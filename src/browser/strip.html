@@ -1,0 +1,344 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>tabs</title>
+<style>
+:root{--ground:#f7f7f7;color:#1d1d1f;font:12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+@media (prefers-color-scheme: dark){:root{--ground:#070707;color:#e6e6e6}}
+body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
+/* Tinted in the colour of the tab under it (tint.rs): the bar and its words, not the menu. */
+/* The page's colour over the blur of the page scrolled under the strip (under.rs), as Safari's
+   bar: the page shows through, and the words inked for that colour read on it. */
+#head{transition:background-color .2s}
+html[data-tint] #head{background:color-mix(in srgb,var(--tint) 35%,transparent)}
+html[data-tint] #projects,html[data-tint] #bar,html[data-tint] #tabs{color:var(--ink);transition:color .2s}
+#head{position:relative;z-index:2}
+#projects{display:none;align-items:center;gap:4px;height:28px;padding:0 8px;box-sizing:border-box;overflow:hidden}
+#projects.on{display:flex}
+.p{flex:none;max-width:200px;height:20px;padding:0 10px;border-radius:10px;display:flex;align-items:center;font-weight:600;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.5}
+.p:hover{opacity:.85;background:color-mix(in srgb,currentColor 7%,transparent)}
+.p.on{opacity:1;background:color-mix(in srgb,currentColor 14%,transparent)}
+#bar{display:flex;align-items:center;gap:4px;height:52px;padding:0 8px;box-sizing:border-box}
+#tabs{display:flex;align-items:center;gap:4px;height:32px;padding:0 8px 4px;box-sizing:border-box;min-width:0;overflow:hidden}
+#tabs .t{flex:1 1 0;max-width:none;justify-content:center;position:relative;padding:0 26px;background:color-mix(in srgb,currentColor 4%,transparent)}
+#tabs .t .n{flex:0 1 auto}
+#tabs .t .x{position:absolute;left:6px}
+#tabs .t:hover{background:color-mix(in srgb,currentColor 8%,transparent)}
+#tabs .t.on{background:color-mix(in srgb,currentColor 15%,transparent)}
+/* The address field, as Safari's: the page's host while it rests, its whole address to edit. */
+#addr{flex:1;max-width:620px;margin:0 auto;height:30px;border-radius:10px;display:flex;align-items:center;gap:6px;padding:0 4px 0 10px;box-sizing:border-box;background:color-mix(in srgb,currentColor 7%,transparent)}
+#addr:focus-within{box-shadow:0 0 0 3px color-mix(in srgb,#4f7cff 55%,transparent)}
+#ai{flex:none;opacity:.55;font-size:11px}
+#url{flex:1;min-width:0;border:0;outline:0;background:transparent;color:inherit;font:13px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;text-align:center;text-overflow:ellipsis}
+#url:focus{text-align:left}
+#url::selection{background:color-mix(in srgb,#4f7cff 45%,transparent)}
+/* The open lists (the suggestions, the history menu), as the system's menus: on its menu glass
+   (pane.rs, macOS; elsewhere the ground), compact rows, the accent on the row picked. */
+#sug,#menu{position:absolute;display:none;box-sizing:border-box;padding:5px;border-radius:10px;z-index:3;overflow-y:auto;font:13px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;box-shadow:0 0 0 .5px color-mix(in srgb,currentColor 24%,transparent),0 10px 28px rgba(0,0,0,.22)}
+html:not([data-glass]) #sug,html:not([data-glass]) #menu{background:var(--ground)}
+html[data-tint] #sug,html[data-tint] #menu{color:var(--ink)}
+#sug{max-height:calc(100vh - 60px)}
+.q{display:flex;align-items:center;gap:8px;height:24px;padding:0 8px;border-radius:5px;white-space:nowrap}
+.q .i{width:14px;text-align:center;opacity:.6}
+.q .w{min-width:0;display:flex;align-items:baseline;gap:8px;overflow:hidden}
+.q .n{flex:none;max-width:62%;overflow:hidden;text-overflow:ellipsis}
+.q .u{min-width:0;font-size:12px;opacity:.5;overflow:hidden;text-overflow:ellipsis}
+.q.on,.v:hover{background:#0a84ff;background:-apple-system-control-accent;color:#fff}
+.q.on .i,.q.on .u,.v:hover .u{opacity:.85}
+.g{padding:6px 8px 3px;font-size:11px;font-weight:600;opacity:.5}
+.b{flex:none;height:24px;min-width:24px;padding:0 4px;box-sizing:border-box;border-radius:7px;display:grid;place-items:center;opacity:.7}
+.b:hover,.b.on{opacity:1;background:color-mix(in srgb,currentColor 10%,transparent)}
+.b svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.t{display:flex;align-items:center;gap:6px;min-width:0;max-width:220px;height:24px;padding:0 6px 0 10px;border-radius:7px;opacity:.62}
+.t:hover{opacity:.9;background:color-mix(in srgb,currentColor 7%,transparent)}
+.t.on{opacity:1;background:color-mix(in srgb,currentColor 13%,transparent)}
+.i{flex:none;font:10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;opacity:.75}
+.n{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.x{flex:none;width:16px;height:16px;border-radius:4px;display:grid;place-items:center;opacity:0}
+.t:hover .x,.t.on .x{opacity:.6}
+.x:hover{opacity:1!important;background:color-mix(in srgb,currentColor 14%,transparent)}
+#back{position:fixed;inset:0;display:none;z-index:1}
+#menu{right:8px;width:min(380px,calc(100vw - 16px));max-height:calc(100vh - 100px)}
+.v{padding:4px 8px;border-radius:5px}
+.v .h{display:flex;align-items:center;gap:7px}
+.v .n{display:block}
+.v.off .h{opacity:.62}
+.v .u{display:block;margin-top:1px;padding-left:17px;font-size:11px;opacity:.5;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.e{padding:12px 9px;opacity:.5}
+#cm.on{opacity:1;color:#fff;background:#4f7cff}
+.s{display:none;flex:none;height:24px;padding:0 10px;border-radius:7px;align-items:center;font-weight:600;background:#4f7cff;color:#fff}
+.s.on{display:flex}
+.s:hover{filter:brightness(1.1)}
+/* Glass (macOS): the strip is the titlebar, its toolbar row clear of the window's buttons (a unified toolbar's: 18 to 80 points); the projects and the tabs under it run from the edge. */
+html[data-glass] #bar{padding-left:92px}
+#rl{height:22px;min-width:22px}
+</style>
+</head>
+<body>
+<div id="head">
+  <div id="bar">
+    <span class="b" id="bk" title="Back"><svg viewBox="0 0 16 16"><path d="M10 3 5 8l5 5"/></svg></span>
+    <span class="b" id="fw" title="Forward"><svg viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"/></svg></span>
+    <div id="addr"><span id="ai">◐</span><input id="url" spellcheck="false" autocomplete="off" placeholder="Search or enter website name"><span class="b" id="rl" title="Reload"><svg viewBox="0 0 16 16"><path d="M12.5 8a4.5 4.5 0 1 1-1.3-3.2M12.5 3v2.6H9.9"/></svg></span></div>
+    <span class="s" id="sd" title="Send the comments to the agent"></span>
+    <span class="b" id="cm" title="Comment on the page: click what to change"><svg viewBox="0 0 16 16"><path d="M3 3.5h10v7H7l-3 2.5v-2.5H3z"/></svg></span>
+    <span class="b" id="nt" title="New tab"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></span>
+    <span class="b" id="hs" title="History"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.3 1.4"/></svg></span>
+  </div>
+  <div id="projects"></div>
+  <div id="tabs"></div>
+  <div id="menu"></div>
+  <div id="sug"></div>
+</div>
+<div id="back"></div>
+<script>
+"use strict";
+// The colour of the tab under the strip and the ink that reads on it, or null: its own again.
+function T(tint) {
+  const root = document.documentElement;
+  if (tint === null) return void root.removeAttribute("data-tint");
+  root.style.setProperty("--tint", tint.ground);
+  root.style.setProperty("--ink", tint.ink === "dark" ? "#1d1d1f" : "#f2f2f2");
+  root.setAttribute("data-tint", "");
+}
+// The project shown last in each tab, so a click on a project goes back to where it was.
+const lastOf = new Map();
+// Draw the tabs: with several projects, a row of them above and under it the shown project's
+// tabs; every name is set as text. A click says which tab, and what to do with it.
+function S(data) {
+  const shown = data.tabs.find((tab) => tab.key === data.shown);
+  const project = shown ? shown.group : undefined;
+  if (project !== undefined) lastOf.set(project, data.shown);
+  const names = [...new Set(data.tabs.map((tab) => tab.group))].filter((name) => name !== undefined);
+  const row = document.getElementById("projects");
+  row.className = names.length > 0 ? "on" : "";
+  row.replaceChildren(...names.map((name) => {
+    const pill = document.createElement("div");
+    pill.className = name === project ? "p on" : "p";
+    pill.textContent = name || "—";
+    pill.title = name;
+    const own = data.tabs.filter((tab) => tab.group === name);
+    pill.addEventListener("click", () => {
+      const back = lastOf.get(name);
+      const there = own.find((tab) => tab.key === back) || own[0];
+      if (there) window.ipc.postMessage("show " + there.key);
+    });
+    return pill;
+  }));
+  address(shown, data.visited || []);
+  const tabs = data.tabs.filter((tab) => tab.group === project);
+  document.getElementById("tabs").replaceChildren(...tabs.map((tab) => {
+    const item = document.createElement("div");
+    item.className = tab.key === data.shown ? "t on" : "t";
+    item.title = tab.title;
+    const icon = document.createElement("span");
+    icon.className = "i";
+    icon.textContent = tab.kind === "term" ? ">_" : "◐";
+    const name = document.createElement("span");
+    name.className = "n";
+    name.textContent = tab.title;
+    const close = document.createElement("span");
+    close.className = "x";
+    close.textContent = "×";
+    close.addEventListener("click", (event) => {
+      event.stopPropagation();
+      window.ipc.postMessage("close " + tab.key);
+    });
+    item.addEventListener("click", () => window.ipc.postMessage("show " + tab.key));
+    // Its menu is the system's (host_tab_menu.rs), where the person clicked.
+    item.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      window.ipc.postMessage("menu " + tab.key + " " + Math.round(event.clientX) + " " + Math.round(event.clientY));
+    });
+    item.append(icon, name, close);
+    return item;
+  }));
+}
+// The strip is the window's own: no page's menu (Reload, AutoFill) but in the address field.
+document.addEventListener("contextmenu", (event) => {
+  if (event.target !== field) event.preventDefault();
+});
+// The address field: the shown tab's page (a terminal's command, not to edit), and as the person
+// types, where Enter goes (the address, else a search) and the pages seen that match it.
+const field = document.getElementById("url"), sug = document.getElementById("sug");
+let here = { url: "", web: true }, seen = [], rows = [], picked = 0;
+const host = (url) => {
+  try {
+    const at = new URL(url);
+    return /^https?:$/.test(at.protocol) ? at.host.replace(/^www\./, "") : url;
+  } catch { return url; }
+};
+const addressy = (text) => /^https?:\/\//.test(text) || (!/\s/.test(text) && /^(localhost|127\.0\.0\.1|[^.\s]+\.[^\s]+)/.test(text));
+function address(shown, visited) {
+  seen = visited;
+  here = shown ? { url: shown.url || "", web: shown.kind === "web", title: shown.title } : { url: "", web: true };
+  field.readOnly = !here.web;
+  document.getElementById("ai").textContent = here.web ? "◐" : ">_";
+  if (document.activeElement !== field) field.value = here.web ? host(here.url) : here.title || "";
+}
+function suggest() {
+  const typed = field.value.trim(), low = typed.toLowerCase();
+  rows = [];
+  if (typed && typed !== here.url) {
+    rows.push(addressy(typed) ? { go: typed, name: typed, about: "Go to the website" } : { go: typed, name: typed, about: "Search Google", search: true });
+  }
+  const matches = seen.filter((page) => page.url !== here.url && (!low || (page.title + " " + page.url).toLowerCase().includes(low)));
+  const pages = matches.slice(0, 8).map((page) => ({ go: page.url, name: page.title || host(page.url), about: page.url }));
+  picked = 0;
+  const parts = [];
+  const row = (item, at) => {
+    const line = document.createElement("div");
+    line.className = at === picked ? "q on" : "q";
+    const icon = document.createElement("span");
+    icon.className = "i";
+    icon.textContent = item.search ? "⌕" : "◐";
+    const words = document.createElement("span");
+    words.className = "w";
+    const name = document.createElement("span");
+    name.className = "n";
+    name.textContent = item.name;
+    const about = document.createElement("span");
+    about.className = "u";
+    about.textContent = item.about;
+    words.append(name, about);
+    line.append(icon, words);
+    line.addEventListener("mousedown", (event) => event.preventDefault());
+    line.addEventListener("click", () => go(item));
+    return line;
+  };
+  if (rows.length > 0) parts.push(row(rows[0], 0));
+  if (pages.length > 0) {
+    const label = document.createElement("div");
+    label.className = "g";
+    label.textContent = "History";
+    parts.push(label);
+    for (const page of pages) {
+      rows.push(page);
+      parts.push(row(page, rows.length - 1));
+    }
+  }
+  sug.replaceChildren(...parts);
+  const box = document.getElementById("addr").getBoundingClientRect();
+  Object.assign(sug.style, { left: box.left + "px", top: box.bottom + 6 + "px", width: box.width + "px", display: parts.length ? "block" : "none" });
+  glass();
+}
+// The system's glass under the open list (pane.rs): where it is, said once each time it moves.
+let glassed = "";
+function glass() {
+  const open = [sug, document.getElementById("menu")].find((list) => list.style.display === "block");
+  const box = open && open.getBoundingClientRect();
+  const said = box ? "glass " + [box.left, box.top, box.width, box.height].map(Math.round).join(" ") : "glass none";
+  if (said !== glassed) {
+    glassed = said;
+    window.ipc.postMessage(said);
+  }
+}
+addEventListener("resize", glass);
+function mark() {
+  sug.querySelectorAll(".q").forEach((line, at) => { line.className = at === picked ? "q on" : "q"; });
+}
+function go(item) {
+  window.ipc.postMessage("go " + item.go);
+  field.blur();
+}
+field.addEventListener("focus", () => {
+  if (!here.web) return;
+  window.ipc.postMessage("typing on");
+  field.value = here.url;
+  field.select();
+});
+field.addEventListener("input", suggest);
+field.addEventListener("blur", () => {
+  window.ipc.postMessage("typing off");
+  sug.style.display = "none";
+  glass();
+  field.value = here.web ? host(here.url) : here.title || "";
+});
+field.addEventListener("keydown", (event) => {
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    if (rows.length) picked = (picked + (event.key === "ArrowDown" ? 1 : rows.length - 1)) % rows.length;
+    mark();
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    const item = rows[picked] || (field.value.trim() && { go: field.value.trim() });
+    if (item) go(item);
+  } else if (event.key === "Escape") {
+    field.blur();
+  }
+});
+document.getElementById("rl").addEventListener("click", () => window.ipc.postMessage("reload"));
+// "+": the system's menu under the button, a page or a terminal (menu.rs).
+document.getElementById("nt").addEventListener("click", () => {
+  const box = document.getElementById("nt").getBoundingClientRect();
+  window.ipc.postMessage("new " + Math.round(box.left) + " " + Math.round(box.bottom + 4));
+});
+// The history menu: the tabs the window has held, newest first, each with what became of it;
+// null closes it. Titles, pages and projects are set as text.
+const SAID = { open: "open", hidden: "closed · still running", ended: "ended", closed: "closed" };
+function M(rows) {
+  // Once the rows are in: where the menu is now.
+  requestAnimationFrame(glass);
+  const menu = document.getElementById("menu");
+  const open = rows !== null;
+  menu.style.display = document.getElementById("back").style.display = open ? "block" : "none";
+  document.getElementById("hs").className = open ? "b on" : "b";
+  if (!open) return menu.replaceChildren();
+  menu.style.top = document.getElementById("head").offsetHeight + 2 + "px";
+  if (rows.length === 0) {
+    const none = document.createElement("div");
+    none.className = "e";
+    none.textContent = "No tabs yet";
+    menu.replaceChildren(none);
+    return;
+  }
+  const several = new Set(rows.map((row) => row.group)).size > 1;
+  menu.replaceChildren(...rows.map((row) => {
+    const item = document.createElement("div");
+    item.className = row.state === "open" ? "v" : "v off";
+    item.dataset.at = row.at;
+    item.dataset.key = row.key;
+    item.dataset.state = row.state;
+    item.title = row.detail || row.title;
+    const icon = document.createElement("span");
+    icon.className = "i";
+    icon.textContent = row.kind === "term" ? ">_" : "◐";
+    const name = document.createElement("span");
+    name.className = "n";
+    name.textContent = row.title || row.detail || (row.kind === "term" ? "Terminal" : "New tab");
+    const head = document.createElement("span");
+    head.className = "h";
+    head.append(icon, name);
+    const about = document.createElement("span");
+    about.className = "u";
+    about.textContent = [several ? row.group || "—" : "", row.detail, SAID[row.state]].filter(Boolean).join(" · ");
+    item.append(head, about);
+    item.addEventListener("click", () => window.ipc.postMessage("visit " + row.at));
+    return item;
+  }));
+}
+// The comment button, on while the person comments on the pages, and Send while some are held.
+function C(on, held) {
+  document.getElementById("cm").className = on ? "b on" : "b";
+  const send = document.getElementById("sd");
+  send.className = held > 0 ? "s on" : "s";
+  send.textContent = "Send " + held;
+}
+// The strip's empty part moves the window, and a double click zooms it, as a titlebar does.
+for (const id of ["projects", "bar", "tabs"]) {
+  const part = document.getElementById(id);
+  part.addEventListener("mousedown", (event) => {
+    if (event.target === part && event.button === 0 && event.detail === 1) window.ipc.postMessage("drag");
+  });
+  part.addEventListener("dblclick", (event) => {
+    if (event.target === part) window.ipc.postMessage("zoom");
+  });
+}
+for (const [id, what] of [["sd", "send"], ["cm", "comment"], ["bk", "back"], ["fw", "forward"], ["hs", "history"], ["back", "history"]]) {
+  document.getElementById(id).addEventListener("click", () => window.ipc.postMessage(what));
+}
+</script>
+</body>
+</html>

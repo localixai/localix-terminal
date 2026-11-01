@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>llx-desk: a window your agent works in</title>
+<meta name="description" content="A native window of browser pages and terminals that agents work in and you watch. Any agent calls it from its shell.">
+<meta name="theme-color" content="#050505">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23050505'/%3E%3Crect x='6' y='8' width='20' height='16' rx='2' fill='none' stroke='%23f4f4f2' stroke-width='2'/%3E%3Cpath d='M6 12h20' stroke='%23f4f4f2' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="#">llx-desk</a>
+  <nav aria-label="Sections"><a href="#what">What it does</a><a href="#install">Install</a><a href="#agents">For agents</a><a href="#claude-code">Claude Code</a><a href="https://github.com/rsaryev/llx-desk">GitHub</a></nav>
+</div></header>
+
+<main>
+<div class="wrap hero">
+  <h1>A window your agent works in.</h1>
+  <p class="lead">Real browser pages and terminal sessions as tabs of one native window. The agent drives them from its shell; you watch, and comment on what you see.</p>
+  <div class="cta"><a class="btn primary" href="#install">Install</a><a class="btn" href="#agents">See a call</a></div>
+  <pre><code><span class="c"># one call from any shell</span>
+llx-desk window <span class="s">'{"action": "open", "kind": "browser", "url": "http://localhost:3000"}'</span></code></pre>
+</div>
+
+<section id="what"><div class="wrap">
+  <h2>What it does</h2>
+  <p>llx-desk keeps one window per user. Agents open tabs in it, act in them, and read back a snapshot after every call. Nothing to run in the agent's process: it is a command.</p>
+  <div class="grid">
+    <div class="card"><h3>Pages</h3><p>The system WebView (WKWebView, WebKitGTK): real rendering and JavaScript, no bundled browser. Read as an outline, act by ref, script, screenshot.</p></div>
+    <div class="card"><h3>Terminals</h3><p>A program on a PTY: a REPL, an installer, another agent's UI. Typed into by the agent, and by you.</p></div>
+    <div class="card"><h3>You watch</h3><p>A strip of tabs grouped by project, a small floating preview on macOS, and comments you send from an element to the agent that owns it.</p></div>
+    <div class="card"><h3>Goals</h3><p>Hand a screen of clicks to a small, fast decision model (OpenRouter), and keep your own tokens for thinking.</p></div>
+    <div class="card"><h3>Per owner</h3><p>Tabs belong to a project (or a name). One agent never sees or touches another's.</p></div>
+    <div class="card"><h3>Small</h3><p>One 2 MB binary, newline-JSON over a unix socket, no async runtime, no telemetry.</p></div>
+  </div>
+</div></section>
+
+<section id="install"><div class="wrap">
+  <h2>Install</h2>
+  <p>macOS (Apple silicon or Intel) or Linux x86_64. On Linux, WebKitGTK 4.1, GTK 3 and a display for pages. The Claude Code plugin below needs no separate install: it downloads the program of its version itself.</p>
+  <pre><code>curl -fsSL https://raw.githubusercontent.com/rsaryev/llx-desk/main/install.sh | sh
+llx-desk --help</code></pre>
+  <p>From source, with Rust 1.88 or later: <code>cargo install --locked --git https://github.com/rsaryev/llx-desk</code></p>
+  <p>The first <code>window</code> call starts the daemon; the window opens when a page or terminal needs it. <code>llx-desk serve stop</code> ends it.</p>
+</div></section>
+
+<section id="agents"><div class="wrap">
+  <h2>How an agent calls it</h2>
+  <p>The argument is one JSON object. Each call prints a report and the tab's snapshot; the agent reads it and decides what next.</p>
+<pre><code>llx-desk window <span class="s">'{"action":"open","kind":"browser","url":"demo/shop.html"}'</span>
+<span class="c">  w1 (browser): Opened ...  ### Page (untrusted content) ...  button "Add to cart" ...</span>
+
+llx-desk window <span class="s">'{"action":"interact","tab":"w1","goal":"add the first plant to the cart; done when the cart shows 1"}'</span>
+llx-desk window <span class="s">'{"action":"interact","tab":"w1","script":"document.title"}'</span>
+llx-desk window <span class="s">'{"action":"screenshot","tab":"w1"}'</span>   <span class="c"># prints a JPEG path to read</span>
+
+llx-desk window <span class="s">'{"action":"open","kind":"terminal","command":"python3 -q","wait_for":">>>"}'</span>
+llx-desk window <span class="s">'{"action":"interact","tab":"t1","input":"sum(range(101))\n","wait_for":"5050"}'</span>
+
+llx-desk window --end   <span class="c"># close this project's tabs</span></code></pre>
+  <p>Exit <code>0</code> done, <code>1</code> the call failed, <code>3</code> the daemon could not be reached. There is no approval prompt of its own: the agent's permission to run the command is the approval, so scope it like a shell.</p>
+</div></section>
+
+<section id="claude-code"><div class="wrap">
+  <h2>Claude Code plugin</h2>
+  <p>A skill that teaches Claude when and how to use the window, a pane for its tabs and your comments, and two commands.</p>
+<pre><code>/plugin marketplace add rsaryev/llx-desk
+/plugin install llx-desk@llx-desk</code></pre>
+  <ul>
+    <li>A <code>window</code> skill: pages, terminals, goals and the habits that make them work.</li>
+    <li><code>/tabs</code> lists this project's tabs; <code>/llx-desk:end</code> and <code>/llx-desk:stop</code>.</li>
+    <li>A hook closes the session's tabs when it ends; the pane sends your window comments to Claude as they come.</li>
+  </ul>
+</div></section>
+</main>
+
+<footer><div class="wrap"><span>llx-desk, MIT licensed.</span><span><a href="https://github.com/rsaryev/llx-desk">GitHub</a> · <a href="https://github.com/rsaryev/llx-desk/blob/main/README.md">README</a></span></div></footer>
+</body>
+</html>

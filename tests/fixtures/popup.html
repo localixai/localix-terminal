@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Sign-in popup</title>
+</head>
+<body>
+  <!-- A sign-in popup, as Google's is: it answers its opener, then closes itself. -->
+  <p>Signing in</p>
+  <script>
+    if (window.opener) {
+      window.opener.postMessage("signed in", "*")
+      setTimeout(() => window.close(), 300)
+    } else {
+      document.title = "No opener"
+    }
+  </script>
+</body>
+</html>

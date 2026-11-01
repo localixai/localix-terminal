@@ -1,0 +1,163 @@
+//! How a tab's WebView is built: the probe, the handlers that tell the host of its loads, titles
+//! and new windows, and on macOS the configuration all tabs share.
+
+use std::sync::Arc;
+
+use tao::event_loop::EventLoopProxy;
+use wry::{NewWindowResponse, PageLoadEvent, WebView, WebViewBuilder};
+
+use super::guard::allowed;
+use super::host::{Cmd, PROBE, Said, Shared, Window};
+use super::platform::user_agent;
+use super::popup::{self, Parent};
+use super::presence::Event;
+use super::tabs::BLANK;
+
+pub(super) fn builder<'a>(
+    id: u32,
+    url: Option<&'a str>,
+    window: &Window,
+    shared: &Arc<Shared>,
+    proxy: &EventLoopProxy<Cmd>,
+    parent: Option<Parent>,
+) -> WebViewBuilder<'a> {
+    let proxy = proxy.clone();
+    // Where the tabs share a configuration, the first tab's IPC handler serves them all: a
+    // second one under the same name raises an Objective-C exception, which a binary built
+    // with `panic = "abort"` cannot catch.
+    let with_ipc = id == 1 || !SHARED;
+    let (opened, popups, made) = (window.clone(), Arc::clone(shared), proxy.clone());
+    let ipc = Arc::clone(shared);
+    let told = proxy.clone();
+    let loads = Arc::clone(shared);
+    let requests = Arc::clone(shared);
+    let titles = Arc::clone(shared);
+    // A title or a load changes what the strip names the tab.
+    let (titled, loaded) = (proxy.clone(), proxy.clone());
+    // The person's sign-ins stay, as in their own browser, in the window they see: WebKit's
+    // store of the app's own (macOS: ~/Library/WebKit and HTTPStorages, under the binary's
+    // name). A window nobody sees (headless, CI, the tests' unseen ones) remembers nothing.
+    let forget = window.headless || super::platform::unseen();
+    let mut builder = WebViewBuilder::new()
+        .with_incognito(forget)
+        .with_initialization_script_for_main_only(
+            PROBE.replace("__TOKEN__", &shared.token).replace(
+                "__HEADLESS__",
+                if window.headless { "true" } else { "false" },
+            ),
+            true,
+        )
+        .with_on_page_load_handler(move |event, url| {
+            super::debug(|| {
+                let kind = if matches!(event, PageLoadEvent::Started) {
+                    "started"
+                } else {
+                    "finished"
+                };
+                format!("tab {id} load {kind}: {url}")
+            });
+            loads.page_load(id, &event, &url);
+            let _ = loaded.send_event(Cmd::Strip);
+            // The mini's picture was taken as the tab appeared, before its page: take it again.
+            if matches!(event, PageLoadEvent::Finished) {
+                let _ = loaded.send_event(Cmd::Presence(Event::Changed));
+            }
+        })
+        .with_document_title_changed_handler(move |title| {
+            titles.titled(id, title);
+            let _ = titled.send_event(Cmd::Strip);
+        })
+        .with_navigation_handler(move |url| {
+            let allow = allowed(&url) || url == BLANK;
+            super::debug(|| format!("tab {id} navigation requested: {url} (allowed: {allow})"));
+            if allow {
+                requests.navigation_requested(id);
+            }
+            allow
+        })
+        .with_download_started_handler(|_url, _path| false)
+        // A link with target=_blank or `window.open` opens a tab, which is shown: what the page
+        // opened is what it is about now. Built while WebKit waits, it keeps its opener
+        // (popup.rs); where it cannot be, it opens as a tab of its own.
+        .with_new_window_req_handler(move |url, features| {
+            if !allowed(&url) {
+                return NewWindowResponse::Deny;
+            }
+            let made =
+                parent.and_then(|parent| popup::open(features, parent, &opened, &popups, &made));
+            made.unwrap_or_else(|| {
+                let _ = proxy.send_event(Cmd::NewTab { url, reply: None });
+                NewWindowResponse::Deny
+            })
+        })
+        .with_background_throttling(wry::BackgroundThrottlingPolicy::Disabled);
+    // A popup's view loads nothing of its own: WebKit loads the page's request into it.
+    if let Some(url) = url {
+        builder = builder.with_url(url);
+    }
+    if with_ipc {
+        builder = builder.with_ipc_handler(move |request| {
+            let command = match ipc.ipc(request.body()) {
+                Some(Said::Noted(noted)) => Cmd::Noted(noted),
+                Some(Said::Close(id)) => {
+                    // Nobody waits for the answer.
+                    let (reply, _) = std::sync::mpsc::sync_channel(1);
+                    Cmd::CloseTab { id, reply }
+                }
+                None => return,
+            };
+            let _ = told.send_event(command);
+        });
+    }
+    if let Some(agent) = user_agent() {
+        builder = builder.with_user_agent(agent);
+    }
+    builder
+}
+
+/// Whether the tabs share one WebKit configuration (see `share`).
+pub(super) const SHARED: bool = cfg!(target_os = "macos");
+
+/// On macOS a new tab shares the first one's configuration: one cookie store for the window, as
+/// in a browser (a page opened in a new tab stays signed in), and one IPC channel.
+#[cfg(target_os = "macos")]
+pub(super) fn share<'a>(
+    builder: WebViewBuilder<'a>,
+    first: Option<&WebView>,
+) -> WebViewBuilder<'a> {
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2_web_kit::WKWebViewConfiguration;
+    use wry::{WebViewBuilderExtMacos, WebViewExtMacOS};
+    let Some(first) = first else {
+        return builder;
+    };
+    let view = first.webview();
+    // SAFETY: the first tab's WKWebView is alive (borrowed); `configuration` answers a copy of
+    // its WKWebViewConfiguration, retained.
+    let configuration: Retained<WKWebViewConfiguration> =
+        unsafe { msg_send![&*view, configuration] };
+    builder.with_webview_configuration(configuration)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(super) fn share<'a>(
+    builder: WebViewBuilder<'a>,
+    _first: Option<&WebView>,
+) -> WebViewBuilder<'a> {
+    builder
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(super) fn build(builder: WebViewBuilder, window: &tao::window::Window) -> wry::Result<WebView> {
+    builder.build_as_child(window)
+}
+
+#[cfg(target_os = "linux")]
+pub(super) fn build(builder: WebViewBuilder, window: &tao::window::Window) -> wry::Result<WebView> {
+    use tao::platform::unix::WindowExtUnix;
+    use wry::WebViewBuilderExtUnix;
+    let vbox = (window.default_vbox())
+        .ok_or_else(|| std::io::Error::other("the window has no box to put a page in"))?;
+    builder.build_gtk(vbox)
+}

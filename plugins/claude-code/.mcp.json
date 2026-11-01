@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "desk": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/llx-desk",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

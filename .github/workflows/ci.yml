@@ -1,0 +1,39 @@
+# The checks of CONTRIBUTING.md on every push to main, on the project's own runners. The repository
+# is public and its runners are self-hosted, so nothing here runs for a pull request: a fork's code
+# never reaches them.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: [self-hosted, linux, x64, llx-desk]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/check-versions.sh
+      - run: sh -n install.sh && sh -n plugins/claude-code/bin/llx-desk
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+
+  msrv:
+    runs-on: [self-hosted, linux, x64, llx-desk]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: cargo check on the rust-version of Cargo.toml
+        run: |
+          msrv=$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)
+          rustup toolchain install "$msrv" --profile minimal --no-self-update
+          cargo "+$msrv" check --locked --all-targets

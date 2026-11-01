@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Told</title>
+    <style>
+      #cover { position: fixed; left: 0; top: 0; width: 100%; height: 100%; background: #fff8 }
+    </style>
+  </head>
+  <body>
+    <h1>What a page tells</h1>
+    <button onclick="document.title = confirm('Delete the row?') ? 'deleted' : 'kept'">Delete row</button>
+    <button onclick="alert('Hi there'); document.title = 'greeted'">Greet</button>
+    <button onclick="document.title = 'named:' + prompt('Your name?', 'nobody')">Name</button>
+    <button onclick="toast()">Save</button>
+    <div id="toasts"></div>
+    <button onclick="cart()">Add to cart</button>
+    <div id="cart" role="status" hidden></div>
+    <ul id="feed" aria-live="polite"><li>A trail report <button onclick="this.textContent = 'Liked'">Like</button></li></ul>
+    <form id="signup">
+      <label>Email <input id="email" type="email" required /></label>
+      <button>Sign up</button>
+    </form>
+    <label>Phone <input id="phone" /></label>
+    <label>Code <input id="code" /></label>
+    <iframe id="inner" srcdoc="<button onclick=&quot;parent.document.title = confirm('Leave the frame?') ? 'frame ok' : 'frame kept'&quot;>Frame confirm</button>"></iframe>
+    <label>Day <input id="day" type="date" /></label>
+    <button id="late" onclick="document.title = 'late clicked'">Under the cover</button>
+    <div id="cover"></div>
+    <script>
+      // A toast that shows a moment after the click and is gone before anyone looks again.
+      function toast() {
+        setTimeout(() => {
+          const note = document.createElement('div')
+          note.setAttribute('role', 'status')
+          note.textContent = 'Saved'
+          toasts.append(note)
+          setTimeout(() => note.remove(), 150)
+        }, 30)
+      }
+      // A toast whose words are set in the click itself, as most are.
+      function cart() {
+        const box = document.getElementById('cart')
+        box.textContent = 'Fern added to cart'
+        box.hidden = false
+      }
+      document.getElementById('signup').addEventListener('submit', (event) => {
+        event.preventDefault()
+        document.title = 'signed up'
+      })
+      // A phone field that builds its value from the keys pressed, as an input mask does: a value
+      // set at once is put back to what the keys built.
+      let digits = ''
+      const format = (d) => (d.length > 3 ? `(${d.slice(0, 3)}) ${d.slice(3)}` : d)
+      phone.addEventListener('keydown', (event) => {
+        if (/^\d$/.test(event.key)) digits += event.key
+        event.preventDefault()
+        phone.value = format(digits)
+      })
+      phone.addEventListener('input', () => { phone.value = format(digits) })
+      // A field that refuses every sign: a value of signs only is never kept.
+      code.addEventListener('input', () => { code.value = code.value.replace(/[^\w]/g, '') })
+      // A cover that fades out a moment after the page loads.
+      setTimeout(() => cover.remove(), 300)
+      // A poll every 200 ms: the page living, not working.
+      setInterval(() => fetch('/poll.json').catch(() => {}), 200)
+    </script>
+  </body>
+</html>

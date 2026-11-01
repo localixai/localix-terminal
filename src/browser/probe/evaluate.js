@@ -1,0 +1,56 @@
+  // `evaluate`: the caller's script runs in the page realm and its value comes back
+  // as compact text (see `script_forms` in webview.rs for how it is started).
+  const MAX_EVAL = 8000
+  function serialize(v) {
+    const cap = (s) => (s.length > MAX_EVAL ? `${s.slice(0, MAX_EVAL)}… [truncated, ${s.length} chars]` : s)
+    if (v === undefined) return 'undefined'
+    if (v === null || ['number', 'boolean', 'bigint'].includes(typeof v)) return String(v)
+    if (typeof v === 'string') return cap(v)
+    if (v instanceof Element) return cap(`<${v.tagName.toLowerCase()}> ${(v.textContent || '').trim().replace(/\s+/g, ' ')}`)
+    if (v instanceof NodeList || v instanceof HTMLCollection) return cap([...v].map(serialize).join('\n'))
+    try {
+      const seen = new WeakSet()
+      return cap(JSON.stringify(v, (_k, x) => {
+        if (typeof x === 'object' && x !== null) {
+          if (seen.has(x)) return '[Circular]'
+          seen.add(x)
+        }
+        return typeof x === 'bigint' ? String(x) : x
+      }, 2) ?? '[unserializable]')
+    } catch {
+      return '[unserializable]'
+    }
+  }
+  // The caller's script, compiled by the native side (which a page's CSP cannot block), is
+  // started here once the probe watches what it sets off (its requests, the page's
+  // announcements); its value comes back over IPC like any other answer.
+  async function settled(start) {
+    begin()
+    try {
+      return { result: serialize(await start()) }
+    } catch (error) {
+      throw new Error(`the script threw: ${error?.message || error}`)
+    }
+  }
+
+  // A popup that closes itself (a sign-in done) has its tab closed: WebKit tells no one of it, so
+  // the page says so, with its address, which names its tab.
+  if (window.opener) {
+    Object.defineProperty(window, 'close', {
+      value() { post(JSON.stringify({ t: TOKEN, close: location.href })) },
+    })
+  }
+
+  const ready = () => document.readyState
+  const CALLS = { snapshot, act, settle, read, settled, ready, keys, locate, comment, answer }
+  Object.defineProperty(window, '__dloop_call', {
+    value(id, name, args) {
+      // What the page told since the last reply goes with this one (told.js).
+      const reply = (body) => post(JSON.stringify({ t: TOKEN, id, ...body, ...(told.length ? { told: told.splice(0) } : {}) }))
+      Promise.resolve()
+        .then(() => CALLS[name](args))
+        .then((ok) => reply({ ok: ok ?? null }), (error) => reply({ err: String(error?.message || error) }))
+      return true
+    },
+  })
+})()

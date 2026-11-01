@@ -1,0 +1,169 @@
+[package]
+name = "llx-desk"
+version = "0.1.1"
+edition = "2024"
+rust-version = "1.88"
+description = "A native window of browser pages and terminals that agents work in and a person watches"
+license = "MIT"
+publish = false
+repository = "https://github.com/rsaryev/llx-desk"
+readme = "README.md"
+keywords = ["agents", "browser", "terminal", "webview"]
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+base64 = "0.23.1"
+log = "0.4"
+tao = "0.37"
+wry = "0.57"
+# Already in the tree through tao and wry: an address is checked as the system will read it.
+url = "2.5.8"
+# The few unix calls std has no wrapper for: the PTY, signals, locks.
+libc = "0.2"
+# A terminal session's screen.
+vt100 = "0.16.2"
+# The decision model is reached over HTTPS with the OS's TLS.
+ureq = { version = "3", default-features = false, features = ["json", "native-tls"] }
+
+# Messages to the WKWebView behind the window, and the block its screenshot answers through.
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-web-kit = { version = "0.3", default-features = false, features = ["std", "WKWebView", "WKWebViewConfiguration"] }
+
+# A page's place in the window's GTK box, and the WebView's own snapshot for a screenshot.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+webkit2gtk = "2.0"
+
+# Test builds only: a daemon with no window, whose lock and socket are in `LLX_DESK_TEST_DIR`,
+# and the harness that runs one. Only the self dev-dependency below turns it on, so no
+# `cargo build` or `cargo install` has it.
+[features]
+test-daemon = []
+
+[dev-dependencies]
+llx-desk = { path = ".", features = ["test-daemon"] }
+base64 = "0.23.1"
+sha2 = "0.11.1"
+
+# Opens a real window: run with LLX_DESK_DISPLAY_TESTS=1.
+[[test]]
+name = "browser"
+harness = false
+
+[[test]]
+name = "bench"
+harness = false
+
+[profile.release]
+# A panic in one request is that request's error, not the daemon's end.
+panic = "unwind"
+strip = true
+opt-level = "z"
+lto = true
+codegen-units = 1
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+# The tightest visibility that compiles: `pub` only for what another crate uses.
+unreachable_pub = "deny"
+unused_qualifications = "deny"
+
+[lints.clippy]
+# A panic is a bug: no unwrap, expect, panic or unreachable in working code; an error is
+# handled, returned or shown.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unreachable = "deny"
+todo = "deny"
+unimplemented = "deny"
+# A string sliced inside a character panics.
+string_slice = "deny"
+# A number cut short by `as` is a silent bug: `try_from`, or a reason.
+cast_possible_truncation = "deny"
+# What reaches the terminal goes through the interface and the output; the process ends in
+# `main.rs` only, with the exit-code contract.
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+exit = "deny"
+mem_forget = "deny"
+# Shared state is Mutex or atomics; the rest of the banned API is in clippy.toml.
+disallowed_methods = "deny"
+disallowed_types = "deny"
+# Small functions, as small files: at most 100 lines, a bounded complexity.
+too_many_lines = "deny"
+cognitive_complexity = "deny"
+# Explicit where it matters.
+clone_on_ref_ptr = "deny"
+redundant_clone = "deny"
+match_wildcard_for_single_variants = "deny"
+# Our own enums are matched exhaustively: a variant added is placed in every match, never
+# swallowed by a `_`. A foreign enum's `_` arm is an `expect` that names it.
+wildcard_enum_match_arm = "deny"
+wildcard_imports = "deny"
+unused_self = "deny"
+# Rust's anti-patterns: a lost error cause, a guard held
+# where it blocks, time that underflows, a cast that changes sign, flags instead of a state.
+map_err_ignore = "deny"
+unwrap_in_result = "deny"
+unused_result_ok = "deny"
+significant_drop_in_scrutinee = "deny"
+unchecked_time_subtraction = "deny"
+cast_sign_loss = "deny"
+cast_possible_wrap = "deny"
+fn_params_excessive_bools = "deny"
+struct_excessive_bools = "deny"
+option_option = "deny"
+unnecessary_wraps = "deny"
+needless_collect = "deny"
+format_collect = "deny"
+# `write!` into the String, not a `format!` allocated to be appended.
+format_push_string = "deny"
+# A default built only when it is needed: `unwrap_or_else`, `map_or_else`, `or_else`.
+or_fun_call = "deny"
+# A method that returns a changed copy is `#[must_use]`: dropping the copy loses the change.
+return_self_not_must_use = "deny"
+# A clone into a value already there reuses its allocation: `clone_from`.
+assigning_clones = "deny"
+# Primitives sort unstably: equal ones cannot be told apart, and it needs no buffer.
+stable_sort_primitive = "deny"
+# One module layout: `x.rs` beside its directory `x/`, never `x/mod.rs`.
+mod_module_files = "deny"
+# What a function only reads it borrows; a value it takes it keeps, or moves on.
+needless_pass_by_value = "deny"
+# A struct is all public, or its fields say how far they reach: another crate reads
+# a private field through a method.
+partial_pub_fields = "deny"
+iter_over_hash_type = "deny"
+fallible_impl_from = "deny"
+mutex_atomic = "deny"
+mutex_integer = "deny"
+rc_mutex = "deny"
+rc_buffer = "deny"
+try_err = "deny"
+get_unwrap = "deny"
+verbose_file_reads = "deny"
+lossy_float_literal = "deny"
+mixed_read_write_in_expression = "deny"
+infinite_loop = "deny"
+empty_drop = "deny"
+error_impl_error = "deny"
+panic_in_result_fn = "deny"
+rest_pat_in_fully_bound_structs = "deny"
+trivially_copy_pass_by_ref = "deny"
+large_types_passed_by_value = "deny"
+inefficient_to_string = "deny"
+implicit_clone = "deny"
+create_dir = "deny"
+filetype_is_file = "deny"
+# Every unsafe block says why it is sound, one operation each.
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+# A lint set aside says why, and is an `expect`: an exemption that no longer applies fails the
+# build, so none outlives its reason.
+allow_attributes_without_reason = "deny"
+allow_attributes = "deny"
