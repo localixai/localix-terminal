@@ -15,11 +15,13 @@ kept=$data/$VERSION/llx-desk
 
 say() { printf 'llx-desk: %s\n' "$*" >&2; }
 
-# The OpenRouter key given in the plugin's settings (Claude Code keeps it in the keychain and hands
-# it to the plugin's processes), unless the environment has one already.
-if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -n "${CLAUDE_PLUGIN_OPTION_OPENROUTER_API_KEY:-}" ]; then
-  export OPENROUTER_API_KEY="$CLAUDE_PLUGIN_OPTION_OPENROUTER_API_KEY"
-fi
+# The OpenRouter key given in the plugin's settings (Claude Code keeps it in the keychain; .mcp.json
+# hands it to the MCP server), unless the environment has one already. A placeholder left
+# unsubstituted, when no key was given, is no key.
+case "${CLAUDE_PLUGIN_OPTION_OPENROUTER_API_KEY:-}" in
+  '' | *'${'*) ;;
+  *) [ -n "${OPENROUTER_API_KEY:-}" ] || export OPENROUTER_API_KEY="$CLAUDE_PLUGIN_OPTION_OPENROUTER_API_KEY" ;;
+esac
 
 # A program on PATH of this version, not this script nor another copy of it.
 if [ -z "${LLX_DESK_WRAPPED:-}" ]; then
