@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.2
+
 - While the person comments on the pages, the agent's actions that would move a page (a click,
   typing, keys, a load, a goal's steps) wait for them, up to 60 s, and then answer that the person
   is commenting. Scripts are not held. Send, turning comments off, or collapsing the window gives the
@@ -11,6 +13,8 @@
 - A new look for the strip: monochrome, buttons in shared capsules, thin icons drawn as SVG instead
   of text characters, the address field always centred, larger project pills that count their tabs,
   and tabs in the same style.
+- The Claude Code plugin hands the OpenRouter key from its settings to the MCP server, so `goal`
+  works with a key given only there. An unfilled setting is no key.
 
 ## 0.1.1
 
