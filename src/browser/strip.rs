@@ -12,7 +12,7 @@ pub(super) const BAR: f64 = 52.0;
 /// The strip's height, in points: the toolbar, and the row of tabs under it.
 pub(super) const HEIGHT: f64 = BAR + 32.0;
 /// The row of projects above it, drawn when the tabs of more than one project are in the window.
-pub(super) const ROW: f64 = 28.0;
+pub(super) const ROW: f64 = 32.0;
 
 /// A tab: one of the browser's (its id) or a terminal session's screen (its panel's id).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -263,6 +263,42 @@ pub(super) fn menu(rows: Option<&[Row]>) -> String {
 /// The call that marks the comment button on or off, and offers to send the comments held.
 pub(super) fn commenting(on: bool, held: usize) -> String {
     format!("C({on}, {held})")
+}
+
+/// Whose turn the strip shows: the agent's while it acts, the person's while they comment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Turn {
+    /// Nothing to show.
+    Idle,
+    /// The agent is acting on a page.
+    Acting,
+    /// The person comments: the agent's actions wait.
+    Paused,
+    /// The person comments, and an action of the agent's waits for them now.
+    Waiting,
+}
+
+impl Turn {
+    /// The turn from what the deck knows: an action already under way shows until it settles.
+    pub(super) fn of(busy: bool, commenting: bool, waiting: usize) -> Self {
+        match (busy, commenting, waiting) {
+            (true, _, _) => Self::Acting,
+            (false, true, 0) => Self::Paused,
+            (false, true, _) => Self::Waiting,
+            (false, false, _) => Self::Idle,
+        }
+    }
+}
+
+/// The call that shows whose turn it is.
+pub(super) fn turn(turn: Turn) -> String {
+    let what = match turn {
+        Turn::Idle => "",
+        Turn::Acting => "acting",
+        Turn::Paused => "paused",
+        Turn::Waiting => "waiting",
+    };
+    format!("A({})", json!(what))
 }
 
 /// The call that turns commenting on or off in a page; a page whose marks are of an earlier

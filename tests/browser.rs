@@ -732,9 +732,44 @@ fn feedback(browser: &browser::Browser, driver: &WebviewDriver) {
     } else {
         assert!(picture.is_none(), "{what}");
     }
+    assert_eq!(cursor(driver), "", "Send ends commenting: the agent's turn");
     browser.click("comment");
-    assert_eq!(cursor(driver), "", "and off again");
+    assert_eq!(cursor(driver), "crosshair", "on again");
+    browser.click("comment");
+    assert_eq!(cursor(driver), "", "and off");
     browser.listen(|_, _| {});
+}
+
+/// While the person comments, an action that moves the page waits for them; a script that reads
+/// it does not. Their Send gives the turn back, and the action goes.
+fn waits_for_the_person(browser: &browser::Browser, driver: &WebviewDriver) {
+    let page = driver.observe().unwrap();
+    browser.click("comment");
+    let mover = driver.clone();
+    let (sender, done) = std::sync::mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let _ = sender.send(mover.act(&page.epoch, &Action::ScrollDown));
+    });
+    assert!(
+        done.recv_timeout(Duration::from_millis(800)).is_err(),
+        "the scroll waits while the person comments"
+    );
+    assert_eq!(
+        driver.evaluate("document.title").unwrap(),
+        driver.evaluate("document.title").unwrap(),
+        "a script still reads the page"
+    );
+    browser.click("send");
+    let went = done.recv_timeout(Duration::from_secs(5));
+    assert!(
+        matches!(went, Ok(Ok(()))),
+        "Send gives the turn back: {went:?}"
+    );
+    // Send ended commenting: the next action goes at once.
+    let page = driver.observe().unwrap();
+    let started = std::time::Instant::now();
+    driver.act(&page.epoch, &Action::ScrollUp).unwrap();
+    assert!(started.elapsed() < Duration::from_secs(3));
 }
 
 /// Tabs: one opened, switched to and back, one per link with target=_blank and per window.open,
@@ -1073,6 +1108,7 @@ fn main() {
                     answers_while_loading(&browser, &driver, &origin);
                     starts_at_once(&browser, &driver, &origin);
                     feedback(&browser, &driver);
+                    waits_for_the_person(&browser, &driver);
                     told::scenario(&driver, &origin);
                     scenario(&driver, &origin);
                 });

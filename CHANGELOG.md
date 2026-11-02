@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- While the person comments on the pages, the agent's actions that would move a page (a click,
+  typing, keys, a load, a goal's steps) wait for them, up to 60 s, and then answer that the person
+  is commenting. Scripts are not held. Send, turning comments off, or collapsing the window gives the
+  turn back; Send now ends commenting too.
+- The strip says whose turn it is, in quiet words at the end of the address field: "Agent is
+  working", "Paused while you comment", "Agent is waiting for you".
+- A new look for the strip: monochrome, buttons in shared capsules, thin icons drawn as SVG instead
+  of text characters, the address field always centred, larger project pills that count their tabs,
+  and tabs in the same style.
+
 ## 0.1.1
 
 - Linux: a terminal draws as soon as it opens and after it is shown again. It showed one character

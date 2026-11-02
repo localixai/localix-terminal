@@ -127,7 +127,21 @@ impl Drop for Acting {
     }
 }
 
+/// How long an action waits for the person to finish commenting before it gives up.
+const TURN_WAIT: Duration = Duration::from_secs(60);
+
 impl WebviewDriver {
+    /// The agent's turn to move a page (click, type, keys, a load): after the person, while they
+    /// comment (the strip says the agent waits), and an error when they are still at it after
+    /// TURN_WAIT. A script is not held: the agent reads the page with one as often as it acts.
+    fn my_turn(&self) -> ViewResult<()> {
+        let told = || {
+            let _ = self.proxy.send_event(Cmd::Strip);
+        };
+        (self.shared.turn.wait(TURN_WAIT, told))
+            .map_err(|waited| ViewError::Unavailable(super::super::turn::refused(waited)))
+    }
+
     fn acting(&self) -> Acting {
         let _ = self.proxy.send_event(Cmd::Presence(Event::Acting));
         Acting(self.proxy.clone())
@@ -135,6 +149,7 @@ impl WebviewDriver {
 
     /// Keys pressed in the page, and the load they start followed.
     fn press_page(&self, keys: &[String], delay_ms: u64) -> ViewResult<()> {
+        self.my_turn()?;
         let _acting = self.acting();
         self.before_acting();
         let before = self.loads();
@@ -148,6 +163,7 @@ impl WebviewDriver {
 
 impl Driver for WebviewDriver {
     fn navigate(&self, url: &str) -> ViewResult<()> {
+        self.my_turn()?;
         let _acting = self.acting();
         let url = super::loadable(url)?;
         self.open_or_closed()?;
@@ -212,6 +228,7 @@ impl Driver for WebviewDriver {
             | Action::ScrollDown
             | Action::ScrollUp => {}
         }
+        self.my_turn()?;
         let _acting = self.acting();
         self.before_acting();
         let started = Instant::now();
@@ -247,6 +264,8 @@ impl Driver for WebviewDriver {
     /// The browser's own shortcuts (a reload) are its own, as a person's are; the keys between
     /// them reach the page.
     fn press(&self, keys: &[String], delay_ms: u64) -> ViewResult<()> {
+        // A reload among the keys moves the page too.
+        self.my_turn()?;
         for run in keys.split_inclusive(|key| toolbar::shortcut(key).is_some()) {
             let (page, reload) = match run.split_last() {
                 Some((last, before)) if toolbar::shortcut(last).is_some() => (before, true),

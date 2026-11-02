@@ -137,7 +137,7 @@ fn several_projects_draw_their_tabs_together_each_saying_its_project() {
         ]
     );
     // A project's name is set as text too.
-    assert!(PAGE.contains("pill.textContent = name"));
+    assert!(PAGE.contains("label.textContent = name"));
 }
 
 #[test]
@@ -288,4 +288,17 @@ fn every_row_of_the_strip_is_inked_for_the_page_under_it() {
     assert!(PAGE.contains(
         "html[data-tint] #projects,html[data-tint] #bar,html[data-tint] #tabs{color:var(--ink)"
     ));
+}
+
+#[test]
+fn the_strip_shows_whose_turn_it_is() {
+    use super::{Turn, turn};
+    assert_eq!(Turn::of(false, false, 0), Turn::Idle);
+    assert_eq!(Turn::of(true, false, 0), Turn::Acting);
+    // An action under way when the person turned comments on still shows until it settles.
+    assert_eq!(Turn::of(true, true, 0), Turn::Acting);
+    assert_eq!(Turn::of(false, true, 0), Turn::Paused);
+    assert_eq!(Turn::of(false, true, 2), Turn::Waiting);
+    assert_eq!(turn(Turn::Idle), r#"A("")"#);
+    assert_eq!(turn(Turn::Waiting), r#"A("waiting")"#);
 }

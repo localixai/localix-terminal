@@ -57,16 +57,8 @@ impl Deck {
                 native.set_maximized(!native.is_maximized());
                 return Ok(After::Kept);
             }
-            Click::Send => {
-                for (tab, said) in shared.comments.take() {
-                    shared.heard(&tab, Heard::Sent(&said));
-                }
-                self.sent = self.sent.wrapping_add(1);
-                return Ok(After::Kept);
-            }
-            Click::Comment => {
-                self.commenting = !self.commenting;
-                self.menu = false;
+            Click::Send | Click::Comment => {
+                self.comment_click(&click, shared);
                 return Ok(After::Kept);
             }
         };
@@ -142,6 +134,32 @@ impl Deck {
             let _ = web.active().evaluate_script(script);
         }
         After::Kept
+    }
+
+    /// The comment button turns commenting on or off; Send hands the comments held to the agent
+    /// and ends it. Either way the turn follows: the agent's actions wait while the person comments.
+    fn comment_click(&mut self, click: &Click, shared: &Shared) {
+        if *click == Click::Send {
+            for (tab, said) in shared.comments.take() {
+                shared.heard(&tab, Heard::Sent(&said));
+            }
+            self.sent = self.sent.wrapping_add(1);
+            // Sent: the agent's turn again, to act on what was said.
+            self.commenting = false;
+        } else {
+            self.commenting = !self.commenting;
+            self.menu = false;
+        }
+        shared.turn.commenting(self.commenting);
+    }
+
+    /// The window went out of the person's sight: commenting ends, the pages and the strip say so.
+    pub(crate) fn stop_commenting(&mut self, shared: &Shared) {
+        if self.commenting {
+            self.commenting = false;
+            shared.turn.commenting(false);
+            self.refresh(shared);
+        }
     }
 
     /// Panel `id`'s page, or the strip's (`STRIP`).

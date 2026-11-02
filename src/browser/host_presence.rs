@@ -95,6 +95,10 @@ impl Presenter {
                 if let Some(mini) = &self.mini {
                     mini.busy(on);
                 }
+                stage.shared.turn.acting(on);
+                if let Some(deck) = stage.deck.as_ref() {
+                    deck.refresh(stage.shared);
+                }
             }
             Effect::Blink(long) => {
                 if let Some(mini) = &self.mini {
@@ -109,6 +113,13 @@ impl Presenter {
             State::Expanded => Elsewhere::watch(stage.proxy),
             State::Hidden | State::Mini => None,
         };
+        // Out of sight, the person points at nothing: commenting ends, and the agent's actions
+        // that waited for them go. Comments not sent yet are kept for Send.
+        if state != State::Expanded
+            && let Some(deck) = stage.deck.as_mut()
+        {
+            deck.stop_commenting(stage.shared);
+        }
         match state {
             State::Hidden => self.hide(),
             State::Mini => {

@@ -272,7 +272,8 @@ pub(crate) fn first(browser: &Browser) {
     assert!(seen[0].as_u64() > Some(5), "no animation frames: {seen}");
     // Two projects' tabs: a row of the projects, set as text; one project's, no row.
     let labels = |want: Value| {
-        let read = "[...document.querySelectorAll('.p')].map(p => p.textContent)";
+        // Each pill: the project's name, then how many of its tabs are open.
+        let read = "[...document.querySelectorAll('.p')].map(p => p.firstChild.textContent)";
         let deadline = Instant::now() + Duration::from_secs(10);
         while browser.peek_strip(read) != Ok(want.clone()) {
             assert!(Instant::now() < deadline, "{:?}", browser.peek_strip(read));

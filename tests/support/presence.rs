@@ -5,6 +5,7 @@
 use std::time::{Duration, Instant};
 
 use llx_desk::browser::{Browser, Driver, WebviewDriver, Window};
+use llx_desk::view::Action;
 use serde_json::json;
 
 /// Until `want` holds, within ten seconds.
@@ -111,8 +112,34 @@ pub(crate) fn scenario(browser: &Browser, window: &Window, origin: &str) {
         browser.presented() == Some("expanded")
     });
     assert_eq!(viewport(&driver), size, "expanding again resized the page");
+
+    // Whose turn: the person comments, the strip says the agent is paused; an action of the
+    // agent's waits, and the strip says so; collapsing ends commenting and lets it go.
+    let turn = "document.getElementById('tn').textContent";
+    browser.click("comment");
+    until("the strip says the agent is paused", || {
+        browser.peek_strip(turn) == Ok(json!("Paused while you comment"))
+    });
+    let page = driver.observe().unwrap();
+    let mover = driver.clone();
+    let (sender, done) = std::sync::mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let _ = sender.send(mover.act(&page.epoch, &Action::ScrollDown));
+    });
+    until("the strip says the agent waits", || {
+        browser.peek_strip(turn) == Ok(json!("Agent is waiting for you"))
+    });
+    assert!(done.try_recv().is_err(), "the scroll waits for the person");
     browser.click("collapse");
     until("the mini once more", || browser.presented() == Some("mini"));
+    let went = done.recv_timeout(Duration::from_secs(5));
+    assert!(
+        matches!(went, Ok(Ok(()))),
+        "collapsed, commenting ends and the scroll goes: {went:?}"
+    );
+    until("the strip shows no turn", || {
+        browser.peek_strip(turn) == Ok(json!(""))
+    });
 
     // A screenshot is the same whichever state the window is in.
     driver.screenshot(None).expect("a picture while collapsed");

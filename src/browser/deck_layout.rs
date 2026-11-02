@@ -137,6 +137,9 @@ impl Deck {
         let _ = strip.evaluate_script(&strip::menu(rows.as_deref()));
         let held = shared.comments.count();
         let _ = strip.evaluate_script(&strip::commenting(self.commenting, held));
+        let (acting, waiting) = shared.turn.now();
+        let turn = strip::Turn::of(acting, self.commenting, waiting);
+        let _ = strip.evaluate_script(&strip::turn(turn));
         self.tint();
     }
 

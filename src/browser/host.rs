@@ -184,6 +184,8 @@ pub(super) struct Shared {
     pub(super) history: History,
     /// The person's comments on the pages, until they send them.
     pub(super) comments: Comments,
+    /// Whose turn it is: the agent's actions wait while the person comments.
+    pub(super) turn: super::turn::Turn,
     /// What each tab's pages told besides their content, and how it answers a confirm.
     pub(super) notices: super::notices::Notices,
     /// Where the person put the window and its mini, for the process.
@@ -251,6 +253,8 @@ impl Shared {
         crate::lock(&self.loads).clear();
         crate::lock(&self.tabs).clear();
         self.notices.forget_all();
+        // No window, no one commenting: actions waiting for the person go (and find it closed).
+        self.turn.commenting(false);
         let groups = crate::lock(&self.groups).clone();
         self.history.web(&[], &groups);
         self.loaded.notify_all();

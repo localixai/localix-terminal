@@ -66,6 +66,7 @@ where
         groups: Mutex::new(HashMap::new()),
         history: History::default(),
         comments: Comments::default(),
+        turn: Default::default(),
         notices: Default::default(),
         kept: Mutex::new(Kept::default()),
     });
