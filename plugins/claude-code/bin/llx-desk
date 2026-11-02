@@ -8,7 +8,7 @@
 # LLX_DESK_RELEASE_URL fetches from a mirror of the release's files instead.
 set -eu
 
-VERSION=0.1.2
+VERSION=0.1.3
 REPO=rsaryev/llx-desk
 data=${LLX_DESK_DATA:-${XDG_DATA_HOME:-$HOME/.local/share}/llx-desk}
 kept=$data/$VERSION/llx-desk
