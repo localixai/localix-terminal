@@ -23,7 +23,7 @@ llx-desk window '{"action": "open", "kind": "browser", "url": "http://localhost:
 ```
 
 <p align="center">
-  <img src="assets/demo.webp" width="860" alt="An agent drives a shop and a 2048 game in a llx-desk window, then fixes the page from a comment">
+  <img src="assets/demo.webp" width="860" alt="Claude Code opens 2048 in a llx-desk window and scores 500, then opens Codex in a terminal tab">
 </p>
 
 - **Pages**: tabs on the system WebView (WKWebView on macOS, WebKitGTK on Linux). The agent reads a page as an outline, clicks and types by ref, runs scripts, takes screenshots.
