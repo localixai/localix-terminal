@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.3
+
+- Closing the window takes a moment again, not seconds: the window's own thread no longer waits
+  on itself for its list of tabs. The pages of a closed window are now forgotten too, and their
+  owners hear `tab/closed`.
+
 ## 0.1.2
 
 - While the person comments on the pages, the agent's actions that would move a page (a click,

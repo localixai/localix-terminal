@@ -33,13 +33,17 @@ pub(super) fn on_window(
     )]
     match event {
         // The person closed the window: the browser's calls fail and the task is told, and the
-        // terminals' callers let their screens go.
+        // terminals' callers let their screens go. The browser is marked closed before the
+        // listener hears it: it then forgets every page at once, rather than asking this very
+        // loop for the window's tabs and waiting out the question's timeout.
         WindowEvent::CloseRequested => {
             let browser = open.web.is_some();
             *deck = None;
-            shared.heard("window", Heard::WindowClosed(CLOSED_WINDOW));
             if browser {
                 shared.closed();
+            }
+            shared.heard("window", Heard::WindowClosed(CLOSED_WINDOW));
+            if browser {
                 on_close();
             }
         }
