@@ -22,6 +22,10 @@
 llx-desk window '{"action": "open", "kind": "browser", "url": "http://localhost:3000"}'
 ```
 
+<p align="center">
+  <img src="assets/demo.webp" width="860" alt="An agent drives a shop and a 2048 game in a llx-desk window, then fixes the page from a comment">
+</p>
+
 - **Pages**: tabs on the system WebView (WKWebView on macOS, WebKitGTK on Linux). The agent reads a page as an outline, clicks and types by ref, runs scripts, takes screenshots.
 - **Terminals**: a program on a PTY that both the agent and the person can type into.
 - **The person watches**: tabs grouped by project, a floating preview on macOS, and comments on elements that reach the agent.
