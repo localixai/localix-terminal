@@ -70,6 +70,35 @@ extern "C" fn no(_this: &AnyObject, _sel: Sel) -> Bool {
     Bool::NO
 }
 
+/// An observer let go of, as NSPanel does it, but never with an exception. AppKit's own window
+/// frame observes the window from its first moment, while it is still tao's class; once the
+/// class is swapped, KVO looks for that observer under the panel's class, does not find it, and
+/// throws from inside the window's `dealloc`, which then never ends: the window stays in the
+/// window server for the rest of the process, one per window ever closed. Not finding it is
+/// all that went wrong: the observer goes with the window.
+extern "C" fn remove_observer(
+    this: &AnyObject,
+    _sel: Sel,
+    observer: *mut AnyObject,
+    key_path: *mut AnyObject,
+    context: *mut std::ffi::c_void,
+) {
+    let Some(panel) = AnyClass::get(c"NSPanel") else {
+        return;
+    };
+    let call = std::panic::AssertUnwindSafe(|| {
+        // SAFETY: NSPanel's own `removeObserver:forKeyPath:context:`, with the arguments AppKit
+        // gave this override, on the window they were given for.
+        let () = unsafe {
+            msg_send![super(this, panel), removeObserver: observer, forKeyPath: key_path, context: context]
+        };
+    });
+    // An Objective-C exception the message throws is caught here, never unwound through Rust.
+    if let Err(exception) = objc2::exception::catch(call) {
+        super::debug(|| format!("an observer KVO did not find: {exception:?}"));
+    }
+}
+
 /// Where the window's own minimize button goes: the loop, told to collapse to the mini. One
 /// deck per process.
 static COLLAPSE: OnceLock<Mutex<Option<EventLoopProxy<Cmd>>>> = OnceLock::new();
@@ -146,6 +175,14 @@ fn panel_class() -> Option<&'static AnyClass> {
         unsafe { class.add_method(sel!(canBecomeKeyWindow), yes as extern "C" fn(_, _) -> Bool) };
         // SAFETY: as above.
         unsafe { class.add_method(sel!(canBecomeMainWindow), no as extern "C" fn(_, _) -> Bool) };
+        // SAFETY: NSObject's `removeObserver:forKeyPath:context:`: an observer, a key path, a
+        // context pointer, no result.
+        unsafe {
+            class.add_method(
+                sel!(removeObserver:forKeyPath:context:),
+                remove_observer as extern "C" fn(_, _, _, _, _),
+            );
+        };
         Some(class.register())
     })
 }

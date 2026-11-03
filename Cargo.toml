@@ -29,7 +29,8 @@ ureq = { version = "3", default-features = false, features = ["json", "native-tl
 # Messages to the WKWebView behind the window, and the block its screenshot answers through.
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6"
-objc2 = "0.6"
+# `exception`: a panel's window lets go of an observer AppKit no longer finds (nspanel.rs).
+objc2 = { version = "0.6", features = ["exception"] }
 objc2-web-kit = { version = "0.3", default-features = false, features = ["std", "WKWebView", "WKWebViewConfiguration"] }
 
 # A page's place in the window's GTK box, and the WebView's own snapshot for a screenshot.

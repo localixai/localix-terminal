@@ -5,6 +5,9 @@
 - The mini no longer goes missing on the desktop after a full-screen app leaves full screen and
   comes back: macOS left it on that app's Space alone. Going to another Space now puts it on
   every Space again.
+- A closed window is let go of: each one stayed in the window server, invisible, for the rest of
+  the daemon's life. AppKit's own observers of the window, from before it became a panel, made
+  its teardown stop halfway (and the log say an autorelease pool was drained twice).
 
 ## 0.1.3
 
