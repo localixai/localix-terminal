@@ -59,6 +59,10 @@ pub(super) enum Event {
     /// A picture asked for has come (or failed).
     Pictured,
     /// The person went to another Space.
+    #[cfg_attr(
+        not(target_os = "macos"),
+        expect(dead_code, reason = "only macOS has Spaces to go to")
+    )]
     Respaced,
 }
 
