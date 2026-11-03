@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use super::Effect::{Blink, Busy, Capture, Enter};
 use super::Event::{
-    Acting, Appeared, Changed, Collapse, Expand, Pictured, Settled, Show, Vanished,
+    Acting, Appeared, Changed, Collapse, Expand, Pictured, Respaced, Settled, Show, Vanished,
 };
 use super::{Presence, State, Support, Timing};
 
@@ -122,4 +122,18 @@ fn a_blink_is_as_long_as_it_is_told() {
         presence.event(Show),
         vec![Blink(Duration::from_millis(5)), Capture]
     );
+}
+
+#[test]
+fn another_space_shows_the_mini_again_and_nothing_else() {
+    let mut presence = mini();
+    // Hidden: nothing to show.
+    assert_eq!(presence.event(Respaced), vec![]);
+    presence.event(Appeared);
+    assert_eq!(presence.event(Respaced), vec![Enter(State::Mini)]);
+    assert_eq!(presence.state(), State::Mini);
+    // Expanded: the deck moves to the person's Space on its own.
+    presence.event(Expand);
+    assert_eq!(presence.event(Respaced), vec![]);
+    assert_eq!(presence.state(), State::Expanded);
 }

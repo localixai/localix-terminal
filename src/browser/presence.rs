@@ -58,6 +58,8 @@ pub(super) enum Event {
     Changed,
     /// A picture asked for has come (or failed).
     Pictured,
+    /// The person went to another Space.
+    Respaced,
 }
 
 /// What to do about it.
@@ -135,6 +137,10 @@ impl Presence {
                 out
             }
             Event::Show => vec![],
+            // The mini is shown again: macOS may have left it on the Space of a full-screen app
+            // that left full screen and came back, out of every other Space.
+            Event::Respaced if self.state == State::Mini => vec![Effect::Enter(State::Mini)],
+            Event::Respaced => vec![],
             Event::Changed => self.refresh(),
             Event::Pictured => match self.picture {
                 Picture::Stale => {

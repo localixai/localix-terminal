@@ -99,6 +99,16 @@ pub(super) fn hide_mini(window: &tao::window::Window) {
     super::nspanel::hide(window);
 }
 
+/// The person's moves between Spaces, told to the loop: the mini is put on every Space again.
+#[cfg(target_os = "macos")]
+pub(super) fn watch_spaces(proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>) {
+    super::nspanel::watch_spaces(proxy);
+}
+
+/// Elsewhere there are no Spaces to watch.
+#[cfg(not(target_os = "macos"))]
+pub(super) fn watch_spaces(_proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>) {}
+
 #[cfg(not(target_os = "macos"))]
 pub(super) fn adopt_mini(_window: &tao::window::Window) {}
 

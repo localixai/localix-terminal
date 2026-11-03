@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The mini no longer goes missing on the desktop after a full-screen app leaves full screen and
+  comes back: macOS left it on that app's Space alone. Going to another Space now puts it on
+  every Space again.
+
 ## 0.1.3
 
 - Closing the window takes a moment again, not seconds: the window's own thread no longer waits

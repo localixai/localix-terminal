@@ -85,6 +85,7 @@ where
         let _ = refused.send_event(Cmd::Exit(1));
     }
 
+    platform::watch_spaces(&proxy);
     let mut deck: Option<Deck> = None;
     let mut presenter = Presenter::new();
     let mut docked = false;

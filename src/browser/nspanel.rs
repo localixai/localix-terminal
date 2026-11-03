@@ -212,6 +212,15 @@ pub(super) fn reveal(window: &Window, role: Role, rendering: Rendering) {
     let _: () = unsafe { msg_send![object, setHasShadow: Bool::YES] };
     // SAFETY: an NSWindow takes an NSWindowLevel (an NSInteger).
     let _: () = unsafe { msg_send![object, setLevel: role.level()] };
+    if role == Role::Mini {
+        // On every Space again. A full-screen app that leaves full screen takes the mini off
+        // every Space, and back on the one it comes back to, alone: the window keeps its
+        // behaviour all along, and only setting it anew puts it on the others.
+        // SAFETY: an NSWindow takes an NSWindowCollectionBehavior (an NSUInteger).
+        let _: () = unsafe { msg_send![object, setCollectionBehavior: 0usize] };
+        // SAFETY: as above.
+        let _: () = unsafe { msg_send![object, setCollectionBehavior: role.spaces()] };
+    }
     // SAFETY: an NSWindow answers a BOOL.
     let here: Bool = unsafe { msg_send![object, isOnActiveSpace] };
     if role == Role::Deck && !here.as_bool() {
@@ -260,6 +269,38 @@ pub(super) fn conceal_object(object: &AnyObject, rendering: Rendering) {
         let _: () = unsafe { msg_send![object, orderBack: std::ptr::null::<AnyObject>()] };
     } else {
         front(object);
+    }
+}
+
+/// Tell `proxy` each time the person goes to another Space, for the rest of the process. An
+/// unseen window (a test's) is never watched.
+pub(super) fn watch_spaces(proxy: &EventLoopProxy<Cmd>) {
+    use block2::RcBlock;
+    if unseen() {
+        return;
+    }
+    let proxy = proxy.clone();
+    let block = RcBlock::new(move |_note: *mut AnyObject| {
+        let _ = proxy.send_event(Cmd::Presence(Event::Respaced));
+    });
+    // SAFETY: `sharedWorkspace` is NSWorkspace's class method, returning the shared instance.
+    let workspace: Retained<AnyObject> = unsafe { msg_send![class!(NSWorkspace), sharedWorkspace] };
+    // SAFETY: an NSWorkspace answers its notification center.
+    let center: Retained<AnyObject> = unsafe { msg_send![&*workspace, notificationCenter] };
+    // SAFETY: the argument is a NUL-terminated UTF-8 literal, alive for the whole program.
+    let name: Retained<AnyObject> = unsafe {
+        msg_send![class!(NSString), stringWithUTF8String: c"NSWorkspaceActiveSpaceDidChangeNotification".as_ptr()]
+    };
+    // SAFETY: `mainQueue` is NSOperationQueue's class method: the block runs on the main thread.
+    let queue: Retained<AnyObject> = unsafe { msg_send![class!(NSOperationQueue), mainQueue] };
+    // SAFETY: a name, a nil object, a queue and a block of `void (^)(NSNotification *)`, which
+    // the center copies; it answers the observer (autoreleased, retained here).
+    let observer: Option<Retained<AnyObject>> = unsafe {
+        msg_send![&*center, addObserverForName: &*name, object: std::ptr::null::<AnyObject>(), queue: &*queue, usingBlock: &*block]
+    };
+    // Kept for the process: removed, the person's Spaces would go unwatched.
+    if let Some(observer) = observer {
+        let _ = Retained::into_raw(observer);
     }
 }
 
