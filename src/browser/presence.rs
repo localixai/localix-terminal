@@ -61,7 +61,10 @@ pub(super) enum Event {
     /// The person went to another Space.
     #[cfg_attr(
         all(not(target_os = "macos"), not(test)),
-        expect(dead_code, reason = "only macOS has Spaces to go to (the tests make it anywhere)")
+        expect(
+            dead_code,
+            reason = "only macOS has Spaces to go to (the tests make it anywhere)"
+        )
     )]
     Respaced,
 }
