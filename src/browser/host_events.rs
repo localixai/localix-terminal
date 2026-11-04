@@ -247,7 +247,7 @@ impl On<'_> {
             | Cmd::Adopt
             | Cmd::SwitchTab { .. }
             | Cmd::CloseTab { .. }
-            | Cmd::Resize(..)
+            | Cmd::Frame(..)
             | Cmd::Capture { .. }
             | Cmd::Noted(_)
             | Cmd::Exit(_)) => on_browser(command, self.deck, shared, proxy),

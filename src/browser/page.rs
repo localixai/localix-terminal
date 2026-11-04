@@ -209,11 +209,10 @@ impl Page {
         }
     }
 
-    /// Reframe the page to a size (`desktop`, `tablet`, `mobile`).
-    pub fn resize(&self, size: &str) -> ViewResult<()> {
-        let (width, height) = toolbar::size(size)
-            .ok_or_else(|| ViewError::Refused(format!("no page size {size}")))?;
-        self.driver()?.resize(width, height)
+    /// Give the page a size of its own (`iPhone 15 Pro`, `mobile`, `393x852`; `window` for the
+    /// whole window); what it is now, in words.
+    pub fn resize(&self, size: &str) -> ViewResult<String> {
+        self.driver()?.frame(size)
     }
 }
 

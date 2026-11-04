@@ -38,6 +38,20 @@ fn eval(
     }
 }
 
+/// Tab `tab` (the one acted on with none) takes `frame`, and the window and the strip show it.
+fn reframe(
+    open: &mut Deck,
+    tab: Option<u32>,
+    frame: Option<crate::browser::sizes::Frame>,
+    shared: &Shared,
+) {
+    if let Some(tabs) = open.web.as_mut() {
+        tabs.set_frame(tab, frame);
+    }
+    open.layout();
+    open.refresh(shared);
+}
+
 /// A command of the browser's own, on its tabs in the window.
 pub(super) fn on_browser(
     command: Cmd,
@@ -60,7 +74,7 @@ pub(super) fn on_browser(
             tab,
             ..
         } => return eval(tabs.at(tab), id, &script, failed, shared),
-        Cmd::Resize(width, height) => open.resize(width, height),
+        Cmd::Frame(tab, frame) => return reframe(open, tab, frame, shared),
         Cmd::Capture { clip, reply, tab } => match tabs.at(tab) {
             Some(webview) => return capture(webview, clip, reply),
             None => {

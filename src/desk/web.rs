@@ -176,7 +176,7 @@ fn run(page: &Page, args: &Value, url: Option<&str>) -> Result<Output, String> {
     }
     if let Some(size) = text(args, "size") {
         match page.resize(size) {
-            Ok(()) => report.push(format!("Page size {size}.")),
+            Ok(said) => report.push(said),
             Err(e) => report.push(format!("Page size not changed: {e}")),
         }
     }

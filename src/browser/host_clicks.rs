@@ -11,7 +11,8 @@ use super::On;
 use crate::browser::capture::Shot;
 use crate::browser::deck::{After, Deck, Revisit, Shown};
 use crate::browser::presence::Event as Presence;
-use crate::browser::strip::{Click, Key, SEARCH, click, went};
+use crate::browser::sizes;
+use crate::browser::strip::{Click, Key, SEARCH, Tool, click, went};
 
 impl On<'_> {
     /// The mini names the tab shown again: its project may be known by now.
@@ -55,6 +56,8 @@ impl On<'_> {
             Some(Click::Visit(at)) => return self.visit(at),
             Some(Click::Collapse) => return self.presence(Presence::Collapse),
             Some(Click::NewTab(x, y)) => return self.plus(x, y),
+            Some(Click::Frame(x, y)) => return self.size_menu(x, y),
+            Some(Click::More(x, y, held)) => return self.more_menu(x, y, held),
             // GTK lays the strip and the pages in a column, so the strip's own list could only
             // take the pages' place: the history is the system's menu there.
             #[cfg(not(target_os = "macos"))]
@@ -113,6 +116,66 @@ impl On<'_> {
         self.shared.heard(&Key::Web(id).name(), Heard::Did(&said));
     }
 
+    /// "»": the system's menu under it, the buttons the strip had no room for; the one picked
+    /// does as its button would, its own menu (if any) under "»".
+    fn more_menu(&mut self, x: u32, y: u32, held: u8) {
+        let Some(open) = self.deck.as_ref() else {
+            return;
+        };
+        let tools: Vec<Tool> = Tool::ALL
+            .into_iter()
+            .filter(|tool| held & tool.bit() != 0)
+            .collect();
+        let labels: Vec<&str> = tools.iter().map(|tool| tool.label()).collect();
+        let marked = (open.commenting())
+            .then(|| tools.iter().position(|tool| *tool == Tool::Comment))
+            .flatten();
+        let at = (f64::from(x), f64::from(y));
+        match open
+            .choose(at, &labels, marked)
+            .and_then(|at| tools.get(at))
+        {
+            Some(Tool::Size) => self.size_menu(x, y),
+            Some(Tool::Comment) => self.clicked("comment"),
+            Some(Tool::NewTab) => self.plus(x, y),
+            Some(Tool::History) => self.clicked("history"),
+            None => {}
+        }
+    }
+
+    /// The size button: the system's menu under it, the sizes to pick from; the page shown takes
+    /// the one picked, and whoever works in it is told.
+    fn size_menu(&mut self, x: u32, y: u32) {
+        let Some(open) = self.deck.as_ref() else {
+            return;
+        };
+        let Some(web) = open.web.as_ref().filter(|_| open.shown == Shown::Web) else {
+            return;
+        };
+        let now = web.frame(None).cloned();
+        let (items, marked) = sizes::menu(now.as_ref());
+        let titles: Vec<&str> = items.iter().map(String::as_str).collect();
+        let at = (f64::from(x), f64::from(y));
+        let Some(frame) = open
+            .choose(at, &titles, marked)
+            .and_then(|at| sizes::picked(at, now.as_ref()))
+            .map(sizes::Picked::frame)
+        else {
+            return;
+        };
+        let id = web.listed().1;
+        let said = match &frame {
+            Some(frame) => format!(
+                "The person set this tab's page size to {} ({}).",
+                frame.name,
+                frame.sides()
+            ),
+            None => "The person let this tab's page fill the window again.".to_string(),
+        };
+        let _ = self.proxy.send_event(Cmd::Frame(Some(id), frame));
+        self.shared.heard(&Key::Web(id).name(), Heard::Did(&said));
+    }
+
     /// "+": the system's menu under it, then a page on the search page, or a terminal of the
     /// person's in the project shown (the app starts it).
     fn plus(&mut self, x: u32, y: u32) {
@@ -120,7 +183,7 @@ impl On<'_> {
             return;
         };
         let at = (f64::from(x), f64::from(y));
-        match open.choose(at, &["New Page", "New Terminal"]) {
+        match open.choose(at, &["New Page", "New Terminal"], None) {
             Some(0) => {
                 let url = SEARCH.trim_end_matches("/search").to_string();
                 let _ = self.proxy.send_event(Cmd::NewTab { url, reply: None });
@@ -156,7 +219,10 @@ impl On<'_> {
         if items.is_empty() {
             items.push("No tabs yet");
         }
-        if let Some(row) = open.choose((0.0, 0.0), &items).and_then(|at| rows.get(at)) {
+        if let Some(row) = open
+            .choose((0.0, 0.0), &items, None)
+            .and_then(|at| rows.get(at))
+        {
             self.visit(row.at);
         }
     }

@@ -740,6 +740,23 @@ fn feedback(browser: &browser::Browser, driver: &WebviewDriver) {
     browser.listen(|_, _| {});
 }
 
+/// A page of a size of its own: framed as a phone, the page sees the phone's width, and the
+/// window is as it was; `window` gives it the whole window again. A size the window cannot hold
+/// is said, not pretended.
+fn sizes(driver: &WebviewDriver) {
+    let width = |driver: &WebviewDriver| driver.evaluate("innerWidth").unwrap();
+    let whole = width(driver);
+    let said = driver.frame("iPhone 15 Pro").unwrap();
+    assert_eq!(said, "Page size iPhone 15 Pro: 393 × 852.");
+    assert_eq!(width(driver), "393");
+    let said = driver.frame("390x2000").unwrap();
+    assert!(said.contains("the window is smaller"), "{said}");
+    assert!(driver.frame("watch").is_err(), "a size it does not know");
+    let said = driver.frame("window").unwrap();
+    assert!(said.starts_with("The page fills the window"), "{said}");
+    assert_eq!(width(driver), whole);
+}
+
 /// While the person comments, an action that moves the page waits for them; a script that reads
 /// it does not. Their Send gives the turn back, and the action goes.
 fn waits_for_the_person(browser: &browser::Browser, driver: &WebviewDriver) {
@@ -1109,6 +1126,7 @@ fn main() {
                     starts_at_once(&browser, &driver, &origin);
                     feedback(&browser, &driver);
                     waits_for_the_person(&browser, &driver);
+                    sizes(&driver);
                     told::scenario(&driver, &origin);
                     scenario(&driver, &origin);
                 });

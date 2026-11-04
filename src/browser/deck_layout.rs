@@ -68,14 +68,6 @@ impl Deck {
         )
     }
 
-    /// Give the pages `width` by `height` (the browser's viewport), the strip above them.
-    pub(in super::super) fn resize(&self, width: f64, height: f64) {
-        let top = self.top();
-        self.frame
-            .native
-            .set_inner_size(LogicalSize::new(width, height + top));
-    }
-
     /// The strip along the top, what is shown under it, and the rest beside, out of sight.
     pub(in super::super) fn layout(&self) {
         let (size, top) = self.content();
@@ -135,6 +127,10 @@ impl Deck {
         let _ = strip.evaluate_script(&strip::script(&items, shown, &visited(shared)));
         let rows = self.menu.then(|| self.rows(shared));
         let _ = strip.evaluate_script(&strip::menu(rows.as_deref()));
+        let framed = (self.web.as_ref())
+            .filter(|_| self.shown == Shown::Web)
+            .and_then(|web| web.frame(None));
+        let _ = strip.evaluate_script(&super::super::sizes::script(framed));
         let held = shared.comments.count();
         let _ = strip.evaluate_script(&strip::commenting(self.commenting, held));
         let (acting, waiting) = shared.turn.now();

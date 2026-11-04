@@ -1,19 +1,12 @@
 //! The browser's own controls, shown beside the page like a real browser's toolbar: back and
-//! reload, acted on like any control, by ref; the page never sees them. The page size (a phone or
-//! a tablet, for how a site lays out at that width) is the agent's `size`, not a control: offered
-//! to the helper, it was picked for any other dropdown a goal named.
+//! reload, acted on like any control, by ref; the page never sees them. The page size (sizes.rs)
+//! is the agent's `size`, not a control: offered to the helper, it was picked for any other
+//! dropdown a goal named.
 
 use crate::view::Element;
 
 pub(crate) const BACK: &str = "back";
 pub(crate) const RELOAD: &str = "reload";
-
-/// The page sizes `size` takes: (value, width, height).
-const SIZES: [(&str, f64, f64); 3] = [
-    ("desktop", 1280.0, 860.0),
-    ("tablet", 820.0, 1180.0),
-    ("mobile", 390.0, 844.0),
-];
 
 /// Whether `reference` names a toolbar control rather than something on the page.
 pub(crate) fn owns(reference: &str) -> bool {
@@ -64,14 +57,6 @@ pub(crate) fn shortcut(key: &str) -> Option<&'static str> {
         "r" if held.iter().any(command) => Some(RELOAD),
         _ => None,
     }
-}
-
-/// The width and height a page size names.
-pub(crate) fn size(value: &str) -> Option<(f64, f64)> {
-    SIZES
-        .iter()
-        .find(|(known, ..)| *known == value)
-        .map(|(_, width, height)| (*width, *height))
 }
 
 #[cfg(test)]

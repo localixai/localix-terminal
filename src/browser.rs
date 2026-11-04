@@ -34,6 +34,7 @@ mod platform;
 mod popup;
 mod presence;
 mod script;
+mod sizes;
 mod strip;
 mod tab_view;
 mod tabs;
@@ -135,8 +136,10 @@ pub trait Driver {
     fn observe(&self) -> ViewResult<Observation>;
     /// Perform `action` against the observation with `epoch`, then let the page settle.
     fn act(&self, epoch: &str, action: &Action) -> ViewResult<()>;
-    /// Reframe the page to `width`×`height` (layout only: the user agent stays), then let it settle.
-    fn resize(&self, width: f64, height: f64) -> ViewResult<()>;
+    /// Give the page a size of its own, as `size` names it (`iPhone 15 Pro`, `mobile`, `393x852`;
+    /// `window` for the whole window), then let it settle; what it is now, in words. Layout only:
+    /// the user agent stays.
+    fn frame(&self, size: &str) -> ViewResult<String>;
     /// Press `keys` (chords such as "ArrowUp", "Ctrl+A") on the focused element, `delay_ms` apart,
     /// then let the page settle.
     fn press(&self, keys: &[String], delay_ms: u64) -> ViewResult<()>;

@@ -5,6 +5,7 @@
 //! the next tab: on macOS the tabs share one WebKit configuration (cookies, the probe's IPC), and
 //! the first WebView owns its IPC handler, so none is ever dropped before the window is.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use tao::dpi::LogicalSize;
@@ -14,6 +15,7 @@ use wry::WebView;
 use super::host::{Cmd, Shared, Window};
 use super::platform::keep_tab_rendering;
 use super::popup::{self, Parent};
+use super::sizes::{self, Frame};
 use super::strip::Key;
 use super::tab_view::{build, builder, share};
 
@@ -31,6 +33,8 @@ pub(super) struct Tabs {
     /// The id of the tab shown and acted on.
     active: u32,
     window: Window,
+    /// Each tab's size, by id, while one is set (sizes.rs); else it fills the window.
+    frames: HashMap<u32, Frame>,
 }
 
 impl Tabs {
@@ -45,6 +49,7 @@ impl Tabs {
             slots: vec![],
             active: 1,
             window: window.clone(),
+            frames: HashMap::new(),
         };
         popup::reset();
         let id = popup::reserve().unwrap_or(1);
@@ -173,6 +178,7 @@ impl Tabs {
         self.check(id)?;
         let slot = &mut self.slots[id as usize - 1];
         slot.open = false;
+        self.frames.remove(&id);
         popup::free(id);
         let _ = slot.webview.load_url(BLANK);
         let ids = self.ids();
@@ -203,19 +209,42 @@ impl Tabs {
         (self.ids(), self.active)
     }
 
+    /// Tab `id`'s size (the one acted on with none), while one is set.
+    pub(super) fn frame(&self, id: Option<u32>) -> Option<&Frame> {
+        self.frames.get(&id.unwrap_or(self.active))
+    }
+
+    /// Set tab `id`'s size (the one acted on with none), or let it fill the window again.
+    pub(super) fn set_frame(&mut self, id: Option<u32>, frame: Option<Frame>) {
+        let id = id.unwrap_or(self.active);
+        match frame {
+            Some(frame) => self.frames.insert(id, frame),
+            None => self.frames.remove(&id),
+        };
+    }
+
     /// The active tab fills `size`, `top` points down, while the browser is `shown`; the others
     /// (and all of them while a terminal is shown) stand beside it, out of sight.
     pub(super) fn layout(&self, size: LogicalSize<f64>, top: f64, shown: bool) {
         for (at, slot) in self.slots.iter().enumerate() {
             let here = shown && id_of(at) == self.active;
-            let x = if here { 0.0 } else { -(size.width + 100.0) };
+            fit(&slot.webview, None);
+            let away = |x: f64| if here { x } else { -(size.width + 100.0) };
+            if let Some(frame) = self.frames.get(&id_of(at)) {
+                // A size of its own: in the middle, below the strip, nothing of it under it.
+                let (across, down, framed) = sizes::place(size, top, Some(frame));
+                super::platform::inset(&slot.webview, 0.0);
+                place(&slot.webview, away(across), down, framed, here);
+                fit(&slot.webview, Some(framed));
+                continue;
+            }
             // Under the strip where WebKit keeps its viewport below it, else below the strip.
             match super::platform::inset(&slot.webview, top) {
                 true => {
                     let whole = LogicalSize::new(size.width, size.height + top);
-                    place(&slot.webview, x, 0.0, whole, here);
+                    place(&slot.webview, away(0.0), 0.0, whole, here);
                 }
-                false => place(&slot.webview, x, top, size, here),
+                false => place(&slot.webview, away(0.0), top, size, here),
             }
         }
     }
@@ -263,6 +292,30 @@ pub(super) fn place(webview: &WebView, x: f64, top: f64, size: LogicalSize<f64>,
 #[cfg(target_os = "linux")]
 pub(super) fn place(webview: &WebView, _x: f64, _top: f64, _size: LogicalSize<f64>, shown: bool) {
     let _ = webview.set_visible(shown);
+}
+
+/// A page of a size of its own keeps it while the window is resized (the layout the resize
+/// brings moves it to the middle again); with none it fills the window. In a GTK box: that size
+/// asked for, in the middle of the page's share.
+#[cfg(not(target_os = "linux"))]
+fn fit(webview: &WebView, framed: Option<LogicalSize<f64>>) {
+    if framed.is_some() {
+        super::platform::follow(webview, super::platform::Follow::Centre);
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn fit(webview: &WebView, framed: Option<LogicalSize<f64>>) {
+    use gtk::prelude::WidgetExt;
+    use wry::WebViewExtUnix;
+    let view = webview.webview();
+    let (size, align) = match framed {
+        Some(size) => (size.cast::<i32>(), gtk::Align::Center),
+        None => (LogicalSize::new(-1, -1), gtk::Align::Fill),
+    };
+    view.set_size_request(size.width, size.height);
+    view.set_halign(align);
+    view.set_valign(align);
 }
 
 /// The strip along the top, `size` tall. In a GTK box every page takes an equal share unless

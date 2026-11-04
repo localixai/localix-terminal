@@ -98,7 +98,7 @@ pub(super) fn list() -> Vec<Value> {
                 "script": {"type": "string"},
                 "read": {"type": "boolean", "description": "Also the page's whole text."},
                 "offset": {"type": "integer", "minimum": 0},
-                "size": {"type": "string", "enum": ["desktop", "tablet", "mobile"]},
+                "size": {"type": "string", "description": "The page's size, its tab's own: a device (`iPhone SE`, `iPhone 15 Pro`, `Pixel 8`, `iPad Mini`, `Laptop`, `Desktop`; `mobile`, `tablet`), `WIDTHxHEIGHT`, or `window` to fill the window again. The window stays as the person left it: the page is framed in it. Layout only: the user agent stays."},
                 "input": {"type": "string", "description": "Terminal: text to type; `{{secret:NAME}}` types a saved secret."},
                 "wait_for": wait,
                 "yield_ms": yield_ms,

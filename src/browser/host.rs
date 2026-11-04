@@ -103,8 +103,8 @@ pub(super) enum Cmd {
     /// Close the window, as the person would but without stopping the task: it opens again,
     /// shown or hidden, on its next use.
     Close,
-    /// Reframe the page (`viewport`): width, height.
-    Resize(f64, f64),
+    /// Give a tab (the one acted on with none) a size of its own (sizes.rs), or the whole window.
+    Frame(Option<u32>, Option<super::sizes::Frame>),
     /// A screenshot of the page, or of a part of it; the reply comes once WebKit has drawn it.
     Capture {
         clip: Option<Clip>,

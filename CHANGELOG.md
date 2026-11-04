@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Page sizes: the size button in the window's toolbar frames the page shown as a device (iPhone SE,
+  iPhone 15 Pro, Pixel 8, iPad Mini, Laptop, Desktop), in the middle of the window, or lets it fill
+  the window again; Rotate turns a size. Each tab keeps its own. The agent's `size` takes the same
+  names, `mobile`, `tablet`, `WIDTHxHEIGHT` or `window`, frames the page instead of resizing the
+  person's window, and says the size the page has (smaller when the window is). `desktop` is now
+  the Desktop size, 1440 × 900.
+- A narrow window keeps its toolbar in order: the address field gives way first, then the buttons
+  that no longer fit go into "»", the system's menu of them, as Safari's do. They no longer slide
+  over the address field.
+
 ## 0.1.4
 
 - The mini no longer goes missing on the desktop after a full-screen app leaves full screen and

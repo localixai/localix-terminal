@@ -56,6 +56,10 @@ llx-desk window --end                                       # close every tab of
 - Every call prints a report and the tab's snapshot: a page's outline, or a terminal's screen. After an
   `interact` on a page, only what changed since you last read it whole. Act on what it says, not on
   what you expected.
+- A page's size: `size` frames it as a device (`iPhone 15 Pro`, `mobile`, `tablet`, `iPad Mini`,
+  `Laptop`, or `393x852`) in the middle of the window, for that tab alone; `window` fills the window
+  again. The person can pick one from the window too. Check a layout at a phone and a tablet size
+  before calling it done.
 - Precise work needs no goal: `keys` (`["ArrowDown", "Enter"]`), `script` (JavaScript, its value
   returned), `read: true` (the page's whole text), `input` and `wait_for` in a terminal.
 - A page's `confirm` and `prompt` are answered Cancel unless you pass `dialog: "accept"` (`dialog_text`

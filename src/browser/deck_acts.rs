@@ -43,7 +43,12 @@ impl Deck {
                 return Ok(After::Kept);
             }
             // The host's: the window's presence, and a tab built on the event loop.
-            Click::Collapse | Click::NewTab(..) | Click::Menu(..) | Click::Glass(_) => {
+            Click::Collapse
+            | Click::NewTab(..)
+            | Click::Frame(..)
+            | Click::More(..)
+            | Click::Menu(..)
+            | Click::Glass(_) => {
                 return Ok(After::Kept);
             }
             Click::Reload => {
@@ -87,6 +92,8 @@ impl Deck {
             | Click::Collapse
             | Click::Reload
             | Click::NewTab(..)
+            | Click::Frame(..)
+            | Click::More(..)
             | Click::Menu(..)
             | Click::Glass(_)
             | Click::Typing(_)
@@ -153,6 +160,11 @@ impl Deck {
         shared.turn.commenting(self.commenting);
     }
 
+    /// Whether the person is commenting on the pages now.
+    pub(crate) fn commenting(&self) -> bool {
+        self.commenting
+    }
+
     /// The window went out of the person's sight: commenting ends, the pages and the strip say so.
     pub(crate) fn stop_commenting(&mut self, shared: &Shared) {
         if self.commenting {
@@ -180,9 +192,15 @@ impl Deck {
     }
 
     /// The person picks one of `items` from the system's menu at `at` (the strip's points).
-    pub(crate) fn choose(&self, at: (f64, f64), items: &[&str]) -> Option<usize> {
+    /// The item `marked`, if any, is shown as the one chosen now.
+    pub(crate) fn choose(
+        &self,
+        at: (f64, f64),
+        items: &[&str],
+        marked: Option<usize>,
+    ) -> Option<usize> {
         let strip = self.strip.as_ref()?;
-        super::super::platform::choose(strip, at, items)
+        super::super::platform::choose(strip, at, items, marked)
     }
 
     pub(crate) fn listing(&self, shared: &Shared) -> Vec<WindowTab> {

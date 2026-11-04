@@ -7,17 +7,27 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use gtk::gdk::prelude::SeatExt;
 use gtk::glib;
-use gtk::prelude::{GtkMenuExt, GtkMenuExtManual, GtkMenuItemExt, MenuShellExt, WidgetExt};
+use gtk::prelude::{
+    Cast, CheckMenuItemExt, GtkMenuExt, GtkMenuExtManual, GtkMenuItemExt, MenuShellExt, WidgetExt,
+};
 use wry::{WebView, WebViewExtUnix};
 
 /// Show `items` as a menu at the pointer, over `strip`'s window, and wait for the person: the
 /// index of the item picked, or none when they dismissed it.
-pub(super) fn choose(strip: &WebView, items: &[&str]) -> Option<usize> {
+pub(super) fn choose(strip: &WebView, items: &[&str], marked: Option<usize>) -> Option<usize> {
     let menu = gtk::Menu::new();
     // The index picked, `usize::MAX` for none.
     let picked = Arc::new(AtomicUsize::new(usize::MAX));
     for (at, label) in items.iter().enumerate() {
-        let entry = gtk::MenuItem::with_label(label);
+        // The item chosen now (the page's size, commenting) is checked, as on macOS. Checked
+        // before the handler below is connected: checking an item activates it.
+        let entry: gtk::MenuItem = if marked == Some(at) {
+            let chosen = gtk::CheckMenuItem::with_label(label);
+            chosen.set_active(true);
+            chosen.upcast()
+        } else {
+            gtk::MenuItem::with_label(label)
+        };
         let picked = Arc::clone(&picked);
         entry.connect_activate(move |_| picked.store(at, Ordering::SeqCst));
         menu.append(&entry);

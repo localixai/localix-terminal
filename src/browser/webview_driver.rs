@@ -254,11 +254,22 @@ impl Driver for WebviewDriver {
         Ok(())
     }
 
-    fn resize(&self, width: f64, height: f64) -> ViewResult<()> {
-        self.send(Cmd::Resize(width, height))?;
+    fn frame(&self, size: &str) -> ViewResult<String> {
+        let frame = super::super::sizes::parse(size).map_err(ViewError::Refused)?;
+        self.open_or_closed()?;
+        self.send(Cmd::Frame(Some(self.target()), frame.clone()))?;
         // The page reflows on its own resize event; give it the usual settle.
         let _ = self.call("settle", &json!({}), SETTLE_TIMEOUT);
-        Ok(())
+        let seen = self.evaluate("innerWidth + ' × ' + innerHeight")?;
+        Ok(match frame {
+            None => format!("The page fills the window: {seen}."),
+            Some(frame) if seen == frame.sides() => format!("Page size {}: {seen}.", frame.name),
+            Some(frame) => format!(
+                "Page size {} ({}), shown at {seen}: the window is smaller.",
+                frame.name,
+                frame.sides()
+            ),
+        })
     }
 
     /// The browser's own shortcuts (a reload) are its own, as a person's are; the keys between

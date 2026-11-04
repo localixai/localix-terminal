@@ -237,6 +237,16 @@ fn only_web_addresses_are_gone_to_from_the_field() {
 fn the_toolbar_buttons_are_clicks() {
     assert_eq!(click("reload"), Some(Click::Reload));
     assert_eq!(click("new 812 40"), Some(Click::NewTab(812, 40)));
+    assert_eq!(click("frame 760 40"), Some(Click::Frame(760, 40)));
+    assert_eq!(click("frame 760"), None);
+    let held = Tool::Size.bit() | Tool::History.bit();
+    assert_eq!(click("more 700 40 fs hs"), Some(Click::More(700, 40, held)));
+    assert_eq!(click("more 700 40"), None, "nothing held");
+    assert_eq!(
+        click("more 700 40 fs xx"),
+        None,
+        "a button it does not know"
+    );
     assert_eq!(click("new"), None);
     assert_eq!(click("new 812"), None);
 }

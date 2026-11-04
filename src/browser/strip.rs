@@ -43,6 +43,51 @@ impl Key {
     }
 }
 
+/// A toolbar button the strip had no room for: it waits in the "»" menu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Tool {
+    Size,
+    Comment,
+    NewTab,
+    History,
+}
+
+impl Tool {
+    /// The buttons, in the toolbar's order (and the menu's).
+    pub(super) const ALL: [Self; 4] = [Self::Size, Self::Comment, Self::NewTab, Self::History];
+
+    /// The button the strip names by its id.
+    fn parse(id: &str) -> Option<Self> {
+        Some(match id {
+            "fs" => Self::Size,
+            "cm" => Self::Comment,
+            "nt" => Self::NewTab,
+            "hs" => Self::History,
+            _ => return None,
+        })
+    }
+
+    /// Its line in the "»" menu.
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Self::Size => "Page Size\u{2026}",
+            Self::Comment => "Comment on the Page",
+            Self::NewTab => "New Tab\u{2026}",
+            Self::History => "History",
+        }
+    }
+
+    /// Its bit in `Click::More`'s set.
+    pub(super) fn bit(self) -> u8 {
+        match self {
+            Self::Size => 1,
+            Self::Comment => 2,
+            Self::NewTab => 4,
+            Self::History => 8,
+        }
+    }
+}
+
 /// What the person did on the strip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Click {
@@ -67,6 +112,11 @@ pub(super) enum Click {
     Reload,
     /// "+" at these points of the strip: a new page or terminal, as the person picks.
     NewTab(u32, u32),
+    /// The size button at these points of the strip: the page's size, as the person picks.
+    Frame(u32, u32),
+    /// "»" at these points of the strip, with the buttons it holds (`Tool::bit`s): one of them,
+    /// as the person picks.
+    More(u32, u32, u8),
     /// The strip's open list (the address field's suggestions, the history menu) is at this
     /// rectangle of it (x, y, width, height), or none is open: the system's glass goes under it.
     Glass(Option<(u32, u32, u32, u32)>),
@@ -96,6 +146,20 @@ pub(super) fn click(body: &str) -> Option<Click> {
         ("new", Some(at)) => {
             let (x, y) = at.split_once(' ')?;
             Some(Click::NewTab(x.parse().ok()?, y.parse().ok()?))
+        }
+        ("frame", Some(at)) => {
+            let (x, y) = at.split_once(' ')?;
+            Some(Click::Frame(x.parse().ok()?, y.parse().ok()?))
+        }
+        ("more", Some(rest)) => {
+            let mut parts = rest.split(' ');
+            let x = parts.next()?.parse().ok()?;
+            let y = parts.next()?.parse().ok()?;
+            let mut held = 0;
+            for id in parts {
+                held |= Tool::parse(id)?.bit();
+            }
+            (held != 0).then_some(Click::More(x, y, held))
         }
         ("typing", Some("on")) => Some(Click::Typing(true)),
         ("typing", Some("off")) => Some(Click::Typing(false)),

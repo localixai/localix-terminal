@@ -90,7 +90,7 @@ impl On<'_> {
         }
         let titles: Vec<&str> = items.iter().map(|item| item.title()).collect();
         let at = (f64::from(at.0), f64::from(at.1));
-        let Some(picked) = open.choose(at, &titles).and_then(|at| items.get(at)) else {
+        let Some(picked) = open.choose(at, &titles, None).and_then(|at| items.get(at)) else {
             return;
         };
         match picked {
@@ -124,7 +124,8 @@ impl On<'_> {
         items.extend([Term::Paste, Term::SelectAll, Term::Clear]);
         let titles: Vec<&str> = items.iter().map(|item| item.title()).collect();
         let at = (f64::from(at.0), f64::from(at.1));
-        let picked = platform::choose(&open.webview, at, &titles).and_then(|at| items.get(at));
+        let picked =
+            platform::choose(&open.webview, at, &titles, None).and_then(|at| items.get(at));
         let view = &open.webview;
         let _ = match picked {
             Some(Term::Copy) => view.evaluate_script_with_callback("term.getSelection()", |text| {

@@ -51,7 +51,12 @@ fn text(words: &str) -> Option<Retained<AnyObject>> {
 
 /// Show `items` as a menu at `at` (the strip's points, from its top left) and wait for the
 /// person: the index of the item picked, or none when they dismissed it.
-pub(super) fn choose(strip: &WebView, at: (f64, f64), items: &[&str]) -> Option<usize> {
+pub(super) fn choose(
+    strip: &WebView,
+    at: (f64, f64),
+    items: &[&str],
+    marked: Option<usize>,
+) -> Option<usize> {
     let target = picker()?;
     // SAFETY: `new` on NSMenu answers a retained, empty menu.
     let menu: Retained<AnyObject> = unsafe { msg_send![class!(NSMenu), new] };
@@ -74,6 +79,12 @@ pub(super) fn choose(strip: &WebView, at: (f64, f64), items: &[&str]) -> Option<
         let _: () = unsafe { msg_send![item, setTarget: target] };
         // SAFETY: an NSMenuItem takes an NSInteger tag.
         let _: () = unsafe { msg_send![item, setTag: isize::try_from(tag).unwrap_or(-1)] };
+        if marked == Some(tag) {
+            /// NSControlStateValueOn: the item's check mark.
+            const ON: isize = 1;
+            // SAFETY: an NSMenuItem takes an NSControlStateValue (an NSInteger).
+            let _: () = unsafe { msg_send![item, setState: ON] };
+        }
     }
     PICKED.store(-1, Ordering::SeqCst);
     let view = strip.webview();

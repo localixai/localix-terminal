@@ -29,6 +29,7 @@ llx-desk window '{"action": "open", "kind": "browser", "url": "http://localhost:
 - **Pages**: tabs on the system WebView (WKWebView on macOS, WebKitGTK on Linux). The agent reads a page as an outline, clicks and types by ref, runs scripts, takes screenshots.
 - **Terminals**: a program on a PTY that both the agent and the person can type into.
 - **The person watches**: tabs grouped by project, a floating preview on macOS, and comments on elements that reach the agent.
+- **Page sizes**: any tab can be framed as a phone, a tablet or a laptop (`size`, or the size button in the window), without moving the window.
 - **`goal`**: hands a screen of routine clicks to a small, fast model via OpenRouter, so the agent spends its tokens on thinking.
 - **Tabs per owner**: each project (or `--as NAME`) sees only its own tabs.
 

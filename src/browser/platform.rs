@@ -206,6 +206,8 @@ pub(super) enum Follow {
     Fill,
     /// The strip: as wide as the window, its height kept, held to the window's top.
     Top,
+    /// A page of a size of its own: that size kept, in the middle of the window.
+    Centre,
 }
 
 /// AppKit resizes `webview` with its window in the same pass as the window itself: the window's
@@ -216,12 +218,16 @@ pub(super) fn follow(webview: &wry::WebView, follow: Follow) {
     use objc2::msg_send;
     use wry::WebViewExtMacOS;
     /// NSAutoresizingMaskOptions.
+    const LEFT: usize = 1;
     const WIDTH: usize = 2;
+    const RIGHT: usize = 4;
     const BELOW: usize = 8;
     const HEIGHT: usize = 16;
+    const ABOVE: usize = 32;
     let mask = match follow {
         Follow::Fill => WIDTH | HEIGHT,
         Follow::Top => WIDTH | BELOW,
+        Follow::Centre => LEFT | RIGHT | BELOW | ABOVE,
     };
     let view = webview.webview();
     // SAFETY: an NSView takes an NSAutoresizingMaskOptions (an NSUInteger).
@@ -233,14 +239,24 @@ pub(super) fn follow(_webview: &wry::WebView, _follow: Follow) {}
 
 /// The person picks one of `items` from the system's menu at `at` (menu.rs).
 #[cfg(target_os = "macos")]
-pub(super) fn choose(strip: &wry::WebView, at: (f64, f64), items: &[&str]) -> Option<usize> {
-    super::menu::choose(strip, at, items)
+pub(super) fn choose(
+    strip: &wry::WebView,
+    at: (f64, f64),
+    items: &[&str],
+    marked: Option<usize>,
+) -> Option<usize> {
+    super::menu::choose(strip, at, items, marked)
 }
 
 /// Elsewhere GTK's menu, at the pointer (the click that asked for it is under it).
 #[cfg(not(target_os = "macos"))]
-pub(super) fn choose(strip: &wry::WebView, _at: (f64, f64), items: &[&str]) -> Option<usize> {
-    super::menu_gtk::choose(strip, items)
+pub(super) fn choose(
+    strip: &wry::WebView,
+    _at: (f64, f64),
+    items: &[&str],
+    marked: Option<usize>,
+) -> Option<usize> {
+    super::menu_gtk::choose(strip, items, marked)
 }
 
 /// The pasteboard's text (pasteboard.rs); elsewhere none yet.
