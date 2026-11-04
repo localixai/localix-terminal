@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.5
+
 - Page sizes: the size button in the window's toolbar frames the page shown as a device (iPhone SE,
   iPhone 15 Pro, Pixel 8, iPad Mini, Laptop, Desktop), in the middle of the window, or lets it fill
   the window again; Rotate turns a size. Each tab keeps its own. The agent's `size` takes the same

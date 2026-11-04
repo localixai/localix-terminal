@@ -9,7 +9,7 @@
       "name": "llx-desk",
       "source": "./plugins/claude-code",
       "description": "A window of browser pages and terminals Claude works in and you watch, with a pane for its tabs and your comments",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "license": "MIT",
       "keywords": ["browser", "terminal", "window", "screenshot"]
     }
