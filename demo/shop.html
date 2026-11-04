@@ -28,6 +28,9 @@
   }
   .product {
     display: grid;
+    /* The card's own width: an auto column took the swatch's width from its height (aspect-ratio)
+       and kept it after the page narrowed and widened again, wider than the card. */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto 1fr auto;
     gap: 0.75rem;
     padding: 1rem;
