@@ -19,7 +19,9 @@ const RETRY: Duration = Duration::from_millis(500);
 
 /// Never returns: the monitor that started it stops it. A daemon not running yet, or gone, is
 /// waited for, so the follower can start before the first tab and outlive a daemon restart.
-pub fn follow(owner: &str) -> ! {
+/// With `lines`, each note is one JSON string on a line of its own, for a program that reads
+/// it: a note's lines never come apart.
+pub fn follow(owner: &str, lines: bool) -> ! {
     loop {
         let (notes, arrived) = sync_channel::<Value>(64);
         let hear: Notes = Arc::new(move |method, params| {
@@ -36,7 +38,7 @@ pub fn follow(owner: &str) -> ! {
             );
             while subscribed.is_ok() {
                 match arrived.recv_timeout(LOOK) {
-                    Ok(note) => print(&client, owner, &note),
+                    Ok(note) => print(&client, owner, &note, lines),
                     Err(RecvTimeoutError::Timeout) if client.link.is_open() => {}
                     Err(RecvTimeoutError::Timeout | RecvTimeoutError::Disconnected) => break,
                 }
@@ -46,11 +48,18 @@ pub fn follow(owner: &str) -> ! {
     }
 }
 
-/// One note, as one block, flushed at once (the monitor reads lines), then acknowledged.
-fn print(client: &Client, owner: &str, note: &Value) {
+/// One note, as one block written at once (the monitor reads lines; stdout's line buffer would
+/// let out each line on its own), then acknowledged. With `lines`, the block as a JSON string.
+fn print(client: &Client, owner: &str, note: &Value, lines: bool) {
     let text = note["text"].as_str().unwrap_or_default().to_string();
+    let block = crate::desk::said_block(&[text]);
+    let shown = if lines {
+        serde_json::to_string(&block).unwrap_or_default()
+    } else {
+        block
+    };
     let mut out = std::io::stdout().lock();
-    let _ = writeln!(out, "{}", crate::desk::said_block(&[text]));
+    let _ = out.write_all(format!("{shown}\n").as_bytes());
     let _ = out.flush();
     drop(out);
     let _ = client.request("comment/ack", json!({"owner": owner, "ids": [note["id"]]}));

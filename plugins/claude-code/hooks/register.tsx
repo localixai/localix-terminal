@@ -61,13 +61,28 @@ export const register: Register = on => {
     // so Claude wakes on a comment without anyone typing. The first look settles which program.
     void (async () => {
       await refresh()
-      const follow = $.process.spawn({ argv: [program, 'window', '--said', '--follow'] })
+      // Each note is one JSON string on a line of its own (`--json`): what the pipe hands over
+      // comes in pieces of any size, so the lines are put together again before one is read, and
+      // a note's own lines (its picture's path last) never come as a turn of their own.
+      const follow = $.process.spawn({ argv: [program, 'window', '--said', '--follow', '--json'] })
+      let held = ''
       for await (const piece of follow) {
-        if (piece.stream !== 'stdout' || !piece.text.trim()) continue
-        const text = piece.text.trim()
-        await update($, desk, d => ({ ...d, comments: [...d.comments, { at: time(), text: words(text) }].slice(-20) }))
-        $.ui.toast(`llx-desk: ${words(text).slice(0, 80)}`)
-        void $.prompt.submit({ text })
+        if (piece.stream !== 'stdout') continue
+        held += piece.text
+        const lines = held.split('\n')
+        held = lines.pop() ?? ''
+        for (const line of lines) {
+          let text: string
+          try {
+            text = String(JSON.parse(line)).trim()
+          } catch {
+            continue
+          }
+          if (!text) continue
+          await update($, desk, d => ({ ...d, comments: [...d.comments, { at: time(), text: words(text) }].slice(-20) }))
+          $.ui.toast(`llx-desk: ${words(text).slice(0, 80)}`)
+          void $.prompt.submit({ text })
+        }
       }
     })()
 

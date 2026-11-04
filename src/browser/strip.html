@@ -401,7 +401,8 @@ function F(size) {
   const kind = !size ? "fill" : size.width < 600 ? "phone" : size.width < 1000 ? "tablet" : size.width < 1400 ? "laptop" : "desktop";
   fs.replaceChildren(glyph(kind));
   fs.className = size ? "b on" : "b";
-  fs.title = size ? "Page size: " + size.name + ", " + size.width + " × " + size.height : "Page size: the window";
+  const shown = size && size.percent < 100 ? ", shown at " + size.percent + "% to fit the window" : "";
+  fs.title = size ? "Page size: " + size.name + ", " + size.width + " × " + size.height + shown : "Page size: the window";
 }
 F(null);
 // "Page size": the system's menu under the button (frame.rs), the sizes to pick from.

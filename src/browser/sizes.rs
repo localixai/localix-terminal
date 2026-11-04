@@ -98,22 +98,46 @@ pub(crate) fn parse(value: &str) -> Result<Option<Frame>, String> {
     }
 }
 
-/// Where a page of `frame` goes in the pages' part of the window (`size`, `top` points down): its
-/// offset across, its top and its size; with no frame, the whole part. A frame larger than the
-/// part is cut to it.
-pub(crate) fn place(
-    size: LogicalSize<f64>,
-    top: f64,
-    frame: Option<&Frame>,
-) -> (f64, f64, LogicalSize<f64>) {
+/// Where a page goes in the pages' part of the window, and at what scale.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Placed {
+    /// Its offset across the part, in points.
+    pub(crate) across: f64,
+    /// Its top, in points from the window's.
+    pub(crate) down: f64,
+    /// The points it takes on the screen.
+    pub(crate) size: LogicalSize<f64>,
+    /// Points per CSS pixel: below 1 when the frame is larger than the part.
+    pub(crate) scale: f64,
+}
+
+/// Where a page of `frame` goes in the pages' part of the window (`size`, `top` points down);
+/// with no frame, the whole part. A frame larger than the part is drawn smaller to fit it, as a
+/// browser's device view does: the page still lays out at the frame's size, and the window is
+/// never made larger for it.
+pub(crate) fn place(size: LogicalSize<f64>, top: f64, frame: Option<&Frame>) -> Placed {
     let Some(frame) = frame else {
-        return (0.0, top, size);
+        return Placed {
+            across: 0.0,
+            down: top,
+            size,
+            scale: 1.0,
+        };
     };
-    let width = frame.width.min(size.width);
-    let height = frame.height.min(size.height);
-    let across = ((size.width - width) / 2.0).floor();
-    let down = ((size.height - height) / 2.0).floor();
-    (across, top + down, LogicalSize::new(width, height))
+    let fits = (size.width / frame.width).min(size.height / frame.height);
+    let scale = if fits.is_finite() && fits > 0.0 {
+        fits.min(1.0)
+    } else {
+        1.0
+    };
+    let width = (frame.width * scale).min(size.width);
+    let height = (frame.height * scale).min(size.height);
+    Placed {
+        across: ((size.width - width) / 2.0).floor().max(0.0),
+        down: top + ((size.height - height) / 2.0).floor().max(0.0),
+        size: LogicalSize::new(width, height),
+        scale,
+    }
 }
 
 /// The strip's size menu: the whole window, each preset with its sides, and Rotate while a size
@@ -174,10 +198,12 @@ pub(crate) fn picked(at: usize, now: Option<&Frame>) -> Option<Picked> {
     })
 }
 
-/// The strip's call that shows the size of the tab shown (`F(null)` for the whole window).
-pub(crate) fn script(frame: Option<&Frame>) -> String {
+/// The strip's call that shows the size of the tab shown and the scale it is drawn at
+/// (`F(null)` for the whole window).
+pub(crate) fn script(frame: Option<&Frame>, scale: f64) -> String {
     let data = frame.map(|frame| {
-        serde_json::json!({"name": frame.name, "width": frame.width.round(), "height": frame.height.round()})
+        let percent = (scale * 100.0).round();
+        serde_json::json!({"name": frame.name, "width": frame.width.round(), "height": frame.height.round(), "percent": percent})
     });
     format!("F({})", serde_json::json!(data))
 }

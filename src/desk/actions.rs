@@ -1,11 +1,11 @@
-//! The `window` tool's actions: open, interact, screenshot, close, show, list and resize, over
+//! The `window` tool's actions: open, interact, screenshot, close, show and list, over
 //! the owner's tabs.
 
 use std::fmt::Write as _;
 
 use serde_json::{Value, json};
 
-use super::args::{TERM_FIELDS, WEB_FIELDS, number, picked, strings, text};
+use super::args::{TERM_FIELDS, WEB_FIELDS, picked, strings, text};
 use super::{Call, Desk, Failure, Output};
 
 /// What a tab is, from its key.
@@ -82,23 +82,17 @@ impl Desk {
                 })
             }
             Some("list") => Ok(self.list(call.owner).into()),
-            Some("resize") => {
-                let browser = self
-                    .browser
-                    .as_ref()
-                    .ok_or_else(|| "there is no window here to size".to_string())?;
-                let (Some(width), Some(height)) = (number(args, "width"), number(args, "height"))
-                else {
-                    return Err("`width` and `height` are needed, in points"
-                        .to_string()
-                        .into());
-                };
-                let points = |n: u64| f64::from(u32::try_from(n).unwrap_or(u32::MAX));
-                browser.resize_window(points(width), points(height))?;
-                Ok(format!("The window is {width}x{height} now.").into())
-            }
+            // The window is the person's: where it is and how large stay theirs. A page takes a
+            // size of its own instead, framed in it.
+            Some("resize") => Err(
+                "the window is the person's and keeps its size: give a page a \
+                 size of its own with `interact` and `size` (`mobile`, `tablet`, `Desktop`, \
+                 `393x852`; `window` to fill it again)"
+                    .to_string()
+                    .into(),
+            ),
             _ => Err(
-                "`action` is one of open, interact, screenshot, close, show, list, resize"
+                "`action` is one of open, interact, screenshot, close, show, list"
                     .to_string()
                     .into(),
             ),

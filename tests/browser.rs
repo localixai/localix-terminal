@@ -740,17 +740,61 @@ fn feedback(browser: &browser::Browser, driver: &WebviewDriver) {
     browser.listen(|_, _| {});
 }
 
+/// A modal dialog open (a cart) leaves the rest of the page inert and is drawn above it: the
+/// comment card goes inside it, on top, and takes typing; when it closes the overlay comes back.
+/// The overlay's root is open since `feedback`.
+fn feedback_in_a_dialog(driver: &WebviewDriver) {
+    let said = driver
+        .evaluate(
+            "const dialog = document.createElement('dialog');
+             dialog.innerHTML = '<button id=\"inside\">Checkout</button>';
+             document.body.append(dialog);
+             dialog.showModal();
+             __dloop_call(0, 'comment', { on: true, all: true });
+             await sleep(50);
+             const host = document.querySelector('desk-feedback');
+             const inside = document.getElementById('inside');
+             const r = inside.getBoundingClientRect();
+             const at = { clientX: r.left + 5, clientY: r.top + 5, bubbles: true, composed: true, cancelable: true };
+             for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'])
+               inside.dispatchEvent(new PointerEvent(type, at));
+             const note = host.shadowRoot.querySelector('textarea');
+             const typed = note !== null && host.shadowRoot.activeElement === note;
+             const placed = host.parentNode === dialog;
+             const above = !host.showPopover || host.matches(':popover-open');
+             note?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+             const closed = host.shadowRoot.querySelector('textarea') === null && dialog.open;
+             dialog.close();
+             await sleep(50);
+             const back = host.parentNode === document.documentElement;
+             __dloop_call(0, 'comment', { on: false });
+             dialog.remove();
+             JSON.stringify({ typed, placed, above, closed, back })",
+        )
+        .unwrap();
+    assert_eq!(
+        said,
+        r#"{"typed":true,"placed":true,"above":true,"closed":true,"back":true}"#
+    );
+}
+
 /// A page of a size of its own: framed as a phone, the page sees the phone's width, and the
-/// window is as it was; `window` gives it the whole window again. A size the window cannot hold
-/// is said, not pretended.
+/// window is as it was; `window` gives it the whole window again. A size larger than the window
+/// is drawn smaller to fit it, and the page still lays out at that size.
 fn sizes(driver: &WebviewDriver) {
     let width = |driver: &WebviewDriver| driver.evaluate("innerWidth").unwrap();
+    let height = |driver: &WebviewDriver| driver.evaluate("innerHeight").unwrap();
     let whole = width(driver);
     let said = driver.frame("iPhone 15 Pro").unwrap();
-    assert_eq!(said, "Page size iPhone 15 Pro: 393 × 852.");
+    assert!(
+        said.starts_with("Page size iPhone 15 Pro: 393 × 852."),
+        "{said}"
+    );
     assert_eq!(width(driver), "393");
-    let said = driver.frame("390x2000").unwrap();
-    assert!(said.contains("the window is smaller"), "{said}");
+    let said = driver.frame("3000x2000").unwrap();
+    assert!(said.starts_with("Page size Custom: 3000 × 2000."), "{said}");
+    let near = |seen: String, side: f64| (seen.parse::<f64>().unwrap() - side).abs() <= 1.0;
+    assert!(near(width(driver), 3000.0) && near(height(driver), 2000.0));
     assert!(driver.frame("watch").is_err(), "a size it does not know");
     let said = driver.frame("window").unwrap();
     assert!(said.starts_with("The page fills the window"), "{said}");
@@ -1125,6 +1169,7 @@ fn main() {
                     answers_while_loading(&browser, &driver, &origin);
                     starts_at_once(&browser, &driver, &origin);
                     feedback(&browser, &driver);
+                    feedback_in_a_dialog(&driver);
                     waits_for_the_person(&browser, &driver);
                     sizes(&driver);
                     told::scenario(&driver, &origin);

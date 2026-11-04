@@ -81,7 +81,6 @@ The first call starts the daemon. `llx-desk window` with no argument prints the 
 | `close` | Close `tab` or `tabs: [...]`. |
 | `show` | Bring a tab in front of the person. |
 | `list` | The owner's tabs. |
-| `resize` | `width`, `height` of the window. |
 
 <details>
 <summary>More examples</summary>

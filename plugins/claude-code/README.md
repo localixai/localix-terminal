@@ -29,7 +29,7 @@ for the whole session. The command line, `llx-desk window`, is the fallback.
 - **Commands**: `/tabs` (this project's tabs and your latest comments, in the chat), `/llx-desk:end`
   (close this project's tabs), `/llx-desk:stop` (stop the daemon and its window).
 - **A pane** (`hooks/register.tsx`): follows the comments you send from the window
-  (`llx-desk window --said --follow`) and sends each to Claude as a message.
+  (`llx-desk window --said --follow --json`) and sends each to Claude as a message.
 - **Hook**: `SessionEnd` closes the tabs the project opened (`llx-desk window --end`). It does
   nothing when `llx-desk` is not installed.
 

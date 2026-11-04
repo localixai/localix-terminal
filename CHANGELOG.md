@@ -5,9 +5,18 @@
 - Page sizes: the size button in the window's toolbar frames the page shown as a device (iPhone SE,
   iPhone 15 Pro, Pixel 8, iPad Mini, Laptop, Desktop), in the middle of the window, or lets it fill
   the window again; Rotate turns a size. Each tab keeps its own. The agent's `size` takes the same
-  names, `mobile`, `tablet`, `WIDTHxHEIGHT` or `window`, frames the page instead of resizing the
-  person's window, and says the size the page has (smaller when the window is). `desktop` is now
-  the Desktop size, 1440 × 900.
+  names, `mobile`, `tablet`, `WIDTHxHEIGHT` or `window`, and frames the page instead of resizing the
+  person's window. A size larger than the window is drawn smaller to fit it, as a browser's device
+  view does, and the page still lays out at that size; screenshots of it are cut right. `desktop`
+  is now the Desktop size, 1440 × 900.
+- The agent no longer sizes the person's window: the `resize` action is gone (it could push the
+  window past the screen's edge). A call to it says to give the page a `size` instead.
+- Comments work in a modal dialog (a cart, a sign-in): the card opened under the dialog, where the
+  page's inert rest took no typing. It now opens inside the dialog, on top of it, and Escape in
+  it closes the card alone; a mark of a part of a dialog that closed goes with it.
+- A comment comes to Claude Code as one message: its picture's path came as a turn of its own.
+  `window --said --follow` writes each note at once, and `--json` prints each one as a JSON string
+  on a line of its own, which the plugin reads whole.
 - A narrow window keeps its toolbar in order: the address field gives way first, then the buttons
   that no longer fit go into "»", the system's menu of them, as Safari's do. They no longer slide
   over the address field.

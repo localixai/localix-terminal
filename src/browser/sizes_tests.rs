@@ -1,6 +1,6 @@
 use tao::dpi::LogicalSize;
 
-use super::{Frame, PRESETS, Picked, menu, parse, picked, place, script};
+use super::{Frame, PRESETS, Picked, Placed, menu, parse, picked, place, script};
 
 fn frame(name: &str, width: f64, height: f64) -> Frame {
     Frame {
@@ -46,18 +46,29 @@ fn a_size_it_does_not_know_says_what_it_takes() {
 #[test]
 fn a_frame_sits_in_the_middle_and_never_past_the_window() {
     let part = LogicalSize::new(1200.0, 700.0);
-    assert_eq!(place(part, 84.0, None), (0.0, 84.0, part));
+    let at = |placed: Placed| (placed.across, placed.down, placed.size, placed.scale);
+    assert_eq!(at(place(part, 84.0, None)), (0.0, 84.0, part, 1.0));
     let phone = frame("iPhone SE", 375.0, 667.0);
     assert_eq!(
-        place(part, 84.0, Some(&phone)),
-        (412.0, 100.0, LogicalSize::new(375.0, 667.0))
+        at(place(part, 84.0, Some(&phone))),
+        (412.0, 100.0, LogicalSize::new(375.0, 667.0), 1.0)
     );
-    // Taller than the window: cut to it, at its top.
+    // Taller than the window: drawn smaller to fit, its layout still the frame's.
     let tall = frame("iPhone 15 Pro", 393.0, 852.0);
-    assert_eq!(
-        place(part, 84.0, Some(&tall)),
-        (403.0, 84.0, LogicalSize::new(393.0, 700.0))
-    );
+    let placed = place(part, 84.0, Some(&tall));
+    assert!((placed.scale - 700.0 / 852.0).abs() < 1e-9, "{placed:?}");
+    assert!((placed.size.height - 700.0).abs() < 1e-9, "{placed:?}");
+    assert!((placed.size.width / placed.scale - 393.0).abs() < 1e-9);
+    assert_eq!(placed.down, 84.0);
+    // Wider than the window: the same, never past it.
+    let desktop = frame("Desktop", 1440.0, 900.0);
+    let placed = place(LogicalSize::new(960.0, 800.0), 50.0, Some(&desktop));
+    assert!((placed.scale - 960.0 / 1440.0).abs() < 1e-9, "{placed:?}");
+    assert!(placed.size.width <= 960.0 && placed.size.height <= 800.0);
+    assert_eq!(placed.across, 0.0);
+    // A window with no room left: no scale of nothing.
+    let none = place(LogicalSize::new(0.0, 0.0), 50.0, Some(&desktop));
+    assert!(none.scale > 0.0 && none.scale.is_finite(), "{none:?}");
 }
 
 #[test]
@@ -103,11 +114,12 @@ fn the_menu_marks_the_size_set_and_turns_it() {
 
 #[test]
 fn the_strip_hears_the_size_as_data() {
-    assert_eq!(script(None), "F(null)");
-    let said = script(Some(&frame("</script>", 393.0, 852.0)));
+    assert_eq!(script(None, 1.0), "F(null)");
+    let said = script(Some(&frame("</script>", 393.0, 852.0)), 0.8215);
     assert!(
         said.starts_with("F({") && said.contains(r#""width":393.0"#),
         "{said}"
     );
     assert!(said.contains(r#""name":"</script>""#), "{said}");
+    assert!(said.contains(r#""percent":82.0"#), "{said}");
 }

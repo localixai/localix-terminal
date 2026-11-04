@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use tao::event_loop::EventLoopProxy;
 
-use super::super::capture::capture;
+use super::super::capture::{Clip, capture};
 use super::super::deck::{Deck, Shown};
 use super::{Cmd, Shared, WINDOW_CLOSED};
 
@@ -52,6 +52,16 @@ fn reframe(
     open.refresh(shared);
 }
 
+/// `clip`, in CSS pixels, in the points of a page drawn at `zoom` (a size drawn smaller to fit).
+fn zoomed(clip: Option<Clip>, zoom: f64) -> Option<Clip> {
+    clip.map(|clip| Clip {
+        x: clip.x * zoom,
+        y: clip.y * zoom,
+        width: clip.width * zoom,
+        height: clip.height * zoom,
+    })
+}
+
 /// A command of the browser's own, on its tabs in the window.
 pub(super) fn on_browser(
     command: Cmd,
@@ -76,7 +86,7 @@ pub(super) fn on_browser(
         } => return eval(tabs.at(tab), id, &script, failed, shared),
         Cmd::Frame(tab, frame) => return reframe(open, tab, frame, shared),
         Cmd::Capture { clip, reply, tab } => match tabs.at(tab) {
-            Some(webview) => return capture(webview, clip, reply),
+            Some(webview) => return capture(webview, zoomed(clip, tabs.zoom(tab)), reply),
             None => {
                 let _ = reply.send(Err("the tab is closed".into()));
                 return;
@@ -85,7 +95,8 @@ pub(super) fn on_browser(
         Cmd::Noted(noted) => {
             let (reply, shot) = std::sync::mpsc::sync_channel(1);
             if let (Some(_), Some(webview)) = (noted.clip, tabs.at(Some(noted.tab))) {
-                capture(webview, noted.clip, reply);
+                let clip = zoomed(noted.clip, tabs.zoom(Some(noted.tab)));
+                capture(webview, clip, reply);
             }
             return crate::browser::comments::pictured(noted, shot, shared, proxy);
         }
@@ -155,7 +166,6 @@ pub(super) fn on_browser(
         | Cmd::Tinted(..)
         | Cmd::Dressed(_)
         | Cmd::Listing(_)
-        | Cmd::Sized(..)
         | Cmd::Act(..)
         | Cmd::Presence(_)
         | Cmd::Pictured(_)

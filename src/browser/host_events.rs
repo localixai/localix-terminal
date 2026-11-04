@@ -196,18 +196,6 @@ impl On<'_> {
                 let _ = reply.send(self.presenter.name());
             }
             Cmd::Clicked(said) => self.clicked(&said),
-            Cmd::Sized(width, height, reply) => {
-                let sized = self
-                    .deck
-                    .as_ref()
-                    .ok_or("the window is not open")
-                    .map(|open| {
-                        let size = tao::dpi::LogicalSize::new(width, height);
-                        open.frame.native.set_inner_size(size);
-                        open.layout();
-                    });
-                let _ = reply.send(sized.map_err(String::from));
-            }
             Cmd::Act(said, reply) => {
                 let done = act(self.deck, said, shared, None);
                 // The agent showed a tab: the mini blinks, and never opens.

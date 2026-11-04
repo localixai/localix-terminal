@@ -15,11 +15,12 @@ const UNREACHABLE: u8 = 3;
 const HELP: &str = "llx-desk: a native window of browser pages and terminals that agents work in and a person watches
 
 Usage:
-  llx-desk window '<json>' [--as NAME]   one call: open, interact, screenshot, close, show, list, resize
+  llx-desk window '<json>' [--as NAME]   one call: open, interact, screenshot, close, show, list
   llx-desk window                        how to call it: the actions and their arguments (JSON Schema)
   llx-desk window --end [--as NAME]      close the owner's tabs
   llx-desk window --said [--as NAME]     print what the person sent from the window since last asked
-  llx-desk window --said --follow        keep waiting, and print each comment as it comes (for a monitor)
+  llx-desk window --said --follow [--json]   keep waiting, and print each comment as it comes (for a
+                                         monitor); --json: each one a JSON string on one line
   llx-desk mcp [--as NAME]               an MCP server on stdio: tools open, act, look, screenshot, tabs, comments
   llx-desk serve [--headless] [--no-window]   the daemon (one per user; started by `window` when needed)
   llx-desk serve status | stop           say what the daemon holds | end it

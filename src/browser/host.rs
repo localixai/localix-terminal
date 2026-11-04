@@ -142,8 +142,6 @@ pub(super) enum Cmd {
     Dressed(SyncSender<Option<Dressing>>),
     /// The window's tabs; `None` while it is closed.
     Listing(SyncSender<Option<Vec<WindowTab>>>),
-    /// Size the whole window, in points.
-    Sized(f64, f64, SyncSender<Result<(), String>>),
     /// Show or close a tab by its key, for the agent: the task goes on whatever closes.
     Act(Click, SyncSender<Result<(), String>>),
     /// What the agent or the person did to the window's presence (presence.rs).

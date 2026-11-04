@@ -1,4 +1,5 @@
-//! The commands that call the daemon: `window` (one call, `--end`, `--said`, `--said --follow`)
+//! The commands that call the daemon: `window` (one call, `--end`, `--said`, `--said --follow
+//! [--json]`)
 //! and `status`/`stop`. The CLI is a client of protocol v2 like any other: its call carries an
 //! idempotency key, so one asked again after a broken connection is not done twice, and a
 //! picture comes as bytes that it saves where the calling agent can read them.
@@ -21,7 +22,18 @@ struct Window {
     owner: Option<String>,
     end: bool,
     said: bool,
-    follow: bool,
+    follow: Follow,
+}
+
+/// Whether `--said` keeps waiting, and how it prints each note.
+#[derive(Default, Clone, Copy, PartialEq)]
+enum Follow {
+    #[default]
+    No,
+    /// `--follow`: each note as a block of text.
+    Blocks,
+    /// `--follow --json`: each note one JSON string on a line of its own (for a program).
+    Json,
 }
 
 fn parse(args: &[String]) -> Result<Window, String> {
@@ -31,7 +43,9 @@ fn parse(args: &[String]) -> Result<Window, String> {
         match arg.as_str() {
             "--end" => parsed.end = true,
             "--said" => parsed.said = true,
-            "--follow" => parsed.follow = true,
+            "--follow" if parsed.follow == Follow::No => parsed.follow = Follow::Blocks,
+            "--follow" => {}
+            "--json" => parsed.follow = Follow::Json,
             "--as" => {
                 let name = args.next().ok_or("--as needs a name")?;
                 parsed.owner = Some(name.clone());
@@ -55,8 +69,8 @@ pub(super) fn window(args: &[String]) -> u8 {
             .display()
             .to_string()
     });
-    if parsed.said && parsed.follow {
-        crate::follow::follow(&owner);
+    if parsed.said && parsed.follow != Follow::No {
+        crate::follow::follow(&owner, parsed.follow == Follow::Json);
     }
     if parsed.end || parsed.said {
         // Neither starts a daemon: with none there is nothing to end and nothing said.

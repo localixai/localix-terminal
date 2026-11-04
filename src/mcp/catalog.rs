@@ -128,13 +128,11 @@ pub(super) fn list() -> Vec<Value> {
         tool(
             "tabs",
             "This project's tabs. `action`: list (the default), close (`tab` or `tabs`), show (brings a tab in front \
-             of the person), resize (`width`, `height`).",
+             of the person). A page's size is `act`'s `size`: the window stays the person's.",
             &json!({
-                "action": {"type": "string", "enum": ["list", "close", "show", "resize"]},
+                "action": {"type": "string", "enum": ["list", "close", "show"]},
                 "tab": tab,
                 "tabs": {"type": "array", "items": {"type": "string"}},
-                "width": {"type": "integer", "minimum": 400},
-                "height": {"type": "integer", "minimum": 300},
             }),
             &[],
             &hints(Effect::Changes, Again::Harmless, World::Closed),

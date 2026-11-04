@@ -44,8 +44,8 @@ list of them) and returns each one's id and its snapshot: the text it shows now.
 tab `tab` with that kind's fields, and returns what happened and the snapshot after. `screenshot` \
 saves a picture of a tab as a file and returns its path (read the file to see it). `close` ends a \
 tab (`tab`) or several (`tabs`). `list` names your tabs; `show` puts a tab in front of the person \
-(it changes nothing in it) and returns its snapshot; `resize` sizes the whole window (`width`, \
-`height`). Tabs stay between calls for their owner: the project, or the name given with `--as`. \
+(it changes nothing in it) and returns its snapshot. The window is the person's: a page takes a \
+size of its own with `size`, framed in it. Tabs stay between calls for their owner: the project, or the name given with `--as`. \
 A tab's snapshot is its newest state: read it before acting again.
 - `goal` (with `open` or `interact`, any kind of tab) hands one short goal to a fast helper that \
 sees only the goal and the tab, and acts in it (clicks and types on a page, types and presses keys \
@@ -73,7 +73,7 @@ pub fn schema() -> Value {
     put(
         "action",
         json!({"type": "string", "enum":
-        ["open", "interact", "screenshot", "close", "show", "list", "resize"]}),
+        ["open", "interact", "screenshot", "close", "show", "list"]}),
     );
     put(
         "kind",
@@ -105,8 +105,6 @@ pub fn schema() -> Value {
         "dialog_text",
         json!({"type": "string", "description": "browser: what a prompt is answered with, when `dialog` is accept."}),
     );
-    put("width", json!({"type": "integer", "minimum": 400}));
-    put("height", json!({"type": "integer", "minimum": 300}));
     put(
         "url",
         json!({"type": "string", "description": "browser: an address to open, or an HTML file's path."}),

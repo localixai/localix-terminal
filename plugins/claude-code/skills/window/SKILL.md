@@ -18,12 +18,12 @@ show as progress. You stay in charge: read the snapshot each call returns, and d
 | `act` | In a tab: `keys`, `script`, `wait_for`, `url`, `input`, or a `goal` with `values`. |
 | `look` | The snapshot without acting; `text: true` for a page's whole text. |
 | `screenshot` | A page as an image; `selector` crops to an element. |
-| `tabs` | List (default), `close`, `show` to the person, `resize`. |
+| `tabs` | List (default), `close`, `show` to the person. |
 | `comments` | What the person sent from the window that you have not read. |
 
 The command line is the fallback, for when the tools are not there (the MCP server is off, or a shell script
 drives it): `llx-desk window '<json>'` is one call of the same tool, the JSON being its arguments
-(`action`: open, interact, screenshot, close, show, list, resize). Run `llx-desk window` with no argument
+(`action`: open, interact, screenshot, close, show, list). Run `llx-desk window` with no argument
 once to read the full description and JSON Schema.
 
 ## When to use it
@@ -58,7 +58,9 @@ llx-desk window --end                                       # close every tab of
   what you expected.
 - A page's size: `size` frames it as a device (`iPhone 15 Pro`, `mobile`, `tablet`, `iPad Mini`,
   `Laptop`, or `393x852`) in the middle of the window, for that tab alone; `window` fills the window
-  again. The person can pick one from the window too. Check a layout at a phone and a tablet size
+  again. A size larger than the window is drawn smaller to fit, and the page still lays out at it.
+  The window itself is the person's: nothing sizes or moves it. The person can pick one from the
+  window too. Check a layout at a phone and a tablet size
   before calling it done.
 - Precise work needs no goal: `keys` (`["ArrowDown", "Enter"]`), `script` (JavaScript, its value
   returned), `read: true` (the page's whole text), `input` and `wait_for` in a terminal.
@@ -82,7 +84,7 @@ llx-desk window --end                                       # close every tab of
 - Exit 0 done. Exit 1 the call failed and the output says why. Exit 3 the daemon could not be reached or
   the argument is not a JSON object.
 - The tools take the same fields: `act` is `interact`, `look` is an `interact` that changes nothing, `tabs`
-  is `list`, `close`, `show` and `resize`. A tool that fails returns an error result that says why.
+  is `list`, `close` and `show`. A tool that fails returns an error result that says why.
 
 ## The person's comments
 

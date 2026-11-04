@@ -261,11 +261,24 @@ impl Driver for WebviewDriver {
         // The page reflows on its own resize event; give it the usual settle.
         let _ = self.call("settle", &json!({}), SETTLE_TIMEOUT);
         let seen = self.evaluate("innerWidth + ' × ' + innerHeight")?;
+        // A size larger than the window is drawn smaller to fit it, and its layout may round by
+        // a pixel: the page has the size asked for.
+        let near = |frame: &super::super::sizes::Frame| {
+            let sides: Vec<f64> = (seen.split('×'))
+                .filter_map(|side| side.trim().parse().ok())
+                .collect();
+            matches!(sides[..], [width, height]
+                if (width - frame.width).abs() <= 1.0 && (height - frame.height).abs() <= 1.0)
+        };
         Ok(match frame {
             None => format!("The page fills the window: {seen}."),
-            Some(frame) if seen == frame.sides() => format!("Page size {}: {seen}.", frame.name),
+            Some(frame) if near(&frame) => format!(
+                "Page size {}: {}. The person's window is as they left it.",
+                frame.name,
+                frame.sides()
+            ),
             Some(frame) => format!(
-                "Page size {} ({}), shown at {seen}: the window is smaller.",
+                "Page size {} ({}), laid out at {seen}.",
                 frame.name,
                 frame.sides()
             ),

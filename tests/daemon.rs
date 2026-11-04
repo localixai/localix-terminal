@@ -363,6 +363,56 @@ fn follow_prints_a_comment_when_it_is_sent_and_a_daemon_that_is_gone_is_waited_f
 }
 
 #[test]
+fn follow_json_gives_each_note_whole_on_one_line() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    let home = home("follow-json");
+    let tmp = Path::new("/tmp");
+    let open = r#"{"action":"open","kind":"terminal","command":"sleep 60","yield_ms":300}"#;
+    assert!(home.window(tmp, open).0);
+    let mut follow = home
+        .command(tmp, &["window", "--said", "--follow", "--json"])
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let (lines, printed) = std::sync::mpsc::sync_channel::<String>(16);
+    let out = follow.stdout.take().unwrap();
+    std::thread::Builder::new()
+        .name("follow-json-reader".into())
+        .spawn(move || {
+            for line in BufReader::new(out).lines().map_while(Result::ok) {
+                let _ = lines.send(line);
+            }
+        })
+        .unwrap();
+    let subscribed = || {
+        let status = home.run(tmp, &["status"]);
+        String::from_utf8_lossy(&status.stdout).contains("subscribed: 1")
+    };
+    Home::until("the follower subscribes", subscribed);
+    let (client, _) = home.client();
+    // A note of several lines, its picture's path last: as a comment with its picture comes.
+    let words = "make it red\nPicture of it: /tmp/shot.jpg";
+    client
+        .request("test/say", serde_json::json!({"tab": "t1", "words": words}))
+        .unwrap();
+    let line = printed
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    let block: String = serde_json::from_str(&line).unwrap();
+    assert!(
+        block.starts_with("### What the person sent from the window"),
+        "{block}"
+    );
+    assert!(
+        block.contains("make it red\nPicture of it: /tmp/shot.jpg"),
+        "{block}"
+    );
+    follow.kill().unwrap();
+    follow.wait().unwrap();
+}
+
+#[test]
 fn a_secret_saved_once_is_typed_into_a_terminal_and_no_answer_shows_it() {
     use std::io::Write as _;
     use std::process::Stdio;

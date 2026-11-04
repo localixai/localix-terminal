@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use tao::dpi::LogicalSize;
 use tao::event_loop::EventLoopProxy;
@@ -26,6 +27,30 @@ pub(super) const BLANK: &str = "about:blank";
 struct Slot {
     webview: WebView,
     open: bool,
+    /// The page's zoom now, an `f64`'s bits: points per CSS pixel, below 1 while a size larger
+    /// than the window is drawn smaller to fit it (sizes.rs).
+    zoom: AtomicU64,
+}
+
+impl Slot {
+    fn new(webview: WebView) -> Self {
+        Self {
+            webview,
+            open: true,
+            zoom: AtomicU64::new(1.0_f64.to_bits()),
+        }
+    }
+
+    /// Draw the page at `zoom`, when it is not at it already.
+    fn zoom(&self, zoom: f64) {
+        if (self.zoomed() - zoom).abs() > f64::EPSILON && self.webview.zoom(zoom).is_ok() {
+            self.zoom.store(zoom.to_bits(), Ordering::Relaxed);
+        }
+    }
+
+    fn zoomed(&self) -> f64 {
+        f64::from_bits(self.zoom.load(Ordering::Relaxed))
+    }
 }
 
 pub(super) struct Tabs {
@@ -55,10 +80,7 @@ impl Tabs {
         let id = popup::reserve().unwrap_or(1);
         let webview = tabs.build(native, id, &window.url, shared, proxy)?;
         keep_tab_rendering(&webview);
-        tabs.slots.push(Slot {
-            webview,
-            open: true,
-        });
+        tabs.slots.push(Slot::new(webview));
         shared.set_tabs(1, &tabs.ids());
         Ok(tabs)
     }
@@ -109,10 +131,7 @@ impl Tabs {
                 let id = popup::reserve().ok_or_else(full)?;
                 let webview = self.build(native, id, url, shared, proxy)?;
                 keep_tab_rendering(&webview);
-                self.slots.push(Slot {
-                    webview,
-                    open: true,
-                });
+                self.slots.push(Slot::new(webview));
                 id
             }
             None => return Err(full()),
@@ -138,16 +157,10 @@ impl Tabs {
             match self.slots.get_mut(at) {
                 // A closed tab's place: its blank view goes, the popup's takes it.
                 Some(slot) if !slot.open => {
-                    *slot = Slot {
-                        webview,
-                        open: true,
-                    };
+                    *slot = Slot::new(webview);
                 }
                 Some(_) => continue,
-                None if at == end => self.slots.push(Slot {
-                    webview,
-                    open: true,
-                }),
+                None if at == end => self.slots.push(Slot::new(webview)),
                 // Places are handed out in order: one past the end was never given.
                 None => continue,
             }
@@ -209,6 +222,14 @@ impl Tabs {
         (self.ids(), self.active)
     }
 
+    /// Tab `id`'s zoom (the one acted on with none): points per CSS pixel, 1 unless its size is
+    /// drawn smaller to fit the window. A picture's clip, in CSS pixels, is in points times it.
+    pub(super) fn zoom(&self, id: Option<u32>) -> f64 {
+        let id = id.unwrap_or(self.active);
+        let slot = self.slots.get((id as usize).wrapping_sub(1));
+        slot.map_or(1.0, Slot::zoomed)
+    }
+
     /// Tab `id`'s size (the one acted on with none), while one is set.
     pub(super) fn frame(&self, id: Option<u32>) -> Option<&Frame> {
         self.frames.get(&id.unwrap_or(self.active))
@@ -232,12 +253,21 @@ impl Tabs {
             let away = |x: f64| if here { x } else { -(size.width + 100.0) };
             if let Some(frame) = self.frames.get(&id_of(at)) {
                 // A size of its own: in the middle, below the strip, nothing of it under it.
-                let (across, down, framed) = sizes::place(size, top, Some(frame));
+                // Larger than the window, drawn smaller: the page lays out at its size still.
+                let placed = sizes::place(size, top, Some(frame));
                 super::platform::inset(&slot.webview, 0.0);
-                place(&slot.webview, away(across), down, framed, here);
-                fit(&slot.webview, Some(framed));
+                place(
+                    &slot.webview,
+                    away(placed.across),
+                    placed.down,
+                    placed.size,
+                    here,
+                );
+                fit(&slot.webview, Some(placed.size));
+                slot.zoom(placed.scale);
                 continue;
             }
+            slot.zoom(1.0);
             // Under the strip where WebKit keeps its viewport below it, else below the strip.
             match super::platform::inset(&slot.webview, top) {
                 true => {

@@ -2,7 +2,9 @@
   // page takes no presses. A click picks the element under the pointer, a drag marks a region and
   // the elements inside it, and a card anchored to it takes an optional note. What was picked goes
   // to the host as data ({fb}), where the agent reads it as what the person did in the window.
-  // Everything is drawn in a closed shadow root the snapshot never sees.
+  // Everything is drawn in a closed shadow root the snapshot never sees. A modal dialog (a cart,
+  // a sign-in) makes the rest of the page inert and is drawn above any z-index: the overlay goes
+  // inside the topmost one and into the top layer, so its card takes typing there too.
   const FB_MAX_TEXT = 300
   const FB_MAX_MEMBERS = 8
   const FB_DRAG = 6
@@ -94,6 +96,9 @@
     const host = document.createElement('desk-feedback')
     host.setAttribute('aria-hidden', 'true')
     host.style.cssText = 'all:initial;position:fixed;inset:0;z-index:2147483647;pointer-events:none'
+    // A manual popover: in the top layer once shown, above the page's dialogs and popovers, and
+    // closed by nothing the page does.
+    if ('popover' in HTMLElement.prototype) host.setAttribute('popover', 'manual')
     fb.root = host.attachShadow({ mode: 'closed' })
     fb.root.innerHTML = `<style>
 .o{position:fixed;box-sizing:border-box;border:2px solid #4f7cff;border-radius:3px;background:#4f7cff14;pointer-events:none;display:none}
@@ -107,7 +112,36 @@
 .c button.s{background:#4f7cff;color:#fff}
 </style><div class="o"></div><div class="o d"></div>`
     ;[fb.hover, fb.drag] = fb.root.querySelectorAll('.o')
-    document.documentElement.append(host)
+  }
+
+  // The modal dialog on top, if one is open: what is outside it is inert. The last open one in
+  // the document stands for the top.
+  function fbModal() {
+    try {
+      const open = document.querySelectorAll('dialog:modal')
+      return open[open.length - 1] || null
+    } catch {
+      return null // no :modal in this engine
+    }
+  }
+
+  // The overlay where the person can reach it and above all the page shows: inside the modal
+  // dialog open (else the page's root), shown again on top of the top layer. While the person
+  // types in a card in its place, it stays as it is.
+  function fbRaise() {
+    if (!fb.root) return
+    const host = fb.root.host
+    const parent = fbModal() || document.documentElement
+    const moved = host.parentNode !== parent
+    if (moved) parent.append(host)
+    if (!host.showPopover || (fb.card && !moved)) return
+    try {
+      if (host.matches(':popover-open')) host.hidePopover()
+      host.showPopover()
+    } catch {
+      // Not shown as a popover: it is still drawn, at the top of the page's own layers.
+    }
+    if (moved) fb.card?.querySelector('textarea')?.focus({ preventScroll: true })
   }
 
   const fbShow = (box, r) => Object.assign(box.style, { display: 'block', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` })
@@ -116,7 +150,8 @@
   function fbMeasure() {
     for (const mark of fb.marks) {
       const r = mark.target ? mark.target.getBoundingClientRect() : mark.rect
-      if (mark.target && !mark.target.isConnected) mark.box.style.display = 'none'
+      // Gone, or no longer drawn (its dialog closed): no mark in the corner for it.
+      if (mark.target && (!mark.target.isConnected || (!r.width && !r.height))) mark.box.style.display = 'none'
       else fbShow(mark.box, r)
     }
   }
@@ -163,7 +198,11 @@
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault()
         submit()
-      } else if (event.key === 'Escape') fbClose()
+      } else if (event.key === 'Escape') {
+        // The card's alone: a dialog under it stays open.
+        event.preventDefault()
+        fbClose()
+      }
     })
     fb.root.append(card)
     fb.card = card
@@ -188,6 +227,7 @@
 
   function fbDown(event) {
     if (!fbSwallow(event)) return
+    fbRaise()
     fb.start = { x: event.clientX, y: event.clientY }
   }
 
@@ -235,6 +275,15 @@
   addEventListener('pointermove', fbMove, { capture: true, passive: true })
   addEventListener('scroll', () => fb.marks.length && requestAnimationFrame(fbMeasure), { capture: true, passive: true })
   addEventListener('resize', () => fb.marks.length && requestAnimationFrame(fbMeasure))
+  // A dialog closed or a popover opened or closed: the overlay finds its place again. Its own
+  // toggles are its own.
+  const fbMoved = (event) => {
+    if (!fb.root || event.target === fb.root.host || (!fb.on && !fb.marks.length)) return
+    fbRaise()
+    if (fb.marks.length) requestAnimationFrame(fbMeasure)
+  }
+  addEventListener('close', fbMoved, { capture: true })
+  addEventListener('toggle', fbMoved, { capture: true })
 
   // The host turns commenting on or off; the marks of comments held stay until a batch is sent.
   function comment({ on, sent = fb.sent, all = fb.all }) {
@@ -246,8 +295,10 @@
       fb.marks = []
       fb.count = 0
     }
-    if (fb.on) fbMount()
-    else if (fb.root) fbClose()
+    if (fb.on) {
+      fbMount()
+      fbRaise()
+    } else if (fb.root) fbClose()
     if (fb.root) fb.root.host.style.cursor = fb.on ? 'crosshair' : ''
     document.documentElement.style.cursor = fb.on ? 'crosshair' : ''
     return fb.on

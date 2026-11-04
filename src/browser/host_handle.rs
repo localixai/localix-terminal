@@ -88,16 +88,6 @@ impl Browser {
             .ok()?
     }
 
-    /// Size the whole window to `width` by `height` points, as the person would.
-    pub fn resize_window(&self, width: f64, height: f64) -> Result<(), String> {
-        let (reply, answer) = mpsc::sync_channel(1);
-        let ask = Cmd::Sized(width, height, reply);
-        self.proxy.send_event(ask).map_err(gone)?;
-        answer
-            .recv_timeout(std::time::Duration::from_secs(5))
-            .map_err(gone)?
-    }
-
     /// Show the tab `id` (`w1`, `t2`), or take it out of the window (`close`).
     pub fn act(&self, id: &str, close: bool) -> Result<(), String> {
         let key = Key::parse(id).ok_or_else(|| format!("there is no tab {id}"))?;

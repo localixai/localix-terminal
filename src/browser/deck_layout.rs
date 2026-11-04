@@ -130,7 +130,9 @@ impl Deck {
         let framed = (self.web.as_ref())
             .filter(|_| self.shown == Shown::Web)
             .and_then(|web| web.frame(None));
-        let _ = strip.evaluate_script(&super::super::sizes::script(framed));
+        let (size, top) = self.content();
+        let scale = super::super::sizes::place(size, top, framed).scale;
+        let _ = strip.evaluate_script(&super::super::sizes::script(framed, scale));
         let held = shared.comments.count();
         let _ = strip.evaluate_script(&strip::commenting(self.commenting, held));
         let (acting, waiting) = shared.turn.now();
