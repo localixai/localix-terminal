@@ -7,6 +7,7 @@ use tao::event_loop::EventLoopProxy;
 
 use super::super::capture::{Clip, capture};
 use super::super::deck::{Deck, Shown};
+use super::super::strip::Key;
 use super::{Cmd, Shared, WINDOW_CLOSED};
 
 /// The browser is closed: a script waiting on it fails now.
@@ -114,29 +115,11 @@ pub(super) fn on_browser(
             }
         }
         Cmd::Adopt => {
-            if tabs.adopt(shared).is_some() {
+            if tabs.adopt(shared).is_some_and(|(_, shown)| shown) {
                 open.show(Shown::Web);
             }
         }
-        Cmd::NewTab { url, reply } => {
-            let added = match crate::browser::guard::loadable(&url) {
-                Some(url) => tabs.add(&open.frame.native, &url, shared, proxy),
-                None => Err(format!("`{url}` is not an address")),
-            };
-            match reply {
-                Some(reply) => {
-                    let _ = reply.send(added);
-                }
-                // A page's window past the tab limit opens where the page is, as before tabs.
-                None if added.is_err() => {
-                    if let Some(url) = crate::browser::guard::loadable(&url) {
-                        let _ = tabs.active().load_url(&url);
-                    }
-                }
-                None => {}
-            }
-            open.show(Shown::Web);
-        }
+        Cmd::NewTab { url, reply, opener } => new_tab(open, &url, reply, opener, shared, proxy),
         Cmd::SwitchTab { id, reply } => {
             let _ = reply.send(tabs.switch(id, shared));
             open.show(Shown::Web);
@@ -160,17 +143,71 @@ pub(super) fn on_browser(
         | Cmd::Paint(_)
         | Cmd::Unpanel(_)
         | Cmd::PanelMenu(..)
+        | Cmd::Reveal(_)
         | Cmd::Titled(..)
         | Cmd::Clicked(_)
+        | Cmd::SideClicked(_)
+        | Cmd::NavClicked(_)
+        | Cmd::Slide(..)
+        | Cmd::Restyle
         | Cmd::Strip
-        | Cmd::Tinted(..)
+        | Cmd::Offered(..)
+        | Cmd::Go(_)
         | Cmd::Dressed(_)
         | Cmd::Listing(_)
         | Cmd::Act(..)
         | Cmd::Presence(_)
+        | Cmd::Opened
         | Cmd::Pictured(_)
         | Cmd::Presented(_)
+        | Cmd::Confirm(..)
         | Cmd::Exit(_) => return,
     }
     open.refresh(shared);
+}
+
+/// A tab opened on `url` and shown: the agent's (`reply`), or a page's own new window, which past
+/// the tab limit opens where the page is, as before tabs.
+fn new_tab(
+    open: &mut Deck,
+    url: &str,
+    reply: Option<std::sync::mpsc::SyncSender<Result<u32, String>>>,
+    opener: Option<u32>,
+    shared: &Arc<Shared>,
+    proxy: &EventLoopProxy<Cmd>,
+) {
+    let Some(tabs) = open.web.as_mut() else {
+        return;
+    };
+    // The project of the tab the app opens (one not shown opens out of sight there); a page's own
+    // new window is of its opener's, and never takes the slot a call of the app set.
+    let project = match opener {
+        Some(opener) => crate::lock(&shared.groups)
+            .get(&Key::Web(opener).name())
+            .cloned(),
+        None => crate::lock(&shared.scope).take_opening(),
+    };
+    let shown = (project.as_deref()).is_none_or(|project| {
+        let mut scope = crate::lock(&shared.scope);
+        scope.touched(project);
+        scope.in_sight(project)
+    });
+    let added = match crate::browser::guard::loadable(url) {
+        Some(url) => tabs.add(&open.frame.native, &url, project, shown, shared, proxy),
+        None => Err(format!("`{url}` is not an address")),
+    };
+    match reply {
+        Some(reply) => {
+            let _ = reply.send(added);
+        }
+        None if added.is_err() => {
+            if let Some(url) = crate::browser::guard::loadable(url) {
+                let _ = tabs.active().load_url(&url);
+            }
+        }
+        None => {}
+    }
+    if shown {
+        open.show(Shown::Web);
+    }
 }

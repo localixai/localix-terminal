@@ -1,6 +1,7 @@
 //! Tests of `strip`.
 
 use super::*;
+use crate::browser::Visited;
 
 #[test]
 fn a_click_names_a_tab_and_what_to_do_with_it() {
@@ -32,21 +33,23 @@ fn the_tabs_reach_the_page_as_data() {
         Item {
             key: Key::Web(1),
             title: "</script><img src=x onerror=alert(1)>".into(),
-            url: "https://a.example/\"><b>".into(),
+            detail: "https://a.example/\"><b>".into(),
             group: "proj".into(),
+            agent: None,
         },
         Item {
             key: Key::Term(2),
             title: "session 2 · python3".into(),
-            url: String::new(),
+            detail: String::new(),
             group: "proj".into(),
+            agent: None,
         },
     ];
     let visited = [Visited {
         title: "<i>Habr</i>".into(),
         url: "https://habr.com/ru/post/210288/".into(),
     }];
-    let script = script(&items, Key::Term(2), &visited);
+    let script = script(&items, Key::Term(2), &visited, None, &none());
     assert!(
         script.starts_with("S(") && script.ends_with(')'),
         "{script}"
@@ -65,7 +68,7 @@ fn the_tabs_reach_the_page_as_data() {
     );
     assert_eq!(data["tabs"][1]["kind"], "term");
     // What the address field shows and suggests: each tab's page, the pages seen.
-    assert_eq!(data["tabs"][0]["url"], "https://a.example/\"><b>");
+    assert_eq!(data["tabs"][0]["detail"], "https://a.example/\"><b>");
     assert_eq!(data["visited"][0]["title"], "<i>Habr</i>");
     assert_eq!(
         data["visited"][0]["url"],
@@ -80,10 +83,11 @@ fn an_empty_title_reads_as_what_the_tab_is() {
     let items = [Item {
         key: Key::Web(1),
         title: String::new(),
-        url: String::new(),
+        detail: String::new(),
         group: String::new(),
+        agent: None,
     }];
-    let script = script(&items, Key::Web(1), &[]);
+    let script = script(&items, Key::Web(1), &[], None, &none());
     assert!(script.contains("\"title\":\"New tab\""), "{script}");
 }
 
@@ -91,8 +95,9 @@ fn item(key: Key, title: &str, group: &str) -> Item {
     Item {
         key,
         title: title.into(),
-        url: String::new(),
+        detail: String::new(),
         group: group.into(),
+        agent: None,
     }
 }
 
@@ -103,41 +108,54 @@ fn one_project_draws_as_it_always_has() {
         item(Key::Term(2), "make", "proj"),
     ];
     assert_eq!(
-        script(&items, Key::Web(1), &[]),
-        r#"S({"shown":"w1","tabs":[{"key":"w1","kind":"web","title":"Docs","url":""},{"key":"t2","kind":"term","title":"make","url":""}],"visited":[]})"#
+        script(&items, Key::Web(1), &[], None, &none()),
+        r#"S({"places":[],"project":"","shown":"w1","side":null,"tabs":[{"detail":"","group":"proj","key":"w1","kind":"web","title":"Docs"},{"detail":"","group":"proj","key":"t2","kind":"term","title":"make"}],"visited":[]})"#
     );
 }
 
 #[test]
-fn several_projects_draw_their_tabs_together_each_saying_its_project() {
+fn each_tab_says_its_project_and_the_switcher_names_the_one_shown() {
     let items = [
-        item(Key::Web(1), "Docs", "proj"),
-        item(Key::Term(2), "make", "<b>shop</b>"),
-        item(Key::Web(3), "Issues", "proj"),
+        item(Key::Web(1), "Docs", "1"),
+        item(Key::Term(2), "make", "2"),
+        item(Key::Web(3), "Issues", "1"),
     ];
-    let script = script(&items, Key::Web(1), &[]);
+    let (shop, blog) = (
+        crate::browser::Place {
+            key: "1".into(),
+            name: "<b>shop</b>".into(),
+            folder: "/work/shop".into(),
+        },
+        crate::browser::Place {
+            key: "2".into(),
+            name: "blog".into(),
+            folder: "/work/blog".into(),
+        },
+    );
+    let projects = Projects {
+        shown: "1",
+        places: vec![(&shop, false), (&blog, true)],
+    };
+    let script = script(&items, Key::Web(1), &[], None, &projects);
     let json = script
         .strip_prefix("S(")
         .and_then(|s| s.strip_suffix(')'))
         .unwrap();
     let data: serde_json::Value = serde_json::from_str(json).unwrap();
-    let tabs = data["tabs"].as_array().unwrap();
-    let keys: Vec<&str> = tabs
-        .iter()
-        .map(|tab| tab["key"].as_str().unwrap())
+    let groups: Vec<&str> = (data["tabs"].as_array().unwrap().iter())
+        .map(|tab| tab["group"].as_str().unwrap())
         .collect();
-    assert_eq!(keys, ["w1", "w3", "t2"]);
-    let labels: Vec<&serde_json::Value> = tabs.iter().map(|tab| &tab["group"]).collect();
+    assert_eq!(groups, ["1", "2", "1"]);
+    assert_eq!(data["project"], "1");
     assert_eq!(
-        labels,
-        [
-            &serde_json::json!("proj"),
-            &serde_json::json!("proj"),
-            &serde_json::json!("<b>shop</b>")
-        ]
+        data["places"],
+        serde_json::json!([
+            {"key": "1", "name": "<b>shop</b>", "marked": false, "folder": "/work/shop"},
+            {"key": "2", "name": "blog", "marked": true, "folder": "/work/blog"},
+        ])
     );
-    // A project's name is set as text too.
-    assert!(PAGE.contains("label.textContent = name"));
+    // A crumb's name is set as text.
+    assert!(PAGE.contains("name.textContent = parts.name;"));
 }
 
 #[test]
@@ -150,6 +168,7 @@ fn the_toolbar_and_the_history_button_say_what_they_are() {
     assert_eq!(click("drag"), Some(Click::Drag));
     assert_eq!(click("zoom"), Some(Click::Zoom));
     assert_eq!(click("collapse"), Some(Click::Collapse));
+    assert_eq!(click("quit"), Some(Click::Quit));
     for junk in [
         "back w1",
         "visit",
@@ -164,17 +183,18 @@ fn the_toolbar_and_the_history_button_say_what_they_are() {
 
 #[test]
 fn the_history_menu_reaches_the_page_as_data() {
-    let row = |at, key, state| Row {
+    let row = |at, key: Option<Key>, kind, state| Row {
         at,
         key,
+        kind,
         title: "\"</script><b>x</b>".into(),
         detail: "https://a.example/".into(),
         state,
         group: "proj".into(),
     };
     let rows = [
-        row(7, Key::Term(2), State::Hidden),
-        row(3, Key::Web(1), State::Closed),
+        row(7, Some(Key::Term(2)), "term", State::Hidden),
+        row(3, None, "web", State::Closed),
     ];
     let open = menu(Some(&rows));
     let json = open
@@ -188,6 +208,7 @@ fn the_history_menu_reaches_the_page_as_data() {
     assert_eq!(data[0]["state"], "hidden");
     assert_eq!(data[0]["title"], "\"</script><b>x</b>");
     assert_eq!(data[1]["kind"], "web");
+    assert_eq!(data[1]["key"], serde_json::Value::Null);
     assert_eq!(data[1]["state"], "closed");
     assert_eq!(data[1]["detail"], "https://a.example/");
     assert_eq!(menu(None), "M(null)");
@@ -239,11 +260,16 @@ fn the_toolbar_buttons_are_clicks() {
     assert_eq!(click("new 812 40"), Some(Click::NewTab(812, 40)));
     assert_eq!(click("frame 760 40"), Some(Click::Frame(760, 40)));
     assert_eq!(click("frame 760"), None);
-    let held = Tool::Size.bit() | Tool::History.bit();
-    assert_eq!(click("more 700 40 fs hs"), Some(Click::More(700, 40, held)));
+    let held = Tool::Mini.bit() | Tool::History.bit();
+    assert_eq!(click("more 700 40 mn hs"), Some(Click::More(700, 40, held)));
+    assert_eq!(
+        click("more 700 40 fs"),
+        None,
+        "the page's tools are its toolbar's"
+    );
     assert_eq!(click("more 700 40"), None, "nothing held");
     assert_eq!(
-        click("more 700 40 fs xx"),
+        click("more 700 40 hs xx"),
         None,
         "a button it does not know"
     );
@@ -276,28 +302,34 @@ fn where_the_strip_wants_glass_is_a_rectangle_or_none() {
         Some(Click::Glass(Some((150, 104, 1240, 212))))
     );
     assert_eq!(click("glass none"), Some(Click::Glass(None)));
+    // The bar's crumbs: the project's and the tab's menus.
+    assert_eq!(click("projects 92 34"), Some(Click::Projects(92, 34)));
+    assert_eq!(click("tabs 210 34"), Some(Click::Tabs(210, 34)));
+    assert_eq!(click("tabs 210"), None);
     assert_eq!(click("glass 1 2 3"), None);
     assert_eq!(click("glass 1 2 3 4 5"), None);
     assert_eq!(click("glass"), None);
 }
 
 #[test]
-fn the_toolbar_sits_in_the_titlebar_and_the_projects_have_a_row_of_their_own_above_the_tabs() {
+fn the_bar_holds_the_projects_and_the_crumbs_and_the_page_its_own_toolbar() {
     let at = |id: &str| PAGE.find(&format!("id=\"{id}\"")).unwrap();
-    // Top to bottom: the toolbar (beside the window's buttons), the projects, the tabs.
-    assert!(at("bar") < at("projects") && at("projects") < at("tabs"));
-    // Only the toolbar is inset for the window's buttons; the projects run from the edge.
-    assert!(PAGE.contains("html[data-glass] #bar{padding-left:92px}"));
-    assert!(!PAGE.contains("#projects.on,html[data-glass]"));
+    // The bar (beside the window's buttons): the crumbs, then the window's buttons; nothing
+    // else. The browser's toolbar after it: back, forward, reload, the address, the page's
+    // tools. The tabs' row under them.
+    assert!(at("bar") < at("cr") && at("cr") < at("end") && at("end") < at("browse"));
+    assert!(!PAGE.contains("id=\"logo\"") && !PAGE.contains("id=\"pt\""));
+    assert!(at("browse") < at("bk") && at("bk") < at("addr") && at("addr") < at("fs"));
+    assert!(at("fs") < at("tabs"));
+    assert!(PAGE.contains("html[data-glass] #bar{padding-left:78px}"));
+    // The bar is a compact toolbar's height, as `BAR` says; the browser's toolbar `NAV`'s.
+    assert!(PAGE.contains("height:38px") && (BAR - 38.0).abs() < f64::EPSILON);
+    assert!(PAGE.contains("height:40px") && (NAV - 40.0).abs() < f64::EPSILON);
 }
 
 #[test]
-fn every_row_of_the_strip_is_inked_for_the_page_under_it() {
-    // A light page under a strip in the dark appearance: a row left in the system's colour is
-    // light words on a light bar.
-    assert!(PAGE.contains(
-        "html[data-tint] #projects,html[data-tint] #bar,html[data-tint] #tabs{color:var(--ink)"
-    ));
+fn the_strip_keeps_the_windows_own_colours_over_every_tab() {
+    assert!(!PAGE.contains("data-tint") && !PAGE.contains("--ink"));
 }
 
 #[test]
@@ -311,4 +343,142 @@ fn the_strip_shows_whose_turn_it_is() {
     assert_eq!(Turn::of(false, true, 2), Turn::Waiting);
     assert_eq!(turn(Turn::Idle), r#"A("")"#);
     assert_eq!(turn(Turn::Waiting), r#"A("waiting")"#);
+}
+
+#[test]
+fn a_board_is_a_panel_past_the_terminals_named_b() {
+    let board = Key::parse("b3").unwrap();
+    assert_eq!(board, Key::Term(BOARD + 3));
+    assert_eq!((board.name().as_str(), board.kind()), ("b3", "board"));
+    assert_eq!(Key::Term(2).kind(), "term");
+    assert_eq!(Key::parse("b0"), None);
+    assert_eq!(Key::parse(&format!("t{}", BOARD + 1)), None);
+    let items = [item(Key::Term(BOARD + 1), "", "proj")];
+    assert!(
+        script(&items, Key::Term(BOARD + 1), &[], None, &none())
+            .contains(r#""kind":"board","title":"Board""#)
+    );
+}
+
+#[test]
+fn the_event_center_opens_closes_and_says_which_button_of_which_event() {
+    assert_eq!(click("events"), Some(Click::Events));
+    assert_eq!(click("unmenu"), Some(Click::Unmenu));
+    assert_eq!(click("event 7 1"), Some(Click::Event(7, 1)));
+    assert_eq!(click("clear"), Some(Click::Clear));
+    for said in ["event", "event 7", "event x 1", "event 7 -1"] {
+        assert_eq!(click(said), None, "{said}");
+    }
+    assert_eq!(center("", false), "V([], false)");
+    assert_eq!(center(r#"[{"n":1}]"#, true), r#"V([{"n":1}], true)"#);
+}
+
+#[test]
+fn the_side_says_what_the_strip_says_its_menus_placed_below_the_strip() {
+    assert_eq!(click("side"), Some(Click::Side));
+    assert_eq!(click("side-width 260"), Some(Click::SideWidth(260, false)));
+    assert_eq!(
+        click("side-width 300 done"),
+        Some(Click::SideWidth(300, true))
+    );
+    assert_eq!(click("side-width 300 later"), None);
+    assert_eq!(click("side-width -4"), None);
+    assert_eq!(
+        click("side-width usual done"),
+        Some(Click::SideWidth(264, true))
+    );
+    // The side's points and the browser's toolbar's, said as the window's.
+    assert_eq!(moved("menu t3 40 12", (0.0, 38.0)), "menu t3 40 50");
+    assert_eq!(moved("new 200 30", (0.0, 84.4)), "new 200 114");
+    assert_eq!(moved("show w2", (0.0, 38.0)), "show w2");
+    assert_eq!(moved("menu t3 40 no", (0.0, 38.0)), "menu t3 40 no");
+    assert_eq!(moved("frame 100 30", (264.0, 38.0)), "frame 364 68");
+    assert_eq!(
+        moved("glass 10 40 300 200", (264.0, 38.0)),
+        "glass 274 78 300 200"
+    );
+    assert_eq!(moved("tabs 10 20", (5.0, 5.0)), "tabs 15 25");
+    let drawn = script(
+        &[item(Key::Web(1), "Docs", "proj")],
+        Key::Web(1),
+        &[],
+        Some(false),
+        &none(),
+    );
+    assert!(drawn.contains(r#""side":false"#), "{drawn}");
+}
+
+#[test]
+fn a_terminal_running_an_agent_carries_its_mark_and_what_it_does() {
+    let items = [Item {
+        key: Key::Term(3),
+        title: "session 3 · claude --resume".into(),
+        detail: "Fix the cart button".into(),
+        group: "proj".into(),
+        agent: None,
+    }];
+    let script = script(&items, Key::Term(3), &[], Some(true), &none());
+    let data: serde_json::Value = serde_json::from_str(
+        script
+            .strip_prefix("S(")
+            .unwrap()
+            .strip_suffix(')')
+            .unwrap(),
+    )
+    .unwrap();
+    let tab = &data["tabs"][0];
+    assert_eq!(tab["agent"], "claude");
+    assert_eq!(tab["name"], "Claude Code");
+    assert_eq!(tab["detail"], "Fix the cart button");
+}
+
+#[test]
+fn a_shell_running_an_agent_in_front_carries_its_mark() {
+    // The person typed `codex` in the shell: the program in front says so, not the title.
+    let items = [Item {
+        key: Key::Term(4),
+        title: "session 4 · shell".into(),
+        detail: "okak@Mac:~".into(),
+        group: "proj".into(),
+        agent: Some("codex"),
+    }];
+    let drawn = script(&items, Key::Term(4), &[], Some(true), &none());
+    assert!(drawn.contains(r#""agent":"codex""#), "{drawn}");
+    assert!(drawn.contains(r#""name":"Codex""#), "{drawn}");
+}
+
+#[test]
+fn every_shortcut_is_a_click_the_strip_knows() {
+    // A row of places does its click with the place after it (`key tab 3`).
+    for shortcut in &crate::browser::shortcuts::SHORTCUTS {
+        let does = match shortcut.keys.ends_with("+digit") {
+            true => format!("{} 1", shortcut.does),
+            false => shortcut.does.to_string(),
+        };
+        assert!(click(&does).is_some(), "{does}");
+    }
+    assert_eq!(click("key tab 3"), Some(Click::Key(Keyed::Tab(3))));
+    assert_eq!(click("key tab 9"), None);
+    assert_eq!(click("key tab last"), Some(Click::Key(Keyed::LastTab)));
+}
+
+#[test]
+fn no_two_functions_of_the_strip_share_a_name() {
+    // A second `function mark` is hoisted over the first, and the side drew "undefined".
+    let mut names: Vec<&str> = (PAGE.split("function ").skip(1))
+        .filter_map(|rest| rest.split('(').next())
+        .filter(|name| !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_'))
+        .collect();
+    names.sort_unstable();
+    let before = names.len();
+    names.dedup();
+    assert_eq!(names.len(), before, "a function name is declared twice");
+}
+
+/// No project known: the window's first moments.
+fn none() -> Projects<'static> {
+    Projects {
+        shown: "",
+        places: vec![],
+    }
 }

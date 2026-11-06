@@ -4,7 +4,7 @@
   <body>
     <!-- Results arrive from the page's own server after the DOM has gone quiet, as on Google Flights. -->
     <button onclick="fetch('/slow/second.html').then(() => { results.textContent = '3 results' })">Search</button>
-    <button onclick="fetch('/slower/second.html').then(() => { results.textContent = '9 results' })">Search everywhere</button>
+    <button onclick="fetch('/slowest/second.html').then(() => { results.textContent = '9 results' })">Search everywhere</button>
     <p id="results"></p>
   </body>
 </html>

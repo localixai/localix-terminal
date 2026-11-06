@@ -1,53 +1,79 @@
-//! The history menu's side of the window: what became of each tab it lists, and an entry shown
-//! again. The window is what says it: a terminal is listed while its screen is kept, a browser
-//! tab while it is open or was closed at a web page.
+//! The history menu's side of the window: the tabs of the project shown, from its ledger (the
+//! app keeps it, `Browser::ledger`), each with what became of it: open, a terminal hidden or
+//! ended, or closed (opened again by the app, from its row).
 
-use super::super::history::Entry;
 use super::super::host::Shared;
 use super::super::panel::Held;
-use super::super::strip::{self, Key, Row, State};
+use super::super::strip::{Key, Row, State};
+use super::super::{Past, TabKind, Visited};
 use super::{Deck, Shown};
 
 /// What showing an entry of the history again comes to.
 #[derive(Debug, PartialEq, Eq)]
 pub(in super::super) enum Revisit {
     Shown,
-    /// Its page, for the host to open in a new tab of the browser.
-    Load(String),
-    /// The window no longer has it.
-    Gone,
+    /// Not open in the window: for the app to open again, from its row of the ledger.
+    Again(i64),
 }
 
 impl Deck {
-    /// The history's entries the window can show, newest first, a project's together.
-    pub(in super::super) fn rows(&self, shared: &Shared) -> Vec<Row> {
-        let groups = crate::lock(&shared.groups).clone();
-        let list = shared.history.list().into_iter();
-        let rows = list.filter_map(|entry| {
-            let state = self.state(&entry)?;
-            let group = match state {
-                State::Closed => entry.group,
-                State::Open | State::Hidden | State::Ended => {
-                    groups.get(&entry.key.name()).cloned().unwrap_or_default()
-                }
-            };
-            let title = entry.title.strip_prefix("desk · ").unwrap_or(&entry.title);
-            Some(Row {
-                at: entry.at,
-                key: entry.key,
-                title: title.to_string(),
-                detail: entry.detail,
-                state,
-                group,
+    /// The project shown (scope.rs): else the one of the tab shown, else the first the window
+    /// knows.
+    pub(in super::super) fn shown_project(&self, shared: &Shared) -> String {
+        let scoped = crate::lock(&shared.scope).shown().to_string();
+        if !scoped.is_empty() {
+            return scoped;
+        }
+        let listed = self.listing(shared);
+        let shown = listed
+            .into_iter()
+            .find(|tab| tab.shown)
+            .map(|tab| tab.group);
+        shown
+            .filter(|group| !group.is_empty())
+            .or_else(|| {
+                crate::lock(&shared.places)
+                    .first()
+                    .map(|place| place.key.clone())
             })
-        });
-        strip::by_group(rows.collect(), |row| row.group.as_str())
+            .unwrap_or_default()
     }
 
-    /// What became of `entry`'s tab, while the window can show it.
-    fn state(&self, entry: &Entry) -> Option<State> {
-        match entry.key {
-            Key::Web(_) if entry.closed => Some(State::Closed),
+    /// The history's entries of the project shown, newest first.
+    pub(in super::super) fn rows(&self, shared: &Shared) -> Vec<Row> {
+        let project = self.shown_project(shared);
+        let ledgers = crate::lock(&shared.ledgers);
+        let Some(ledger) = ledgers.get(&project) else {
+            return vec![];
+        };
+        (ledger.tabs.iter())
+            .map(|past| {
+                let key = past.key.as_deref().and_then(Key::parse);
+                let title = past.title.strip_prefix("desk · ").unwrap_or(&past.title);
+                Row {
+                    at: past.row,
+                    key,
+                    kind: kind(past.kind),
+                    title: title.to_string(),
+                    detail: past.detail.clone(),
+                    state: key.and_then(|key| self.state(key)).unwrap_or(State::Closed),
+                    group: project.clone(),
+                }
+            })
+            .collect()
+    }
+
+    /// The pages the project shown showed, newest first: what the address field suggests.
+    pub(in super::super) fn visited(&self, shared: &Shared) -> Vec<Visited> {
+        let project = self.shown_project(shared);
+        (crate::lock(&shared.ledgers).get(&project))
+            .map(|ledger| ledger.visited.clone())
+            .unwrap_or_default()
+    }
+
+    /// What became of open tab `key`, while the window has it.
+    fn state(&self, key: Key) -> Option<State> {
+        match key {
             Key::Web(id) => {
                 let open = self.web.as_ref().filter(|web| web.listed().0.contains(&id));
                 open.map(|_| State::Open)
@@ -60,29 +86,36 @@ impl Deck {
         }
     }
 
-    /// Show `entry` again, and close the menu: an open tab, a terminal the person closed (a tab
-    /// again) or one that ended (its last screen, which is no tab).
-    pub(in super::super) fn revisit(&mut self, entry: &Entry, shared: &Shared) -> Revisit {
-        self.menu = false;
-        match (self.state(entry), entry.key) {
-            (None, Key::Web(_) | Key::Term(_)) => Revisit::Gone,
-            (Some(State::Closed), Key::Web(_) | Key::Term(_)) => {
-                self.show(Shown::Web);
-                Revisit::Load(entry.detail.clone())
-            }
-            (Some(State::Open | State::Hidden | State::Ended), Key::Web(id)) => {
+    /// Show `past` again, and close the menu: an open tab, a terminal the person closed (a tab
+    /// again) or one that ended (its last screen, which is no tab); else it is the app's to
+    /// open again.
+    pub(in super::super) fn revisit(&mut self, past: &Past, shared: &Shared) -> Revisit {
+        self.menu = None;
+        let key = past.key.as_deref().and_then(Key::parse);
+        match (key, key.and_then(|key| self.state(key))) {
+            (Some(Key::Web(id)), Some(_)) => {
                 let switched = self.web.as_mut().map(|web| web.switch(id, shared));
                 self.show(Shown::Web);
                 match switched {
                     Some(Ok(())) => Revisit::Shown,
-                    Some(Err(_)) | None => Revisit::Gone,
+                    Some(Err(_)) | None => Revisit::Again(past.row),
                 }
             }
-            (Some(State::Open | State::Hidden | State::Ended), Key::Term(id)) => {
+            (Some(Key::Term(id)), Some(_)) => {
                 self.unhide_term(id);
                 self.shown = Shown::Term(id);
                 Revisit::Shown
             }
+            (_, None) | (None, _) => Revisit::Again(past.row),
         }
+    }
+}
+
+/// How the strip names a kind of tab.
+fn kind(kind: TabKind) -> &'static str {
+    match kind {
+        TabKind::Page => "web",
+        TabKind::Terminal => "term",
+        TabKind::Board => "board",
     }
 }

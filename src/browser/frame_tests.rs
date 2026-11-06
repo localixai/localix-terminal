@@ -50,40 +50,26 @@ fn glass_is_for_a_shown_window_on_macos() {
 }
 
 #[test]
-fn a_ground_is_dark_below_mid_grey() {
-    assert!(dark([0x1e, 0x1e, 0x1e]));
-    assert!(dark([0x7f, 0x7f, 0x7f]));
-    assert!(!dark([0x80, 0x80, 0x80]));
-    assert!(!dark([0xff, 0xff, 0xff]));
-    // Luma, not the mean: a saturated blue is dark, a yellow light.
-    assert!(dark([0x20, 0x40, 0xff]));
-    assert!(!dark([0xff, 0xd7, 0x00]));
+fn each_appearance_has_its_own_material_and_coat() {
+    // HUD in the dark appearance; under-window background, which reads light, in the light.
+    assert_eq!(material(true), 13);
+    assert_eq!(material(false), 21);
+    let (dark_coat, dark_alpha) = coat(true);
+    let (light_coat, light_alpha) = coat(false);
+    assert_eq!((dark_coat, light_coat), (DARK, LIGHT));
+    // Mostly glass, as Safari's bar: at most a quarter coat, lighter where the text is dark.
+    assert!(dark_alpha < light_alpha && dark_alpha >= 0.1 && light_alpha <= 0.25);
+    // A neutral coat, near-black or near-white, so the material never reads grey.
+    let neutral = |[red, green, blue]: Rgb| red == green && green == blue;
+    assert!(neutral(DARK) && DARK[0] < 0x10 && neutral(LIGHT) && LIGHT[0] > 0xf0);
 }
 
 #[test]
-fn each_appearance_has_its_own_material_and_coat() {
-    // HUD over a dark ground; under-window background, which reads light, over a light one.
-    assert_eq!(material(true), 13);
-    assert_eq!(material(false), 21);
-    let (dark_ground, dark_alpha) = coat(None, true);
-    let (light_ground, light_alpha) = coat(None, false);
-    assert_eq!((dark_ground, light_ground), (DARK, LIGHT));
-    // Mostly glass, as Safari's bar: at most a quarter coat, lighter where the text is dark.
-    assert!(dark_alpha < light_alpha && dark_alpha >= 0.1 && light_alpha <= 0.25);
-    // A neutral glass: a terminal's own grey-blue ground only says which
-    // appearance; the coat stays near-black (or near-white), so the material does not read grey.
-    let neutral = |[red, green, blue]: Rgb| red == green && green == blue;
-    let (over_grey_blue, alpha) = coat(Some([0x2a, 0x2b, 0x37]), false);
-    assert!(
-        neutral(over_grey_blue) && over_grey_blue[0] < 0x10,
-        "{over_grey_blue:?}"
-    );
-    assert_eq!(alpha, dark_alpha);
-    let (over_paper, _) = coat(Some([0xee, 0xee, 0xe0]), true);
-    assert!(
-        neutral(over_paper) && over_paper[0] > 0xf0,
-        "{over_paper:?}"
-    );
+fn the_theme_is_the_persons_else_the_systems() {
+    use super::super::settings::Theme as Chosen;
+    assert_eq!(themed(Chosen::Light), Some(Theme::Light));
+    assert_eq!(themed(Chosen::Dark), Some(Theme::Dark));
+    assert_eq!(themed(Chosen::System), None);
 }
 
 #[test]
@@ -99,14 +85,4 @@ fn a_page_is_dressed_in_the_frames_stylesheet() {
     assert!(opaque.contains("<html>") && opaque.contains(CSS));
     assert_eq!(opaque.matches("<style>").count(), 1);
     assert!(CSS.contains("prefers-reduced-transparency"));
-}
-
-#[test]
-fn a_light_page_under_a_dark_window_coats_the_glass_light() {
-    // The strip inks its words for the tab shown: its glass must be of the same lightness.
-    let white = [0xff, 0xff, 0xff];
-    let (colour, _) = coat(shade(Some(white), Some([0x10, 0x10, 0x14])), true);
-    assert_eq!(colour, LIGHT);
-    let (colour, _) = coat(shade(None, Some([0x10, 0x10, 0x14])), false);
-    assert_eq!(colour, DARK);
 }

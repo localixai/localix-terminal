@@ -14,7 +14,6 @@ use wry::WebView;
 
 use super::super::capture::Shot;
 use super::super::deck::{Deck, Shown};
-use super::super::elsewhere::Elsewhere;
 use super::super::mini::Mini;
 use super::super::placement::{self, Rect};
 use super::super::platform;
@@ -37,8 +36,6 @@ pub(super) struct Presenter {
     mini: Option<Mini>,
     /// The tab the mini names now.
     named: Option<(Shown, u32)>,
-    /// While the deck is expanded: a click in another app collapses it.
-    elsewhere: Option<Elsewhere>,
 }
 
 impl Presenter {
@@ -52,7 +49,6 @@ impl Presenter {
             presence: Presence::new(support, Timing::default()),
             mini: None,
             named: None,
-            elsewhere: None,
         }
     }
 
@@ -68,6 +64,18 @@ impl Presenter {
     pub(super) fn event(&mut self, event: Event, stage: &mut Stage<'_>) {
         for effect in self.presence.event(event) {
             self.apply(effect, stage);
+        }
+    }
+
+    /// The person clicked the mini open: the window expands, and llx-desk becomes the app they
+    /// use, its window taking their next click and key. Only their click does this: what the
+    /// agent shows never takes their keys.
+    pub(super) fn opened(&mut self, stage: &mut Stage<'_>) {
+        self.event(Event::Expand, stage);
+        if self.presence.state() == State::Expanded
+            && let Some(deck) = stage.deck.as_ref()
+        {
+            deck.frame.focus();
         }
     }
 
@@ -109,10 +117,6 @@ impl Presenter {
     }
 
     fn enter(&mut self, state: State, stage: &mut Stage<'_>) {
-        self.elsewhere = match state {
-            State::Expanded => Elsewhere::watch(stage.proxy),
-            State::Hidden | State::Mini => None,
-        };
         // Out of sight, the person points at nothing: commenting ends, and the agent's actions
         // that waited for them go. Comments not sent yet are kept for Send.
         if state != State::Expanded
@@ -216,6 +220,13 @@ impl Presenter {
 
     pub(super) fn owns(&self, id: WindowId) -> bool {
         self.mini.as_ref().is_some_and(|mini| mini.id() == id)
+    }
+
+    /// The person's settings, taken by the mini.
+    pub(super) fn restyle(&self, settings: &super::super::settings::Settings) {
+        if let Some(mini) = &self.mini {
+            mini.restyle(settings);
+        }
     }
 
     /// The mini's page, for checks.

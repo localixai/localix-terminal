@@ -6,7 +6,7 @@ use std::time::Instant;
 use serde_json::Value;
 
 use crate::browser::{Driver, Page};
-use crate::view::View;
+use crate::view::{Action, View};
 
 use super::args::{WEB_FIELDS, number, strings, text};
 use super::changes::Seen;
@@ -26,7 +26,7 @@ const READ_LIMIT: usize = 8000;
 impl Desk {
     pub(super) fn page(&self) -> Result<&Page, String> {
         self.page.as_ref().ok_or_else(|| {
-            "there is no window here (no display, or the daemon runs with --no-window): \
+            "there is no window here (no display, or the app runs with --no-window): \
              terminals work, pages do not"
                 .to_string()
         })
@@ -34,8 +34,7 @@ impl Desk {
 
     /// Where `url` opens: a page on disk at the address it is served at, else the web address.
     fn address(&self, call: &Call, url: &str) -> Result<String, String> {
-        let root = project(call.cwd);
-        match self.served.address(&root, call.cwd, url)? {
+        match self.served.address(&call.project.path, call.cwd, url)? {
             Some(served) => Ok(served),
             None => web_address(url),
         }
@@ -49,6 +48,9 @@ impl Desk {
             // One tab is made at a time, and the window's loop makes it: the lock is held for
             // that, not for the page's load, so tabs opened together load together.
             let _change = crate::lock(&self.tabs_change);
+            if let Some(browser) = &self.browser {
+                browser.opening(&crate::projects::key(call.project.id));
+            }
             page.start(&url).map_err(|e| e.to_string())?
         };
         let tab = page.pinned(id);
@@ -83,7 +85,16 @@ impl Desk {
         id: u32,
         args: &Value,
     ) -> Result<Output, String> {
-        let call_args = super::args::picked(args, &WEB_FIELDS);
+        let mut call_args = super::args::picked(args, &WEB_FIELDS);
+        // A secret a field is filled with is put in here, and shows as its name in every answer.
+        if let Some(fill) = call_args.get_mut("fill").and_then(Value::as_object_mut) {
+            let dir = crate::secrets::dir();
+            for value in fill.values_mut() {
+                if let Some(text) = value.as_str() {
+                    *value = Value::String(self.vault.fill_in(dir.as_deref(), text)?);
+                }
+            }
+        }
         let url = match text(args, "url") {
             Some(url) => Some(self.address(call, url)?),
             None => None,
@@ -126,21 +137,17 @@ impl Desk {
         let _change = crate::lock(&self.tabs_change);
         let driver = self.page()?.driver().map_err(|e| e.to_string())?;
         crate::lock(&self.seen).remove(&id);
-        crate::lock(&self.paid).remove(&id);
         match driver.close_tab(id) {
             Ok(true) => Ok(format!("Closed w{id}.")),
+            Ok(false) if self.panels_open() => Ok(format!(
+                "Closed w{id}, the last page; the window stays for its other tabs."
+            )),
             Ok(false) => Ok(format!(
                 "Closed w{id}, the last page: the window closed; the next page opens it again."
             )),
             Err(e) => Err(format!("w{id} was not closed: {e}")),
         }
     }
-}
-
-/// The project at `dir`: the nearest directory with a `.git` at or above it, else `dir`.
-pub fn project(dir: &std::path::Path) -> std::path::PathBuf {
-    let found = dir.ancestors().find(|at| at.join(".git").exists());
-    found.unwrap_or(dir).to_path_buf()
 }
 
 /// `url` as the window loads it: http or https only. Without a scheme, https, but http for this
@@ -180,6 +187,7 @@ fn run(page: &Page, args: &Value, url: Option<&str>) -> Result<Output, String> {
             Err(e) => report.push(format!("Page size not changed: {e}")),
         }
     }
+    controls(page, args, &mut report)?;
     let driver = page.driver().map_err(|e| e.to_string())?;
     let keys = strings(args, "keys");
     if !keys.is_empty() {
@@ -203,6 +211,7 @@ fn run(page: &Page, args: &Value, url: Option<&str>) -> Result<Output, String> {
             .min(MAX_WAIT_MS);
         report.push(wait_for(&driver, wanted, most));
     }
+    // `screenshot`, as the desk's own action asks it (`shoot_web`): never a field of a call.
     let mut shot = None;
     if args.get("screenshot").and_then(Value::as_bool) == Some(true) {
         let selector = text(args, "selector");
@@ -232,11 +241,78 @@ fn run(page: &Page, args: &Value, url: Option<&str>) -> Result<Output, String> {
     })
 }
 
-/// The page as the agent reads it: where it is, then its outline without refs.
+/// The call's acts on the page's controls by their refs, in order: fields filled, options
+/// selected, then what is clicked. Each acts on the page as it is just then, so a click that
+/// loads another page is the last that lands; a ref that is gone or covered is said, and the
+/// rest are not done.
+fn controls(page: &Page, args: &Value, report: &mut Vec<String>) -> Result<(), String> {
+    let pairs = |field: &str| -> Vec<(String, String)> {
+        (args
+            .get(field)
+            .and_then(Value::as_object)
+            .into_iter()
+            .flatten())
+        .filter_map(|(at, value)| Some((at.clone(), value.as_str()?.to_string())))
+        .collect()
+    };
+    let mut acts: Vec<(String, Action)> = vec![];
+    for (at, text) in pairs("fill") {
+        let reference = control(&at)?;
+        acts.push((
+            format!("Filled {reference}."),
+            Action::Type { reference, text },
+        ));
+    }
+    for (at, value) in pairs("select") {
+        let reference = control(&at)?;
+        let said = format!("Selected \"{value}\" in {reference}.");
+        acts.push((said, Action::Select { reference, value }));
+    }
+    let clicks = match args.get("click") {
+        Some(Value::String(one)) => vec![one.clone()],
+        Some(Value::Array(many)) => many
+            .iter()
+            .filter_map(|at| at.as_str().map(String::from))
+            .collect(),
+        _ => vec![],
+    };
+    for at in clicks {
+        let reference = control(&at)?;
+        acts.push((format!("Clicked {reference}."), Action::Click { reference }));
+    }
+    for (said, action) in acts {
+        let epoch = page.observe().map_err(|e| e.to_string())?.epoch;
+        match page.act(&epoch, &action) {
+            Ok(()) => report.push(said),
+            Err(why) => {
+                report.push(format!("{} not done: {why}", said.trim_end_matches('.')));
+                break;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// A control's ref as a call gives it: `e12`, `@e12` or `[e12]`.
+fn control(at: &str) -> Result<String, String> {
+    let at = at
+        .trim()
+        .trim_start_matches('@')
+        .trim_start_matches('[')
+        .trim_end_matches(']');
+    let digits = at
+        .strip_prefix('e')
+        .filter(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
+    digits
+        .map(|n| format!("e{n}"))
+        .ok_or_else(|| format!("`{at}` is not a control's ref: the outline names them, `[e12]`"))
+}
+
+/// The page as the agent reads it: where it is, then its outline with each control's ref.
 fn outline(page: &Page) -> String {
     match page.observe() {
         Ok(view) => {
-            let outline = without_refs(&view.outline);
+            let outline = short_refs(&view.outline);
             let shown: String = outline.chars().take(OUTLINE_LIMIT).collect();
             let more = if shown.len() < outline.len() {
                 "\n... (more below: `read` or `script` reach it)"
@@ -273,25 +349,26 @@ fn read(page: &Page, offset: usize) -> String {
     }
 }
 
-/// The outline as a person reads it: ` [ref=e12]` marks dropped.
-fn without_refs(outline: &str) -> String {
-    let mut out = String::with_capacity(outline.len());
-    let mut rest = outline;
-    while let Some((before, marked)) = rest.split_once(" [ref=") {
-        out.push_str(before);
-        rest = marked.split_once(']').map_or("", |(_, after)| after);
-    }
-    out.push_str(rest);
-    out
+/// The outline as the agent reads it: each control's ` [ref=e12]` as ` [e12]`, what `click`,
+/// `fill` and `select` name it by.
+fn short_refs(outline: &str) -> String {
+    outline.replace(" [ref=", " [")
 }
 
-/// Waits until the page's text shows `wanted`, at most `most` ms, polled in the page on a timer
-/// (animation frames stop in a window in the background); says whether it came and when.
+/// Waits until the page shows `wanted`, at most `most` ms, polled in the page on a timer
+/// (animation frames stop in a window in the background); says whether it came and when. What
+/// it shows is what the outline names: its text, and a control's name or value (a button known
+/// only by its `aria-label`, a field's placeholder or what was typed in it).
 fn wait_for(driver: &impl Driver, wanted: &str, most: u64) -> String {
     let literal = Value::String(wanted.to_string());
     let source = format!(
         "const wanted = {literal}; const until = performance.now() + {most}; \
-         const shows = () => (document.body?.innerText ?? '').includes(wanted); \
+         const NAMES = ['aria-label', 'title', 'placeholder', 'alt']; \
+         const named = () => [...document.querySelectorAll('[aria-label],[title],[placeholder],[alt]')] \
+           .some(el => NAMES.some(name => (el.getAttribute(name) ?? '').includes(wanted))) \
+           || [...document.querySelectorAll('input,textarea,select')] \
+           .some(el => String(el.value ?? '').includes(wanted)); \
+         const shows = () => (document.body?.innerText ?? '').includes(wanted) || named(); \
          while (!shows() && performance.now() < until) await sleep(100); shows()"
     );
     let started = Instant::now();

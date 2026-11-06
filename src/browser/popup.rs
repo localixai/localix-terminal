@@ -37,7 +37,8 @@ impl HasWindowHandle for Parent {
 struct Places {
     taken: u32,
     free: Vec<u32>,
-    waiting: Vec<(u32, WebView)>,
+    /// Each popup's place, view and the tab that opened it.
+    waiting: Vec<(u32, WebView, u32)>,
 }
 
 thread_local! {
@@ -95,13 +96,13 @@ pub(super) fn claim(id: u32) {
 }
 
 /// The popups built since the tabs last looked, in the order of their ids.
-pub(super) fn waiting() -> Vec<(u32, WebView)> {
+pub(super) fn waiting() -> Vec<(u32, WebView, u32)> {
     let mut waiting = with(|places| std::mem::take(&mut places.waiting));
-    waiting.sort_unstable_by_key(|(id, _)| *id);
+    waiting.sort_unstable_by_key(|(id, _, _)| *id);
     waiting
 }
 
-/// Keep `webview`, built for the place `id`, until the tabs take it in.
+/// Keep `webview`, built for the place `id` by tab `opener`, until the tabs take it in.
 #[cfg_attr(
     not(target_os = "macos"),
     expect(
@@ -109,8 +110,8 @@ pub(super) fn waiting() -> Vec<(u32, WebView)> {
         reason = "elsewhere a page's window opens as a tab of its own"
     )
 )]
-pub(super) fn wait(id: u32, webview: WebView) {
-    with(|places| places.waiting.push((id, webview)));
+pub(super) fn wait(id: u32, webview: WebView, opener: u32) {
+    with(|places| places.waiting.push((id, webview, opener)));
 }
 
 /// Build the tab a page asked for, on its opener's configuration, as WebKit waits for it: the
@@ -120,6 +121,7 @@ pub(super) fn wait(id: u32, webview: WebView) {
 pub(super) fn open(
     features: wry::NewWindowFeatures,
     parent: Parent,
+    opener: u32,
     window: &super::host::Window,
     shared: &std::sync::Arc<super::host::Shared>,
     proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>,
@@ -134,7 +136,7 @@ pub(super) fn open(
     };
     // A WryWebView is a WKWebView: its superclass, as WebKit takes it.
     let view = objc2::rc::Retained::into_super(webview.webview());
-    wait(id, webview);
+    wait(id, webview, opener);
     let _ = proxy.send_event(super::host::Cmd::Adopt);
     Some(wry::NewWindowResponse::Create { webview: view })
 }
@@ -144,6 +146,7 @@ pub(super) fn open(
 pub(super) fn open(
     _features: wry::NewWindowFeatures,
     _parent: Parent,
+    _opener: u32,
     _window: &super::host::Window,
     _shared: &std::sync::Arc<super::host::Shared>,
     _proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>,

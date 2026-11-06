@@ -240,7 +240,7 @@ impl Driver for WebviewDriver {
         let settle_time = started.elapsed().saturating_sub(acted);
         self.follow_navigation(before, &settled);
         super::super::debug(|| {
-            // What was typed is never printed: it may be a secret put in for a goal.
+            // What was typed is never printed: it may be a secret filled in.
             let shown = if let Action::Type { reference, text } = action {
                 format!("Type {reference} ({} characters)", text.chars().count())
             } else {

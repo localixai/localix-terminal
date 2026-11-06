@@ -1,10 +1,11 @@
-//! Opening tabs: one or several at once, each a page or a terminal, each owned from the moment it
-//! exists, a `goal` working in it when it has one.
+//! Opening tabs: one or several at once, each a page, a terminal or the board, each owned from the
+//! moment it exists.
 
 use serde_json::Value;
 
 use super::actions::{Kind, parse};
-use super::args::{strings, text};
+use super::args::text;
+use super::ledger::Facts;
 use super::{Call, Desk, Failure, Output};
 
 impl Desk {
@@ -55,13 +56,14 @@ impl Desk {
         })
     }
 
-    /// One tab of an `open`, owned from the moment it exists; its goal, if it has one, works in it.
+    /// One tab of an `open`, owned from the moment it exists.
     fn open_one(&self, call: &Call, spec: &Value) -> Result<(String, Output), Failure> {
         let kind = match text(spec, "kind") {
             Some("browser") => Kind::Web,
             Some("terminal") => Kind::Term,
+            Some("board") => Kind::Board,
             Some(other) => {
-                return Err(format!("no kind of tab `{other}`: browser or terminal").into());
+                return Err(format!("no kind of tab `{other}`: browser, terminal or board").into());
             }
             None if text(spec, "command").is_some() => Kind::Term,
             None => Kind::Web,
@@ -76,38 +78,38 @@ impl Desk {
                 let (id, out) = self.open_term(call, spec)?;
                 (id.map(|id| format!("t{id}")), out)
             }
+            // The owner's one board, shown: opened the first time, the same tab after.
+            Kind::Board => {
+                let out = self.board(call, &serde_json::json!({"op": "show"}))?;
+                return Ok((kind.name().to_string(), out));
+            }
         };
         let Some(key) = key else {
             // The program ended within the wait: no tab, and what it printed.
             return Ok((kind.name().to_string(), out));
         };
-        {
-            let mut registry = crate::lock(&self.registry);
-            registry.own(&key, call.owner);
-            if let (Kind::Web, Some(browser)) = (kind, &self.browser) {
-                browser.group(&key, &registry.group_of(call.owner));
-            }
+        let dir = super::term::term_dir(call, spec);
+        let facts = match kind {
+            Kind::Web => Facts {
+                url: text(spec, "url"),
+                ..Facts::default()
+            },
+            Kind::Term | Kind::Board => Facts {
+                title: text(spec, "command").unwrap_or_default(),
+                cwd: Some(&dir),
+                command: text(spec, "command"),
+                ..Facts::default()
+            },
+        };
+        let kept = match kind {
+            Kind::Web => crate::ledger::Kind::Page,
+            Kind::Term | Kind::Board => crate::ledger::Kind::Terminal,
+        };
+        self.own(&key, call, kept, facts);
+        if let (Kind::Web, Some(browser)) = (kind, &self.browser) {
+            browser.group(&key, &crate::projects::key(call.project.id));
         }
         let tab = parse(&key);
-        if let (Some(goal), Some(tab)) = (text(spec, "goal"), &tab) {
-            let answering = match kind {
-                Kind::Web => self.answering(tab.id, spec)?,
-                Kind::Term => None,
-            };
-            let helped = self.goal_on(call, tab, goal, &strings(spec, "values"));
-            drop(answering);
-            match helped {
-                Ok(report) => out.report = format!("{}\n{report}", out.report),
-                Err(why) => {
-                    out.report = format!("{}\nthe goal failed: {}", out.report, why.message())
-                }
-            }
-            out.state = self
-                .read(tab)
-                .ok()
-                .and_then(|read| read.state)
-                .or(out.state);
-        }
         if let Some(told) =
             (tab.filter(|tab| tab.kind == Kind::Web)).and_then(|tab| self.told(tab.id, mark))
         {

@@ -38,3 +38,14 @@ fn an_answer_without_a_picture_is_its_text_alone() {
         "Closed 2 tabs."
     );
 }
+
+#[test]
+fn peek_marks_a_look_that_leaves_the_persons_notes() {
+    let args: Vec<String> = ["--peek", r#"{"action":"list"}"#]
+        .map(String::from)
+        .to_vec();
+    let parsed = parse(&args).unwrap();
+    assert!(parsed.peek);
+    assert_eq!(parsed.json.as_deref(), Some(r#"{"action":"list"}"#));
+    assert!(!parse(&args[1..]).unwrap().peek);
+}

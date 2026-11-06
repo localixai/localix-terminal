@@ -6,6 +6,7 @@ use std::fmt::Write as _;
 use serde_json::{Value, json};
 
 use super::args::{TERM_FIELDS, WEB_FIELDS, picked, strings, text};
+use super::center::Subject;
 use super::{Call, Desk, Failure, Output};
 
 /// What a tab is, from its key.
@@ -13,6 +14,7 @@ use super::{Call, Desk, Failure, Output};
 pub(super) enum Kind {
     Web,
     Term,
+    Board,
 }
 
 impl Kind {
@@ -20,6 +22,7 @@ impl Kind {
         match self {
             Self::Web => "browser",
             Self::Term => "terminal",
+            Self::Board => "board",
         }
     }
 
@@ -27,9 +30,79 @@ impl Kind {
         match self {
             Self::Web => &WEB_FIELDS,
             Self::Term => &TERM_FIELDS,
+            Self::Board => &[],
+        }
+    }
+
+    /// Every field `interact` reads on a tab of this kind, past those of any tab ([`ANY_TAB`]).
+    fn takes(self) -> Vec<String> {
+        let own = self.fields().iter().map(|field| (*field).to_string());
+        match self {
+            Self::Web => own.chain(DIALOG.map(String::from)).collect(),
+            Self::Term => own.collect(),
+            Self::Board => super::args::board_fields()
+                .into_iter()
+                .map(|(name, _)| name)
+                .collect(),
+        }
+    }
+
+    /// How what was meant is done on this kind, after a field it does not take.
+    fn instead(self) -> &'static str {
+        match self {
+            Self::Web => {
+                "A control is acted on by its ref from the outline (`[e12]`): `click` it, `fill` \
+                 fields (`{\"e4\": \"text\"}`), `select` an option; keys are `keys`, anything \
+                 else a `script`."
+            }
+            Self::Term => "Text is `input`, keys are `keys` ([\"Enter\"], [\"Ctrl-C\"]).",
+            Self::Board => "A board is acted on with an `op`: add, take, review, block, release…",
         }
     }
 }
+
+/// The fields `interact` reads on any tab: which, the ask of the person, and who acts (a
+/// subagent's name, as the caller gives it).
+const ANY_TAB: [&str; 4] = ["action", "tab", "ask", "who"];
+/// How a page's dialogs are answered.
+const DIALOG: [&str; 2] = ["dialog", "dialog_text"];
+
+/// A field `interact` would not read on `kind` is refused, never passed over: a page's
+/// `"op": "click"` did nothing, and read as a page that would not answer a click. An `op` that
+/// names a field the call carries (`"op": "script"` beside its `script`) says what the call
+/// does already, and is let be.
+fn unread(kind: Kind, args: &Value) -> Result<(), String> {
+    let takes = kind.takes();
+    let Some(given) = args.as_object() else {
+        return Ok(());
+    };
+    let named = |field: &str| {
+        field == "op"
+            && kind != Kind::Board
+            && (given.get("op").and_then(Value::as_str)).is_some_and(|op| {
+                op != "op" && given.contains_key(op) && takes.iter().any(|t| t == op)
+            })
+    };
+    let stray: Vec<String> = (given.keys())
+        .filter(|field| !ANY_TAB.contains(&field.as_str()) && !takes.contains(field))
+        .filter(|field| !named(field))
+        .map(|field| format!("`{field}`"))
+        .collect();
+    if stray.is_empty() {
+        return Ok(());
+    }
+    let listed: Vec<String> = takes.iter().map(|field| format!("`{field}`")).collect();
+    Err(format!(
+        "a {} tab takes no {}: nothing was done. It takes {}. {}",
+        kind.name(),
+        stray.join(", "),
+        listed.join(", "),
+        kind.instead()
+    ))
+}
+
+/// What a board answers where a page or a terminal acts.
+const ON_A_BOARD: &str = "a board is acted on with an `op` (add, take, review…), not keys";
 
 /// A tab of the owner's: its key, kind and number.
 pub(super) struct Tab {
@@ -44,6 +117,7 @@ pub(super) fn parse(key: &str) -> Option<Tab> {
     let kind = match key.chars().next()? {
         'w' => Kind::Web,
         't' => Kind::Term,
+        'b' => Kind::Board,
         _ => return None,
     };
     let id = key.get(1..)?.parse().ok()?;
@@ -65,11 +139,20 @@ impl Desk {
                         state: Some(self.session(tab.id)?.snapshot()),
                         shot: None,
                     },
+                    Kind::Board => Output {
+                        report: "A board is read as text: it is below.".into(),
+                        state: Some(self.board_text(&tab.key)?),
+                        shot: None,
+                    },
                 })
             }
             Some("close") => self.close(call, args),
             Some("show") => {
                 let tab = self.tab(call, text(args, "tab"))?;
+                // A board shown is opened again when the window went with its tab.
+                if tab.kind == Kind::Board {
+                    return self.board(call, &json!({"op": "show"}));
+                }
                 let browser = self
                     .browser
                     .as_ref()
@@ -109,9 +192,13 @@ impl Desk {
         }
         match crate::lock(&self.registry).owner_of(&tab.key) {
             Some(owner) if owner == call.owner => Ok(tab),
+            // A call from another directory is another owner's: say whose, so the agent sees it
+            // left its project (a `cd` into a scratch directory) rather than lost the tab.
             _ => Err(format!(
-                "there is no tab {} among yours: `list` names them",
-                tab.key
+                "there is no tab {} among yours, {}: `list` names them. Tabs are kept per \
+                 project, the directory with `.git` around where the call runs (or \
+                 LLX_DESK_PROJECT, or `--as`): run it from the project's directory",
+                tab.key, call.owner
             )),
         }
     }
@@ -127,19 +214,46 @@ impl Desk {
                 state: Some(self.session(tab.id)?.snapshot()),
                 ..Output::default()
             }),
+            Kind::Board => Ok(Output {
+                state: Some(self.board_text(&tab.key)?),
+                ..Output::default()
+            }),
         }
     }
 
     /// Acting in a tab, a page answering its dialogs as the call asks; what the page told
     /// during the call after the report.
     fn interact(&self, call: &Call, args: &Value) -> Result<Output, Failure> {
+        // An ask with no tab: the session waits for the person.
+        if text(args, "tab").is_none() && args.get("ask").is_some() {
+            let session = Subject::Session(call.owner.to_string());
+            return Ok(self.ask(call.owner, session, text(args, "ask")).into());
+        }
         let tab = self.tab(call, text(args, "tab"))?;
-        if tab.kind == Kind::Term {
-            return self.interact_in(call, &tab, args);
+        unread(tab.kind, args)?;
+        // An ask of the person, on any kind of tab, and then what the call does there.
+        let asked = (args.get("ask")).map(|_| {
+            let on = Subject::Tab(tab.key.clone());
+            self.ask(call.owner, on, text(args, "ask"))
+        });
+        let mut done = self.interact_tab(call, &tab, args)?;
+        if let Some(asked) = asked {
+            done.report = format!("{asked}\n\n{}", done.report);
+        }
+        Ok(done)
+    }
+
+    fn interact_tab(&self, call: &Call, tab: &Tab, args: &Value) -> Result<Output, Failure> {
+        match tab.kind {
+            Kind::Term => return self.interact_in(call, tab, args),
+            // A board's `op` acts on it; with none, it is read (what a page or a terminal is
+            // acted on with was refused already).
+            Kind::Board => return self.board(call, args),
+            Kind::Web => {}
         }
         let mark = self.told_mark();
         let answering = self.answering(tab.id, args)?;
-        let mut done = self.interact_in(call, &tab, args)?;
+        let mut done = self.interact_in(call, tab, args)?;
         drop(answering);
         if let Some(told) = self.told(tab.id, mark) {
             done.report = format!(
@@ -152,83 +266,18 @@ impl Desk {
         Ok(done)
     }
 
-    /// Acting in a tab: a goal for the helper first, then the kind's own fields.
+    /// Acting in a tab: the kind's own fields.
     fn interact_in(&self, call: &Call, tab: &Tab, args: &Value) -> Result<Output, Failure> {
-        let Some(goal) = text(args, "goal") else {
-            let mut done = self.interact_kind(call, tab, args)?;
-            done.report = format!("{}: {}", tab.key, done.report);
-            return Ok(done);
-        };
-        // The kind's own fields first (an address to load), so the goal acts on what they leave.
-        let own = tab
-            .kind
-            .fields()
-            .iter()
-            .any(|field| args.get(*field).is_some());
-        let first = if own {
-            Some(self.interact_kind(call, tab, args)?)
-        } else {
-            None
-        };
-        let helper = self.goal_on(call, tab, goal, &strings(args, "values"))?;
-        let mut after = self.interact_kind(call, tab, &json!({}))?;
-        let mut report = vec![];
-        if let Some(first) = first.filter(|f| !f.report.is_empty()) {
-            report.push(format!("{}: {}", tab.key, first.report));
-        }
-        report.push(helper);
-        if !after.report.is_empty() {
-            report.push(std::mem::take(&mut after.report));
-        }
-        after.report = report.join("\n\n");
-        Ok(after)
+        let mut done = self.interact_kind(call, tab, args)?;
+        done.report = format!("{}: {}", tab.key, done.report);
+        Ok(done)
     }
 
     fn interact_kind(&self, call: &Call, tab: &Tab, args: &Value) -> Result<Output, String> {
         match tab.kind {
             Kind::Web => self.interact_web(call, tab.id, args),
             Kind::Term => self.interact_term(tab.id, &picked(args, &TERM_FIELDS)),
-        }
-    }
-
-    /// `goal` on `tab`'s view, while no other call works in it.
-    pub(super) fn goal_on(
-        &self,
-        call: &Call,
-        tab: &Tab,
-        goal: &str,
-        values: &[String],
-    ) -> Result<String, Failure> {
-        match tab.kind {
-            Kind::Web => {
-                let lock = self.tab_lock(tab.id);
-                let _held = crate::lock(&lock);
-                let page = self.page()?.pinned(tab.id);
-                let mut paid = crate::lock(&self.paid).remove(&tab.id).unwrap_or_default();
-                let done = super::goal::run_goal(
-                    call,
-                    &tab.key,
-                    &page,
-                    goal,
-                    values,
-                    &self.vault,
-                    &mut paid,
-                );
-                crate::lock(&self.paid).insert(tab.id, paid);
-                done
-            }
-            Kind::Term => {
-                let session = self.session(tab.id)?;
-                super::goal::run_goal(
-                    call,
-                    &tab.key,
-                    &crate::terminal::TerminalView(&session),
-                    goal,
-                    values,
-                    &self.vault,
-                    &mut vec![],
-                )
-            }
+            Kind::Board => Err(ON_A_BOARD.into()),
         }
     }
 
@@ -261,13 +310,13 @@ impl Desk {
             registry.release(&tab.key);
             owner
         };
-        if let Some(owner) = owner {
-            self.events
-                .publish("tab/closed", Some(&owner), json!({"tab": tab.key}));
+        if owner.is_some() {
+            self.gone(owner, &tab.key);
         }
         match tab.kind {
             Kind::Web => self.close_web(tab.id),
             Kind::Term => self.close_term(tab.id),
+            Kind::Board => self.close_board(&tab.key),
         }
     }
 
@@ -288,6 +337,7 @@ impl Desk {
             let Some(tab) = parse(&key) else { continue };
             let known = window.iter().find(|w| w.id == key);
             let detail = match (tab.kind, known) {
+                (Kind::Board, _) => self.board_summary(&tab.key),
                 (_, Some(w)) => format!("{} {}", w.title, w.detail).trim().to_string(),
                 (Kind::Term, None) => self
                     .session(tab.id)

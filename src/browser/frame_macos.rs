@@ -27,13 +27,13 @@ pub(super) fn clear(builder: WindowBuilder) -> WindowBuilder {
         .with_title_hidden(true)
 }
 
-/// An empty toolbar of the unified style, as Safari's window has: AppKit makes the titlebar that
+/// An empty toolbar of the compact unified style, as Safari's compact tabs have: AppKit makes the titlebar that
 /// tall and centres the window's buttons on it itself, through every resize. The strip draws
 /// the toolbar's contents under it (the content fills the window).
 pub(super) fn toolbar(window: &Window) {
-    /// NSWindowToolbarStyle: automatic 0, expanded 1, preference 2, unified 3 (52 points tall,
-    /// `strip::BAR`, the buttons centred on it).
-    const UNIFIED: isize = 3;
+    /// NSWindowToolbarStyle: automatic 0, expanded 1, preference 2, unified 3, unified compact 4
+    /// (38 points tall, `strip::BAR`, the buttons centred on it).
+    const UNIFIED: isize = 4;
     // SAFETY: tao's NSWindow is alive while its `Window` is borrowed.
     let object = unsafe { &*window.ns_window().cast::<AnyObject>() };
     // SAFETY: `new` on NSToolbar answers a retained, empty toolbar.
@@ -58,14 +58,12 @@ pub(super) fn reduced() -> bool {
 
 /// What names our material among the frame view's own (the system puts materials there too).
 fn name() -> Retained<AnyObject> {
-    // SAFETY: the argument is a NUL-terminated UTF-8 literal, alive for the whole program.
-    unsafe { msg_send![class!(NSString), stringWithUTF8String: c"desk.glass".as_ptr()] }
+    crate::browser::appkit::text("desk.glass")
 }
 
 /// What names the coat over it.
 fn coat_name() -> Retained<AnyObject> {
-    // SAFETY: the argument is a NUL-terminated UTF-8 literal, alive for the whole program.
-    unsafe { msg_send![class!(NSString), stringWithUTF8String: c"desk.coat".as_ptr()] }
+    crate::browser::appkit::text("desk.coat")
 }
 
 /// The view that holds the titlebar and the content.

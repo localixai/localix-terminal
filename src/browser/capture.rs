@@ -7,10 +7,8 @@ use std::sync::mpsc::SyncSender;
 
 #[cfg(target_os = "linux")]
 mod gtk;
-mod top;
 #[cfg(target_os = "linux")]
 pub(super) use gtk::capture;
-pub(super) use top::top;
 
 /// The long side of a picture, in pixels.
 #[cfg_attr(
@@ -81,9 +79,6 @@ pub(super) fn capture(
     let bounds: CGRect = unsafe { msg_send![&*view, bounds] };
     // SAFETY: wry's NSWindow is alive while its WebView is; it answers a CGFloat.
     let scale: f64 = unsafe { msg_send![&*window, backingScaleFactor] };
-    // What the strip covers of a page under it is not the page's (under.rs). WebKit measures the
-    // picture from below it, as the page's own coordinates are: only its height is less.
-    let covered = super::under::covered(&view);
     let rect = match clip {
         Some(clip) => CGRect {
             origin: CGPoint {
@@ -99,7 +94,7 @@ pub(super) fn capture(
             origin: CGPoint { x: 0.0, y: 0.0 },
             size: CGSize {
                 width: bounds.size.width,
-                height: bounds.size.height - covered,
+                height: bounds.size.height,
             },
         },
     };
@@ -180,18 +175,22 @@ unsafe fn encode(image: *mut objc2::runtime::AnyObject) -> Result<Shot, String> 
     if bitmap.is_null() {
         return Err("the picture could not be decoded".into());
     }
-    // SAFETY: the argument is a NUL-terminated UTF-8 literal, alive for the whole program.
-    let key: *mut AnyObject = unsafe {
-        msg_send![
-            class!(NSString),
-            stringWithUTF8String: c"NSImageCompressionFactor".as_ptr()
-        ]
-    };
+    let key = super::appkit::text("NSImageCompressionFactor");
     // SAFETY: NSNumber's class method takes a double and returns a number.
     let quality: *mut AnyObject = unsafe { msg_send![class!(NSNumber), numberWithDouble: QUALITY] };
     // SAFETY: `quality` and `key` are live objects, made just above in this pool.
-    let properties: *mut AnyObject =
-        unsafe { msg_send![class!(NSDictionary), dictionaryWithObject: quality, forKey: key] };
+    let properties: *mut AnyObject = unsafe {
+        msg_send![class!(NSMutableDictionary), dictionaryWithObject: quality, forKey: &*key]
+    };
+    // A page on the window's glass is clear where the glass shows, and a JPEG has no clear: it is
+    // laid on the window's own background, in the appearance in force, not on black.
+    let fallback = super::appkit::text("NSImageFallbackBackgroundColor");
+    // SAFETY: NSColor's class method answers the shared, live system colour.
+    let ground: *mut AnyObject = unsafe { msg_send![class!(NSColor), windowBackgroundColor] };
+    if !properties.is_null() && !ground.is_null() {
+        // SAFETY: `properties` is a live NSMutableDictionary, `ground` and `fallback` live objects.
+        let _: () = unsafe { msg_send![properties, setObject: ground, forKey: &*fallback] };
+    }
     // SAFETY: `bitmap` is a live NSBitmapImageRep (non-null above), `properties` a dictionary.
     let data: *mut AnyObject =
         unsafe { msg_send![bitmap, representationUsingType: JPEG, properties: properties] };

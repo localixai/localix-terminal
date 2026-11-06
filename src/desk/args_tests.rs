@@ -25,9 +25,14 @@ fn an_array_of_the_wrong_items_is_refused() {
 }
 
 #[test]
-fn null_and_unknown_fields_are_left_alone() {
+fn a_null_field_is_left_alone_and_an_unknown_one_refused() {
     assert_eq!(
-        check(&json!({"action": "list", "tab": null, "extra": 1})),
+        check(&json!({"action": "list", "tab": null, "extra": null})),
         Ok(())
+    );
+    let why = check(&json!({"action": "open", "url": "x", "goal": "log in"})).unwrap_err();
+    assert!(
+        why.starts_with("no field `goal`: nothing was done"),
+        "{why}"
     );
 }

@@ -6,7 +6,7 @@
 //! share; the loop is host_events.rs (the browser's commands host_web.rs), the work thread's
 //! handle host_handle.rs.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Condvar, Mutex};
@@ -19,10 +19,11 @@ use crate::WindowTab;
 
 use super::capture::{Clip, Shot};
 use super::comments::Comments;
-use super::history::History;
 use super::panel;
 use super::strip::{Click, Key};
-pub use super::told::{Heard, Tab};
+pub use super::told::{
+    Answers, Asked, CenterDid, Confirm, Heard, Ledger, Past, Place, Tab, TabKind, Visited, Went,
+};
 use super::viewport::Viewport;
 
 #[path = "host_events.rs"]
@@ -90,7 +91,12 @@ pub(super) enum Cmd {
     NewTab {
         url: String,
         reply: Option<SyncSender<Result<u32, String>>>,
+        /// The tab whose page asked for it, whose project it is of.
+        opener: Option<u32>,
     },
+    /// A new tab's page has drawn: the tab draws its own ground again (until then the window's
+    /// showed through it, so a blank view never flashes white over a dark window).
+    Reveal(u32),
     SwitchTab {
         id: u32,
         reply: SyncSender<Result<(), String>>,
@@ -118,15 +124,28 @@ pub(super) enum Cmd {
     /// Close a panel.
     Unpanel(u32),
     /// A panel's menu, where the person right-clicked in it (`m` of its page).
-    PanelMenu(u32, (u32, u32), panel::Selection),
+    PanelMenu(u32, (u32, u32), Vec<super::choice::Entry>),
     /// A panel's page took a title.
     Titled(u32, String),
     /// What the person clicked on the strip.
     Clicked(String),
+    /// What the person clicked in the side: as the strip says it, its points the side's.
+    SideClicked(String),
+    /// The person clicked in the browser's toolbar: said as the strip says it, its points the
+    /// toolbar's.
+    NavClicked(String),
+    /// A step of the side's slide: the slide's number, and how much of it shows.
+    Slide(u32, f64),
+    /// The person's settings changed: the window takes them.
+    Restyle,
     /// A comment the person made on a page: pictured, then held.
     Noted(Noted),
     /// Tell the strip what the window holds (a tab's title changed, its page loaded).
     Strip,
+    /// Integration `.0` was read: on (`.1`) or off. The offer bar is drawn again.
+    Offered(&'static str, bool),
+    /// The window goes to the project of this key (one the app just made, the person's pick).
+    Go(String),
     /// Take in the popups pages opened (popup.rs), and show the last.
     #[cfg_attr(
         not(target_os = "macos"),
@@ -136,8 +155,6 @@ pub(super) enum Cmd {
         )
     )]
     Adopt,
-    /// The colour of the tab now under the strip (the one `Deck::signature` names), if one.
-    Tinted((super::deck::Shown, u32), Option<super::tint::Rgb>),
     /// For checks: how the window is dressed, once tinted again.
     Dressed(SyncSender<Option<Dressing>>),
     /// The window's tabs; `None` while it is closed.
@@ -146,10 +163,14 @@ pub(super) enum Cmd {
     Act(Click, SyncSender<Result<(), String>>),
     /// What the agent or the person did to the window's presence (presence.rs).
     Presence(super::presence::Event),
+    /// The person clicked the mini open: expanded, and the app they use from then on.
+    Opened,
     /// The mini's picture, taken or not.
     Pictured(Result<Shot, String>),
     /// For checks: the window's state, `hidden`, `mini` or `expanded`.
     Presented(SyncSender<&'static str>),
+    /// Ask the person; the reply is whether they went on.
+    Confirm(Confirm, SyncSender<bool>),
     Exit(i32),
 }
 
@@ -178,8 +199,21 @@ pub(super) struct Shared {
     listener: Mutex<Option<Listener>>,
     /// The group (a project) of each tab, by key, as its opener named it.
     pub(super) groups: Mutex<HashMap<String, String>>,
-    /// The tabs the window has held, for the strip's history menu.
-    pub(super) history: History,
+    /// The projects the window knows, as the app tells them (`Browser::places`).
+    pub(super) places: Mutex<Vec<Place>>,
+    /// Which project the window shows, and what it knows of the others (host_project.rs).
+    pub(super) scope: Mutex<super::scope::Scope>,
+    /// The window's own Settings tab, once opened.
+    pub(super) settings: Mutex<Option<panel::Panel>>,
+    /// What a terminal's program says it is doing (the title it set), by key.
+    pub(super) details: Mutex<HashMap<String, String>>,
+    /// The new tabs drawn through until their page has drawn (tabs::see_through_until_drawn).
+    pub(super) undrawn: Mutex<HashSet<u32>>,
+    /// The Event Center's events, as the desk last sent them (a JSON list, newest first).
+    pub(super) center: Mutex<String>,
+    /// Each project's past (its tabs, its pages), as the app tells it (`Browser::ledger`), by
+    /// the project's key: for the history menu and the address field's suggestions.
+    pub(super) ledgers: Mutex<HashMap<String, Ledger>>,
     /// The person's comments on the pages, until they send them.
     pub(super) comments: Comments,
     /// Whose turn it is: the agent's actions wait while the person comments.
@@ -188,6 +222,10 @@ pub(super) struct Shared {
     pub(super) notices: super::notices::Notices,
     /// Where the person put the window and its mini, for the process.
     pub(super) kept: Mutex<super::placement::Kept>,
+    /// What the offer bar knows: the agents in the terminals, the integrations' states.
+    pub(super) offers: super::offer::Offers,
+    /// Where each terminal is now (its program's folder), by tab key: its menu works there.
+    pub(super) folders: Mutex<HashMap<String, std::path::PathBuf>>,
 }
 
 /// Told what the person did to a tab (its key; `window` for the whole window), in words.
@@ -253,8 +291,6 @@ impl Shared {
         self.notices.forget_all();
         // No window, no one commenting: actions waiting for the person go (and find it closed).
         self.turn.commenting(false);
-        let groups = crate::lock(&self.groups).clone();
-        self.history.web(&[], &groups);
         self.loaded.notify_all();
     }
 
@@ -274,20 +310,39 @@ impl Shared {
                 PageLoadEvent::Finished => loads.finished = loads.started,
             }
         }
-        if let Some(entry) = crate::lock(&self.tabs).iter_mut().find(|t| t.id == tab) {
+        let title = (crate::lock(&self.tabs).iter_mut().find(|t| t.id == tab)).map(|entry| {
             entry.url = url.to_string();
-        }
+            entry.title.clone()
+        });
         if matches!(event, PageLoadEvent::Finished) {
-            self.history.loaded(tab, url);
+            self.went(tab, url, &title.unwrap_or_default());
         }
         self.loaded.notify_all();
     }
 
-    pub(super) fn titled(&self, tab: u32, title: String) {
-        self.history.titled(Key::Web(tab), &title);
-        if let Some(entry) = crate::lock(&self.tabs).iter_mut().find(|t| t.id == tab) {
-            entry.title = title;
+    pub(super) fn titled(&self, tab: u32, title: &str) {
+        let url = (crate::lock(&self.tabs).iter_mut().find(|t| t.id == tab)).map(|entry| {
+            title.clone_into(&mut entry.title);
+            entry.url.clone()
+        });
+        if let Some(url) = url.filter(|url| !url.is_empty()) {
+            self.went(tab, &url, title);
         }
+    }
+
+    /// Browser tab `tab` showed `url`, titled `title`: the app hears it, for the ledger.
+    fn went(&self, tab: u32, url: &str, title: &str) {
+        let key = Key::Web(tab).name();
+        let group = crate::lock(&self.groups)
+            .get(&key)
+            .cloned()
+            .unwrap_or_default();
+        let went = Went {
+            url,
+            title: title.trim(),
+            group: &group,
+        };
+        self.heard(&key, Heard::Went(went));
     }
 
     /// The tabs open now, `active` acted on; what is known of each is kept.
@@ -305,8 +360,6 @@ impl Shared {
         }
         tabs.sort_by_key(|tab| tab.id);
         drop(tabs);
-        let groups = crate::lock(&self.groups).clone();
-        self.history.web(ids, &groups);
         self.active.store(active, Ordering::SeqCst);
         self.loaded.notify_all();
     }
@@ -365,6 +418,12 @@ pub(super) const STRIP: u32 = u32::MAX;
 
 /// The panel id that names the mini's own page, for checks.
 pub(super) const MINI: u32 = u32::MAX - 1;
+
+/// The panel id that names the page the tabs are listed in, for checks: the side, or the strip
+/// where there is none.
+pub(super) const TABS: u32 = u32::MAX - 2;
+/// The browser's toolbar's page, for checks.
+pub(super) const NAV_PAGE: u32 = u32::MAX - 3;
 
 /// The answer to every call while the window is closed.
 pub(super) const WINDOW_CLOSED: &str = "window_closed";

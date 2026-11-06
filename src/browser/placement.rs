@@ -24,6 +24,10 @@ pub(super) struct Rect {
 pub(super) struct Kept {
     pub deck: Option<Rect>,
     pub mini: Option<(f64, f64)>,
+    /// The tabs' column was left open or slid shut: a window opened again keeps it so.
+    pub side: Option<bool>,
+    /// The side's width as the person last dragged it.
+    pub side_width: Option<f64>,
 }
 
 /// The mini's size: its picture, 16 by 10.

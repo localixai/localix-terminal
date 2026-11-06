@@ -1,4 +1,4 @@
-//! Screenshots saved as files an agent can read; the newest few are kept. The daemon sends a
+//! Screenshots saved as files an agent can read; the newest few are kept. The app sends a
 //! picture as bytes, and the CLI, whose caller reads files, saves it here.
 
 use std::path::{Path, PathBuf};

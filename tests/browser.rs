@@ -16,16 +16,20 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use llx_desk::browser::{self, Driver, Observation, WebviewDriver, Window};
 use llx_desk::view::{Action, ViewError};
 
+#[path = "support/board.rs"]
+mod board;
 #[path = "support/panel.rs"]
 mod panel;
 #[cfg(target_os = "macos")]
 #[path = "support/presence.rs"]
 mod presence;
+#[path = "support/refs.rs"]
+mod refs;
 #[path = "support/told.rs"]
 mod told;
 
@@ -56,11 +60,10 @@ fn answer(stream: &std::net::TcpStream) {
         .unwrap_or("/")
         .trim_start_matches('/');
     // A server that takes its time: a navigation must be followed, not raced.
-    let (path, delay) = match (path.strip_prefix("slow/"), path.strip_prefix("slower/")) {
-        (Some(rest), _) => (rest, 800),
-        (_, Some(rest)) => (rest, 3000),
-        _ => (path, 0),
-    };
+    let delayed = [("slow/", 800), ("slower/", 3000), ("slowest/", 6000)];
+    let (path, delay) = (delayed.iter())
+        .find_map(|(prefix, ms)| Some((path.strip_prefix(prefix)?, *ms)))
+        .unwrap_or((path, 0));
     std::thread::sleep(Duration::from_millis(delay));
     let file = format!("{}/tests/fixtures/{path}", env!("CARGO_MANIFEST_DIR"));
     let (status, body) = match std::fs::read(&file) {
@@ -349,7 +352,7 @@ fn scenario(driver: &WebviewDriver, origin: &str) {
 
     // A script whose page leaves answers once the new document loads, not at the script timeout.
     driver.navigate(&format!("{origin}/form.html")).unwrap();
-    let started = std::time::Instant::now();
+    let started = Instant::now();
     let left = driver
         .evaluate("location.href = '/second.html'; await new Promise((r) => setTimeout(r, 30000))")
         .unwrap();
@@ -377,7 +380,7 @@ fn scenario(driver: &WebviewDriver, origin: &str) {
 
     // A parsed page is used after a short grace: a slow image (an ad, a video) does not hold the
     // run until it arrives, nor makes the page busy.
-    let started = std::time::Instant::now();
+    let started = Instant::now();
     driver.navigate(&format!("{origin}/heavy.html")).unwrap();
     let page = driver.observe().unwrap();
     assert!(
@@ -388,8 +391,8 @@ fn scenario(driver: &WebviewDriver, origin: &str) {
     assert!(page.title == "Heavy" && !page.busy, "{page:?}");
     std::thread::sleep(Duration::from_millis(2500));
 
-    // An action waits for the request it started (results in 0.8 s); one that takes longer than
-    // that wait (3 s) leaves the page busy until the answer arrives.
+    // An action waits for the request it started (results in 0.8 s); one that takes far longer
+    // than that wait (6 s) leaves the page busy until the answer arrives.
     driver.navigate(&format!("{origin}/search.html")).unwrap();
     let page = driver.observe().unwrap();
     act(
@@ -401,6 +404,7 @@ fn scenario(driver: &WebviewDriver, origin: &str) {
     );
     let page = driver.observe().unwrap();
     assert!(!page.busy && page.text.contains("3 results"), "{page:?}");
+    let clicked = Instant::now();
     act(
         driver,
         &page,
@@ -409,9 +413,20 @@ fn scenario(driver: &WebviewDriver, origin: &str) {
         },
     );
     let page = driver.observe().unwrap();
-    assert!(page.busy && !page.text.contains("9 results"), "{page:?}");
-    std::thread::sleep(Duration::from_millis(1500));
-    let page = driver.observe().unwrap();
+    // Busy while the request is out and young: a click that waited its turn behind the other
+    // scenarios (the person commenting) may come back after that.
+    if clicked.elapsed() < Duration::from_millis(4500) {
+        assert!(page.busy && !page.text.contains("9 results"), "{page:?}");
+    }
+    // Its answer comes in the end, and the page is not busy then.
+    let answered = Instant::now() + Duration::from_secs(10);
+    let page = loop {
+        let page = driver.observe().unwrap();
+        if page.text.contains("9 results") || Instant::now() > answered {
+            break page;
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    };
     assert!(!page.busy && page.text.contains("9 results"), "{page:?}");
 
     // A banner in a same-origin frame over the page: its controls are offered as a dialog, and
@@ -561,7 +576,7 @@ fn scenario(driver: &WebviewDriver, origin: &str) {
     // The agent closes the window: it is closed, and the task goes on (closing it by hand would
     // end this test with the window-closed exit code instead of "driver: ok").
     driver.close();
-    let closing = std::time::Instant::now();
+    let closing = Instant::now();
     while driver.is_open() && closing.elapsed() < Duration::from_secs(2) {
         std::thread::sleep(Duration::from_millis(10));
     }
@@ -569,7 +584,7 @@ fn scenario(driver: &WebviewDriver, origin: &str) {
     assert!(matches!(driver.observe(), Err(ViewError::Unavailable(_))));
 }
 
-/// A second page on the one open window (another client of the daemon): it opens a tab of its own
+/// A second page on the one open window (another client of the server): it opens a tab of its own
 /// beside the first page's, and the first page's tab is left as it was.
 /// Two calls that open the window at once: the second is refused, and the window stays open to
 /// every driver and to the next page that would open it.
@@ -610,11 +625,11 @@ fn answers_while_loading(browser: &browser::Browser, driver: &WebviewDriver, ori
         let opening =
             scope.spawn(|| page.open(&format!("{origin}/slower/form.html"), "slow", None));
         // Its tab is made at once; its document comes 3 s later.
-        let asked = std::time::Instant::now();
+        let asked = Instant::now();
         while driver.tabs().0.len() == before.len() && asked.elapsed() < Duration::from_secs(2) {
             std::thread::sleep(Duration::from_millis(10));
         }
-        let asked = std::time::Instant::now();
+        let asked = Instant::now();
         let _ = (page.is_open(), page.driver().is_ok());
         let _ = page.pinned(1);
         let waited = asked.elapsed();
@@ -640,7 +655,7 @@ fn answers_while_loading(browser: &browser::Browser, driver: &WebviewDriver, ori
 /// says the tab's id before the document comes; a driver pinned to it waits for it.
 fn starts_at_once(browser: &browser::Browser, driver: &WebviewDriver, origin: &str) {
     let page = browser::Page::new(browser.clone(), true);
-    let asked = std::time::Instant::now();
+    let asked = Instant::now();
     let id = (page.start(&format!("{origin}/slower/form.html"))).expect("a tab starts");
     let waited = asked.elapsed();
     assert!(waited < Duration::from_secs(1), "it waited: {waited:?}");
@@ -828,7 +843,7 @@ fn waits_for_the_person(browser: &browser::Browser, driver: &WebviewDriver) {
     );
     // Send ended commenting: the next action goes at once.
     let page = driver.observe().unwrap();
-    let started = std::time::Instant::now();
+    let started = Instant::now();
     driver.act(&page.epoch, &Action::ScrollUp).unwrap();
     assert!(started.elapsed() < Duration::from_secs(3));
 }
@@ -874,7 +889,7 @@ fn tabs(driver: &WebviewDriver, origin: &str) {
     assert_eq!(one.observe().unwrap().title, "Tabs");
     assert_eq!(two.observe().unwrap().title, "Book");
     assert_eq!(driver.tabs().1, 1, "the tab shown stays");
-    let started = std::time::Instant::now();
+    let started = Instant::now();
     let (a, b) = std::thread::scope(|scope| {
         let a = scope.spawn(|| one.evaluate("await sleep(700); document.title"));
         let b = scope.spawn(|| two.evaluate("await sleep(700); document.title"));
@@ -984,7 +999,7 @@ fn tabs(driver: &WebviewDriver, origin: &str) {
     }
     driver.evaluate("document.title = 'Tabs'").unwrap();
     // A driver pinned to a tab that is closed, or never was, acts nowhere: it never falls back to
-    // the tab shown, where a goal's clicks would land on another page.
+    // the tab shown, where its clicks would land on another page.
     for gone in [2, 9] {
         let pinned = driver.on(gone);
         assert!(
@@ -1129,67 +1144,76 @@ fn main() {
         headless: true,
         viewport: browser::Viewport::DESKTOP,
     };
-    // A window that cannot open ends the run with 3; the person closing it, with 130.
-    browser::host(
-        || std::process::exit(130),
-        move |browser| {
-            let run = |name: &str, test: &dyn Fn()| match catch_unwind(AssertUnwindSafe(test)) {
-                Ok(()) => {
-                    println!("{name}: ok");
-                    true
-                }
-                Err(_) => false,
-            };
-            if paneling && !run("panel (first)", &|| panel::first(&browser)) {
-                return 1;
+    // A window that cannot open ends the run with 3.
+    browser::host(move |browser| {
+        let run = |name: &str, test: &dyn Fn()| match catch_unwind(AssertUnwindSafe(test)) {
+            Ok(()) => {
+                println!("{name}: ok");
+                true
             }
-            // The mini is macOS's: elsewhere the window opens expanded and stays so.
-            #[cfg(target_os = "macos")]
-            if paneling
-                && !run("presence", &|| {
-                    presence::never_active(|| presence::scenario(&browser, &window, &origin));
-                })
-            {
-                return 1;
+            Err(_) => false,
+        };
+        if paneling && !run("panel (first)", &|| panel::first(&browser)) {
+            return 1;
+        }
+        if paneling && !run("board (reopened)", &|| board::reopened(&browser)) {
+            return 1;
+        }
+        if driving && !run("refs", &|| refs::scenario(&browser, &origin)) {
+            return 1;
+        }
+        // The Event Center lies over the pages: macOS's, where the strip does.
+        #[cfg(target_os = "macos")]
+        if paneling && !run("event center", &|| board::center(&browser)) {
+            return 1;
+        }
+        // The mini is macOS's: elsewhere the window opens expanded and stays so.
+        #[cfg(target_os = "macos")]
+        if paneling
+            && !run("presence", &|| {
+                presence::never_active(|| presence::scenario(&browser, &window, &origin));
+            })
+        {
+            return 1;
+        }
+        let driver = match browser.open(window.clone()) {
+            Ok(driver) => driver,
+            Err(error) => {
+                eprintln!("{error}");
+                return 3;
             }
-            let driver = match browser.open(window.clone()) {
-                Ok(driver) => driver,
-                Err(error) => {
-                    eprintln!("{error}");
-                    return 3;
-                }
-            };
-            let driven = !driving
-                || run("driver", &|| {
-                    driver
-                        .wait_loaded(Duration::from_secs(10))
-                        .expect("it loads");
-                    opened_twice(&browser, &driver, &window);
-                    second_page(&browser, &driver, &origin);
-                    answers_while_loading(&browser, &driver, &origin);
-                    starts_at_once(&browser, &driver, &origin);
-                    feedback(&browser, &driver);
-                    feedback_in_a_dialog(&driver);
-                    waits_for_the_person(&browser, &driver);
-                    sizes(&driver);
-                    told::scenario(&driver, &origin);
-                    scenario(&driver, &origin);
-                });
-            // The driver's scenario ends with its window closed: the panel's opens it again.
-            let paneled = !paneling
-                || run("panel", &|| {
-                    let reopened = driver
-                        .observe()
-                        .is_err()
-                        .then(|| browser.open(window.clone()));
-                    let driver = match reopened {
-                        Some(opened) => opened.expect("it opens again"),
-                        None => driver.clone(),
-                    };
-                    panel::scenario(&browser, &driver);
-                    panel::glass(&browser, &driver, &window, &origin);
-                });
-            if driven && paneled { 0 } else { 1 }
-        },
-    );
+        };
+        let driven = !driving
+            || run("driver", &|| {
+                driver
+                    .wait_loaded(Duration::from_secs(10))
+                    .expect("it loads");
+                opened_twice(&browser, &driver, &window);
+                second_page(&browser, &driver, &origin);
+                answers_while_loading(&browser, &driver, &origin);
+                starts_at_once(&browser, &driver, &origin);
+                feedback(&browser, &driver);
+                feedback_in_a_dialog(&driver);
+                waits_for_the_person(&browser, &driver);
+                sizes(&driver);
+                told::scenario(&driver, &origin);
+                scenario(&driver, &origin);
+            });
+        // The driver's scenario ends with its window closed: the panel's opens it again.
+        let paneled = !paneling
+            || run("panel", &|| {
+                let reopened = driver
+                    .observe()
+                    .is_err()
+                    .then(|| browser.open(window.clone()));
+                let driver = match reopened {
+                    Some(opened) => opened.expect("it opens again"),
+                    None => driver.clone(),
+                };
+                panel::scenario(&browser, &driver);
+                panel::glass(&browser, &driver, &window, &origin);
+                board::scenario(&browser);
+            });
+        if driven && paneled { 0 } else { 1 }
+    });
 }

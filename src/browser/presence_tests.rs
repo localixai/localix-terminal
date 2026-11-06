@@ -12,20 +12,27 @@ fn mini() -> Presence {
     Presence::new(Support::Mini, Timing::default())
 }
 
-/// A presence that has seen its tabs appear and its first picture taken.
+/// A presence whose tabs appeared, collapsed by the person to the mini, its first picture taken.
 fn showing() -> Presence {
     let mut presence = mini();
     presence.event(Appeared);
+    presence.event(Collapse);
     presence.event(Pictured);
     presence
 }
 
 #[test]
-fn tabs_open_as_the_mini_and_ask_for_its_picture() {
+fn tabs_open_as_the_window_and_the_mini_only_when_asked() {
     let mut presence = mini();
     assert_eq!(presence.state(), State::Hidden);
-    assert_eq!(presence.event(Appeared), vec![Enter(State::Mini), Capture]);
-    assert_eq!(presence.state(), State::Mini);
+    assert_eq!(presence.event(Appeared), vec![Enter(State::Expanded)]);
+    assert_eq!(presence.state(), State::Expanded);
+    // Nothing the agent does makes the mini.
+    for event in [Acting, Show, Changed, Settled, Pictured, Respaced] {
+        presence.event(event);
+        assert_eq!(presence.state(), State::Expanded, "{event:?}");
+    }
+    assert_eq!(presence.event(Collapse), vec![Enter(State::Mini), Capture]);
 }
 
 #[test]
@@ -80,7 +87,8 @@ fn a_spinner_while_the_agent_acts_and_a_picture_when_it_settles() {
 #[test]
 fn pictures_are_taken_one_at_a_time_and_the_newest_follows() {
     let mut presence = mini();
-    assert_eq!(presence.event(Appeared), vec![Enter(State::Mini), Capture]);
+    presence.event(Appeared);
+    assert_eq!(presence.event(Collapse), vec![Enter(State::Mini), Capture]);
     // Two changes while a picture is in flight: one more is taken, not two.
     assert_eq!(presence.event(Changed), vec![]);
     assert_eq!(presence.event(Settled), vec![]);
@@ -104,8 +112,9 @@ fn no_tabs_hides_everything_and_starts_over() {
     assert_eq!(presence.event(Vanished), vec![Enter(State::Hidden)]);
     assert_eq!(presence.event(Vanished), vec![]);
     assert_eq!(presence.event(Settled), vec![]);
-    // A later window opens as a mini again, with no spinner left over.
-    assert_eq!(presence.event(Appeared), vec![Enter(State::Mini), Capture]);
+    // A later window opens as the window again, with no spinner left over.
+    assert_eq!(presence.event(Appeared), vec![Enter(State::Expanded)]);
+    assert_eq!(presence.event(Collapse), vec![Enter(State::Mini), Capture]);
     assert_eq!(presence.event(Settled), vec![]);
     assert_eq!(presence.event(Acting), vec![Busy(true)]);
 }
@@ -117,6 +126,7 @@ fn a_blink_is_as_long_as_it_is_told() {
     };
     let mut presence = Presence::new(Support::Mini, timing);
     presence.event(Appeared);
+    presence.event(Collapse);
     presence.event(Pictured);
     assert_eq!(
         presence.event(Show),
@@ -130,6 +140,7 @@ fn another_space_shows_the_mini_again_and_nothing_else() {
     // Hidden: nothing to show.
     assert_eq!(presence.event(Respaced), vec![]);
     presence.event(Appeared);
+    presence.event(Collapse);
     assert_eq!(presence.event(Respaced), vec![Enter(State::Mini)]);
     assert_eq!(presence.state(), State::Mini);
     // Expanded: the deck moves to the person's Space on its own.

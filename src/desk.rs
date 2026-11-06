@@ -4,16 +4,22 @@
 //! window is the person's: they may show, close or comment on any tab.
 //!
 //! Here, the desk itself and how a call is answered; `open`, `interact` and the rest are
-//! in `actions`, a page's tab in `web`, a terminal's in `term`, a `goal` in `goal`.
+//! in `actions`, a page's tab in `web`, a terminal's in `term`, the board's in `board`.
 
 mod actions;
 mod args;
+mod board;
+mod board_file;
+mod board_told;
+mod center;
 mod changes;
 mod events;
-mod goal;
+mod ledger;
+mod lifecycle;
 mod open;
 mod registry;
-mod sealed;
+mod relay;
+mod scope;
 mod term;
 mod told;
 mod web;
@@ -22,35 +28,36 @@ use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU32;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use serde_json::{Value, json};
 
-use crate::browser::{Browser, Heard, Page, Shot};
+use crate::browser::{Asked, Browser, HOME, Heard, Page, Shot};
+use crate::feed::{Entity, Op};
+use crate::projects::{Project, ProjectId};
 use crate::served::Served;
 use crate::terminal::Session;
 
-pub use args::{description, schema};
+pub use args::{ask_field, board_fields, description, schema};
 pub use events::{Events, Quiet, said_block};
 use registry::Registry;
 pub use registry::Said;
-pub use web::project;
-
-/// Told a step of a `goal`: the tab it acts on, and the step.
-pub type Progress<'a> = &'a (dyn Fn(&str, &str) + Sync);
 
 /// Who is calling, from where, and with what the call may need of the caller.
 #[derive(Clone, Copy)]
 pub struct Call<'a> {
+    /// The caller's key (`projects::owner`): its tabs and notes are kept by it.
     pub owner: &'a str,
+    /// The project it works in: everything it opens is the project's.
+    pub project: &'a Project,
+    /// Its name within the project; none: the project's own agent.
+    pub agent: Option<&'a str>,
     /// The caller's directory: relative paths start here.
     pub cwd: &'a Path,
     /// The caller's environment, for a program started in a terminal.
     pub vars: Option<&'a [(String, String)]>,
-    /// The caller's OpenRouter key, for a `goal`.
-    pub key: Option<&'a str>,
-    /// Told each step a `goal` takes, with the tab it acts on.
-    pub progress: Option<Progress<'a>>,
+    /// A look for a pane, not the agent's call: the person's notes stay for the agent.
+    pub peek: bool,
 }
 
 /// Why a call did not come to what it asked.
@@ -120,10 +127,19 @@ pub struct Desk {
     page: Option<Page>,
     browser: Option<Browser>,
     sessions: Mutex<HashMap<u32, Arc<Session>>>,
+    /// Held while a session starts, so two starts never both take the last place.
+    starting: Mutex<()>,
     next_terminal: AtomicU32,
     registry: Mutex<Registry>,
     served: Served,
     events: Arc<dyn Events>,
+    /// The one way the desk says what changed: owners record, consumers (the relay, the Event
+    /// Center) read.
+    feed: crate::feed::Feed,
+    /// The Event Center: what the person has seen and dismissed of it.
+    center: Mutex<center::Center>,
+    /// What the agent asked the person to do, by tab, for the Event Center.
+    asks: Mutex<HashMap<center::Subject, center::Ask>>,
     /// Each web tab's page as the caller last read it whole.
     seen: Mutex<HashMap<u32, changes::Seen>>,
     /// One lock per web tab: work in one never waits on another's.
@@ -133,9 +149,21 @@ pub struct Desk {
     shots: PathBuf,
     /// The secrets calls had put in: no answer shows their values.
     vault: crate::secrets::Vault,
-    /// Per browser tab, the paying controls its goals clicked: a later goal clicks one again only
-    /// when it asks to do it again.
-    paid: Mutex<HashMap<u32, Vec<String>>>,
+    /// Each project's board, once it has been asked for.
+    boards: Mutex<HashMap<ProjectId, board::Kept>>,
+    next_board: AtomicU32,
+    /// Where an owner's board news waits for the person to be quiet.
+    board_news: Mutex<Option<std::sync::mpsc::SyncSender<ProjectId>>>,
+    /// The projects called for in this run, by canonical folder: each found or made once.
+    projects: Mutex<HashMap<PathBuf, Project>>,
+    /// The desk itself, for what the window calls back.
+    me: Weak<Self>,
+    /// Each open tab's row in the ledger, and its project, by key.
+    ledger: Mutex<HashMap<String, (crate::ledger::Row, ProjectId)>>,
+    /// The projects that have had a tab this run: what another run left open in them is past.
+    begun: Mutex<std::collections::HashSet<ProjectId>>,
+    /// What ends the app when the person quits it (`on_quit`).
+    quit: OnceLock<Box<dyn Fn() + Send + Sync>>,
 }
 
 impl Desk {
@@ -145,6 +173,7 @@ impl Desk {
         headless: bool,
         shots: PathBuf,
         events: Arc<dyn Events>,
+        store: Arc<crate::store::Store>,
     ) -> Arc<Self> {
         let desk = Arc::new_cyclic(|weak: &Weak<Self>| {
             if let Some(browser) = &browser {
@@ -154,25 +183,55 @@ impl Desk {
                         desk.heard(key, heard);
                     }
                 });
+                browser.answers(Arc::new(crate::offers::Kept(Arc::clone(&store))));
             }
             Self {
                 page: browser.clone().map(|browser| Page::new(browser, headless)),
                 browser,
                 sessions: Mutex::default(),
+                starting: Mutex::default(),
                 next_terminal: AtomicU32::new(1),
                 registry: Mutex::default(),
                 served: Served::default(),
                 events,
+                feed: crate::feed::Feed::new(store, std::time::Duration::from_millis(500)),
+                center: Mutex::default(),
+                asks: Mutex::default(),
                 seen: Mutex::default(),
                 locks: Mutex::default(),
                 tabs_change: Mutex::new(()),
                 shots,
                 vault: crate::secrets::Vault::default(),
-                paid: Mutex::default(),
+                boards: Mutex::default(),
+                next_board: AtomicU32::new(1),
+                board_news: Mutex::default(),
+                projects: Mutex::default(),
+                me: Weak::clone(weak),
+                ledger: Mutex::default(),
+                begun: Mutex::default(),
+                quit: OnceLock::new(),
             }
         });
         // A picture someone asked for earlier is not worth keeping for long.
         crate::shots::prune(&desk.shots);
+        let relay = relay::Relay {
+            desk: Arc::downgrade(&desk),
+        };
+        if let Err(error) = desk.feed.consume(Box::new(relay)) {
+            log::warn!("desk: nobody will be told what changes: {error}");
+        }
+        let center = center::Projector {
+            desk: Arc::downgrade(&desk),
+        };
+        if let Err(error) = desk.feed.consume(Box::new(center)) {
+            log::warn!("desk: the Event Center will not follow what changes: {error}");
+        }
+        let files = board_file::BoardFile {
+            desk: Arc::downgrade(&desk),
+        };
+        if let Err(error) = desk.feed.consume(Box::new(files)) {
+            log::warn!("desk: the boards will not be written out to their projects: {error}");
+        }
         desk
     }
 
@@ -205,8 +264,38 @@ impl Desk {
         }
         Ok(Answered {
             text: self.vault.mask(text.trim()),
-            said: self.said(call.owner).map(|said| self.vault.mask(&said)),
+            said: (!call.peek)
+                .then(|| self.said(call.owner))
+                .flatten()
+                .map(|said| self.vault.mask(&said)),
             shot: out.shot,
+        })
+    }
+
+    /// The person opened the app (app.rs): the window comes to them, expanded, as their click
+    /// on the mini opens it; with no tab in it yet, their shell in `call.cwd` (their home), a
+    /// terminal of their own.
+    pub fn present(&self, call: &Call, go: bool) -> Result<String, String> {
+        let browser = (self.browser.as_ref()).ok_or("there is no window here: no display")?;
+        crate::lock(&self.registry).known(call);
+        let group = crate::projects::key(call.project.id);
+        let listed = browser.listing().unwrap_or_default();
+        // Going to the project: the window goes first, so what opens for it opens in sight.
+        let empty = match go {
+            true => {
+                browser.go(&group);
+                !listed.iter().any(|tab| tab.group == group)
+            }
+            false => listed.is_empty(),
+        };
+        if empty {
+            self.reopen_project(call, &group)?;
+        }
+        browser.present();
+        Ok(if empty {
+            "The window opened, with what the project had open.".into()
+        } else {
+            "The window opened.".into()
         })
     }
 
@@ -228,45 +317,123 @@ impl Desk {
         crate::lock(&self.registry).acknowledge(owner, ids);
     }
 
-    /// Say a note to those who subscribed to `owner`'s.
-    fn announce(&self, owner: &str, said: &Said) {
-        self.events
-            .publish("comment/added", Some(owner), said.note(owner));
+    /// Kept `words` for the owner of tab `key`; with `told`, the notice that tells those who
+    /// subscribed, recorded under the registry's lock with the note it announces.
+    fn hear(&self, key: &str, words: &str, told: bool) {
+        let mut registry = crate::lock(&self.registry);
+        if let Some((owner, said)) = registry.hear(key, words)
+            && told
+        {
+            let said = Entity::Said { owner, id: said.id };
+            self.feed.record(&said, Op::Upserted);
+        }
+    }
+
+    /// Tab `key`, whose was `owner`, is gone: closed in the ledger too.
+    fn gone(&self, owner: Option<String>, key: &str) {
+        self.unkeep(key);
+        let key = key.to_string();
+        self.feed.record(&Entity::Tab { owner, key }, Op::Deleted);
     }
 
     /// What the person did in the window: a comment, a closed tab, a terminal asked for.
     fn heard(self: &Arc<Self>, key: &str, heard: Heard<'_>) {
         match heard {
             Heard::Sent(words) | Heard::Did(words) => self.kept(key, words),
+            // A tab the person closed is no news worth waking the agent for: it hears it with its
+            // next call. A board is kept; a page or a terminal is gone.
             Heard::Closed(words) => {
-                self.kept(key, words);
-                self.events.publish(
-                    "tab/closed",
-                    self.owner_of(key).as_deref(),
-                    json!({"tab": key}),
-                );
+                self.hear(key, words, false);
+                match key.starts_with('b') {
+                    true => self.unkeep(key),
+                    false => self.gone(self.owner_of(key), key),
+                }
             }
-            Heard::WindowClosed(_) => {
-                self.prune_pages();
-                self.events.publish("window/closed", None, json!({}));
-            }
-            Heard::Terminal => self.person_terminal(key),
+            Heard::Went(went) => self.went(key, &went),
+            Heard::Folder(folder) => self.open_folder(folder),
+            Heard::Showing => self.showing(key),
+            Heard::Quit => self.quit_asked(),
+            Heard::Reopened => self.reopened(),
+            Heard::Asked(asked) => self.person_asked(key, asked),
+            Heard::Center(did) => self.person_on_center(did),
         }
+    }
+
+    /// The person asked for a tab of theirs with "+", in the project of group `group`: opened on
+    /// a thread of its own, since the window's loop calls this and must never wait on the work.
+    fn person_asked(self: &Arc<Self>, group: &str, asked: Asked) {
+        let Some(person) = self.person(group) else {
+            return;
+        };
+        let (desk, group) = (Arc::clone(self), crate::projects::key(person.project.id));
+        // What the person asks is done in sight: the window goes to its project first (from the
+        // Event Center it may be another's).
+        if let Some(browser) = &self.browser {
+            browser.go(&group);
+        }
+        let started = std::thread::Builder::new()
+            .name("desk-person-asked".into())
+            .spawn(move || {
+                let call = Call {
+                    owner: &person.owner,
+                    project: &person.project,
+                    agent: None,
+                    cwd: &person.cwd,
+                    vars: person.vars.as_deref(),
+                    peek: false,
+                };
+                // The person is known as their project's own, as an agent is once it calls: what
+                // they open is of that project wherever it is listed (an ended terminal's event).
+                crate::lock(&desk.registry).known(&call);
+                let done = match &asked {
+                    Asked::Page(url) => {
+                        let url = url.as_deref().unwrap_or(HOME);
+                        (desk.open(&call, &json!({"kind": "browser", "url": url})))
+                            .map(|_| ())
+                            .map_err(|failure| failure.message().to_string())
+                    }
+                    Asked::Terminal(folder) => {
+                        // Only a folder of the project (a crumb's), as it really is: no `..`
+                        // or link leads out of it.
+                        let inside = (folder.as_deref())
+                            .and_then(|folder| folder.canonicalize().ok())
+                            .filter(|folder| folder.starts_with(&person.project.path));
+                        let cwd = inside.as_deref().unwrap_or(&person.cwd);
+                        desk.person_terminal(&Call { cwd, ..call }, &group, "")
+                    }
+                    Asked::Agent(command) => desk.person_terminal(&call, &group, command),
+                    Asked::Board => (desk.board(&call, &json!({"op": "show"})))
+                        .map(|_| ())
+                        .map_err(|failure| failure.message().to_string()),
+                    Asked::Again(row) => desk.again(&call, &group, *row),
+                    Asked::Project => desk.reopen_project(&call, &group),
+                };
+                if let Err(why) = done {
+                    log::warn!("a {asked:?} the person asked for did not open: {why}");
+                }
+            });
+        if let Err(why) = started {
+            log::warn!("a tab the person asked for had no thread: {why}");
+        }
+    }
+
+    /// The person does `action` on project `project`'s board, as its page would send it: for
+    /// tests, which have no window to do it in.
+    #[cfg(feature = "test-server")]
+    pub fn person_on_the_board(&self, project: ProjectId, action: &str) {
+        self.person_on_board(project, action);
     }
 
     /// The person sends `words` about tab `key`, as they would from the window: for tests, which
     /// have no window to send from.
-    #[cfg(feature = "test-daemon")]
+    #[cfg(feature = "test-server")]
     pub fn person_says(&self, key: &str, words: &str) {
         self.kept(key, words);
     }
 
     /// `words` kept for the owner of tab `key`, and told to those who subscribed.
     fn kept(&self, key: &str, words: &str) {
-        let heard = crate::lock(&self.registry).hear(key, words);
-        if let Some((owner, said)) = heard {
-            self.announce(&owner, &said);
-        }
+        self.hear(key, words, true);
     }
 
     /// The pages the window no longer has (the person closed it, or the tab) forgotten as a
@@ -274,13 +441,10 @@ impl Desk {
     /// owner hears `tab/closed`.
     fn prune_pages(&self) {
         let Some(page) = &self.page else { return };
-        let alive: Vec<String> = if page.is_open() {
-            match self.browser.as_ref().and_then(Browser::listing) {
-                Some(listing) => listing.into_iter().map(|tab| tab.id).collect(),
-                None => return,
-            }
-        } else {
-            vec![]
+        let alive: Vec<String> = match &self.browser {
+            Some(browser) if page.is_open() => browser.pages(),
+            Some(_) => vec![],
+            None => return,
         };
         let gone: Vec<(String, Option<String>)> = {
             let mut registry = crate::lock(&self.registry);
@@ -297,10 +461,8 @@ impl Desk {
         for (key, owner) in gone {
             if let Some(id) = key.get(1..).and_then(|n| n.parse::<u32>().ok()) {
                 crate::lock(&self.seen).remove(&id);
-                crate::lock(&self.paid).remove(&id);
             }
-            self.events
-                .publish("tab/closed", owner.as_deref(), json!({"tab": key}));
+            self.gone(owner, &key);
         }
     }
 
@@ -315,19 +477,32 @@ impl Desk {
             let _ = self.close_tab(tab);
         }
         crate::lock(&self.registry).forget(owner);
+        // What the session asked the person to do goes with it.
+        crate::lock(&self.asks).remove(&center::Subject::Session(owner.to_string()));
         tabs.len()
     }
 
     /// Every terminal ends; the window stays the process's to close.
     pub fn shutdown(&self) {
+        // The tabs open now stay open in the ledger, their screens kept: the app opens them
+        // again. Their sessions end below, and must not close them.
+        self.keep_screens();
+        crate::lock(&self.ledger).clear();
+        self.feed.stop();
         let sessions = std::mem::take(&mut *crate::lock(&self.sessions));
         sessions.values().for_each(|session| session.close());
     }
 
-    /// The window and every owner's tabs, for `serve status`.
+    /// Whether a board or a terminal is in the window: it shows the window as much as a page does.
+    pub(super) fn panels_open(&self) -> bool {
+        !crate::lock(&self.sessions).is_empty()
+            || (crate::lock(&self.boards).values()).any(|kept| kept.panel.is_some())
+    }
+
+    /// The window and every owner's tabs, for `llx-desk status`.
     pub fn status(&self) -> String {
         let window = match (&self.page, &self.browser) {
-            (Some(page), _) if page.is_open() => "open",
+            (Some(page), _) if page.is_open() || self.panels_open() => "open",
             (Some(_), _) => "not open yet",
             (None, _) => "none (no display, or --no-window)",
         };

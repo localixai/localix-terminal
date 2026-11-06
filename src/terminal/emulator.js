@@ -45,23 +45,76 @@ try {
 const term = new Terminal({
   scrollback: 5000, allowTransparency: true, allowProposedApi: false,
   cursorBlink: true, cursorStyle: "block",
-  fontFamily: css("--mono"), fontSize: 13, lineHeight: 1.1, theme: theme(),
+  fontFamily: (window.__deskLook && window.__deskLook.mono) || css("--mono"),
+  fontSize: (window.__deskLook && window.__deskLook.size) || 13, lineHeight: 1.1, theme: theme(),
+});
+// The person's code font and size (the window's settings), now and as they change.
+addEventListener("desk-look", (event) => {
+  term.options.fontFamily = event.detail.mono;
+  term.options.fontSize = event.detail.size;
+  refit();
 });
 const fit = new FitAddon.FitAddon();
 term.loadAddon(fit);
 term.open(document.getElementById("t"));
 // What this page posts (panel.rs): the keys and pastes as a terminal sends them (k), its size
 // once it is ready (r) and when the pane changes (s), and its menu asked for where the person
-// right-clicked, with whether something is selected (Copy).
+// right-clicked, with the items of its menu.
 const post = (text) => window.ipc && window.ipc.postMessage(text);
 term.onData((data) => post("k" + data));
+// The keys a Mac terminal has: ⌘K clears, ⌘←/⌘→ go to the line's start and end, ⌥←/⌥→ by
+// words, ⌘⌫/⌥⌫ delete to the start and the word before, ⌘↑/⌘↓ scroll to the top and bottom, ⌘A
+// selects all. Sent as the readline keys every shell and REPL reads; the window's own shortcuts
+// (⌘T, ⌘W…) go on to its menu.
+const SENT = {
+  "meta+ArrowLeft": "\x01", "meta+ArrowRight": "\x05", "alt+ArrowLeft": "\x1bb", "alt+ArrowRight": "\x1bf",
+  "meta+Backspace": "\x15", "alt+Backspace": "\x17", "meta+Delete": "\x0b", "alt+Delete": "\x1bd",
+};
+term.attachCustomKeyEventHandler((event) => {
+  if (event.type !== "keydown" || event.ctrlKey || event.shiftKey) return true;
+  const name = (event.metaKey ? "meta+" : event.altKey ? "alt+" : "") + event.key;
+  const done = (run) => {
+    event.preventDefault();
+    run();
+    return false;
+  };
+  if (SENT[name]) return done(() => post("k" + SENT[name]));
+  if (!event.metaKey || event.altKey) return true;
+  switch (event.key.toLowerCase()) {
+    case "k":
+      // The scrollback and the screen go; a shell draws its prompt again at the top.
+      return done(() => {
+        term.clear();
+        if (term.buffer.active.type === "normal") post("k\f");
+      });
+    case "arrowup": return done(() => term.scrollToTop());
+    case "arrowdown": return done(() => term.scrollToBottom());
+    case "a": return done(() => term.selectAll());
+    default: return true;
+  }
+});
 const sized = (kind) => post(kind + " " + term.cols + " " + term.rows);
 term.onResize(() => sized("s"));
+// The menu is the system's: the page names its items and does the one picked (`chosen`), the
+// window copies what Copy answers and hands Paste the pasteboard's text.
+const MENU = [
+  { label: "Copy", when: () => term.hasSelection(), run: () => term.getSelection() },
+  { label: "Paste", paste: true, run: (text) => { if (text) term.paste(text); } },
+  { label: "Select All", run: () => term.selectAll() },
+  { label: "Clear", run: () => post("k\f") },
+];
+let offered = [];
 addEventListener("contextmenu", (event) => {
   event.preventDefault();
-  const selected = term.hasSelection() ? 1 : 0;
-  post("m " + Math.round(event.clientX) + " " + Math.round(event.clientY) + " " + selected);
+  offered = MENU.filter((item) => !item.when || item.when());
+  const items = offered.map((item) => ({ label: item.label, paste: !!item.paste }));
+  post("m " + Math.round(event.clientX) + " " + Math.round(event.clientY) + " " + JSON.stringify(items));
 });
+window.chosen = (place, text) => {
+  const item = offered[place];
+  const answer = item ? item.run(text) : undefined;
+  return typeof answer === "string" ? answer : null;
+};
 // The grid follows the pane; the session is told (term.onResize) and its pty resized.
 function refit() {
   if (innerWidth && innerHeight) fit.fit();

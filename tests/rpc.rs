@@ -1,4 +1,4 @@
-//! Protocol v2 against a daemon of a test build (no window): the handshake, answers by id,
+//! Protocol v2 against a server of a test build (no window): the handshake, answers by id,
 //! calls running at once, notifications by subscription, bytes after a response, a retried call
 //! done once, and a request that panics. Every check goes over the socket, as a client does.
 
@@ -8,15 +8,25 @@ use std::time::{Duration, Instant};
 
 use llx_desk::client::{Client, Error, Link};
 use llx_desk::harness::{Home, asked};
-use llx_desk::wire::code;
+use llx_desk::wire::{PROTOCOL, code};
 use serde_json::{Value, json};
 
 fn home(name: &str) -> Home {
     Home::new(env!("CARGO_BIN_EXE_llx-desk"), name)
 }
 
-fn window(owner: &str, args: &Value) -> Value {
-    json!({"owner": owner, "cwd": "/tmp", "args": args})
+/// Agent `agent` of the project at /tmp.
+fn window(agent: &str, args: &Value) -> Value {
+    json!({"project": "/tmp", "agent": agent, "cwd": "/tmp", "args": args})
+}
+
+/// Agent `agent` of the project at /tmp, as a caller's params, with `more`.
+fn caller(agent: &str, more: Value) -> Value {
+    let mut params = json!({"project": "/tmp", "agent": agent});
+    if let (Some(params), Value::Object(more)) = (params.as_object_mut(), more) {
+        params.extend(more);
+    }
+    params
 }
 
 const OPEN_SLEEPER: &str =
@@ -40,7 +50,7 @@ fn the_handshake_comes_first_and_says_protocol_build_and_capabilities() {
     // A client that speaks an older protocol is told so.
     let old = raw.request(
         "initialize",
-        json!({"protocolVersion": 1}),
+        json!({"protocolVersion": PROTOCOL - 1}),
         Some(Duration::from_secs(5)),
     );
     assert!(matches!(old, Err(Error::Rpc(_))));
@@ -50,18 +60,29 @@ fn the_handshake_comes_first_and_says_protocol_build_and_capabilities() {
     let hello = raw
         .request(
             "initialize",
-            json!({"protocolVersion": 2, "capabilities": {"binary": true}}),
+            json!({"protocolVersion": PROTOCOL, "capabilities": {"binary": true}}),
             None,
         )
         .unwrap()
         .value;
-    assert_eq!(hello["protocolVersion"], 2);
+    assert_eq!(hello["protocolVersion"], PROTOCOL);
     assert_eq!(hello["capabilities"]["notifications"][0], "comment/added");
     assert_eq!(
         hello["serverInfo"]["pid"],
         u64::try_from(home.pid().unwrap()).unwrap()
     );
     assert_eq!(asked(&client, "ping", json!({})), json!({}));
+    // The API describes itself: every method, the events, the window tool's own schema.
+    let described = asked(&client, "api/describe", json!({}));
+    let names: Vec<&str> = (described["methods"].as_array().unwrap().iter())
+        .filter_map(|method| method["name"].as_str())
+        .collect();
+    assert!(
+        names.contains(&"window/call") && names.contains(&"api/describe"),
+        "{names:?}"
+    );
+    assert!(described["window"]["schema"]["properties"]["action"].is_object());
+    assert_eq!(described["server"]["build"], "build-a");
 }
 
 #[test]
@@ -153,8 +174,8 @@ fn a_comment_reaches_a_subscriber_and_is_told_again_until_it_is_acknowledged() {
         "window/call",
         window("o", &serde_json::from_str(OPEN_SLEEPER).unwrap()),
     );
-    let subscribed = asked(&client, "events/subscribe", json!({"owner": "o"}));
-    assert!(subscribed["events"].as_array().unwrap().len() == 5);
+    let subscribed = asked(&client, "events/subscribe", caller("o", json!({})));
+    assert!(subscribed["events"].as_array().unwrap().len() == 3);
     asked(
         &client,
         "test/say",
@@ -164,7 +185,7 @@ fn a_comment_reaches_a_subscriber_and_is_told_again_until_it_is_acknowledged() {
     assert_eq!(method, "comment/added");
     assert_eq!(
         (
-            note["owner"].clone(),
+            note["agent"].clone(),
             note["tab"].clone(),
             note["text"].clone()
         ),
@@ -173,16 +194,16 @@ fn a_comment_reaches_a_subscriber_and_is_told_again_until_it_is_acknowledged() {
 
     // A client that was away subscribes again and is told what was not acknowledged.
     let (again, received_again) = home.client();
-    asked(&again, "events/subscribe", json!({"owner": "o"}));
+    asked(&again, "events/subscribe", caller("o", json!({})));
     let (_, replay) = received_again.recv_timeout(Duration::from_secs(5)).unwrap();
     assert_eq!(replay["id"], note["id"]);
     asked(
         &again,
         "comment/ack",
-        json!({"owner": "o", "ids": [note["id"]]}),
+        caller("o", json!({"ids": [note["id"]]})),
     );
     let (third, received_third) = home.client();
-    asked(&third, "events/subscribe", json!({"owner": "o"}));
+    asked(&third, "events/subscribe", caller("o", json!({})));
     assert!(
         received_third
             .recv_timeout(Duration::from_millis(400))
@@ -192,7 +213,11 @@ fn a_comment_reaches_a_subscriber_and_is_told_again_until_it_is_acknowledged() {
 
     // Another owner's subscriber hears nothing of it; closing a tab and stopping are told.
     let (other, heard_by_other) = home.client();
-    asked(&other, "events/subscribe", json!({"owner": "someone else"}));
+    asked(
+        &other,
+        "events/subscribe",
+        caller("someone else", json!({})),
+    );
     asked(
         &client,
         "window/call",
@@ -203,11 +228,11 @@ fn a_comment_reaches_a_subscriber_and_is_told_again_until_it_is_acknowledged() {
         (method.as_str(), closed["tab"].clone()),
         ("tab/closed", json!("t1"))
     );
-    asked(&client, "daemon/stop", json!({}));
+    asked(&client, "app/quit", json!({}));
     let (method, _) = received.recv_timeout(Duration::from_secs(5)).unwrap();
-    assert_eq!(method, "daemon/stopping");
+    assert_eq!(method, "app/quitting");
     let (method, _) = heard_by_other.recv_timeout(Duration::from_secs(5)).unwrap();
-    assert_eq!(method, "daemon/stopping");
+    assert_eq!(method, "app/quitting");
 }
 
 #[test]
@@ -256,19 +281,19 @@ fn a_call_asked_again_with_its_key_is_done_once_also_on_a_new_connection() {
         asked(
             client,
             "window/said",
-            json!({"owner": "o", "idempotencyKey": "s1"}),
+            caller("o", json!({"idempotencyKey": "s1"})),
         )["text"]
             .clone()
     };
     let text = said(&first);
     assert!(text.as_str().unwrap().contains("look at the title"));
     assert_eq!(said(&second), text);
-    let after = asked(&first, "window/said", json!({"owner": "o"}));
+    let after = asked(&first, "window/said", caller("o", json!({})));
     assert_eq!(after["text"], "");
 }
 
 #[test]
-fn a_request_that_panics_is_that_requests_error_and_the_daemon_goes_on() {
+fn a_request_that_panics_is_that_requests_error_and_the_server_goes_on() {
     let home = home("panic");
     home.start(&[]);
     let (client, _) = home.client();
@@ -276,7 +301,7 @@ fn a_request_that_panics_is_that_requests_error_and_the_daemon_goes_on() {
         panic!("a panic was not an error");
     };
     assert_eq!(error.code, code::INTERNAL);
-    assert!(error.message.contains("the daemon goes on"));
+    assert!(error.message.contains("the app goes on"));
     assert_eq!(asked(&client, "ping", json!({})), json!({}));
     let Err(Error::Rpc(unknown)) = client.request("no/such", json!({})) else {
         panic!("an unknown method was served");

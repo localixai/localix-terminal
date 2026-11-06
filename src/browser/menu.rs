@@ -5,12 +5,13 @@
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicIsize, Ordering};
 
-use objc2::rc::Retained;
+use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, Sel};
 use objc2::{class, msg_send, sel};
 use wry::{WebView, WebViewExtMacOS};
 
 use super::capture::CGPoint;
+use super::choice::Entry;
 
 /// The item the person picked in the menu shown now: its tag, -1 for none.
 static PICKED: AtomicIsize = AtomicIsize::new(-1);
@@ -42,52 +43,38 @@ fn picker() -> Option<&'static AnyObject> {
     unsafe { (at as *const AnyObject).as_ref() }
 }
 
-/// `words` as an NSString; none when they hold a NUL.
-fn text(words: &str) -> Option<Retained<AnyObject>> {
-    let words = std::ffi::CString::new(words).ok()?;
-    // SAFETY: a NUL-terminated UTF-8 string, alive through the call; it answers a new string.
-    unsafe { msg_send![class!(NSString), stringWithUTF8String: words.as_ptr()] }
+/// `svg` as a menu item's picture: 16 points, a template the menu tints as the item's text.
+fn picture(svg: &str) -> Option<Retained<AnyObject>> {
+    /// A menu item's picture, as the system draws its own.
+    const SIDE: f64 = 16.0;
+    // SAFETY: NSData copies the bytes it is given, of the length given.
+    let data: Retained<AnyObject> = unsafe {
+        msg_send![class!(NSData), dataWithBytes: svg.as_ptr().cast::<std::ffi::c_void>(), length: svg.len()]
+    };
+    // SAFETY: `alloc` answers an NSImage to initialise.
+    let blank: Allocated<AnyObject> = unsafe { msg_send![class!(NSImage), alloc] };
+    // SAFETY: `initWithData:` answers the image, or nil when the data is no picture AppKit reads
+    // (SVG it reads since macOS 14).
+    let image: Option<Retained<AnyObject>> = unsafe { msg_send![blank, initWithData: &*data] };
+    let image = image?;
+    let size = super::capture::CGSize {
+        width: SIDE,
+        height: SIDE,
+    };
+    // SAFETY: an NSImage takes the size it is drawn at, and a BOOL: whether it is a template.
+    let _: () = unsafe { msg_send![&*image, setSize: size] };
+    // SAFETY: as above.
+    let _: () = unsafe { msg_send![&*image, setTemplate: Bool::YES] };
+    Some(image)
 }
 
-/// Show `items` as a menu at `at` (the strip's points, from its top left) and wait for the
-/// person: the index of the item picked, or none when they dismissed it.
-pub(super) fn choose(
-    strip: &WebView,
-    at: (f64, f64),
-    items: &[&str],
-    marked: Option<usize>,
-) -> Option<usize> {
+/// Show `entries` as a menu at `at` of `view` (its points, from its top left) and wait for the
+/// person: the place of the item picked among the menu's items, or none when they dismissed it.
+pub(super) fn show(view: &WebView, at: (f64, f64), entries: &[Entry]) -> Option<usize> {
     let target = picker()?;
-    // SAFETY: `new` on NSMenu answers a retained, empty menu.
-    let menu: Retained<AnyObject> = unsafe { msg_send![class!(NSMenu), new] };
-    // SAFETY: a menu takes a BOOL: its items are enabled as they are set, not by a responder.
-    let _: () = unsafe { msg_send![&*menu, setAutoenablesItems: Bool::NO] };
-    let none = text("")?;
-    for (tag, title) in items.iter().enumerate() {
-        let Some(title) = text(title) else {
-            continue;
-        };
-        // SAFETY: a menu adds an item of a title, an action and a key, and answers it.
-        let item: *mut AnyObject = unsafe {
-            msg_send![&*menu, addItemWithTitle: &*title, action: sel!(pick:), keyEquivalent: &*none]
-        };
-        // SAFETY: the menu keeps the item it answered.
-        let Some(item) = (unsafe { item.as_ref() }) else {
-            continue;
-        };
-        // SAFETY: an NSMenuItem takes a target.
-        let _: () = unsafe { msg_send![item, setTarget: target] };
-        // SAFETY: an NSMenuItem takes an NSInteger tag.
-        let _: () = unsafe { msg_send![item, setTag: isize::try_from(tag).unwrap_or(-1)] };
-        if marked == Some(tag) {
-            /// NSControlStateValueOn: the item's check mark.
-            const ON: isize = 1;
-            // SAFETY: an NSMenuItem takes an NSControlStateValue (an NSInteger).
-            let _: () = unsafe { msg_send![item, setState: ON] };
-        }
-    }
+    let menu = filled(entries, target, &mut 0)?;
     PICKED.store(-1, Ordering::SeqCst);
-    let view = strip.webview();
+    let view = view.webview();
     let point = CGPoint { x: at.0, y: at.1 };
     // The menu runs until the person picks or dismisses it; the window keeps drawing meanwhile.
     // A WKWebView's coordinates run downwards, as the page's do.
@@ -96,4 +83,79 @@ pub(super) fn choose(
         msg_send![&*menu, popUpMenuPositioningItem: std::ptr::null::<AnyObject>(), atLocation: point, inView: &*view]
     };
     usize::try_from(PICKED.load(Ordering::SeqCst)).ok()
+}
+
+/// A menu of `entries`, its items tagged from `next` on.
+fn filled(entries: &[Entry], target: &AnyObject, next: &mut isize) -> Option<Retained<AnyObject>> {
+    // SAFETY: `new` on NSMenu answers a retained, empty menu.
+    let menu: Retained<AnyObject> = unsafe { msg_send![class!(NSMenu), new] };
+    // SAFETY: a menu takes a BOOL: its items are enabled as they are set, not by a responder.
+    let _: () = unsafe { msg_send![&*menu, setAutoenablesItems: Bool::NO] };
+    let none = super::appkit::string("")?;
+    for entry in entries {
+        match entry {
+            Entry::Line { .. } => {
+                // SAFETY: NSMenuItem answers the shared separator item; a menu adds an item.
+                let line: *mut AnyObject = unsafe { msg_send![class!(NSMenuItem), separatorItem] };
+                // SAFETY: as above; the separator item is alive, autoreleased.
+                if let Some(line) = unsafe { line.as_ref() } {
+                    // SAFETY: a menu adds an NSMenuItem and keeps it.
+                    let _: () = unsafe { msg_send![&*menu, addItem: line] };
+                }
+            }
+            Entry::Item {
+                label,
+                marked,
+                off,
+                icon,
+                ..
+            } => {
+                let Some(title) = super::appkit::string(label) else {
+                    *next += 1;
+                    continue;
+                };
+                // SAFETY: a menu adds an item of a title, an action and a key, and answers it.
+                let item: *mut AnyObject = unsafe {
+                    msg_send![&*menu, addItemWithTitle: &*title, action: sel!(pick:), keyEquivalent: &*none]
+                };
+                // SAFETY: the menu keeps the item it answered.
+                if let Some(item) = unsafe { item.as_ref() } {
+                    // SAFETY: an NSMenuItem takes a target.
+                    let _: () = unsafe { msg_send![item, setTarget: target] };
+                    // SAFETY: an NSMenuItem takes an NSInteger tag.
+                    let _: () = unsafe { msg_send![item, setTag: *next] };
+                    // SAFETY: an NSMenuItem takes a BOOL: whether it can be picked.
+                    let _: () = unsafe { msg_send![item, setEnabled: Bool::new(!off)] };
+                    if let Some(picture) = icon.and_then(picture) {
+                        // SAFETY: an NSMenuItem takes an NSImage and keeps it.
+                        let _: () = unsafe { msg_send![item, setImage: &*picture] };
+                    }
+                    if *marked {
+                        /// NSControlStateValueOn: the item's check mark.
+                        const ON: isize = 1;
+                        // SAFETY: an NSMenuItem takes an NSControlStateValue (an NSInteger).
+                        let _: () = unsafe { msg_send![item, setState: ON] };
+                    }
+                }
+                *next += 1;
+            }
+            Entry::Sub { label, items } => {
+                let (Some(title), Some(sub)) =
+                    (super::appkit::string(label), filled(items, target, next))
+                else {
+                    continue;
+                };
+                // SAFETY: as for an item, with no action: it opens its submenu.
+                let item: *mut AnyObject = unsafe {
+                    msg_send![&*menu, addItemWithTitle: &*title, action: None::<Sel>, keyEquivalent: &*none]
+                };
+                // SAFETY: the menu keeps the item it answered; an NSMenuItem takes a submenu.
+                if let Some(item) = unsafe { item.as_ref() } {
+                    // SAFETY: an NSMenuItem takes a submenu and keeps it.
+                    let _: () = unsafe { msg_send![item, setSubmenu: &*sub] };
+                }
+            }
+        }
+    }
+    Some(menu)
 }

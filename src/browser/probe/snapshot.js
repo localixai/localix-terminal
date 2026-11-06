@@ -305,7 +305,7 @@
   // data (network.js), a busy region, a progress bar, or words such as "Loading…" on screen.
   function busy() {
     // Still parsing, or fetching its own data. Images, videos and ad frames still loading into a
-    // parsed page are not content the goal waits for.
+    // parsed page are not content a call waits for.
     if (document.readyState === 'loading' || fetching()) return true
     const shown = (selector) => [...document.querySelectorAll(selector)]
       .some((e) => visible(e) && inViewport(e.getBoundingClientRect()))

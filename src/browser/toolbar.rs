@@ -1,7 +1,6 @@
 //! The browser's own controls, shown beside the page like a real browser's toolbar: back and
 //! reload, acted on like any control, by ref; the page never sees them. The page size (sizes.rs)
-//! is the agent's `size`, not a control: offered to the helper, it was picked for any other
-//! dropdown a goal named.
+//! is the agent's `size`, not a control.
 
 use crate::view::Element;
 

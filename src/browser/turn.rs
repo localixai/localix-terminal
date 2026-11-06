@@ -1,5 +1,5 @@
 //! Whose turn it is on the pages: while the person comments, an agent's action that would move a
-//! page (a click, typing, keys, a load; a goal's steps are these) waits for them, so nothing scrolls or navigates
+//! page (a click, typing, keys, a load) waits for them, so nothing scrolls or navigates
 //! under the element they are pointing at. Their Send, or the comment button off, gives the turn back.
 
 use std::sync::{Condvar, Mutex};

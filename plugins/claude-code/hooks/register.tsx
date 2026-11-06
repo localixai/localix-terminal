@@ -1,11 +1,15 @@
 import { atom, read, update } from 'claude-code'
-import type { Register } from 'claude-code'
+import type { Events, Register } from 'claude-code'
 
-import type { Desk } from '../types'
+import type { BoardCard, BoardSummary, Desk } from '../types'
 
-const EMPTY: Desk = { daemon: 'not running', window: '-', terminals: '0', tabs: [], comments: [] }
+const EMPTY: Desk = { app: 'not running', window: '-', terminals: '0', tabs: [], comments: [] }
 // Change the tag when Desk's fields change: it declines what an earlier version stored.
-const desk = atom({ plugin: 'llx-desk', key: 'desk' } as const, EMPTY, { shape: 'desk-1' })
+const desk = atom({ plugin: 'llx-desk', key: 'desk' } as const, EMPTY, { shape: 'desk-2' })
+const board = atom({ plugin: 'llx-desk', key: 'board' } as const, null as BoardSummary | null, { shape: 'board-1' })
+
+/** What every hook is handed as `$`. */
+type Api = Parameters<Events['session.start']>[0]
 
 const time = () => new Date().toTimeString().slice(0, 5)
 
@@ -14,42 +18,138 @@ const words = (text: string) =>
   (text.split('\n').find(line => line.startsWith('The person commented')) ?? text.split('\n')[0] ?? '')
     .replace(/^The person commented \(#\d+\) on /, '')
 
-export const register: Register = on => {
+/** A worker's name as the board takes it: letters, digits and `-`, a few words at most. */
+const slug = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .split('-')
+    .slice(0, 3)
+    .join('-')
+    .slice(0, 24)
+
+/** The worker a board note from the person is about: `returned c4 "Cart" (tests) to Todo: …`. */
+const NOTE = /^The person on the board \S+ (?:returned|commented on|edited|moved|blocked|unblocked) c\d+ ".*" \(([\w.:-]+)\)(?: |:|$)/
+
+// Which subagent is which worker on the board: its loop's id → the name the board shows.
+const workers = new Map<string, string>()
+// Where this project's board is kept, once known: `<project>/.localix/board.json`.
+let boardFile: string | undefined
+// `--project <the session's folder>`, once known: every call names the session's project.
+let project: string[] = []
+
+/** The board's cards, or none when it has no file yet. */
+async function cards($: Api): Promise<BoardCard[] | undefined> {
+  if (!boardFile) return undefined
+  try {
+    const kept = JSON.parse(await $.fs.read(boardFile)) as { cards?: BoardCard[] }
+    return Array.isArray(kept.cards) ? kept.cards : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function summary(list: BoardCard[]): BoardSummary {
+  const count = (column: BoardCard['column']) => list.filter(card => card.column === column).length
+  return {
+    backlog: count('backlog'),
+    todo: count('todo'),
+    doing: count('doing'),
+    review: count('review'),
+    done: count('done'),
+    blocked: list.filter(card => card.blocked && card.column !== 'done').length,
+    working: list.filter(card => card.column === 'doing').map(card => (card.who ? `${card.id} ${card.who}` : card.id)),
+  }
+}
+
+/** The cards `worker` (none: the main agent) left in Doing, named: `c3 "Cart"`. */
+async function leftOver($: Api, worker: string | undefined): Promise<string> {
+  const left = ((await cards($)) ?? []).filter(card => card.column === 'doing' && (card.who ?? undefined) === worker)
+  return left.map(card => `${card.id} "${card.title}"`).join(', ')
+}
+
+/** How the session reaches the desk, once it has started: a `llx-desk` call. */
+let deskRun: ((argv: string[]) => Promise<{ exitCode: number; stdout: string } | undefined>) | undefined
+/** The desk runs: telling it something then starts nothing. */
+let deskUp = false
+/** The session told the Event Center it waits for the person. */
+let waiting = false
+/** A turn of the main agent at least this long is worth telling the person it ended. */
+const LONG_TURN_MS = 30_000
+
+/** The plugin's worker, as a spawn names it. */
+const WORKER = 'llx-desk:worker'
+/** A worker's name on the board as its task gives it: `your name on the board: cart-button`. */
+const NAMED = /your name on the board:\s*`?([A-Za-z0-9._-]+)/i
+/** The workers sent word once to finish their card. */
+const nudged = new Set<string>()
+/** The main agent's cards it was last asked to finish, named. */
+let heldMain = ''
+/** A call of the desk on the board's tab, in a shell command: `llx-desk window '{… "tab": "b1" …}'`. */
+const ON_BOARD = /\bllx-desk\s+window\b[\s\S]*"tab"\s*:\s*"b\d+"/
+const WHO = /"who"\s*:\s*"([^"]*)"/
+
+/** What a worker that stops with `named` in Doing is asked to do first. */
+const finish = (named: string) =>
+  `Your card ${named} is still in Doing on the board. Hand it in with \`review\` and a note of what was done and how it was checked, give it back to Todo with \`release\` and where it stands, or \`block\` it with what it waits for; then end.`
+
+export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
-    // The program: the one on PATH, else the release build the plugin's launcher fetched (kept
-    // under ~/.local/share/llx-desk/current). Never fetched from here: the pane only reads.
+    // The program: the one on PATH, else LLX Desk.app's (its link in ~/.local/bin, or the app
+    // where macOS keeps apps). Never installed from here: the pane only reads.
     const home = await $.env.get('HOME')
-    const kept = `${home ?? ''}/.local/share/llx-desk/current/llx-desk`
-    let program = 'llx-desk'
+    const candidates = [
+      'llx-desk',
+      `${home ?? ''}/.local/bin/llx-desk`,
+      `${home ?? ''}/Applications/LLX Desk.app/Contents/MacOS/llx-desk`,
+      '/Applications/LLX Desk.app/Contents/MacOS/llx-desk',
+    ]
+    let found = 0
     const run = async (argv: string[]) => {
-      try {
-        return await $.process.run([program, ...argv], { timeoutMs: 5000 })
-      } catch {
-        if (program === kept || !home) return undefined
-        program = kept
-        return await $.process.run([program, ...argv], { timeoutMs: 5000 }).catch(() => undefined)
+      for (; found < candidates.length; found++) {
+        const ran = await $.process.run([candidates[found], ...argv], { timeoutMs: 5000 }).catch(() => undefined)
+        if (ran) return ran
       }
+      return undefined
     }
+    deskRun = run
+    // The session's folder names its project: every call says it (`--project`), so the desk
+    // takes the same project the session works in, wherever the hook's process runs. The
+    // project is the nearest directory with `.git` around it (the desk finds it the same way);
+    // its board, when it has one, is in `.localix/board.json` there.
+    const cwd = await $.session.cwd()
+    project = ['--project', cwd]
+    const top = await $.process.run(['git', '-C', cwd, 'rev-parse', '--show-toplevel'], { timeoutMs: 3000 }).catch(() => undefined)
+    const root = top && top.exitCode === 0 && top.stdout.trim() ? top.stdout.trim() : cwd
+    boardFile = `${root}/.localix/board.json`
+
     // The status line an earlier version pinned: its notice read like a warning.
     $.ui.status(undefined)
     await $.command.register({ name: 'tabs', description: "This project's tabs and the person's latest comments" })
 
-    // What the daemon holds, every few seconds. `status` never starts a daemon, and the tabs are
-    // listed only while one runs, so the pane never opens a window by itself.
+    // What the app holds, every few seconds. `status` never starts the app, and the tabs are
+    // listed only while one runs, so the pane never opens a window by itself. The board is read
+    // from its file, so it shows with the app not running.
     const refresh = async () => {
+      const list = await cards($)
+      await update($, board, () => (list && list.length ? summary(list) : null))
       const status = await run(['status'])
       if (!status || status.exitCode !== 0) {
-        await update($, desk, d => ({ ...d, daemon: 'not running', window: '-', terminals: '0', tabs: [] }))
+        deskUp = false
+        await update($, desk, d => ({ ...d, app: 'not running', window: '-', terminals: '0', tabs: [] }))
         return
       }
       const lines = status.stdout.split('\n')
       const field = (name: string) => lines.find(l => l.startsWith(`${name}: `))?.slice(name.length + 2) ?? '-'
-      const list = await run(['window', '{"action":"list"}'])
-      const tabs = (list?.stdout ?? '').split('\n').filter(l => /^[wt]\d+ /.test(l))
+      deskUp = true
+      // A look for the pane: `--peek` leaves the person's notes for Claude's own next call.
+      const listed = await run(['window', ...project, '--peek', '{"action":"list"}'])
+      const tabs = (listed?.stdout ?? '').split('\n').filter(l => /^[wtb]\d+ /.test(l))
       await update($, desk, d => ({
         ...d,
-        daemon: lines[0] ?? 'running',
+        app: lines[0] ?? 'running',
         window: field('window'),
         terminals: field('terminals'),
         tabs,
@@ -57,14 +157,34 @@ export const register: Register = on => {
     }
     $.clock.every(3000, () => void refresh())
 
-    // The person's comments, as they come: kept for the pane, and each one a turn of its own,
-    // so Claude wakes on a comment without anyone typing. The first look settles which program.
+    // A note the person left for a subagent's card goes to that subagent while it runs; the main
+    // agent hears it too, and that it went there.
+    const tell = async (text: string) => {
+      const worker = text.match(NOTE)?.[1]
+      const agentId = worker ? [...workers].find(([, name]) => name === worker)?.[0] : undefined
+      if (agentId) {
+        const agents = await $.agent.list().catch(() => [])
+        const live = agents.find(agent => agent.id === agentId && agent.status !== 'completed' && agent.status !== 'failed')
+        if (live) {
+          const sent = await $.session.send({ to: { agentId }, text }).catch(() => undefined)
+          if (sent?.isDelivered) {
+            void $.prompt.submit({ text: `${text}\n(Sent to the subagent ${worker} too, which has the card: let it work on it.)` })
+            return
+          }
+        }
+      }
+      void $.prompt.submit({ text })
+    }
+
+    // The person's comments and what they do on the board, as they come: kept for the pane, and
+    // each one a turn of its own, so Claude wakes without anyone typing. The first look settles
+    // which program.
     void (async () => {
       await refresh()
       // Each note is one JSON string on a line of its own (`--json`): what the pipe hands over
       // comes in pieces of any size, so the lines are put together again before one is read, and
       // a note's own lines (its picture's path last) never come as a turn of their own.
-      const follow = $.process.spawn({ argv: [program, 'window', '--said', '--follow', '--json'] })
+      const follow = $.process.spawn({ argv: [candidates[Math.min(found, candidates.length - 1)], 'window', ...project, '--said', '--follow', '--json'] })
       let held = ''
       for await (const piece of follow) {
         if (piece.stream !== 'stdout') continue
@@ -81,7 +201,7 @@ export const register: Register = on => {
           if (!text) continue
           await update($, desk, d => ({ ...d, comments: [...d.comments, { at: time(), text: words(text) }].slice(-20) }))
           $.ui.toast(`llx-desk: ${words(text).slice(0, 80)}`)
-          void $.prompt.submit({ text })
+          await tell(text)
         }
       }
     })()
@@ -89,33 +209,131 @@ export const register: Register = on => {
     return started
   })
 
+  // A turn ended. A worker whose run ends with its card still in Doing left it half done: it is
+  // sent word once to hand it in, release it or block it (a message resumes it); if it ends so
+  // again, the main agent hears which card, so it is not forgotten. The main agent is held to its
+  // own cards the same way when the person turned that on. A long turn of the main agent leaves
+  // one line in the Event Center that the session waits for the person, while the desk runs; the
+  // next turn takes it back, so it is never more than one, never stale.
+  on('turn.complete', async ($, e, next) => {
+    const done = await next(e)
+    if (e.isAborted || 'refusal' in e) return done
+    if (e.agentId) {
+      const worker = workers.get(e.agentId)
+      const named = worker ? await leftOver($, worker) : ''
+      if (!worker || !named) return done
+      if (!nudged.has(e.agentId)) {
+        nudged.add(e.agentId)
+        const sent = await $.session.send({ to: { agentId: e.agentId }, text: finish(named) }).catch(() => undefined)
+        if (sent?.isDelivered) return done
+      }
+      void $.prompt.submit({
+        text: `The subagent ${worker} finished, and its card ${named} is still in Doing on the board. Hand it in (\`review\`), give it back to Todo (\`release\`), or \`block\` it with what it waits for.`,
+      })
+      return done
+    }
+    if (options.finish_cards === true) {
+      const named = await leftOver($, undefined)
+      // Asked once for the same cards: a second turn that leaves them is the agent's answer.
+      if (named && named !== heldMain) {
+        heldMain = named
+        void $.prompt.submit({ text: finish(named) })
+        return done
+      }
+      if (!named) heldMain = ''
+    }
+    if (e.durationMs < LONG_TURN_MS || !deskRun || !deskUp) return done
+    const said = (e.answer.split('\n').find(line => line.trim()) ?? '').trim().slice(0, 140)
+    const ask = said ? `Claude finished: ${said}` : 'Claude finished and waits for you'
+    waiting = true
+    void deskRun(['window', JSON.stringify({ action: 'interact', ask })])
+    return done
+  })
+
+  on('turn.start', async ($, e, next) => {
+    if (!e.agentId && waiting && deskRun) {
+      waiting = false
+      void deskRun(['window', JSON.stringify({ action: 'interact', ask: '' })])
+    }
+    return next(e)
+  })
+
+  // A worker is told its name on the board in its task, and passes it as `who` itself. The main
+  // agent gives it ("your name on the board: cart-button"): kept for the subagent's id as it
+  // starts. A task that gives none gets one from its description, added to its words.
+  on('agent.spawn', async ($, e, next) => {
+    if (e.subagentType !== WORKER) return next(e)
+    const given = slug(e.prompt.match(NAMED)?.[1] ?? '')
+    const taken = [...workers.values()]
+    let name = given && !taken.includes(given) && given !== 'agent' && given !== 'person' ? given : ''
+    const told = name !== '' && name === given
+    if (!name) {
+      name = slug(e.description) || 'worker'
+      if (taken.includes(name) || name === 'agent' || name === 'person') name = `${name}-${taken.length + 1}`
+    }
+    const started = await next(told ? e : { ...e, prompt: `${e.prompt.trim()}\n\nYour name on the board: ${name}.` })
+    if (started.agentId) workers.set(started.agentId, name)
+    return started
+  }).catch(($, e, next) => next(e))
+
+  // The board knows who works on a card from who calls: a worker's call on the board carries its
+  // name as `who`, so one worker never acts on another's cards. A worker passes it itself, as its
+  // task says; a call on the board without it, or with another's, is refused here with the name to
+  // pass, never rewritten (a command changed under it is one auto mode reviews again). The main
+  // agent passes none, and may act on any card.
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    const name = e.agentId ? workers.get(e.agentId) : undefined
+    if (!name || !ON_BOARD.test(e.command)) return next(e)
+    const said = e.command.match(WHO)?.[1]
+    if (said === name) return next(e)
+    return { deny: `llx-desk: you are ${name} on the board: pass "who": "${name}" in every call on it, then run it again.` }
+  }).catch(($, e, next) => next(e))
+
+  // The session ends: the tabs the project opened close (never a server started for it: only
+  // the app's program is run, and `--end` starts nothing).
+  on('session.end', async ($, e, next) => {
+    if (deskRun && deskUp) await deskRun(['window', ...project, '--end']).catch(() => undefined)
+    return next(e)
+  })
+
   // A short answer in the chat, not a pane: three facts do not need a column of their own.
   on('command.run', { command: 'tabs' }, async $ => {
     const d = await read($, desk)
-    if (d.daemon === 'not running') return { text: 'llx-desk is not running.' }
+    const b = await read($, board)
+    const ideas = b && b.backlog ? ` · ${b.backlog} in backlog` : ''
+    const work = b ? `\nBoard: ${b.todo} todo · ${b.doing} doing · ${b.review} in review · ${b.done} done${ideas}` : ''
+    if (d.app === 'not running') return { text: `llx-desk is not running.${work}` }
     const tabs = d.tabs.length ? d.tabs.map(tab => `  ${tab}`).join('\n') : '  none open'
     const last = d.comments.slice(-3).map(c => `  ${c.at} ${c.text}`).join('\n')
     const said = last ? `\nLast comments:\n${last}` : ''
-    return { text: `${d.daemon} · window ${d.window}\nTabs of this project:\n${tabs}${said}` }
+    return { text: `${d.app} · window ${d.window}\nTabs of this project:\n${tabs}${work}${said}` }
   })
 
-  // A quiet line above the prompt while the daemon runs: the tabs, and the last comment.
+  // A quiet line above the prompt while the app runs or the board has cards: the tabs, who
+  // works on what, what waits for the person, and the last comment.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const d = await read($, desk)
-    if (e.props.hasSurvey || d.daemon === 'not running') return next(e)
+    const b = await read($, board)
+    const running = d.app !== 'not running'
+    if (e.props.hasSurvey || (!running && !b)) return next(e)
     const { Box, Text } = $.ui.resolve(e)
     const tabs = `${d.tabs.length} tab${d.tabs.length === 1 ? '' : 's'}`
     const last = d.comments[d.comments.length - 1]
+    const working = b && b.working.length ? ` · Doing: ${b.working.slice(0, 3).join(', ')}${b.working.length > 3 ? '…' : ''}` : ''
     return (
       <Box>
         <Text color="cyan">◐ desk</Text>
         <Text dimColor>
-          {' '}· {tabs}
-          {d.terminals !== '0' ? ` · ${d.terminals} terminal${d.terminals === '1' ? '' : 's'}` : ''}
+          {running ? ` · ${tabs}` : ''}
+          {running && d.terminals !== '0' ? ` · ${d.terminals} terminal${d.terminals === '1' ? '' : 's'}` : ''}
+          {working}
+        </Text>
+        {b && b.review ? <Text color="yellow"> · {b.review} to review</Text> : null}
+        {b && b.blocked ? <Text color="red"> · {b.blocked} blocked</Text> : null}
+        <Text dimColor>
           {last ? ` · last comment ${last.at}` : ''} · /tabs
         </Text>
       </Box>
     )
   })
-
 }

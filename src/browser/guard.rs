@@ -30,3 +30,10 @@ pub fn loadable(url: &str) -> Option<String> {
 pub(super) fn token() -> String {
     crate::token()
 }
+
+/// Whether `url` is an address another browser can open: a web page, or a file.
+pub(super) fn outside(url: &str) -> bool {
+    ["http://", "https://", "file://"]
+        .iter()
+        .any(|scheme| url.starts_with(scheme))
+}

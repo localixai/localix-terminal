@@ -81,6 +81,18 @@ impl Tabs {
         let webview = tabs.build(native, id, &window.url, shared, proxy)?;
         keep_tab_rendering(&webview);
         tabs.slots.push(Slot::new(webview));
+        // The first page is of the project the call opening it named, as every later one.
+        let opening = {
+            let mut scope = crate::lock(&shared.scope);
+            let project = scope.take_opening();
+            if let Some(project) = &project {
+                scope.touched(project);
+            }
+            project
+        };
+        if let Some(project) = opening {
+            crate::lock(&shared.groups).insert(Key::Web(id).name(), project);
+        }
         shared.set_tabs(1, &tabs.ids());
         Ok(tabs)
     }
@@ -105,11 +117,14 @@ impl Tabs {
         open.map(|(at, _)| id_of(at)).collect()
     }
 
-    /// Open `url` in a new tab and show it; its id, or why there is none.
+    /// Open `url` in a new tab of `project` (none: of the tab it was opened from), the one
+    /// acted on when it is `shown` (or when there is none); its id, or why there is none.
     pub(super) fn add(
         &mut self,
         native: &tao::window::Window,
         url: &str,
+        project: Option<String>,
+        shown: bool,
         shared: &Arc<Shared>,
         proxy: &EventLoopProxy<Cmd>,
     ) -> Result<u32, String> {
@@ -136,21 +151,27 @@ impl Tabs {
             }
             None => return Err(full()),
         };
-        // Of the project of the tab it was opened from, until its opener names its own.
+        if let Some(webview) = self.at(Some(id)) {
+            see_through_until_drawn(webview, id, shared);
+        }
         let mut groups = crate::lock(&shared.groups);
         let opener = groups.get(&Key::Web(self.active).name()).cloned();
-        groups.insert(Key::Web(id).name(), opener.unwrap_or_default());
+        let project = project.or(opener).unwrap_or_default();
+        groups.insert(Key::Web(id).name(), project);
         drop(groups);
-        self.active = id;
-        shared.set_tabs(id, &self.ids());
+        let ids = self.ids();
+        if shown || !ids.contains(&self.active) || self.active == id {
+            self.active = id;
+        }
+        shared.set_tabs(self.active, &ids);
         Ok(id)
     }
 
-    /// Take in the popups pages opened (popup.rs), each shown as it comes and of its opener's
-    /// project; the last one's id, if any came.
-    pub(super) fn adopt(&mut self, shared: &Shared) -> Option<u32> {
+    /// Take in the popups pages opened (popup.rs), each of its opener's project and shown as it
+    /// comes when that project is in sight; the last one's id, and whether it shows, if any came.
+    pub(super) fn adopt(&mut self, shared: &Shared) -> Option<(u32, bool)> {
         let mut last = None;
-        for (id, webview) in popup::waiting() {
+        for (id, webview, opener) in popup::waiting() {
             keep_tab_rendering(&webview);
             let at = id as usize - 1;
             let end = self.slots.len();
@@ -165,11 +186,20 @@ impl Tabs {
                 None => continue,
             }
             let mut groups = crate::lock(&shared.groups);
-            let opener = groups.get(&Key::Web(self.active).name()).cloned();
-            groups.insert(Key::Web(id).name(), opener.unwrap_or_default());
+            let project = groups
+                .get(&Key::Web(opener).name())
+                .cloned()
+                .unwrap_or_default();
+            groups.insert(Key::Web(id).name(), project.clone());
             drop(groups);
-            self.active = id;
-            last = Some(id);
+            let mut scope = crate::lock(&shared.scope);
+            scope.touched(&project);
+            let shown = project.is_empty() || scope.in_sight(&project);
+            drop(scope);
+            if shown {
+                self.active = id;
+            }
+            last = Some((id, shown));
         }
         if last.is_some() {
             shared.set_tabs(self.active, &self.ids());
@@ -246,16 +276,22 @@ impl Tabs {
 
     /// The active tab fills `size`, `top` points down, while the browser is `shown`; the others
     /// (and all of them while a terminal is shown) stand beside it, out of sight.
-    pub(super) fn layout(&self, size: LogicalSize<f64>, top: f64, shown: bool) {
+    /// The pages in the window's part `size`, `left` and `top` points from its corner.
+    pub(super) fn layout(&self, size: LogicalSize<f64>, left: f64, top: f64, shown: bool) {
         for (at, slot) in self.slots.iter().enumerate() {
             let here = shown && id_of(at) == self.active;
             fit(&slot.webview, None);
-            let away = |x: f64| if here { x } else { -(size.width + 100.0) };
+            let away = |x: f64| {
+                if here {
+                    left + x
+                } else {
+                    -(size.width + left + 100.0)
+                }
+            };
             if let Some(frame) = self.frames.get(&id_of(at)) {
                 // A size of its own: in the middle, below the strip, nothing of it under it.
                 // Larger than the window, drawn smaller: the page lays out at its size still.
                 let placed = sizes::place(size, top, Some(frame));
-                super::platform::inset(&slot.webview, 0.0);
                 place(
                     &slot.webview,
                     away(placed.across),
@@ -268,14 +304,8 @@ impl Tabs {
                 continue;
             }
             slot.zoom(1.0);
-            // Under the strip where WebKit keeps its viewport below it, else below the strip.
-            match super::platform::inset(&slot.webview, top) {
-                true => {
-                    let whole = LogicalSize::new(size.width, size.height + top);
-                    place(&slot.webview, away(0.0), 0.0, whole, here);
-                }
-                false => place(&slot.webview, away(0.0), top, size, here),
-            }
+            // Below the strip, never under it: the strip is the window's glass over every tab.
+            place(&slot.webview, away(0.0), top, size, here);
         }
     }
 
@@ -309,6 +339,22 @@ fn full() -> String {
 fn list(ids: &[u32]) -> String {
     let ids: Vec<String> = ids.iter().map(u32::to_string).collect();
     format!("the tabs are {}", ids.join(", "))
+}
+
+/// A new tab drawn through until its page drew (its load finished, `drawn`): a blank view is
+/// white, and would flash over a dark window before a dark page draws. Through it shows the
+/// window, in the system's light or dark, as Safari shows its own until the page comes.
+pub(super) fn see_through_until_drawn(webview: &WebView, id: u32, shared: &Shared) {
+    super::platform::see_through(webview, true);
+    crate::lock(&shared.undrawn).insert(id);
+}
+
+/// Tab `id`'s page drew: a tab drawn through until then draws its own ground again, so a page
+/// that sets none is white, as everywhere.
+pub(super) fn drawn(shared: &Shared, id: u32, proxy: &EventLoopProxy<Cmd>) {
+    if crate::lock(&shared.undrawn).remove(&id) {
+        let _ = proxy.send_event(Cmd::Reveal(id));
+    }
 }
 
 /// Where a tab stands. A WebView in a GTK box has no bounds of its own, so there the tabs not

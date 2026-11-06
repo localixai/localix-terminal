@@ -1,8 +1,10 @@
 //! The window's three states on macOS as pure logic: events in, what to do
-//! out. Hidden while no tab is open; the mini, a small floating preview, whenever one is; the
-//! expanded window, which only the person's click opens. The agent's acts spin the mini and
-//! refresh its picture, its `show` blinks it, and nothing it does expands anything. Where there
-//! is no mini ([`Support::WindowOnly`]) the window opens as an ordinary one. The AppKit side
+//! out. Hidden while no tab is open; the window, an ordinary one, whenever one is; the mini, a
+//! small floating preview, only when the person asks for it (its button in the bar, the yellow
+//! button, ⌘M), as a video's player shrinks to a corner, and their click on it opens the window
+//! again. In the mini the agent's acts spin it and refresh its picture, its `show` blinks it, and
+//! nothing the agent does changes the state. Where there is no mini ([`Support::WindowOnly`])
+//! the window stays the window. The AppKit side
 //! (host_presence.rs) applies what this decides; the timings come in as values.
 
 use std::time::Duration;
@@ -46,7 +48,7 @@ pub(super) enum Event {
     Vanished,
     /// The person clicked the mini.
     Expand,
-    /// The person pressed the window's minimize button.
+    /// The person asked for the mini: its button in the bar, the yellow button, ⌘M.
     Collapse,
     /// The agent began an action.
     Acting,
@@ -162,22 +164,13 @@ impl Presence {
         }
     }
 
+    /// Tabs came: the window, never the mini (the person asks for that).
     fn appear(&mut self) -> Vec<Effect> {
         if self.state != State::Hidden {
             return vec![];
         }
-        match self.support {
-            Support::Mini => {
-                self.state = State::Mini;
-                let mut out = vec![Effect::Enter(State::Mini)];
-                out.extend(self.refresh());
-                out
-            }
-            Support::WindowOnly => {
-                self.state = State::Expanded;
-                vec![Effect::Enter(State::Expanded)]
-            }
-        }
+        self.state = State::Expanded;
+        vec![Effect::Enter(State::Expanded)]
     }
 
     fn vanish(&mut self) -> Vec<Effect> {

@@ -1,6 +1,7 @@
 //! The window's three states, through real windows (unseen, as every test's):
-//! a shown window opens as the mini, the agent's acts never expand it, collapsing never reflows
-//! the page nor stops it drawing, and llx-desk is never the active app.
+//! a shown window opens as the window, the mini only when the person asks, the agent's acts never
+//! change which, collapsing never reflows the page nor stops it drawing, and llx-desk is never
+//! the active app.
 
 use std::time::{Duration, Instant};
 
@@ -52,15 +53,21 @@ pub(crate) fn scenario(browser: &Browser, window: &Window, origin: &str) {
     let driver = browser.open(shown).expect("a shown window opens");
     driver.wait_loaded(Duration::from_secs(10)).unwrap();
 
-    // The first tab opens as the mini, and the window behind it keeps drawing.
+    // The first tab opens as the window; nothing the agent does makes the mini.
+    until("the window", || browser.presented() == Some("expanded"));
+    browser.act("w1", false).unwrap();
+    assert_eq!(browser.presented(), Some("expanded"));
+    let size = viewport(&driver);
+    assert!(size.0 >= 600 && size.1 >= 400, "{size:?}");
+    // The person asks for the mini (the bar's button): the window behind it keeps drawing.
+    browser.click("collapse");
     until("the mini", || browser.presented() == Some("mini"));
     let (first, later) = frames(&driver, Duration::from_millis(500));
     assert!(
         later > first + 5,
         "the page stopped drawing: {first} to {later}"
     );
-    let size = viewport(&driver);
-    assert!(size.0 >= 600 && size.1 >= 400, "{size:?}");
+    assert_eq!(viewport(&driver), size, "collapsing resized the page");
 
     // The mini has the tab's picture and name, and no spinner once the agent is done.
     let named = "document.getElementById('i').textContent";
@@ -113,12 +120,12 @@ pub(crate) fn scenario(browser: &Browser, window: &Window, origin: &str) {
     });
     assert_eq!(viewport(&driver), size, "expanding again resized the page");
 
-    // Whose turn: the person comments, the strip says the agent is paused; an action of the
-    // agent's waits, and the strip says so; collapsing ends commenting and lets it go.
+    // Whose turn: the person comments, the browser's toolbar says the agent is paused; an action
+    // of the agent's waits, and it says so; collapsing ends commenting and lets it go.
     let turn = "document.getElementById('tn').textContent";
     browser.click("comment");
     until("the strip says the agent is paused", || {
-        browser.peek_strip(turn) == Ok(json!("Paused while you comment"))
+        browser.peek_nav(turn) == Ok(json!("Paused while you comment"))
     });
     let page = driver.observe().unwrap();
     let mover = driver.clone();
@@ -127,7 +134,7 @@ pub(crate) fn scenario(browser: &Browser, window: &Window, origin: &str) {
         let _ = sender.send(mover.act(&page.epoch, &Action::ScrollDown));
     });
     until("the strip says the agent waits", || {
-        browser.peek_strip(turn) == Ok(json!("Agent is waiting for you"))
+        browser.peek_nav(turn) == Ok(json!("Agent is waiting for you"))
     });
     assert!(done.try_recv().is_err(), "the scroll waits for the person");
     browser.click("collapse");
@@ -138,7 +145,7 @@ pub(crate) fn scenario(browser: &Browser, window: &Window, origin: &str) {
         "collapsed, commenting ends and the scroll goes: {went:?}"
     );
     until("the strip shows no turn", || {
-        browser.peek_strip(turn) == Ok(json!(""))
+        browser.peek_nav(turn) == Ok(json!(""))
     });
 
     // A screenshot is the same whichever state the window is in.

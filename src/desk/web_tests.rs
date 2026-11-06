@@ -30,21 +30,15 @@ fn only_the_web_opens_in_the_window() {
 }
 
 #[test]
-fn refs_are_dropped_from_the_outline() {
+fn each_control_shows_its_ref_shortly_and_a_call_names_it_any_way() {
     assert_eq!(
-        without_refs("- button \"Go\" [ref=e1]\n- link [ref=e2]: x"),
-        "- button \"Go\"\n- link: x"
+        short_refs("- button \"Go\" [ref=e1]\n- link [ref=e2]: x"),
+        "- button \"Go\" [e1]\n- link [e2]: x"
     );
-}
-
-#[test]
-fn the_project_is_the_nearest_git_directory() {
-    let scratch = crate::testing::Scratch::new();
-    scratch.file("a/.git/HEAD", "");
-    scratch.file("a/b/c/f", "");
-    assert_eq!(
-        project(&scratch.path().join("a/b/c")),
-        scratch.path().join("a")
-    );
-    assert_eq!(project(scratch.path()), scratch.path());
+    for given in ["e12", "@e12", "[e12]", " e12 "] {
+        assert_eq!(control(given).unwrap(), "e12");
+    }
+    for wrong in ["12", "e", "button", "e1x"] {
+        assert!(control(wrong).is_err(), "{wrong}");
+    }
 }

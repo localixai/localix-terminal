@@ -6,13 +6,15 @@ use std::sync::Arc;
 use serde_json::Value;
 
 use super::super::presence::Stage;
-use super::super::{Cmd, Heard, MINI, Shared, WINDOW_CLOSED};
+use super::super::{Asked, Cmd, Heard, MINI, Shared, WINDOW_CLOSED};
 use super::On;
+use crate::browser::agents::AGENTS;
 use crate::browser::capture::Shot;
+use crate::browser::choice::Entry;
 use crate::browser::deck::{After, Deck, Revisit, Shown};
 use crate::browser::presence::Event as Presence;
 use crate::browser::sizes;
-use crate::browser::strip::{Click, Key, SEARCH, Tool, click, went};
+use crate::browser::strip::{Click, Key, Keyed, Tool, click, went};
 
 impl On<'_> {
     /// The mini names the tab shown again: its project may be known by now.
@@ -47,6 +49,17 @@ impl On<'_> {
         self.presenter.event(event, &mut stage);
     }
 
+    /// The person clicked the mini open.
+    pub(super) fn opened(&mut self) {
+        let mut stage = Stage {
+            deck: &mut *self.deck,
+            target: self.target,
+            shared: self.shared,
+            proxy: self.proxy,
+        };
+        self.presenter.opened(&mut stage);
+    }
+
     /// The person's click: closing the browser's last tab is closing its window.
     pub(super) fn clicked(&mut self, said: &str) {
         if let Some(url) = went(said) {
@@ -54,8 +67,19 @@ impl On<'_> {
         }
         match click(said) {
             Some(Click::Visit(at)) => return self.visit(at),
+            Some(Click::Offer(take)) => return self.offer(take),
             Some(Click::Collapse) => return self.presence(Presence::Collapse),
+            Some(Click::Quit) => return self.shared.heard("", Heard::Quit),
             Some(Click::NewTab(x, y)) => return self.plus(x, y),
+            Some(Click::Projects(x, y)) => return self.project_menu(x, y),
+            Some(Click::Tabs(x, y)) => return self.tabs_menu(x, y),
+            // Once a frame while the edge is dragged: laid out, nothing redrawn but at the end.
+            Some(Click::SideWidth(width, done)) => {
+                if let Some(open) = self.deck.as_mut() {
+                    open.size_side(f64::from(width), done, self.shared);
+                }
+                return;
+            }
             Some(Click::Frame(x, y)) => return self.size_menu(x, y),
             Some(Click::More(x, y, held)) => return self.more_menu(x, y, held),
             // GTK lays the strip and the pages in a column, so the strip's own list could only
@@ -63,6 +87,7 @@ impl On<'_> {
             #[cfg(not(target_os = "macos"))]
             Some(Click::History) => return self.history_menu(),
             Some(Click::Menu(key, x, y)) => return self.tab_menu(key, (x, y)),
+            Some(Click::Key(keyed)) => return self.keyed(keyed),
             // The strip says it on its own refreshes: answered without one.
             Some(Click::Glass(rect)) => {
                 if let Some(open) = self.deck.as_ref() {
@@ -75,7 +100,7 @@ impl On<'_> {
         match click(said) {
             Some(Click::Close(key)) => self.close(key),
             Some(said) => {
-                let _ = act(self.deck, said, self.shared, Some(self.on_close));
+                let _ = act(self.deck, said, self.shared);
             }
             None => {}
         }
@@ -83,31 +108,28 @@ impl On<'_> {
 
     /// The person closes tab `key`, and whoever works in it is told.
     pub(super) fn close(&mut self, key: Key) {
-        if act(
-            self.deck,
-            Click::Close(key),
-            self.shared,
-            Some(self.on_close),
-        )
-        .is_ok()
-        {
-            let what = match key {
-                Key::Web(_) => CLOSED_PAGE,
-                Key::Term(_) => CLOSED_TERMINAL,
+        if act(self.deck, Click::Close(key), self.shared).is_ok() {
+            let what = match key.kind() {
+                "web" => CLOSED_PAGE,
+                "board" => CLOSED_BOARD,
+                _ => CLOSED_TERMINAL,
             };
             self.shared.heard(&key.name(), Heard::Closed(what));
         }
     }
 
     /// What the person typed in the address field: the page shown goes there (a terminal shown,
-    /// a new tab does), and whoever works in it is told.
+    /// a new page of theirs does), and whoever works in it is told.
     fn go(&mut self, url: String) {
         let Some(open) = self.deck.as_ref() else {
             return;
         };
         let web = open.web.as_ref().filter(|_| open.shown == Shown::Web);
         let Some(web) = web else {
-            let _ = self.proxy.send_event(Cmd::NewTab { url, reply: None });
+            // Of the project shown, whatever tab (the settings, of none) shows in it.
+            let group = crate::lock(&self.shared.scope).shown().to_string();
+            self.shared
+                .heard(&group, Heard::Asked(Asked::Page(Some(url))));
             return;
         };
         let _ = web.active().load_url(&url);
@@ -127,18 +149,11 @@ impl On<'_> {
             .filter(|tool| held & tool.bit() != 0)
             .collect();
         let labels: Vec<&str> = tools.iter().map(|tool| tool.label()).collect();
-        let marked = (open.commenting())
-            .then(|| tools.iter().position(|tool| *tool == Tool::Comment))
-            .flatten();
         let at = (f64::from(x), f64::from(y));
-        match open
-            .choose(at, &labels, marked)
-            .and_then(|at| tools.get(at))
-        {
-            Some(Tool::Size) => self.size_menu(x, y),
-            Some(Tool::Comment) => self.clicked("comment"),
-            Some(Tool::NewTab) => self.plus(x, y),
+        match open.choose(at, &labels, None).and_then(|at| tools.get(at)) {
             Some(Tool::History) => self.clicked("history"),
+            Some(Tool::Mini) => self.clicked("collapse"),
+            Some(Tool::Events) => self.clicked("events"),
             None => {}
         }
     }
@@ -176,25 +191,123 @@ impl On<'_> {
         self.shared.heard(&Key::Web(id).name(), Heard::Did(&said));
     }
 
-    /// "+": the system's menu under it, then a page on the search page, or a terminal of the
-    /// person's in the project shown (the app starts it).
+    /// "+": the system's menu under it, then a page, a terminal or the board of the project
+    /// shown, opened by the app as it opens the agent's (so a page opens even when the window
+    /// holds no page yet).
     fn plus(&mut self, x: u32, y: u32) {
         let Some(open) = self.deck.as_ref() else {
             return;
         };
         let at = (f64::from(x), f64::from(y));
-        match open.choose(at, &["New Page", "New Terminal"], None) {
-            Some(0) => {
-                let url = SEARCH.trim_end_matches("/search").to_string();
-                let _ = self.proxy.send_event(Cmd::NewTab { url, reply: None });
+        // The coding agents under "Agents", each with its mark: the ones on the PATH to pick,
+        // the rest shown greyed.
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let found: Vec<Option<&'static str>> =
+            AGENTS.iter().map(|agent| agent.command_on(&path)).collect();
+        let item = |label: String, off: bool, icon: Option<&'static str>| Entry::Item {
+            label,
+            marked: false,
+            off,
+            paste: false,
+            icon,
+        };
+        let agents = (AGENTS.iter().zip(&found))
+            .map(|(agent, command)| match command {
+                Some(_) => item(agent.name.to_string(), false, Some(agent.mark)),
+                None => item(
+                    format!("{} \u{2014} not installed", agent.name),
+                    true,
+                    Some(agent.mark),
+                ),
+            })
+            .collect();
+        let entries = [
+            item("New Page".into(), false, None),
+            item("New Terminal".into(), false, None),
+            item("Board".into(), false, None),
+            Entry::Line { line: true },
+            Entry::Sub {
+                label: "Agents".into(),
+                items: agents,
+            },
+        ];
+        let asked = match open.pick(at, &entries) {
+            Some(0) => Asked::Page(None),
+            Some(1) => Asked::Terminal(None),
+            Some(2) => Asked::Board,
+            Some(at) => match found.get(at - 3).copied().flatten() {
+                Some(command) => Asked::Agent(command),
+                None => return,
+            },
+            None => return,
+        };
+        let group = open.shown_project(self.shared);
+        self.shared.heard(&group, Heard::Asked(asked));
+    }
+
+    /// A shortcut's doing (shortcuts.rs) that no button of the strip does.
+    fn keyed(&mut self, keyed: Keyed) {
+        let Some(open) = self.deck.as_mut() else {
+            return;
+        };
+        let listed = open.listing(self.shared);
+        let shown = listed.iter().position(|tab| tab.shown);
+        let group = open.shown_project(self.shared);
+        // The tabs the person sees listed: the project's shown, and the window's own (of none).
+        let tabs: Vec<Key> = (listed.iter())
+            .filter(|tab| tab.group == group || tab.group.is_empty())
+            .filter_map(|tab| Key::parse(&tab.id))
+            .collect();
+        let here = shown
+            .and_then(|at| listed.get(at))
+            .and_then(|tab| tabs.iter().position(|key| key.name() == tab.id));
+        let step = |forward: bool| {
+            let count = tabs.len();
+            let at = match (here, forward) {
+                (Some(at), true) => (at + 1) % count.max(1),
+                (Some(at), false) => (at + count.max(1) - 1) % count.max(1),
+                (None, _) => 0,
+            };
+            tabs.get(at).copied()
+        };
+        let asked = |asked: Asked| self.shared.heard(&group, Heard::Asked(asked));
+        let show = match keyed {
+            Keyed::Tab(at) => tabs.get(usize::from(at) - 1).copied(),
+            Keyed::LastTab => tabs.last().copied(),
+            Keyed::Next => step(true),
+            Keyed::Previous => step(false),
+            Keyed::NewPage => return asked(Asked::Page(None)),
+            Keyed::NewTerminal => return asked(Asked::Terminal(None)),
+            Keyed::NewBoard => return asked(Asked::Board),
+            Keyed::Close => {
+                if let Some(key) = shown.and_then(|at| Key::parse(&listed.get(at)?.id)) {
+                    self.close(key);
+                }
+                return;
             }
-            Some(_) => {
-                let listed = open.listing(self.shared);
-                let shown = listed.iter().find(|tab| tab.shown);
-                let group = shown.map(|tab| tab.group.clone()).unwrap_or_default();
-                self.shared.heard(&group, Heard::Terminal);
+            Keyed::Reopen => {
+                use crate::browser::strip::State;
+                let rows = open.rows(self.shared);
+                let closed =
+                    (rows.iter()).find(|row| matches!(row.state, State::Closed | State::Hidden));
+                if let Some(at) = closed.map(|row| row.at) {
+                    self.visit(at);
+                }
+                return;
             }
-            None => {}
+            Keyed::Find => return open.find_tab(self.shared),
+            Keyed::Address => return open.keyed_in_strip("address"),
+            Keyed::Size => return open.keyed_in_strip("size"),
+            Keyed::Settings => return self.settings(),
+            Keyed::Projects => return open.keyed_in_strip("projects"),
+            Keyed::OpenFolder => return self.open_folder(),
+            Keyed::CloseProject => {
+                let shown = crate::lock(&self.shared.scope).shown().to_string();
+                return self.close_project(&shown);
+            }
+        };
+        if let Some(key) = show {
+            let _ = act(self.deck, Click::Show(key), self.shared);
         }
     }
 
@@ -227,15 +340,23 @@ impl On<'_> {
         }
     }
 
-    /// An entry of the history menu shown again; a closed page opens in a tab of its own.
-    fn visit(&mut self, at: u64) {
-        let entry = self.shared.history.get(at);
-        if let (Some(entry), Some(open)) = (entry, self.deck.as_mut()) {
-            if let Revisit::Load(url) = open.revisit(&entry, self.shared) {
-                let _ = self.proxy.send_event(Cmd::NewTab { url, reply: None });
-            }
-            open.refresh(self.shared);
+    /// Row `at` of the shown project's history shown again: an open tab here, else the app
+    /// opens it again (a page at its address, a terminal in its folder, the board).
+    fn visit(&mut self, at: i64) {
+        let Some(open) = self.deck.as_mut() else {
+            return;
+        };
+        let project = open.shown_project(self.shared);
+        let past = (crate::lock(&self.shared.ledgers).get(&project))
+            .and_then(|ledger| ledger.tabs.iter().find(|past| past.row == at).cloned());
+        let again = match past {
+            Some(past) => open.revisit(&past, self.shared),
+            None => Revisit::Again(at),
+        };
+        if let Revisit::Again(row) = again {
+            self.shared.heard(&project, Heard::Asked(Asked::Again(row)));
         }
+        open.refresh(self.shared);
     }
 
     /// `script` in a panel's page, or in the strip's (`STRIP`, for checks).
@@ -256,20 +377,10 @@ impl On<'_> {
     }
 }
 
-/// Show or close the tab `said` names. A person's click closing the browser's last tab stops the
-/// task as closing its window does (`on_close`); the agent's goes on.
-pub(super) fn act(
-    deck: &mut Option<Deck>,
-    said: Click,
-    shared: &Shared,
-    on_close: Option<fn()>,
-) -> Result<(), String> {
+/// Show or close the tab `said` names.
+pub(super) fn act(deck: &mut Option<Deck>, said: Click, shared: &Shared) -> Result<(), String> {
     let open = deck.as_mut().ok_or("the window is not open")?;
-    let after = open.act(said, shared)?;
-    if let (After::BrowserGone { .. }, Some(on_close)) = (&after, on_close) {
-        on_close();
-    }
-    match after {
+    match open.act(said, shared)? {
         After::Empty | After::BrowserGone { empty: true } => *deck = None,
         After::Kept | After::BrowserGone { .. } => open.refresh(shared),
     }
@@ -279,3 +390,5 @@ pub(super) fn act(
 /// What the person's closing says, to whoever listens.
 const CLOSED_PAGE: &str = "The person closed this browser tab.";
 const CLOSED_TERMINAL: &str = "The person closed this tab: its program runs on, out of sight.";
+const CLOSED_BOARD: &str =
+    "The person closed the board's tab: the board is kept, and `board` shows it again.";

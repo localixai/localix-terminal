@@ -8,11 +8,12 @@
 <style>
 :root{--fg:#1d1d1f;--bg:#ffffff;--cursor:#1d1d1f;--mono:ui-monospace,SFMono-Regular,Menlo,Monaco,"Cascadia Code","DejaVu Sans Mono",monospace}
 @media (prefers-color-scheme: dark){:root{--fg:#e6e6e6;--bg:#1e1e1e;--cursor:#e6e6e6}}
-{{theme}}
 :root{--ground:var(--bg)}
-/* Solid, not the window's glass: the mini's picture and the strip's tint read the screen's own
-   pixels, and a clear page has none (it came out white). */
-html{background:var(--bg)!important}
+/* On the window's glass (macOS) the screen is clear and the glass shows through; elsewhere, and
+   where the person reduces transparency, it is the terminal's own ground. The strip takes no tint
+   from a clear page, and the mini's picture lays it on the window's background. */
+html:not([data-glass]){background:var(--bg)!important}
+@media (prefers-reduced-transparency:reduce){html[data-glass]{background:var(--bg)!important}}
 body{margin:0;color:var(--fg);cursor:default}
 #t{position:fixed;inset:14px}
 .xterm .xterm-viewport{background:transparent!important;overflow:hidden!important}

@@ -2,6 +2,7 @@
 //! would (cursor moves, erases, redraws), for what the model reads and for a page that needs the
 //! whole screen again. The bytes are untrusted, so only text, line moves (`\n`, `\r`, `\t`,
 //! `\b`) and CSI sequences reach this emulator: no title, no clipboard write, no string sequence.
+//! The title a program sets (OSC 0 or 2) is kept aside as plain text, for the tab's subtitle.
 
 pub(super) struct Screen {
     safe: Safe,
@@ -19,6 +20,16 @@ impl Screen {
     pub(super) fn feed(&mut self, bytes: &[u8]) {
         let kept = self.safe.keep(bytes);
         self.parser.process(&kept);
+    }
+
+    /// The title the program set last, cleaned to plain words; `None` until it sets one.
+    pub(super) fn title(&self) -> Option<&str> {
+        self.safe.title.as_deref()
+    }
+
+    /// Counts the times the title changed.
+    pub(super) fn retitled(&self) -> u32 {
+        self.safe.retitled
     }
 
     /// Whether the program asked for cursor keys in application mode (DECCKM).
@@ -76,10 +87,20 @@ enum State {
     Charset,
 }
 
+/// The longest OSC kept to read a title from; the rest of a longer one is dropped.
+const OSC_MAX: usize = 512;
+/// The most characters of a title kept.
+const TITLE_MAX: usize = 80;
+
 /// What of the output may reach the emulator; its state carries over between reads.
 #[derive(Debug, Default)]
 struct Safe {
     state: State,
+    /// The OSC being read, when the string is one (`ESC ]`), up to `OSC_MAX` bytes.
+    osc: Option<Vec<u8>>,
+    title: Option<String>,
+    /// Counts the times the title changed, so a reader knows when to pass it on.
+    retitled: u32,
 }
 
 impl Safe {
@@ -101,7 +122,11 @@ impl Safe {
                     kept.extend_from_slice(b"\x1b[");
                     State::Csi
                 }
-                (State::Escape, b']' | b'P' | b'X' | b'^' | b'_') => State::Text,
+                (State::Escape, b']') => {
+                    self.osc = Some(Vec::new());
+                    State::Text
+                }
+                (State::Escape, b'P' | b'X' | b'^' | b'_') => State::Text,
                 (State::Escape, 0x20..=0x2f) => State::Charset,
                 (State::Escape, 0x1b) => State::Escape,
                 // Two-byte escapes (save and restore the cursor, a reverse index) are kept;
@@ -128,15 +153,57 @@ impl Safe {
                     kept.push(b'm');
                     State::Ground
                 }
-                (State::Text, 0x07) => State::Ground,
+                (State::Text, 0x07) => {
+                    self.string_ended();
+                    State::Ground
+                }
                 (State::Text, 0x1b) => State::TextEscape,
-                (State::Text, _) => State::Text,
-                (State::TextEscape, b'\\') => State::Ground,
-                (State::TextEscape, _) => State::Text,
+                (State::Text, _) => {
+                    if let Some(osc) = self.osc.as_mut().filter(|osc| osc.len() < OSC_MAX) {
+                        osc.push(byte);
+                    }
+                    State::Text
+                }
+                (State::TextEscape, b'\\') => {
+                    self.string_ended();
+                    State::Ground
+                }
+                // A string broken off by another escape: dropped, as a terminal would.
+                (State::TextEscape, _) => {
+                    self.osc = None;
+                    State::Text
+                }
             };
         }
         kept
     }
+
+    /// A string sequence ended: the title, when it was an OSC that sets one.
+    fn string_ended(&mut self) {
+        let Some(osc) = self.osc.take() else { return };
+        let text = String::from_utf8_lossy(&osc);
+        if let Some(("0" | "2", title)) = text.split_once(';')
+            && let Some(title) = clean_title(title)
+            && self.title.as_ref() != Some(&title)
+        {
+            self.title = Some(title);
+            self.retitled = self.retitled.wrapping_add(1);
+        }
+    }
+}
+
+/// A title as words: control characters out, and the spinner or status mark a program puts in
+/// front (`✳`, `⠋`, `·`) left off, so a title that only spins reads the same. `None` when no
+/// words are left.
+fn clean_title(title: &str) -> Option<String> {
+    let words: String = title
+        .chars()
+        .filter(|c| !c.is_control())
+        .skip_while(|c| !c.is_alphanumeric())
+        .take(TITLE_MAX)
+        .collect();
+    let words = words.trim_end();
+    (!words.is_empty()).then(|| words.to_string())
 }
 
 #[cfg(test)]

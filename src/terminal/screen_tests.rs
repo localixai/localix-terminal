@@ -68,3 +68,20 @@ fn a_resized_screen_keeps_its_text_and_reports_its_size() {
     assert_eq!(screen.size(), (10, 50));
     assert_eq!(screen.text().0, "hello");
 }
+
+#[test]
+fn a_title_is_kept_aside_as_words() {
+    let mut screen = Screen::new(40, 120);
+    assert_eq!(screen.title(), None);
+    // Ended by BEL, then by `ESC \`, read a byte at a time: the spinner in front is left off.
+    screen.feed(b"\x1b]0;\xe2\x9c\xb3 Fix the cart\x07a");
+    assert_eq!(screen.title(), Some("Fix the cart"));
+    for byte in "\x1b]2;\u{280b} Fix the cart button\x1b\\".as_bytes() {
+        screen.feed(&[*byte]);
+    }
+    assert_eq!(screen.title(), Some("Fix the cart button"));
+    // Other OSCs, a broken one and one with no words leave it.
+    screen.feed(b"\x1b]52;c;aGk=\x07\x1b]0;half\x1b[m\x1b]2;\xe2\x9c\xb3 \x07");
+    assert_eq!(screen.title(), Some("Fix the cart button"));
+    assert_eq!(screen.text().0, "a");
+}

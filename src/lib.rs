@@ -2,33 +2,36 @@
 //! person watches. Tabs on the system's WebView (WKWebView on macOS, WebKitGTK on Linux), each
 //! page driven through a probe script; terminal sessions in a PTY, painted into tabs of the same
 //! window; a strip of tabs along the top, grouped by project; on macOS a small preview in a
-//! screen corner. An agent calls it from its shell: `llx-desk window '<json>'` reaches the daemon
-//! (`llx-desk serve`) over a unix socket, and the daemon keeps each caller's tabs apart.
+//! screen corner. An agent calls it from its shell: `llx-desk window '<json>'` reaches the app
+//! (`llx-desk serve`) over a unix socket, and the app keeps each caller's tabs apart.
 //!
 //! The layers, from the window up: [`browser`] (the window and its pages), [`terminal`]
-//! (sessions), [`desk`] (the `window` actions over both, tabs kept per owner), [`goal`] (a decision
-//! model carrying out a screen's worth of clicks), [`daemon`] and [`client`] (the socket), [`cli`].
+//! (sessions), [`desk`] (the `window` actions over both, tabs kept per owner), [`board`] (the
+//! project's cards), [`server`] and [`client`] (the socket), [`cli`]. The desk knows no model: an
+//! agent of any kind drives it through the CLI, and its integration (a plugin) is its own.
 
+pub mod board;
 pub mod browser;
+pub mod bundle;
 pub mod cli;
 pub mod client;
-pub mod daemon;
 pub mod desk;
+pub mod feed;
 pub mod follow;
-pub mod goal;
-pub mod hands;
-#[cfg(feature = "test-daemon")]
+#[cfg(feature = "test-server")]
 pub mod harness;
-pub mod key;
+pub mod ledger;
 pub mod mcp;
-pub mod model;
-pub mod openrouter;
+pub mod offers;
 pub mod out;
 pub mod paths;
+pub mod projects;
 pub mod secrets;
 pub mod served;
-pub mod shapes;
+pub mod server;
+pub mod setup;
 pub mod shots;
+pub mod store;
 pub mod terminal;
 pub mod view;
 pub mod wire;

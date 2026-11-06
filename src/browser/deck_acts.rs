@@ -3,10 +3,10 @@
 
 use wry::WebView;
 
-use super::super::host::{Heard, STRIP, Shared};
+use super::super::host::{CenterDid, Heard, NAV_PAGE, STRIP, Shared, TABS};
 use super::super::panel::Held;
 use super::super::strip::{self, Click, Key};
-use super::{Deck, Shown};
+use super::{Deck, Menu, Shown};
 use crate::WindowTab;
 
 /// What became of the window.
@@ -23,10 +23,11 @@ pub(in super::super) enum After {
 impl Deck {
     /// Show or close the tab `click` names; why not, when it is not there.
     pub(crate) fn act(&mut self, click: Click, shared: &Shared) -> Result<After, String> {
-        let key = match click {
-            Click::Show(key) | Click::Close(key) => key,
-            Click::History => {
-                self.menu = !self.menu;
+        let (key, closing) = match click {
+            Click::Show(key) => (key, false),
+            Click::Close(key) => (key, true),
+            Click::History | Click::Events | Click::Unmenu | Click::Event(..) | Click::Clear => {
+                self.menu_click(click, shared);
                 return Ok(After::Kept);
             }
             Click::Typing(open) => {
@@ -37,24 +38,38 @@ impl Deck {
             }
             Click::Back | Click::Forward => return Ok(self.walk(click)),
             // The host opens its page: the tab it needs is built on the event loop.
-            Click::Visit(_) => return Ok(After::Kept),
+            Click::Visit(_) | Click::Offer(_) => return Ok(After::Kept),
             Click::Drag => {
                 let _ = self.frame.native.drag_window();
                 return Ok(After::Kept);
             }
             // The host's: the window's presence, and a tab built on the event loop.
             Click::Collapse
+            | Click::Quit
             | Click::NewTab(..)
             | Click::Frame(..)
+            | Click::Projects(..)
             | Click::More(..)
+            | Click::Tabs(..)
             | Click::Menu(..)
+            | Click::Key(_)
             | Click::Glass(_) => {
                 return Ok(After::Kept);
             }
+            Click::Side => {
+                self.slide_side(shared);
+                return Ok(After::Kept);
+            }
+            // The host's: laid out without a refresh while the edge is dragged.
+            Click::SideWidth(..) => return Ok(After::Kept),
             Click::Reload => {
                 if let (Some(web), Shown::Web) = (&self.web, self.shown) {
                     let _ = web.active().reload();
                 }
+                return Ok(After::Kept);
+            }
+            Click::Outside => {
+                self.outside(shared);
                 return Ok(After::Kept);
             }
             Click::Zoom => {
@@ -67,53 +82,36 @@ impl Deck {
                 return Ok(After::Kept);
             }
         };
-        self.menu = false;
+        self.menu = None;
         // The agent shows a terminal the person closed: a tab again.
-        if let Click::Show(Key::Term(id)) = click {
+        if let (false, Key::Term(id)) = (closing, key) {
             self.unhide_term(id);
         }
-        if !self.listing(shared).iter().any(|tab| tab.id == key.name()) {
-            let ids: Vec<String> = self.listing(shared).into_iter().map(|tab| tab.id).collect();
+        let ids: Vec<String> = self.listing(shared).into_iter().map(|tab| tab.id).collect();
+        if !ids.contains(&key.name()) {
             return Err(format!(
                 "there is no tab {}: the tabs are {}",
                 key.name(),
                 ids.join(", ")
             ));
         }
-        Ok(match click {
-            // Answered above.
-            Click::Back
-            | Click::Forward
-            | Click::History
-            | Click::Visit(_)
-            | Click::Comment
-            | Click::Send
-            | Click::Drag
-            | Click::Collapse
-            | Click::Reload
-            | Click::NewTab(..)
-            | Click::Frame(..)
-            | Click::More(..)
-            | Click::Menu(..)
-            | Click::Glass(_)
-            | Click::Typing(_)
-            | Click::Zoom => After::Kept,
-            Click::Show(Key::Web(id)) => {
+        Ok(match (closing, key) {
+            (false, Key::Web(id)) => {
                 if let Some(web) = self.web.as_mut() {
                     web.switch(id, shared)?;
                 }
                 self.show(Shown::Web);
                 After::Kept
             }
-            Click::Show(Key::Term(id)) => {
+            (false, Key::Term(id)) => {
                 self.show(Shown::Term(id));
                 After::Kept
             }
-            Click::Close(Key::Term(id)) => match self.hide_term(id) {
+            (true, Key::Term(id)) => match self.hide_term(id) {
                 true => After::Kept,
                 false => After::Empty,
             },
-            Click::Close(Key::Web(id)) => {
+            (true, Key::Web(id)) => {
                 let left = self.web.as_mut().map(|web| web.close(id, shared));
                 match left {
                     Some(Ok(false)) => {
@@ -129,9 +127,104 @@ impl Deck {
         })
     }
 
+    /// A click on the menus: one opens or closes, or the Event Center's button is chosen.
+    fn menu_click(&mut self, click: Click, shared: &Shared) {
+        match click {
+            Click::History => {
+                self.toggle(Menu::History);
+            }
+            // Opened: all it shows is seen, and the bell's count goes.
+            Click::Events => {
+                if self.toggle(Menu::Events) {
+                    shared.heard("", Heard::Center(CenterDid::Opened));
+                }
+            }
+            Click::Event(event, button) => {
+                self.menu = None;
+                let button = usize::from(button);
+                shared.heard("", Heard::Center(CenterDid::Chose { event, button }));
+            }
+            // Cleared: the list stays open, empty.
+            Click::Clear => shared.heard("", Heard::Center(CenterDid::Cleared)),
+            Click::Unmenu => self.menu = None,
+            // Not a menu's.
+            Click::Show(_)
+            | Click::Close(_)
+            | Click::Back
+            | Click::Forward
+            | Click::Visit(_)
+            | Click::Offer(_)
+            | Click::Comment
+            | Click::Send
+            | Click::Drag
+            | Click::Zoom
+            | Click::Collapse
+            | Click::Quit
+            | Click::Reload
+            | Click::Outside
+            | Click::Side
+            | Click::SideWidth(..)
+            | Click::NewTab(..)
+            | Click::Frame(..)
+            | Click::Projects(..)
+            | Click::More(..)
+            | Click::Tabs(..)
+            | Click::Menu(..)
+            | Click::Typing(_)
+            | Click::Key(_)
+            | Click::Glass(_) => {}
+        }
+    }
+
+    /// The person's settings, taken by the window and its own pages (never the browser's).
+    pub(crate) fn restyle(&mut self, settings: &super::super::settings::Settings) {
+        let script = super::super::settings::look_script(settings);
+        for page in [&self.strip, &self.side].into_iter().flatten() {
+            let _ = page.evaluate_script(&script);
+        }
+        for open in &self.terms {
+            let _ = open.webview.evaluate_script(&script);
+        }
+        self.frame.restyle(settings.theme);
+    }
+
+    /// A shortcut's doing in the strip's page (`address`, `size`): what a click there would do,
+    /// the keyboard given to the strip first.
+    pub(crate) fn keyed_in_strip(&self, what: &str) {
+        // The address field and the page's size are the browser's toolbar's, over a page only.
+        let view = match what {
+            "address" | "size" => self.nav.as_ref().filter(|_| self.shown == Shown::Web),
+            _ => self.strip.as_ref(),
+        };
+        if let Some(view) = view {
+            let _ = view.focus();
+            let _ = view.evaluate_script(&format!("K({})", serde_json::json!(what)));
+        }
+    }
+
+    /// The side's search takes the keyboard, the side opened first when it is shut.
+    pub(crate) fn find_tab(&mut self, shared: &Shared) {
+        if self.side.is_none() {
+            return;
+        }
+        if !self.side_open {
+            self.slide_side(shared);
+        }
+        if let Some(side) = &self.side {
+            let _ = side.focus();
+            let _ = side.evaluate_script("K(\"find\")");
+        }
+    }
+
+    /// Menu `menu` opens, or closes when it is the one open; whether it is open now.
+    fn toggle(&mut self, menu: Menu) -> bool {
+        self.menu = (self.menu != Some(menu)).then_some(menu);
+        self.menu.is_some()
+    }
+
     /// Back or forward in the page shown, when a page is.
     fn walk(&mut self, click: Click) -> After {
-        self.menu = false;
+        self.menu = None;
         if let (Some(web), Shown::Web) = (&self.web, self.shown) {
             let script = if click == Click::Back {
                 "history.back()"
@@ -155,14 +248,9 @@ impl Deck {
             self.commenting = false;
         } else {
             self.commenting = !self.commenting;
-            self.menu = false;
+            self.menu = None;
         }
         shared.turn.commenting(self.commenting);
-    }
-
-    /// Whether the person is commenting on the pages now.
-    pub(crate) fn commenting(&self) -> bool {
-        self.commenting
     }
 
     /// The window went out of the person's sight: commenting ends, the pages and the strip say so.
@@ -178,6 +266,8 @@ impl Deck {
     pub(crate) fn page(&self, id: u32) -> Option<&WebView> {
         match id {
             STRIP => self.strip.as_ref(),
+            TABS => self.side.as_ref().or(self.strip.as_ref()),
+            NAV_PAGE => self.nav.as_ref(),
             id => self.term(id).map(|open| &open.webview),
         }
     }
@@ -186,13 +276,29 @@ impl Deck {
     /// key, its kind, its title, what it holds and its group.
     /// The glass under the strip's open list at `rect` of the strip, or none.
     pub(crate) fn glass(&self, rect: Option<(u32, u32, u32, u32)>) {
-        if let (Some(pane), Some(strip)) = (&self.pane, &self.strip) {
-            pane.place(strip, rect);
+        // Under the list that is open: the address field's suggestions are the browser's
+        // toolbar's, the menus the strip's.
+        let over = if self.typing { &self.nav } else { &self.strip };
+        if let (Some(pane), Some(view)) = (&self.pane, over) {
+            pane.place(view, rect);
         }
     }
 
     /// The person picks one of `items` from the system's menu at `at` (the strip's points).
     /// The item `marked`, if any, is shown as the one chosen now.
+    /// The page shown opened in the person's own browser, when it is at an address one opens.
+    fn outside(&self, shared: &Shared) {
+        let (Some(web), Shown::Web) = (&self.web, self.shown) else {
+            return;
+        };
+        let active = web.listed().1;
+        let tabs = crate::lock(&shared.tabs);
+        let url = tabs.iter().find(|tab| tab.id == active).map(|tab| &tab.url);
+        if let Some(url) = url.filter(|url| super::super::guard::outside(url)) {
+            super::super::platform::open_outside(url);
+        }
+    }
+
     pub(crate) fn choose(
         &self,
         at: (f64, f64),
@@ -203,9 +309,21 @@ impl Deck {
         super::super::platform::choose(strip, at, items, marked)
     }
 
+    /// The person picks from `entries` (with lines, submenus, pictures) in the system's menu at
+    /// `at` (the strip's points): the place of the item picked among them.
+    pub(crate) fn pick(
+        &self,
+        at: (f64, f64),
+        entries: &[super::super::choice::Entry],
+    ) -> Option<usize> {
+        let strip = self.strip.as_ref()?;
+        super::super::platform::show(strip, at, entries)
+    }
+
     pub(crate) fn listing(&self, shared: &Shared) -> Vec<WindowTab> {
         let groups = crate::lock(&shared.groups).clone();
         let group = |key: Key| groups.get(&key.name()).cloned().unwrap_or_default();
+        let details = crate::lock(&shared.details).clone();
         let mut out = vec![];
         if let Some(web) = &self.web {
             let (ids, active) = web.listed();
@@ -228,11 +346,17 @@ impl Deck {
         }
         for open in self.terms.iter().filter(|open| open.held == Held::Live) {
             let title = open.title.strip_prefix("desk · ").unwrap_or(&open.title);
+            let key = Key::Term(open.id);
             out.push(WindowTab {
-                id: Key::Term(open.id).name(),
-                kind: "terminal".into(),
+                id: key.name(),
+                kind: if key.kind() == "board" {
+                    "board"
+                } else {
+                    "terminal"
+                }
+                .into(),
                 title: title.to_string(),
-                detail: String::new(),
+                detail: details.get(&key.name()).cloned().unwrap_or_default(),
                 shown: self.shown == Shown::Term(open.id),
                 acted_on: false,
                 group: group(Key::Term(open.id)),

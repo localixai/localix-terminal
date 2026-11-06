@@ -1,29 +1,21 @@
 #!/bin/sh
-# The plugin's llx-desk, on the Bash tool's PATH and the MCP server's command: it runs the
-# program of the plugin's own version. One on PATH of that version is used as it is (a build from
-# source, a package); otherwise the release build kept under ~/.local/share/llx-desk, fetched
-# from the GitHub release, its checksum verified, the first time it is needed.
-#
-# LLX_DESK_NO_FETCH=1 runs only what is already there (a hook that must not wait on a download);
-# LLX_DESK_RELEASE_URL fetches from a mirror of the release's files instead.
+# The plugin's `llx-desk`, on the Bash tool's PATH: the program of LLX Desk.app, which is all
+# there is to install (opened once, it puts `llx-desk` in ~/.local/bin, and Settings →
+# Integrations installs this plugin). Found on the PATH, in ~/.local/bin, or in the app where
+# macOS keeps apps; never downloaded.
 set -eu
-
-VERSION=0.1.5
-REPO=rsaryev/llx-desk
-data=${LLX_DESK_DATA:-${XDG_DATA_HOME:-$HOME/.local/share}/llx-desk}
-kept=$data/$VERSION/llx-desk
 
 say() { printf 'llx-desk: %s\n' "$*" >&2; }
 
-# The OpenRouter key given in the plugin's settings (Claude Code keeps it in the keychain; .mcp.json
-# hands it to the MCP server), unless the environment has one already. A placeholder left
-# unsubstituted, when no key was given, is no key.
-case "${CLAUDE_PLUGIN_OPTION_OPENROUTER_API_KEY:-}" in
-  '' | *'${'*) ;;
-  *) [ -n "${OPENROUTER_API_KEY:-}" ] || export OPENROUTER_API_KEY="$CLAUDE_PLUGIN_OPTION_OPENROUTER_API_KEY" ;;
-esac
+# What says which Claude Code session called, not what the person set: a terminal the desk opens
+# starts without it, so a `claude` run there is a session of its own, of its own directory.
+export LLX_DESK_SCRUB="CLAUDECODE,AI_AGENT,TRACEPARENT,CLAUDE_PID,CLAUDE_EFFORT,CLAUDE_PROJECT_DIR,\
+CLAUDE_ENV_FILE,CLAUDE_PLUGIN_*,CLAUDE_CODE_TMPDIR,CLAUDE_CODE_INVOKED_SKILLS,CLAUDE_CODE_ENTRYPOINT,\
+CLAUDE_CODE_EXECPATH,CLAUDE_CODE_SESSION_ID,CLAUDE_CODE_SESSION_ATTENDED,CLAUDE_CODE_CHILD_SESSION,\
+CLAUDE_CODE_MESSAGING_SOCKET,CLAUDE_CODE_MESSAGING_TOKEN,CLAUDE_CODE_SUBAGENT_MODEL,LLX_DESK_WRAPPED"
 
-# A program on PATH of this version, not this script nor another copy of it.
+# An `llx-desk` on the PATH that is not this script (nor another copy of it, which sets
+# LLX_DESK_WRAPPED before it looks).
 if [ -z "${LLX_DESK_WRAPPED:-}" ]; then
   export LLX_DESK_WRAPPED=1
   here=$(cd "$(dirname "$0")" && pwd -P)
@@ -32,93 +24,18 @@ if [ -z "${LLX_DESK_WRAPPED:-}" ]; then
   for dir in $PATH; do
     [ -n "$dir" ] && [ -x "$dir/llx-desk" ] || continue
     [ "$(cd "$dir" 2>/dev/null && pwd -P)" = "$here" ] && continue
-    if [ "$("$dir/llx-desk" --version 2>/dev/null)" = "llx-desk $VERSION" ]; then
-      IFS=$old_ifs
-      exec "$dir/llx-desk" "$@"
-    fi
+    IFS=$old_ifs
+    exec "$dir/llx-desk" "$@"
   done
   IFS=$old_ifs
 fi
 
-[ -x "$kept" ] && exec "$kept" "$@"
-
-if [ -n "${LLX_DESK_NO_FETCH:-}" ]; then
-  say "version $VERSION is not installed yet"
-  exit 127
-fi
-
-case "$(uname -s)/$(uname -m)" in
-  Darwin/arm64) target=aarch64-apple-darwin ;;
-  Darwin/x86_64) target=x86_64-apple-darwin ;;
-  Linux/x86_64) target=x86_64-unknown-linux-gnu ;;
-  *)
-    say "there is no release build for $(uname -s) $(uname -m); build it from source:"
-    say "  cargo install --locked --git https://github.com/$REPO --tag v$VERSION"
-    exit 1
-    ;;
-esac
-
-mkdir -p "$data"
-# One call fetches; another that comes meanwhile waits for it, up to two minutes (a lock left by a
-# killed fetch is taken over after ten).
-lock=$data/$VERSION.lock
-waited=0
-until mkdir "$lock" 2>/dev/null; do
-  if [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then
-    rm -rf "$lock"
-    continue
-  fi
-  if [ $waited -ge 120 ]; then
-    say "version $VERSION is still being downloaded by another call; try again in a moment"
-    exit 75
-  fi
-  sleep 1
-  waited=$((waited + 1))
-  [ -x "$kept" ] && exec "$kept" "$@"
+for program in \
+  "$HOME/.local/bin/llx-desk" \
+  "$HOME/Applications/LLX Desk.app/Contents/MacOS/llx-desk" \
+  "/Applications/LLX Desk.app/Contents/MacOS/llx-desk"; do
+  [ -x "$program" ] && exec "$program" "$@"
 done
-if [ -x "$kept" ]; then
-  rmdir "$lock"
-  exec "$kept" "$@"
-fi
-trap 'rm -rf "$lock"' EXIT INT TERM
 
-fetch() {
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL --retry 2 -o "$2" "$1"
-  else
-    wget -q -O "$2" "$1"
-  fi
-}
-
-url=${LLX_DESK_RELEASE_URL:-https://github.com/$REPO/releases/download/v$VERSION}
-archive=llx-desk-$target.tar.gz
-say "downloading version $VERSION for $target"
-fetch "$url/$archive" "$lock/$archive" || { say "could not download $url/$archive"; exit 1; }
-fetch "$url/SHA256SUMS" "$lock/SHA256SUMS" || { say "could not download $url/SHA256SUMS"; exit 1; }
-
-want=$(awk -v f="$archive" '$2 == f { print $1 }' "$lock/SHA256SUMS")
-if command -v sha256sum >/dev/null 2>&1; then
-  got=$(sha256sum "$lock/$archive" | awk '{ print $1 }')
-else
-  got=$(shasum -a 256 "$lock/$archive" | awk '{ print $1 }')
-fi
-if [ -z "$want" ] || [ "$want" != "$got" ]; then
-  say "the download of $archive does not match its checksum; nothing was installed"
-  exit 1
-fi
-
-tar -xzf "$lock/$archive" -C "$lock"
-mkdir -p "$data/$VERSION"
-mv -f "$lock/llx-desk" "$kept"
-chmod 0755 "$kept"
-ln -sfn "$VERSION" "$data/current"
-say "installed $kept"
-
-if [ "$target" = x86_64-unknown-linux-gnu ] && command -v ldd >/dev/null 2>&1 &&
-  ldd "$kept" 2>/dev/null | grep -q 'not found'; then
-  say "pages need WebKitGTK 4.1 and GTK 3; on Debian and Ubuntu: sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0"
-fi
-
-rm -rf "$lock"
-trap - EXIT INT TERM
-exec "$kept" "$@"
+say "LLX Desk is not installed: get it from https://github.com/rsaryev/llx-desk/releases and open it once"
+exit 127

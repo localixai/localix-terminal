@@ -1,28 +1,42 @@
-//! The commands that call the daemon: `window` (one call, `--end`, `--said`, `--said --follow
-//! [--json]`)
-//! and `status`/`stop`. The CLI is a client of protocol v2 like any other: its call carries an
+//! The commands that call the app: `window` (one call, `--end`, `--said`, `--said --follow
+//! [--json]`) and `status`/`quit`. The CLI is a client of protocol v2 like any other: its call carries an
 //! idempotency key, so one asked again after a broken connection is not done twice, and a
 //! picture comes as bytes that it saves where the calling agent can read them.
 
 use std::io::Read;
-use std::sync::Arc;
 
 use serde_json::{Value, json};
 
 use super::{FAILED, OK, UNREACHABLE};
-use crate::client::{
-    Answer, Client, Error, Notes, Start, Trouble as Unreached, host_project, legacy, window_params,
-};
+use crate::client::{Answer, Caller, Start, Trouble, ask, window_params};
 use crate::out::{say, warn};
 
 /// What `window` was given.
 #[derive(Default)]
 struct Window {
     json: Option<String>,
-    owner: Option<String>,
-    end: bool,
-    said: bool,
+    /// `--as NAME`: the agent's name within the project.
+    agent: Option<String>,
+    /// `--project DIR`: the project, when the caller knows it better than its directory does.
+    project: Option<std::path::PathBuf>,
+    mode: Mode,
     follow: Follow,
+    /// `--peek`: a look for a pane; the person's notes stay for the agent's own call.
+    peek: bool,
+}
+
+/// What `window` does besides a call: none of these starts the app.
+#[derive(Default, Clone, Copy, PartialEq)]
+enum Mode {
+    /// A call (the JSON), or with none, how to call it.
+    #[default]
+    Call,
+    /// `--end`: close the owner's tabs.
+    End,
+    /// `--said`: what the person sent from the window since last asked.
+    Said,
+    /// `--board`: the owner's open cards, read from the board's file.
+    Board,
 }
 
 /// Whether `--said` keeps waiting, and how it prints each note.
@@ -41,14 +55,23 @@ fn parse(args: &[String]) -> Result<Window, String> {
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--end" => parsed.end = true,
-            "--said" => parsed.said = true,
+            "--end" | "--said" | "--board" if parsed.mode != Mode::Call => {
+                return Err("one of --end, --said and --board only".into());
+            }
+            "--end" => parsed.mode = Mode::End,
+            "--said" => parsed.mode = Mode::Said,
+            "--board" => parsed.mode = Mode::Board,
             "--follow" if parsed.follow == Follow::No => parsed.follow = Follow::Blocks,
             "--follow" => {}
             "--json" => parsed.follow = Follow::Json,
+            "--peek" => parsed.peek = true,
             "--as" => {
                 let name = args.next().ok_or("--as needs a name")?;
-                parsed.owner = Some(name.clone());
+                parsed.agent = Some(name.clone());
+            }
+            "--project" => {
+                let dir = args.next().ok_or("--project needs a folder")?;
+                parsed.project = Some(std::path::PathBuf::from(dir));
             }
             flag if flag.starts_with("--") => return Err(format!("no option `{flag}`")),
             _ if parsed.json.is_some() => return Err("one JSON argument only".into()),
@@ -58,28 +81,46 @@ fn parse(args: &[String]) -> Result<Window, String> {
     Ok(parsed)
 }
 
+/// `--board`: `project`'s board in brief, read from its file, so it needs no app running and starts none.
+/// Nothing when it has no open card, or no file (a name given with `--as` has none).
+fn board(project: &std::path::Path) -> u8 {
+    match crate::board::store::written(project) {
+        Ok(board) => {
+            if let Some(brief) = board.and_then(|board| board.brief(crate::board::now())) {
+                say(&brief);
+            }
+            OK
+        }
+        Err(why) => {
+            warn(&format!("llx-desk: {why}"));
+            FAILED
+        }
+    }
+}
+
 pub(super) fn window(args: &[String]) -> u8 {
     let parsed = match parse(args) {
         Ok(parsed) => parsed,
         Err(why) => return usage(&why),
     };
     let cwd = std::env::current_dir().unwrap_or_default();
-    let owner = parsed.owner.clone().unwrap_or_else(|| {
-        crate::desk::project(&host_project().unwrap_or_else(|| cwd.clone()))
-            .display()
-            .to_string()
-    });
-    if parsed.said && parsed.follow != Follow::No {
-        crate::follow::follow(&owner, parsed.follow == Follow::Json);
-    }
-    if parsed.end || parsed.said {
-        // Neither starts a daemon: with none there is nothing to end and nothing said.
-        let method = if parsed.end {
-            "window/end"
-        } else {
-            "window/said"
-        };
-        return printed(ask(Start::Never, method, &json!({"owner": owner})));
+    let caller = match &parsed.project {
+        Some(dir) => Caller::at(&cwd.join(dir), parsed.agent.clone()),
+        None => Caller::of(&cwd, parsed.agent.clone()),
+    };
+    // None of these starts the app: with none there is nothing to end and nothing said, and the
+    // board is read from its file.
+    let method = match parsed.mode {
+        Mode::Call => None,
+        Mode::Board => return board(&caller.project),
+        Mode::Said if parsed.follow != Follow::No => {
+            return crate::follow::follow(&caller, parsed.follow == Follow::Json);
+        }
+        Mode::Said => Some("window/said"),
+        Mode::End => Some("window/end"),
+    };
+    if let Some(method) = method {
+        return printed(ask(Start::Never, method, &caller.with(json!({}))));
     }
     let Some(json) = parsed.json else {
         say(&crate::desk::description());
@@ -94,11 +135,11 @@ pub(super) fn window(args: &[String]) -> u8 {
         Ok(args) => args,
         Err(why) => return usage(&why),
     };
-    printed(ask(
-        Start::Spawn,
-        "window/call",
-        &window_params(&owner, &cwd.display().to_string(), &args),
-    ))
+    let mut params = window_params(&caller, &cwd.display().to_string(), &args);
+    if parsed.peek {
+        params["peek"] = json!(true);
+    }
+    printed(ask(Start::Spawn, "window/call", &params))
 }
 
 fn object(text: &str) -> Result<Value, String> {
@@ -119,65 +160,15 @@ fn read_stdin() -> Result<String, String> {
     Ok(text)
 }
 
-/// `method` asked of the running daemon (never starting one): `status`, `stop`. An older
-/// daemon is asked in its own protocol, so that this build can end it.
-pub(super) fn admin(method: &str, op: &str) -> u8 {
+/// `method` asked of the running app, never starting it (`status`, `quit`); with none running,
+/// it says so and ends with `idle`.
+pub(super) fn admin(method: &str, idle: u8) -> u8 {
     let asked = ask(Start::Never, method, &json!({}));
-    if let Err(Trouble::Older(_)) = &asked {
-        return match legacy(op) {
-            Ok(text) => {
-                say(&text);
-                OK
-            }
-            Err(why) => unreachable_daemon(&why),
-        };
-    }
     if let Err(Trouble::None) = &asked {
-        say("llx-desk: no daemon is running");
-        return OK;
+        say("llx-desk: LLX Desk is not running");
+        return idle;
     }
     printed(asked)
-}
-
-/// Why a call has no answer to print.
-enum Trouble {
-    /// There is no daemon, and the call did not ask for one.
-    None,
-    /// The daemon spoke, and said no.
-    Refused(String),
-    /// A daemon of an older protocol answers the socket.
-    Older(String),
-    /// The daemon could not be reached.
-    Lost(String),
-}
-
-/// `method` asked of the daemon, once more after a connection that broke under it.
-fn ask(start: Start, method: &str, params: &Value) -> Result<Answer, Trouble> {
-    let notes: Notes = Arc::new(|_, _| {});
-    // Every request has a key, so that the one made again is not done twice.
-    let mut params = params.clone();
-    if let Some(fields) = params.as_object_mut() {
-        fields
-            .entry("idempotencyKey")
-            .or_insert_with(|| json!(crate::token()));
-    }
-    let mut last = Trouble::None;
-    for _ in 0..2 {
-        let client = match Client::connect(start, &notes) {
-            Ok(Some(client)) => client,
-            Ok(None) => return Err(Trouble::None),
-            Err(Unreached::Older(why)) => return Err(Trouble::Older(why)),
-            Err(Unreached::Failed(why)) => return Err(Trouble::Lost(why)),
-        };
-        match client.request(method, params.clone()) {
-            Ok(answer) => return Ok(answer),
-            Err(Error::Rpc(error)) => return Err(Trouble::Refused(error.message)),
-            Err(other @ (Error::Broken(_) | Error::Timeout | Error::Foreign(_))) => {
-                last = Trouble::Lost(other.to_string())
-            }
-        }
-    }
-    Err(last)
 }
 
 /// The answer printed: the text on stdout when it came to what was asked, else on stderr.
@@ -195,7 +186,7 @@ fn printed(answer: Result<Answer, Trouble>) -> u8 {
             warn(&why);
             FAILED
         }
-        Err(Trouble::Older(why) | Trouble::Lost(why)) => unreachable_daemon(&why),
+        Err(Trouble::Lost(why)) => usage(&why),
     }
 }
 
@@ -228,11 +219,6 @@ fn words(answer: &Answer, shots: &std::path::Path) -> String {
 }
 
 pub(super) fn usage(why: &str) -> u8 {
-    warn(&format!("llx-desk: {why}"));
-    UNREACHABLE
-}
-
-fn unreachable_daemon(why: &str) -> u8 {
     warn(&format!("llx-desk: {why}"));
     UNREACHABLE
 }

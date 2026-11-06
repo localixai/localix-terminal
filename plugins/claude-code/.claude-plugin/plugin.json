@@ -1,7 +1,7 @@
 {
   "name": "llx-desk",
   "version": "0.1.5",
-  "description": "A window of real browser pages and terminals that Claude works in and you watch, with a pane for its tabs and your comments",
+  "description": "A window of real browser pages, terminals and a kanban board that Claude works in and you watch, with a line for its tabs, its cards and your comments",
   "author": {
     "name": "rsaryev"
   },
@@ -12,15 +12,17 @@
     "browser",
     "terminal",
     "window",
-    "screenshot"
+    "screenshot",
+    "kanban",
+    "subagents"
   ],
   "types": "./types/index.d.ts",
   "userConfig": {
-    "OPENROUTER_API_KEY": {
-      "type": "string",
-      "title": "OpenRouter API key (optional)",
-      "description": "Only for `goal`, where a fast model clicks through a screen for Claude. Leave it empty if you don't use goals; everything else works without it. Kept in the system keychain.",
-      "sensitive": true,
+    "finish_cards": {
+      "type": "boolean",
+      "title": "Hold Claude to its board card",
+      "description": "When Claude stops while its own card is still in Doing on the board, ask it once to hand the card in, release it or block it first. Subagents are always held to their cards.",
+      "default": false,
       "required": false
     }
   }

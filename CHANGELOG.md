@@ -2,6 +2,219 @@
 
 ## Unreleased
 
+- **A compact bar, and a toolbar of its own for a page.** The bar is one row, a compact
+  titlebar's height: crumbs beside the window's buttons, 📁 the project ⌄ / the tab ⌄ (the
+  project's menu: Open Folder…, every project, Close Project; the tab's: the project's tabs), and
+  the window's buttons. Back, forward, reload, the address field, the page's size and comments
+  moved to a toolbar over the page, there only when a page is shown. A terminal's menu (New
+  Terminal Here, Show in Finder) works where its shell is now.
+- The app's icon: the bird on a near-black plate, larger, without the glow and the rim that made
+  it look dim in the Dock.
+- **Nothing of one project reaches another.** A page a page opens (`window.open`) is of its
+  opener's project, never of the one shown; an agent's first page is of its project from the
+  start; a subscriber always names its project (`events/subscribe` without one is refused) and a
+  tab of no one's is told to no one; a project's terminals are never ended to make room for
+  another's; Show on another project's event (and the person's acts from the Event Center) go to
+  that project first; an event whose id comes back in another project or after it settled is
+  new, not dismissed; an owner is its project's id (a folder's name never makes two alike); a
+  session's end takes its asks with it; a crumb's terminal stays inside the project (no `..`);
+  what the last run left open is history once the project has a tab again. Settings are the
+  window's own, listed in every project.
+- Settings' icon is a gear; a shortcut being recorded shows the keys held as they go down.
+- `window --said --follow` ends on its own when the session that started it is gone: no follower
+  is left behind waiting for the app.
+- **The mini player only when you ask.** The window opens as an ordinary window and stays one
+  when you click another app; the mini (the small floating preview) comes from its button in the
+  bar, the yellow button or ⌘M, as a video's player shrinks to a corner. `LLX_DESK_KEEP_EXPANDED`
+  is gone with the old behaviour.
+
+- **Projects are the scope of everything.** A project is a folder (the nearest one with `.git`),
+  kept in the database with everything that is its own: its tabs, the pages they showed, its
+  terminals' last screens, its board and its events. The window shows one project at a time,
+  named left of the address: click it (⌃⌘P) for the projects used last, Open Folder… (⌘O) and
+  Close Project (⌃⌘W). The tab list, ⌘1…⌘9, the history (⌘Y), Reopen Closed Tab and the
+  address field's suggestions keep to the project shown; an agent working in another project
+  never moves the window, its project gets a dot. A project comes back as it was left, after a
+  restart too: its pages at their addresses, a shell in each terminal's folder with the last
+  screen dimmed above. `llx-desk open DIR` opens the window on a folder as a project. Every call
+  names its project (`--project DIR`, `LLX_DESK_PROJECT`, else the folder it runs in); `--as NAME`
+  is an agent of that project. The plugin passes its session's folder. A new database
+  (`llx-desk.sqlite`) and protocol 3: nothing of the old owner strings is carried over.
+- The tab's menu fits its kind: Reload, Duplicate, Copy Address, Open in Default Browser (also
+  ⇧⌘O) for a page; Copy Folder, Show in Finder for a terminal; Close Other Tabs and Close Tabs
+  Below for all.
+
+- **LLX Desk is the app, and the app is all there is to install.** It is the server: the window,
+  the terminals, the board and the database live in it, and it serves one API on a unix socket.
+  The `llx-desk` command, `llx-desk mcp` and the Claude Code plugin are thin faces of that API with
+  nothing of their own. On macOS it is a regular app (Dock icon, menu bar built from the shortcuts,
+  ⌘Q); the first call of an agent starts it through LaunchServices, in the background, and nothing
+  an agent does takes your keys. Opened, it links `llx-desk` into `~/.local/bin` and brings the
+  window to you, your login shell in it when it has no tab. The Dock icon brings the window back;
+  the close button collapses it to the mini; ⌘Q (or the Dock's Quit, or logging out) asks first
+  while terminals run a program. `install.sh` installs the app (macOS: `~/Applications`; Linux:
+  the program, the command and a desktop entry, `llx-desk open`).
+- **Settings → Integrations** and `llx-desk setup`: the command line, the Claude Code plugin
+  (installed from the app's own bundle, of its version, and refreshed when the app updates), and
+  the window tool as an MCP server in Cursor and Codex, each with one click; any other MCP host
+  takes the entry *Copy MCP Entry* gives (`llx-desk setup mcp`).
+- **The API describes itself**: `api/describe` gives every method with its params as JSON Schema,
+  the events, and the window tool's description and schema, from one table the dispatch reads
+  too. `llx-desk mcp` is back as an MCP server on stdio whose one tool is that window tool. Only
+  the user's own processes are served.
+- Removed: the plugin's download of a program of its own version (it runs the app's), the
+  `window/closed` event (the window no longer closes but to the mini, or by quitting), and the
+  handling of servers of the older protocol.
+- **No daemon apart from the app**: `llx-desk status` and `llx-desk quit` replace `serve status`
+  and `serve stop` (`status` exits 3 when the app is not running); the methods are `app/status`
+  and `app/quit`, the event `app/quitting`; the log is `app.log`. `serve` is the app's own
+  launch, no longer listed.
+- **The theme is the person's alone**: system, light or dark, for the window and its pages; no
+  page or terminal changes it any more.
+- **A bare bar**: no capsules round the buttons or the address; icons and words on the glass, a
+  button lighting as the pointer comes. Only a button that is on and the address being typed in
+  have a ground.
+- **One glass for the window's chrome**: the bar, the tab list, a terminal and the board are the
+  window's own glass in every tab. A page no longer runs under the bar, blurred by a material of
+  its own that read in another colour than the tab list beside it: it starts below the bar.
+- **Offers, at the moment they fit**: run Claude Code or Codex in a terminal of the window (opened
+  as an agent, or typed in its shell) while its integration is off, and a bar under the strip
+  offers it: *Add Plugin* / *Add to Codex*, or *Not Now*, which asks again after a day, then three,
+  a week, a month. Taken, never again. The bar is one component any part of the app can offer
+  through. A terminal shows the mark of the agent in front, typed in its shell too.
+- **Only what fits the tab, and a bar that stays still**: back, forward, reload, the page size
+  and comments are a page's; over a terminal, the board or the settings they fade out where they
+  stand, their room kept, so nothing in the bar moves as the tabs change, and the menu bar greys
+  them. Over a terminal, the board or
+  the settings the address field takes an address for a new page.
+- **The history opens every page again**, the browser too when none is open (it did nothing once
+  the last page closed). A page the person opens (New Page, the history, an address typed over a
+  terminal, Duplicate) is one ask of the desk, a page of the project's, wherever it comes from.
+- **Shortcuts**: ⌘1…⌘9 show the project's tabs by place, and nearly everything the window does has
+  a key (⇧⌘[ ⇧⌘] tabs, ⌘T new page, ⌥⌘T terminal, ⌘W close, ⇧⌘T reopen, ⌘L address, ⇧⌘A search
+  tabs, ⌘R ⌘[ ⌘] page, ⌃⌘S sidebar, ⌘Y history, ⇧⌘E events, ⌘, Settings…). Each is the strip's
+  own click, and the buttons' hints name their keys.
+- **Settings**, a tab of the window: theme (system, light, dark), window transparency (off, low,
+  standard, high), interface font, code font and the terminals' font size, all applied at once;
+  every shortcut can be recorded anew, taken off, reset, or all reset, and a key another shortcut
+  has asks before it moves. Kept in `~/.config/llx-desk/settings.json`.
+- A terminal takes a Mac terminal's keys: ⌘K clears it (a shell draws its prompt again at the
+  top), ⌘← ⌘→ go to the line's start and end, ⌥← ⌥→ move by words, ⌘⌫ ⌥⌫ delete to the start and
+  the word before, ⌘↑ ⌘↓ scroll to the top and bottom, ⌘A selects all.
+- The side's search is a line of the column, no field drawn around it, with Settings, "+" and
+  the button that hides the side beside it (hidden, the bar's button brings it back); a tab's hint names the key that shows it (⌘1…⌘8 by place, ⌘9 the last).
+- A terminal running a coding agent shows the agent's mark in the side, its name, and under it the
+  title the session sets (Claude Code's topic, for one), spinners left off. Any terminal shows its
+  program's title there.
+- The core names no agent's variables: what a terminal leaves out of its caller's environment is
+  what the integration lists in `LLX_DESK_SCRUB` (the Claude Code plugin's launcher lists Claude
+  Code's session variables).
+- Leaks and waste found in a review of the whole: a terminal whose program ended, or whose tab the
+  person closed, gives its place to a new one at the limit (now 16) instead of refusing it, and
+  two starts never take the last place together; a session is closed once, so no reaped id is
+  signalled; the change feed keeps its consumers' cursors once a page, not once a notice, and
+  the store commits without waiting for the disk (WAL, `synchronous=NORMAL`); the Event Center
+  writes its journal only when what it gathers changed; the board's actions from the window run
+  off its thread, in order; a card's history keeps its first step and the latest 200; an owner
+  that never calls again holds at most 200 notes; comment pictures are pruned as screenshots are;
+  the local file server stops writing to a client that stopped reading and serves no file over
+  64 MB; an idle terminal's reader wakes once a second, not 30 times; a connection over the
+  daemon's limit is told why; the environment goes with a call only when it opens a tab or names
+  a program, read from the call, not from words in it.
+
+- The desk knows no model and no agent. `goal` and its decision model (Jev over OpenRouter, Claude
+  Haiku through Claude Code), the check of a card handed in, `llx-desk key`, `llx-desk mcp` and the
+  plugin's MCP server are gone: the desk makes no network call and holds no key. Every agent drives
+  it from its shell with `llx-desk window`, and an integration (the Claude Code plugin today) is its
+  own side of it. A card handed in goes to Review as it is; only the person accepts.
+- A page is acted on by the refs of its outline (`[e12]`): `click` (one ref or several, in order),
+  `fill` (`{"e4": "text"}`, `{{secret:NAME}}` typing a saved secret) and `select`
+  (`{"e7": "Large"}`). A ref that is gone or covered stops the rest and says so.
+- A call with a field the `window` tool does not know (`goal`) is refused with the fields it takes,
+  and nothing is done, where it used to be ignored.
+- `llx-desk window --board` prints the project's open cards from `.localix/board.json`, with no daemon: what
+  an integration gives an agent as it starts. The Claude Code plugin's `board` skill loads with it.
+- The Claude Code plugin works through the CLI: its skills allow `Bash(llx-desk:*)`, its worker
+  calls `llx-desk window`, and a worker's call on the board without its name as `who` is refused
+  with the name to pass.
+- `LLX_DESK_PROJECT` names the project a call belongs to, when it is not the one around the
+  current directory.
+- The Event Center: a bell in the window's toolbar counts what waits for you, and opens a list of
+  it, each with its buttons: a card handed in (Accept, Open Board), a blocked card (Unblock), a
+  terminal whose program ended (Show, Close); any of them dismissed until
+  it changes. It is gathered from what the desk holds, so it is never out of step with the board
+  or the tabs.
+- The agent asks the person on a tab (`ask` on `act`/`interact`, any kind of tab): sign in, a code,
+  a decision. It waits in the Event Center until they press Done, which reaches the agent as their
+  note; one a tab, taken back with `""`, gone with its tab. The bell counts only what wants the
+  person (an ask, a card to accept, a blocked card, a program that failed);
+  what ended well is listed without counting.
+- After a long turn (30 seconds or more), the Claude Code plugin leaves one line in the Event
+  Center that the session waits for you, with the first line of Claude's answer; the next turn
+  takes it back. `ask` with no tab says the same for any agent.
+- The board has a Discarded column, last: what the person gives up, from any column. The agent
+  hears it as a move, cannot take or change a discarded card, and reads it named in the board's
+  snapshot.
+- Every menu of the window is the system's: a panel's page names its own items (a card's Open,
+  Move To, Discard, Delete; the terminal's Copy and Paste) and the window shows them, with lines
+  and submenus, handing the pick back to the page. The board's card shows its status as a pop-up
+  button and is deleted from a trash icon in its header.
+- "+" opens a New Page even when the window holds only a board or a terminal.
+- The Event Center and the history menu open under their buttons, their right edges on the
+  buttons', not under the whole strip. Clear All empties the list at once: the window was not told
+  when nothing was left to show.
+- A tab the person closes no longer wakes the agent: it reads so with its next call.
+- A new page no longer flashes white over a dark window: until it has drawn, the window shows
+  through it in the system's light or dark, and the page draws over it, the first page of the
+  window too.
+- `interact` refuses a field the tab does not take (`op` on a page, `input` on a board) with what
+  it takes and how to do it there, where it used to do nothing and say the page had not changed.
+- A subagent passes its name on the board itself, as its task gives it.
+- The Claude Code plugin's mod uses no classic hook and no prompt content, which an organization's
+  security default keeps from the plugins a person installs: a worker's name is kept as it is
+  spawned, a worker that ends with its card in Doing is sent word to finish it, and the project's
+  tabs close as the session ends, all from the mod's own events.
+- A terminal no longer carries the session of the agent that opened it (`CLAUDECODE`, `AI_AGENT`,
+  `CLAUDE_CODE_SESSION_ID`, `CLAUDE_PROJECT_DIR`…): a `claude` started in it is a session of its own,
+  of the directory it runs in, not a child of the agent bound to its project.
+- An `op` on a page that names a field the call carries (`"op": "script"` beside its `script`) is
+  let be.
+- A page the desk cannot read (an SVG, an image) answers at once that it is one, where it used to
+  wait five seconds for a reader that never comes. `wait_for` finds a control's name and a field's
+  value too, as the outline shows them.
+- One change feed under the desk: what changes is recorded once, by whoever owns it, and every
+  part that cares (the notes to the agent, the Event Center, the board's file) reads it at its own
+  pace. It is kept in a SQLite database (`~/.local/share/llx-desk/desk.db`, moved with
+  `LLX_DESK_DATA`) with the boards and the Event Center's journal, written in the same transaction
+  as the change it announces, so after a restart each reader goes on from where it was. The
+  architecture is described in `docs/architecture.md`.
+- The Event Center keeps a journal: every event it showed, with what you did with it (seen,
+  dismissed) and when it settled, kept a month; what you saw and dismissed outlives a restart.
+- A board: a kanban board of cards in the window, `b1`, one per project, kept in the desk's
+  database and written out to `.localix/board.json`. The agent plans cards (`add`), takes one into Doing (`take`), hands it in
+  with a note of what was done (`review`), or blocks it with what it waits for; the person drags
+  cards, comments, edits, accepts a card into Done or sends it back to the top of Todo with what is
+  wrong, and that reaches the agent as comments do. Each worker has at most one card in Doing, and
+  only the person moves a card to Done. The board is a kind of tab: `open` with `kind` board,
+  `interact` with an `op`; no new command.
+- Backlog, a column before Todo: a card the person writes down lands there, and the agent puts an
+  idea there with `add` and `"to": "backlog"`; nobody takes a card from it, and the person moving one
+  to Todo makes it work.
+- Subagents on the board: `who` names the worker, and in Claude Code the plugin sets it from the
+  subagent's task, so a subagent acts on its own cards alone. The plugin adds a `worker` agent that
+  works one card and a `board` skill; a card sent back that a running subagent had goes to it; a
+  subagent that stops with its card in Doing is asked once to hand it in, release it or block it,
+  and the main agent hears of it if it stops again (the main agent too, with the plugin's
+  `finish_cards` setting); a session starts knowing the board; the line
+  above the prompt shows who has which card and what waits for review.
+- Terminals are on the window's glass too, as the board is (a solid ground where transparency is
+  reduced, and off macOS).
+- A clear page on the window's glass (the board, a terminal) is pictured on the window's background in the
+  mini preview.
+- The window's bar and side keep the window's own light or dark look over every tab: a dark page
+  no longer paints them its colour. They follow the system's appearance, or the theme Settings
+  name, when it changes.
+
 ## 0.1.5
 
 - Page sizes: the size button in the window's toolbar frames the page shown as a device (iPhone SE,

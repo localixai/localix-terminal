@@ -39,6 +39,9 @@ pub(super) fn builder<'a>(
     // name). A window nobody sees (headless, CI, the tests' unseen ones) remembers nothing.
     let forget = window.headless || super::platform::unseen();
     let mut builder = WebViewBuilder::new()
+        // The first click in a window that is not the key one reaches the page: the person
+        // never clicks twice, once to wake the window and once to do what they meant.
+        .with_accept_first_mouse(true)
         .with_incognito(forget)
         .with_initialization_script_for_main_only(
             PROBE.replace("__TOKEN__", &shared.token).replace(
@@ -60,11 +63,12 @@ pub(super) fn builder<'a>(
             let _ = loaded.send_event(Cmd::Strip);
             // The mini's picture was taken as the tab appeared, before its page: take it again.
             if matches!(event, PageLoadEvent::Finished) {
+                super::tabs::drawn(&loads, id, &loaded);
                 let _ = loaded.send_event(Cmd::Presence(Event::Changed));
             }
         })
         .with_document_title_changed_handler(move |title| {
-            titles.titled(id, title);
+            titles.titled(id, &title);
             let _ = titled.send_event(Cmd::Strip);
         })
         .with_navigation_handler(move |url| {
@@ -83,10 +87,15 @@ pub(super) fn builder<'a>(
             if !allowed(&url) {
                 return NewWindowResponse::Deny;
             }
-            let made =
-                parent.and_then(|parent| popup::open(features, parent, &opened, &popups, &made));
+            let made = parent
+                .and_then(|parent| popup::open(features, parent, id, &opened, &popups, &made));
             made.unwrap_or_else(|| {
-                let _ = proxy.send_event(Cmd::NewTab { url, reply: None });
+                let opener = Some(id);
+                let _ = proxy.send_event(Cmd::NewTab {
+                    url,
+                    reply: None,
+                    opener,
+                });
                 NewWindowResponse::Deny
             })
         })

@@ -23,8 +23,9 @@ url = "2.5.8"
 libc = "0.2"
 # A terminal session's screen.
 vt100 = "0.16.2"
-# The decision model is reached over HTTPS with the OS's TLS.
-ureq = { version = "3", default-features = false, features = ["json", "native-tls"] }
+# What the desk keeps across restarts: the change feed, the boards, the Event Center's journal. Built
+# in, so the binary needs no SQLite of the system.
+rusqlite = { version = "0.40.2", features = ["bundled", "fallible_uint"] }
 
 # Messages to the WKWebView behind the window, and the block its screenshot answers through.
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -38,14 +39,14 @@ objc2-web-kit = { version = "0.3", default-features = false, features = ["std", 
 gtk = "0.18"
 webkit2gtk = "2.0"
 
-# Test builds only: a daemon with no window, whose lock and socket are in `LLX_DESK_TEST_DIR`,
+# Test builds only: a server with no window, whose lock and socket are in `LLX_DESK_TEST_DIR`,
 # and the harness that runs one. Only the self dev-dependency below turns it on, so no
 # `cargo build` or `cargo install` has it.
 [features]
-test-daemon = []
+test-server = []
 
 [dev-dependencies]
-llx-desk = { path = ".", features = ["test-daemon"] }
+llx-desk = { path = ".", features = ["test-server"] }
 base64 = "0.23.1"
 sha2 = "0.11.1"
 
@@ -54,12 +55,9 @@ sha2 = "0.11.1"
 name = "browser"
 harness = false
 
-[[test]]
-name = "bench"
-harness = false
 
 [profile.release]
-# A panic in one request is that request's error, not the daemon's end.
+# A panic in one request is that request's error, not the server's end.
 panic = "unwind"
 strip = true
 opt-level = "z"

@@ -1,20 +1,42 @@
-//! The strip of tabs along the top of the one window: the browser's tabs and the terminal
-//! sessions' screens side by side, the one shown marked. The person switches with a click and
+//! The strip along the top of the one window, and the tabs: the browser's tabs, the terminal
+//! sessions' screens and the board, the one shown marked. The person switches with a click and
 //! closes one with its ×; the page says which as one short message, read as data. Titles are
 //! what pages and commands say, so they reach the page as JSON and are set as text. With the tabs
-//! of several projects in it (one window, several sessions), a row of the projects goes above
-//! them, and the tabs under it are the shown project's.
+//! of several projects in it (one window, several sessions), a row of the projects goes in the
+//! strip, and the tabs listed are the shown project's.
+//!
+//! The tabs are a column on the window's left (the side), the same page in a view of its own,
+//! which the person slides shut and open; where the pages lie in a column (GTK), a row of them
+//! under the strip.
 
 use serde_json::json;
 
-/// The toolbar row's height, in points: the window's buttons, back and forward, the address field.
-pub(super) const BAR: f64 = 52.0;
-/// The strip's height, in points: the toolbar, and the row of tabs under it.
-pub(super) const HEIGHT: f64 = BAR + 32.0;
-/// The row of projects above it, drawn when the tabs of more than one project are in the window.
-pub(super) const ROW: f64 = 32.0;
+use super::agents;
 
-/// A tab: one of the browser's (its id) or a terminal session's screen (its panel's id).
+/// The bar's height, in points: the window's buttons, the open projects, where the shown tab is,
+/// and the window's own buttons (a compact unified toolbar's, frame_macos.rs).
+pub(super) const BAR: f64 = 38.0;
+/// The browser's toolbar over a page, in points: back, forward, reload, the address field, the
+/// page's size and comments. Only a page has it.
+pub(super) const NAV: f64 = 40.0;
+/// The strip's height, in points, where the tabs are a row under the toolbar (no side).
+pub(super) const HEIGHT: f64 = BAR + 32.0;
+/// The side's width while it is open, in points, until the person drags it wider or narrower:
+/// the tabs listed down the window's left.
+pub(super) const SIDE: f64 = 264.0;
+/// The narrowest and widest the person can drag the side; never more than half the window.
+pub(super) const SIDE_MIN: f64 = 180.0;
+pub(super) const SIDE_MAX: f64 = 480.0;
+
+/// Panels past this id are boards: board `b1` is panel `BOARD + 1`, a terminal's screen is its
+/// session's id.
+pub const BOARD: u32 = 1 << 24;
+/// The panel of the window's own Settings, a tab like a terminal's (`s1`): the place between the
+/// terminals and the boards.
+pub(super) const SETTINGS: u32 = BOARD;
+
+/// A tab: one of the browser's (its id) or a panel (its id): a terminal session's screen, or a
+/// board.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Key {
     Web(u32),
@@ -25,19 +47,33 @@ impl Key {
     pub(super) fn name(self) -> String {
         match self {
             Key::Web(id) => format!("w{id}"),
+            Key::Term(id) if id > BOARD => format!("b{}", id - BOARD),
+            Key::Term(SETTINGS) => "s1".to_string(),
             Key::Term(id) => format!("t{id}"),
+        }
+    }
+
+    /// What the strip draws it as: `web`, `term` or `board`.
+    pub(super) fn kind(self) -> &'static str {
+        match self {
+            Key::Web(_) => "web",
+            Key::Term(id) if id > BOARD => "board",
+            Key::Term(SETTINGS) => "settings",
+            Key::Term(_) => "term",
         }
     }
 
     pub(super) fn parse(text: &str) -> Option<Self> {
         let (kind, id) = text.split_at_checked(1)?;
-        let id = id
+        let id: u32 = id
             .parse()
             .ok()
             .filter(|_| id.bytes().all(|b| b.is_ascii_digit()))?;
         match kind {
             "w" => Some(Key::Web(id)),
-            "t" => Some(Key::Term(id)),
+            "t" if id < BOARD => Some(Key::Term(id)),
+            "s" if id == 1 => Some(Key::Term(SETTINGS)),
+            "b" if id > 0 => BOARD.checked_add(id).map(Key::Term),
             _ => None,
         }
     }
@@ -46,23 +82,21 @@ impl Key {
 /// A toolbar button the strip had no room for: it waits in the "»" menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Tool {
-    Size,
-    Comment,
-    NewTab,
     History,
+    Mini,
+    Events,
 }
 
 impl Tool {
     /// The buttons, in the toolbar's order (and the menu's).
-    pub(super) const ALL: [Self; 4] = [Self::Size, Self::Comment, Self::NewTab, Self::History];
+    pub(super) const ALL: [Self; 3] = [Self::History, Self::Mini, Self::Events];
 
     /// The button the strip names by its id.
     fn parse(id: &str) -> Option<Self> {
         Some(match id {
-            "fs" => Self::Size,
-            "cm" => Self::Comment,
-            "nt" => Self::NewTab,
             "hs" => Self::History,
+            "mn" => Self::Mini,
+            "ev" => Self::Events,
             _ => return None,
         })
     }
@@ -70,20 +104,18 @@ impl Tool {
     /// Its line in the "»" menu.
     pub(super) fn label(self) -> &'static str {
         match self {
-            Self::Size => "Page Size\u{2026}",
-            Self::Comment => "Comment on the Page",
-            Self::NewTab => "New Tab\u{2026}",
             Self::History => "History",
+            Self::Mini => "Mini Player",
+            Self::Events => "Events",
         }
     }
 
     /// Its bit in `Click::More`'s set.
     pub(super) fn bit(self) -> u8 {
         match self {
-            Self::Size => 1,
-            Self::Comment => 2,
-            Self::NewTab => 4,
-            Self::History => 8,
+            Self::History => 1,
+            Self::Mini => 2,
+            Self::Events => 4,
         }
     }
 }
@@ -98,7 +130,17 @@ pub(super) enum Click {
     /// The history menu opens or closes.
     History,
     /// The history menu's entry of this number.
-    Visit(u64),
+    Visit(i64),
+    /// The offer bar's button that does it (`true`), or the other.
+    Offer(bool),
+    /// The Event Center opens or closes.
+    Events,
+    /// The open menu closes (a click beside it).
+    Unmenu,
+    /// Action `.1` of the Event Center's event numbered `.0`.
+    Event(u64, u8),
+    /// The Event Center cleared: all it shows dismissed.
+    Clear,
     /// Commenting on the pages turns on or off.
     Comment,
     /// The comments held go to whoever listens, and their marks leave the pages.
@@ -108,12 +150,24 @@ pub(super) enum Click {
     Zoom,
     /// The expanded window goes back to the mini.
     Collapse,
+    /// The app quits (asked first while programs run).
+    Quit,
     /// The page shown loads again.
     Reload,
+    /// The page shown opens in the person's default browser.
+    Outside,
+    /// The side, the tabs' column, slides shut or open.
+    Side,
+    /// The person drags the side's edge: its width now, in points, and whether they let go.
+    SideWidth(u32, bool),
     /// "+" at these points of the strip: a new page or terminal, as the person picks.
     NewTab(u32, u32),
     /// The size button at these points of the strip: the page's size, as the person picks.
     Frame(u32, u32),
+    /// The project switcher at these points of the strip: a project, as the person picks.
+    Projects(u32, u32),
+    /// The shown tab's crumb at these points of the strip: the project's tabs, to show another.
+    Tabs(u32, u32),
     /// "»" at these points of the strip, with the buttons it holds (`Tool::bit`s): one of them,
     /// as the person picks.
     More(u32, u32, u8),
@@ -124,6 +178,67 @@ pub(super) enum Click {
     Menu(Key, u32, u32),
     /// The address field opens (its suggestions need the window) or shuts.
     Typing(bool),
+    /// A shortcut's doing that no button of the strip does (shortcuts.rs).
+    Key(Keyed),
+}
+
+/// What a shortcut does that has no button of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Keyed {
+    /// The project's tab of this place, from 1; the last.
+    Tab(u8),
+    /// The project switcher's menu, under its button.
+    Projects,
+    /// A folder picked to open as a project.
+    OpenFolder,
+    /// The project shown closes: its tabs.
+    CloseProject,
+    LastTab,
+    Next,
+    Previous,
+    NewPage,
+    NewTerminal,
+    NewBoard,
+    /// The tab shown closes.
+    Close,
+    /// The tab closed last opens again.
+    Reopen,
+    /// The side's search takes the keyboard.
+    Find,
+    /// The address field takes the keyboard.
+    Address,
+    /// The page size menu, under its button.
+    Size,
+    Settings,
+}
+
+impl Keyed {
+    fn parse(words: &str) -> Option<Self> {
+        Some(match words {
+            "tab last" => Self::LastTab,
+            "next" => Self::Next,
+            "previous" => Self::Previous,
+            "new page" => Self::NewPage,
+            "new terminal" => Self::NewTerminal,
+            "new board" => Self::NewBoard,
+            "close" => Self::Close,
+            "reopen" => Self::Reopen,
+            "find" => Self::Find,
+            "address" => Self::Address,
+            "size" => Self::Size,
+            "settings" => Self::Settings,
+            "projects" => Self::Projects,
+            "open folder" => Self::OpenFolder,
+            "close project" => Self::CloseProject,
+            words => Self::Tab(
+                words
+                    .strip_prefix("tab ")?
+                    .parse()
+                    .ok()
+                    .filter(|at| (1..=8).contains(at))?,
+            ),
+        })
+    }
 }
 
 /// A message from the strip's page: `show w3`, `close t1`, `back`, `forward`, `history`,
@@ -137,12 +252,44 @@ pub(super) fn click(body: &str) -> Option<Click> {
         ("back", None) => Some(Click::Back),
         ("forward", None) => Some(Click::Forward),
         ("history", None) => Some(Click::History),
+        ("events", None) => Some(Click::Events),
+        ("unmenu", None) => Some(Click::Unmenu),
+        ("clear", None) => Some(Click::Clear),
+        ("event", Some(at)) => {
+            let (event, action) = at.split_once(' ')?;
+            Some(Click::Event(event.parse().ok()?, action.parse().ok()?))
+        }
         ("comment", None) => Some(Click::Comment),
         ("send", None) => Some(Click::Send),
         ("drag", None) => Some(Click::Drag),
         ("zoom", None) => Some(Click::Zoom),
         ("collapse", None) => Some(Click::Collapse),
+        ("quit", None) => Some(Click::Quit),
         ("reload", None) => Some(Click::Reload),
+        ("outside", None) => Some(Click::Outside),
+        ("side", None) => Some(Click::Side),
+        ("key", Some(words)) => Keyed::parse(words).map(Click::Key),
+        ("side-width", Some(rest)) => {
+            let (width, done) = match rest.split_once(' ') {
+                Some((width, "done")) => (width, true),
+                Some(_) => return None,
+                None => (rest, false),
+            };
+            // `usual`: the width the side has until the person drags it.
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "SIDE is a few hundred whole points"
+            )]
+            let usual = SIDE as u32;
+            match width {
+                "usual" => Some(Click::SideWidth(usual, done)),
+                width => width
+                    .parse()
+                    .ok()
+                    .map(|width| Click::SideWidth(width, done)),
+            }
+        }
         ("new", Some(at)) => {
             let (x, y) = at.split_once(' ')?;
             Some(Click::NewTab(x.parse().ok()?, y.parse().ok()?))
@@ -150,6 +297,14 @@ pub(super) fn click(body: &str) -> Option<Click> {
         ("frame", Some(at)) => {
             let (x, y) = at.split_once(' ')?;
             Some(Click::Frame(x.parse().ok()?, y.parse().ok()?))
+        }
+        ("tabs", Some(at)) => {
+            let (x, y) = at.split_once(' ')?;
+            Some(Click::Tabs(x.parse().ok()?, y.parse().ok()?))
+        }
+        ("projects", Some(at)) => {
+            let (x, y) = at.split_once(' ')?;
+            Some(Click::Projects(x.parse().ok()?, y.parse().ok()?))
         }
         ("more", Some(rest)) => {
             let mut parts = rest.split(' ');
@@ -163,6 +318,8 @@ pub(super) fn click(body: &str) -> Option<Click> {
         }
         ("typing", Some("on")) => Some(Click::Typing(true)),
         ("typing", Some("off")) => Some(Click::Typing(false)),
+        ("offer", Some("take")) => Some(Click::Offer(true)),
+        ("offer", Some("later")) => Some(Click::Offer(false)),
         ("visit", Some(at)) if at.bytes().all(|b| b.is_ascii_digit()) => {
             at.parse().ok().map(Click::Visit)
         }
@@ -186,8 +343,42 @@ pub(super) fn click(body: &str) -> Option<Click> {
     }
 }
 
+/// What the person clicked in another part of the window (the side, the browser's toolbar), said
+/// as the strip says it: its points moved by `(x, y)`, where that part lies in the window.
+pub(super) fn moved(body: &str, (x, y): (f64, f64)) -> String {
+    let parts: Vec<&str> = body.split(' ').collect();
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a point of the window, whole and positive"
+    )]
+    let at = |value: &str, by: f64| -> Option<String> {
+        let value: f64 = value.parse().ok()?;
+        Some(((value + by).max(0.0).round() as u32).to_string())
+    };
+    let point = |px: &str, py: &str| Some(format!("{} {}", at(px, x)?, at(py, y)?));
+    let moved = match parts.as_slice() {
+        ["menu", key, px, py] => point(px, py).map(|p| format!("menu {key} {p}")),
+        [
+            verb @ ("new" | "frame" | "projects" | "tabs"),
+            px,
+            py,
+            rest @ ..,
+        ] => point(px, py).map(|p| [&[*verb, p.as_str()][..], rest].concat().join(" ")),
+        ["more", px, py, rest @ ..] => {
+            point(px, py).map(|p| [&["more", p.as_str()][..], rest].concat().join(" "))
+        }
+        ["glass", px, py, w, h] => point(px, py).map(|p| format!("glass {p} {w} {h}")),
+        _ => None,
+    };
+    moved.unwrap_or_else(|| body.to_string())
+}
+
 /// Where the search goes: what is typed in the address field that is not an address.
 pub(super) const SEARCH: &str = "https://www.google.com/search";
+
+/// Where a page the person opens with "+" starts: the search page's home.
+pub const HOME: &str = "https://www.google.com";
 
 /// Where `go <typed>`, what the person typed in the address field, goes: a web address as typed
 /// (`https://` put before a bare one), else a search for it. Never a script or a file: only
@@ -221,10 +412,12 @@ pub(super) fn went(body: &str) -> Option<String> {
 pub(super) struct Item {
     pub key: Key,
     pub title: String,
-    /// A browser tab's page.
-    pub url: String,
+    /// A browser tab's page, or what a terminal's program says it is doing.
+    pub detail: String,
     /// The project it was opened for, as the app names it.
     pub group: String,
+    /// The coding agent a terminal runs in front (offer.rs), when it is known.
+    pub agent: Option<&'static str>,
 }
 
 /// `items` with each group's together, the groups in the order they first appear.
@@ -239,30 +432,48 @@ pub(super) fn by_group<T>(mut items: Vec<T>, group: impl Fn(&T) -> &str) -> Vec<
     items
 }
 
-/// The call that draws the strip: the tabs in order, and the one shown. With tabs of more than
-/// one project, each project's are together and each says its project.
-/// A page the window has shown, which the address field suggests.
-pub(super) struct Visited {
-    pub title: String,
-    pub url: String,
+/// The projects as the switcher shows them: the one shown (its key), and each one the window
+/// knows with whether something happened in it out of sight.
+pub(super) struct Projects<'a> {
+    pub shown: &'a str,
+    pub places: Vec<(&'a super::Place, bool)>,
 }
 
-pub(super) fn script(items: &[Item], shown: Key, visited: &[Visited]) -> String {
-    let several = items.iter().any(|item| item.group != items[0].group);
-    let tabs: Vec<_> = by_group(items.iter().collect(), |item| item.group.as_str())
-        .into_iter()
+/// The call that draws the strip: the tabs in order, each with its project's key (the page lists
+/// the shown project's, and the window's own), and the one shown; the projects, for the
+/// switcher. `side`: whether the tabs' column is open, none where the window has no side (its
+/// tabs are a row under the strip).
+pub(super) fn script(
+    items: &[Item],
+    shown: Key,
+    visited: &[super::Visited],
+    side: Option<bool>,
+    projects: &Projects<'_>,
+) -> String {
+    let tabs: Vec<_> = items
+        .iter()
         .map(|item| {
-            let (kind, empty) = match item.key {
-                Key::Web(_) => ("web", "New tab"),
-                Key::Term(_) => ("term", "Terminal"),
+            let kind = item.key.kind();
+            let empty = match kind {
+                "web" => "New tab",
+                "board" => "Board",
+                _ => "Terminal",
             };
             let title = item.title.trim();
             let title = if title.is_empty() { empty } else { title };
             let mut tab =
-                json!({"key": item.key.name(), "kind": kind, "title": title, "url": item.url});
-            if several {
-                tab["group"] = json!(item.group);
+                json!({"key": item.key.name(), "kind": kind, "title": title, "detail": item.detail});
+            // A terminal that runs a coding agent shows the agent's mark and name: the one in
+            // front (typed in its shell too), else the one it was opened with.
+            let running = item.agent.and_then(|id| agents::AGENTS.iter().find(|a| a.id == id));
+            let agent = (kind == "term")
+                .then(|| running.or_else(|| title.rsplit(" · ").next().and_then(agents::of_command)))
+                .flatten();
+            if let Some(agent) = agent {
+                tab["agent"] = json!(agent.id);
+                tab["name"] = json!(agent.name);
             }
+            tab["group"] = json!(item.group);
             tab
         })
         .collect();
@@ -270,9 +481,16 @@ pub(super) fn script(items: &[Item], shown: Key, visited: &[Visited]) -> String 
         .iter()
         .map(|page| json!({"title": page.title, "url": page.url}))
         .collect();
+    let places: Vec<_> = (projects.places.iter())
+        .map(|(place, marked)| {
+            json!({"key": place.key, "name": place.name, "marked": marked,
+                "folder": place.folder.display().to_string()})
+        })
+        .collect();
     format!(
         "S({})",
-        json!({"tabs": tabs, "shown": shown.name(), "visited": visited})
+        json!({"tabs": tabs, "shown": shown.name(), "visited": visited, "side": side,
+            "project": projects.shown, "places": places})
     )
 }
 
@@ -288,10 +506,12 @@ pub(super) enum State {
     Closed,
 }
 
-/// An entry of the history menu.
+/// An entry of the history menu: its row in the project's ledger, and its tab's key while open.
 pub(super) struct Row {
-    pub at: u64,
-    pub key: Key,
+    pub at: i64,
+    pub key: Option<Key>,
+    /// What it is, as the strip names it: `web`, `term` or `board`.
+    pub kind: &'static str,
     pub title: String,
     /// A browser tab's page.
     pub detail: String,
@@ -305,17 +525,13 @@ pub(super) fn menu(rows: Option<&[Row]>) -> String {
         let rows: Vec<_> = rows
             .iter()
             .map(|row| {
-                let kind = match row.key {
-                    Key::Web(_) => "web",
-                    Key::Term(_) => "term",
-                };
                 let state = match row.state {
                     State::Open => "open",
                     State::Hidden => "hidden",
                     State::Ended => "ended",
                     State::Closed => "closed",
                 };
-                json!({"at": row.at, "key": row.key.name(), "kind": kind, "title": row.title,
+                json!({"at": row.at, "key": row.key.map(Key::name), "kind": row.kind, "title": row.title,
                     "detail": row.detail, "state": state, "group": row.group})
             })
             .collect();
@@ -325,6 +541,13 @@ pub(super) fn menu(rows: Option<&[Row]>) -> String {
 }
 
 /// The call that marks the comment button on or off, and offers to send the comments held.
+/// The Event Center as the strip shows it: `events` (a JSON list, newest first), its bell's count
+/// of those not seen yet, and the list itself while it is `open`.
+pub(super) fn center(events: &str, open: bool) -> String {
+    let events = if events.is_empty() { "[]" } else { events };
+    format!("V({events}, {open})")
+}
+
 pub(super) fn commenting(on: bool, held: usize) -> String {
     format!("C({on}, {held})")
 }

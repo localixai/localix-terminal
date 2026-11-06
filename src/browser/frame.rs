@@ -90,13 +90,8 @@ pub(super) fn relayout(event: &WindowEvent) -> bool {
     )
 }
 
-/// Whether a ground reads as dark: its luma below the middle.
-pub(super) fn dark([red, green, blue]: Rgb) -> bool {
-    0.2126 * f64::from(red) + 0.7152 * f64::from(green) + 0.0722 * f64::from(blue) < 127.5
-}
-
-/// The material for an appearance (NSVisualEffectMaterial): HUD, which is dark, under a dark
-/// ground; under-window background, which reads light, under a light one.
+/// The material for an appearance (NSVisualEffectMaterial): HUD, which is dark, in the dark
+/// one; under-window background, which reads light, in the light one.
 #[cfg_attr(
     not(any(target_os = "macos", test)),
     expect(
@@ -108,10 +103,8 @@ pub(super) fn material(dark: bool) -> isize {
     if dark { 13 } else { 21 }
 }
 
-/// The coat over the glass, and how much of it covers: neutral near-black or near-white
-/// (oklch 0.13 and 0.975), never the page's own colour. A terminal's
-/// grey-blue ground over the material read as grey; the page's ground, else the system's, only
-/// says which appearance.
+/// The coat over the glass in the dark appearance or the light, and how much of it covers:
+/// neutral near-black or near-white (oklch 0.13 and 0.975), never a page's colour.
 #[cfg_attr(
     not(any(target_os = "macos", test)),
     expect(
@@ -119,18 +112,23 @@ pub(super) fn material(dark: bool) -> isize {
         reason = "the glass under a window is macOS's only; its tests use it everywhere"
     )
 )]
-pub(super) fn coat(ground: Option<Rgb>, system_dark: bool) -> (Rgb, f64) {
-    match ground.map_or(system_dark, dark) {
+pub(super) fn coat(dark: bool) -> (Rgb, f64) {
+    match dark {
         // Thin: the desktop shows through, text still reads.
         true => (DARK, 0.15),
         false => (LIGHT, 0.25),
     }
 }
 
-/// What the glass is coated for: the tab shown, else the window's own ground, else (none) the
-/// system's appearance.
-pub(super) fn shade(under: Option<Rgb>, own: Option<Rgb>) -> Option<Rgb> {
-    under.or(own)
+/// The appearance a window is given: the person's, or none, which is the system's. Its pages
+/// take it too (their `prefers-color-scheme`); nothing a page shows changes it.
+pub(super) fn themed(theme: super::settings::Theme) -> Option<Theme> {
+    use super::settings::Theme as Chosen;
+    match theme {
+        Chosen::Light => Some(Theme::Light),
+        Chosen::Dark => Some(Theme::Dark),
+        Chosen::System => None,
+    }
 }
 
 /// `page` in the frame's stylesheet, marked as glass when it is.
@@ -146,11 +144,6 @@ pub(super) fn dress(page: &str, look: Look) -> String {
 pub(super) struct Frame {
     pub(super) native: Window,
     look: Look,
-    /// The page's own ground the glass is coated in, when it has one; else the system's.
-    ground: Option<Rgb>,
-    /// The colour of the tab shown, which the strip is tinted in: the glass under the strip takes
-    /// its lightness, so the strip's words, inked for that colour, read on it.
-    under: std::sync::Mutex<Option<Rgb>>,
     #[cfg(target_os = "macos")]
     glass: Option<native::Glass>,
     /// How the window keeps drawing while it is concealed.
@@ -159,18 +152,13 @@ pub(super) struct Frame {
 }
 
 impl Frame {
-    /// A window titled `title` with pages of `size`, at `at` when given, its glass coated in
-    /// `ground` (a panel's page's), else in the system's appearance.
+    /// A window titled `title` with pages of `size`, at `at` when given, in the person's theme.
     pub(super) fn build(
         target: &EventLoopWindowTarget<Cmd>,
         (title, size, at): (&str, LogicalSize<f64>, Option<LogicalPosition<f64>>),
         look: Look,
-        ground: Option<Rgb>,
     ) -> Result<Self, String> {
-        let theme = ground.map(|ground| match dark(ground) {
-            true => Theme::Dark,
-            false => Theme::Light,
-        });
+        let theme = themed(super::settings::now().theme);
         let mut builder = WindowBuilder::new()
             .with_title(title)
             .with_inner_size(size)
@@ -201,8 +189,6 @@ impl Frame {
         Ok(Self {
             native,
             look,
-            ground,
-            under: std::sync::Mutex::new(None),
             #[cfg(target_os = "macos")]
             glass: None,
             #[cfg(target_os = "macos")]
@@ -246,6 +232,14 @@ impl Frame {
         super::nspanel::reveal(&self.native, super::nspanel::Role::Deck, self.rendering);
     }
 
+    /// The window takes the person's keys: they just opened it themselves.
+    pub(super) fn focus(&self) {
+        #[cfg(not(target_os = "macos"))]
+        let _ = &self.native;
+        #[cfg(target_os = "macos")]
+        super::nspanel::focus(&self.native);
+    }
+
     /// The window out of sight, at the size it has, clear and click-through, still drawing.
     pub(super) fn conceal(&self) {
         // Elsewhere the window is an ordinary one, always as it is.
@@ -255,34 +249,21 @@ impl Frame {
         super::nspanel::conceal(&self.native, self.rendering);
     }
 
-    /// Tint the glass for the system's appearance now, unless its ground is the page's own.
+    /// Tint the glass for the window's appearance now (the person's theme, or the system's).
     pub(super) fn retint(&self) {
-        let ground = shade(*crate::lock(&self.under), self.ground);
-        #[cfg(not(target_os = "macos"))]
-        let _ = ground;
         #[cfg(target_os = "macos")]
         if let Some(glass) = &self.glass {
-            let system = self.native.theme() == Theme::Dark;
-            let (colour, alpha) = coat(ground, system);
-            glass.tint(material(ground.map_or(system, dark)), colour, alpha);
+            let dark = self.native.theme() == Theme::Dark;
+            let (colour, alpha) = coat(dark);
+            let alpha = super::settings::now().transparency.coat(alpha);
+            glass.tint(material(dark), colour, alpha);
         }
     }
 
-    /// The tab shown is `ground` (none known: the window's own again); the glass follows it.
-    pub(super) fn under(&self, ground: Option<Rgb>) {
-        *crate::lock(&self.under) = ground;
-        self.retint();
-    }
-
-    /// Take `ground` as the window's own (a terminal's colours), its appearance with it.
-    pub(super) fn ground(&mut self, ground: Rgb) {
-        self.ground = Some(ground);
-        let theme = if dark(ground) {
-            Theme::Dark
-        } else {
-            Theme::Light
-        };
-        self.native.set_theme(Some(theme));
+    /// The window and its pages in the person's `theme`, the glass tinted again, its
+    /// transparency with it.
+    pub(super) fn restyle(&self, theme: super::settings::Theme) {
+        self.native.set_theme(themed(theme));
         self.retint();
     }
 }

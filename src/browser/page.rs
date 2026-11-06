@@ -1,22 +1,16 @@
 //! The browser window and the page it shows, as a `View`: the window opens on the first address
-//! it is sent to, and later addresses load in it. The browser's own toolbar (Back, Reload) is part of the view, so the hands can use it like any control; with several tabs open,
-//! it also says which tab the view is, but the hands do not switch tabs: the agent does.
+//! it is sent to, and later addresses load in it. The browser's own toolbar (Back, Reload) is part
+//! of the view, acted on by its refs like any control; with several tabs open, it also says which
+//! tab the view is.
 
 use std::fmt::Write as _;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use crate::view::{Ability, Action, Observation, View, ViewError, ViewResult};
+use crate::view::{Action, Observation, View, ViewError, ViewResult};
 
 use super::{Browser, Driver, Viewport, WebviewDriver, Window, toolbar};
-
-/// How web pages behave where it is not obvious: forms, suggestions, date pickers, results.
-const CONVENTIONS: &str = "A form sends only once its required fields are filled and its Search, \
-Submit or Done button is pressed. A typed search query usually needs its matching suggestion \
-picked from the list that appears. A date picker takes the date and then its confirmation (Done, \
-Apply or OK). A result opens by its link; a matching link is not yet the result. In a quiz or a \
-form, the answer or option is picked before Next, Continue or Submit.";
 
 /// The window as a view. Its lock is held only to look at the window or change what is held of
 /// it, never across a load or a reply of the window's loop: a page that
@@ -111,7 +105,7 @@ impl Page {
     }
 
     /// The window made for `url` by the call that claimed it (`stale` closed first): a tab of its
-    /// own in the window open for someone else (another client of the daemon, whose tabs stay as
+    /// own in the window open for someone else (another client of the app, whose tabs stay as
     /// they are), else the window opened on it. Its driver is held at once and the claim ends,
     /// however this does; the tab's document is not waited for. The driver and the tab's id.
     fn make(
@@ -241,10 +235,6 @@ fn closed(open: &WebviewDriver) {
 }
 
 impl View for Page {
-    fn conventions(&self) -> &str {
-        CONVENTIONS
-    }
-
     fn observe(&self) -> ViewResult<Observation> {
         let driver = self.driver()?;
         let mut view = Observation::from(driver.observe()?);
@@ -285,9 +275,5 @@ impl View for Page {
             Some(reference) if toolbar::owns(reference) => self.toolbar(action),
             _ => self.driver()?.act(epoch, action),
         }
-    }
-
-    fn abilities(&self) -> &'static [Ability] {
-        &[Ability::Keys, Ability::Address]
     }
 }

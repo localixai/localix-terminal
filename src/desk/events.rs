@@ -1,11 +1,11 @@
 //! What happens in the desk that someone may want to be told of: the desk says it to an
-//! [`Events`], and the daemon tells whoever subscribed. The desk knows no connection.
+//! [`Events`], and the app tells whoever subscribed. The desk knows no connection.
 
 use serde_json::Value;
 
 /// Where the desk says what happened.
 pub trait Events: Send + Sync {
-    /// `event` (`comment/added`, `tab/closed`, `window/closed`) with its `params`, for `owner`'s
+    /// `event` (`comment/added`, `tab/closed`) with its `params`, for `owner`'s
     /// subscribers, or for everyone when there is no owner.
     fn publish(&self, event: &str, owner: Option<&str>, params: Value);
 }

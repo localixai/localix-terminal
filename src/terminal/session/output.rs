@@ -9,6 +9,10 @@ use std::time::{Duration, Instant};
 use super::super::pty;
 use super::{PAINT_EVERY, Shared, UNSENT_MAX, nap};
 
+/// How long the reader waits for output while some waits to be sent, and while none does.
+const PAINT_POLL_MS: i32 = 33;
+const IDLE_POLL_MS: i32 = 1000;
+
 /// The reader thread: output into the screen, frames out to the window, until the terminal
 /// closes. It answers a program's cursor-position query, which some ask before they draw.
 pub(super) fn read(reader: &std::fs::File, writer: &std::fs::File, shared: &Shared, pid: u32) {
@@ -16,12 +20,20 @@ pub(super) fn read(reader: &std::fs::File, writer: &std::fs::File, shared: &Shar
     let mut buffer = [0u8; 8192];
     loop {
         let mut gone = false;
-        if pty::readable(reader.as_raw_fd(), 33) {
+        // Output waiting for the pace is sent within a frame; with none, the reader sleeps until
+        // the program writes or ends (its end, a kill among them, wakes the poll too).
+        let idle = {
+            let state = shared.lock();
+            state.unsent.is_empty() && !state.replay
+        };
+        let wait = if idle { IDLE_POLL_MS } else { PAINT_POLL_MS };
+        if pty::readable(reader.as_raw_fd(), wait) {
             match reader.read(&mut buffer) {
                 Ok(0) => gone = true,
                 Ok(n) => {
                     let chunk = buffer.get(..n).unwrap_or_default();
                     take_in(shared, writer, chunk);
+                    fronted(shared, reader.as_raw_fd());
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
                 Err(_) => gone = true,
@@ -36,10 +48,14 @@ pub(super) fn read(reader: &std::fs::File, writer: &std::fs::File, shared: &Shar
             let mut state = shared.lock();
             state.ended = true;
             state.status = status;
+            let heard = state.on_end.take();
             drop(state);
             paint(shared, Pace::Now);
             paint_ended(shared, status);
             shared.wake.notify_all();
+            if let Some(heard) = heard {
+                heard();
+            }
             return;
         }
     }
@@ -48,7 +64,16 @@ pub(super) fn read(reader: &std::fs::File, writer: &std::fs::File, shared: &Shar
 fn take_in(shared: &Shared, mut writer: &std::fs::File, chunk: &[u8]) {
     let asked = chunk.windows(4).filter(|w| w == b"\x1b[6n").count();
     let mut state = shared.lock();
+    let retitled = state.screen.retitled();
     state.screen.feed(chunk);
+    let title = (state.screen.retitled() != retitled)
+        .then(|| {
+            state
+                .on_title
+                .clone()
+                .zip(state.screen.title().map(str::to_string))
+        })
+        .flatten();
     state.version += 1;
     state.changed_at = Instant::now();
     if state.painter.is_some() && !state.replay {
@@ -60,10 +85,49 @@ fn take_in(shared: &Shared, mut writer: &std::fs::File, chunk: &[u8]) {
     }
     let (row, column) = state.screen.cursor();
     drop(state);
+    if let Some((heard, title)) = title {
+        heard(&title);
+    }
     for _ in 0..asked {
         let _ = writer.write_all(format!("\x1b[{row};{column}R").as_bytes());
     }
     shared.wake.notify_all();
+}
+
+/// How often the name in front is read again while the group stays: a program that replaces
+/// itself (`exec`: a shell running `claude` becomes it) keeps its group, not its name.
+const RENAMED: Duration = Duration::from_millis(500);
+
+/// Whoever listens told when another program came in front: a program started, or ended, in
+/// the terminal, or the one in front became another. The group is read with each output; the
+/// name when it changed, or now and then while it stays.
+fn fronted(shared: &Shared, master: std::os::fd::RawFd) {
+    let group = super::super::foreground::group(master);
+    {
+        let state = shared.lock();
+        let lately = (state.front.read).is_some_and(|read| read.elapsed() < RENAMED);
+        if state.front.group == group && lately {
+            return;
+        }
+    }
+    let name = group.and_then(super::super::foreground::name);
+    let heard = {
+        let mut state = shared.lock();
+        let same = state.front.group == group && state.front.name == name;
+        state.front = super::Front::read(group, name.clone());
+        if same {
+            return;
+        }
+        state.on_front.clone()
+    };
+    if let Some(heard) = heard {
+        heard(name.as_deref());
+    }
+}
+
+/// What waits for the window sent now, whatever the pace.
+pub(super) fn paint_now(shared: &Shared) {
+    paint(shared, Pace::Now);
 }
 
 /// Whether a send waits for the pace.

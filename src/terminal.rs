@@ -2,29 +2,17 @@
 //! terminal shows it. A tab's page is xterm.js (vendored, run by its SHA-384): the session paints
 //! its raw output into it (`W(...)`), the page sends back the keys, pastes and its size.
 
+mod foreground;
 mod keys;
 mod pty;
 mod screen;
 mod session;
-mod view;
 
 pub use session::{DEFAULT_WAIT, Painter, Session, Until};
-pub use view::TerminalView;
 
 /// The grid a terminal panel shows: a terminal session is this size.
 pub const COLUMNS: u16 = 120;
 pub const ROWS: u16 = 40;
-
-/// A colour as red, green and blue.
-pub type Rgb = [u8; 3];
-
-/// The person's terminal colours, which the page takes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Theme {
-    pub fg: Rgb,
-    pub bg: Rgb,
-    pub cursor: Rgb,
-}
 
 /// xterm.js, its fit addon and its stylesheet, vendored (xterm.js 6.0.0, addon-fit 0.11.0): the
 /// page runs them by their SHA-384, so a page that was altered never runs a script.
@@ -37,19 +25,11 @@ const XTERM_CSS: &str = include_str!("terminal/vendor/xterm.css");
 /// The emulator page's own script, and its SHA-384: the page's policy runs it by that hash.
 pub(crate) const GLUE: &str = include_str!("terminal/emulator.js");
 pub(crate) const GLUE_SHA384: &str =
-    "kGRWX10ozOUtQJZS5KI55hN6v7zvZnpU5wKTvDajWeLzxaSkVYYceosSOSk2TLWI";
+    "w9StU4CQwbG5gPt6Hw+OUNCQcj9vcQEJv4eECxjFxwzyXDumpZpYFAd4cTZUNY52";
 
-/// The page that shows a session in xterm.js, titled `title`, in the person's colours, else the
-/// system's. Its policy runs its own scripts only, by their hashes.
-pub fn page(title: &str, theme: Option<&Theme>) -> String {
-    let colours = theme.map_or(String::new(), |theme| {
-        format!(
-            ":root{{--fg:{};--bg:{};--cursor:{}}}",
-            hex(theme.fg),
-            hex(theme.bg),
-            hex(theme.cursor)
-        )
-    });
+/// The page that shows a session in xterm.js, titled `title`, in the window's light or dark.
+/// Its policy runs its own scripts only, by their hashes.
+pub fn page(title: &str) -> String {
     let title = title
         .replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -61,7 +41,6 @@ pub fn page(title: &str, theme: Option<&Theme>) -> String {
             ("scripts", &scripts),
             ("title", &title),
             ("css", XTERM_CSS),
-            ("theme", &colours),
             ("xterm", XTERM),
             ("fit", FIT),
             ("glue", GLUE),
@@ -89,10 +68,6 @@ fn fill(template: &str, values: &[(&str, &str)]) -> String {
     }
     page.push_str(rest);
     page
-}
-
-fn hex([red, green, blue]: Rgb) -> String {
-    format!("#{red:02x}{green:02x}{blue:02x}")
 }
 
 #[cfg(test)]

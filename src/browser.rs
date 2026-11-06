@@ -2,17 +2,20 @@
 //! script in the page. [`Page`] is the window as a view ([`crate::view::View`]); [`Driver`] is the
 //! browser's own, fuller surface (navigate, read, keys, scripts).
 
+mod agents;
+#[cfg(target_os = "macos")]
+mod app_menu;
+#[cfg(target_os = "macos")]
+mod appkit;
 mod capture;
+mod choice;
 mod comments;
 mod deck;
-#[cfg(target_os = "macos")]
-mod edit_menu;
-mod elsewhere;
 mod feedback;
 mod frame;
 mod guard;
-mod history;
 mod host;
+mod icons;
 #[cfg(target_os = "macos")]
 mod menu;
 #[cfg(not(target_os = "macos"))]
@@ -23,6 +26,7 @@ mod mini_grip;
 mod notices;
 #[cfg(target_os = "macos")]
 mod nspanel;
+mod offer;
 mod page;
 #[cfg(target_os = "macos")]
 mod pane;
@@ -33,17 +37,18 @@ mod placement;
 mod platform;
 mod popup;
 mod presence;
+mod scope;
 mod script;
+mod settings;
+mod shortcuts;
 mod sizes;
 mod strip;
 mod tab_view;
 mod tabs;
-mod tint;
 mod told;
 mod toolbar;
 mod turn;
 #[cfg(target_os = "macos")]
-mod under;
 mod viewport;
 mod webview;
 
@@ -54,10 +59,15 @@ use serde::{Deserialize, Serialize};
 
 pub use capture::{Clip, Shot};
 pub use guard::loadable;
-pub use host::{Browser, Dressing, Heard, Tab, Window, host};
+pub use host::{
+    Answers, Asked, Browser, CenterDid, Confirm, Dressing, Heard, Ledger, Past, Place, Tab,
+    TabKind, Visited, Went, Window, host,
+};
 pub use notices::{Armed, Notice};
 pub use page::Page;
 pub use panel::{Fitted, Pane, Panel};
+pub use strip::BOARD;
+pub use strip::HOME;
 pub use tabs::MAX_TABS;
 pub use viewport::Viewport;
 pub use webview::WebviewDriver;

@@ -21,6 +21,12 @@ mod driver;
 const CALL_TIMEOUT: Duration = Duration::from_secs(10);
 /// How long a page that is replacing itself may take before the probe answers again.
 const PROBE_READY: Duration = Duration::from_secs(5);
+/// How long a loaded page may still lack its probe before it is taken for a document the probe
+/// never runs in: its scripts run as the document starts, well before its load ends.
+const UNREAD_AFTER_LOAD: Duration = Duration::from_millis(600);
+/// What such a document reads as.
+const UNREADABLE: &str = "the page is not a document the desk can read (an SVG, an image or a \
+    file shown as it is): a `screenshot` shows it";
 const LOAD_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Clone)]
@@ -62,7 +68,7 @@ impl WebviewDriver {
     }
 
     /// The window is open, and so is the tab it is pinned to: a pinned call never goes to the tab
-    /// shown instead, where a goal's clicks would land on another page.
+    /// shown instead, where its clicks would land on another page.
     fn open_or_closed(&self) -> ViewResult<()> {
         if !self.is_open() {
             return Err(closed());
@@ -133,11 +139,25 @@ impl WebviewDriver {
     )]
     fn call_ready(&self, name: &'static str, args: &Value) -> ViewResult<Value> {
         let deadline = Instant::now() + PROBE_READY;
+        // When the tab's loads were first seen settled, with the probe still missing.
+        let mut settled: Option<Instant> = None;
         loop {
+            // A closed tab never comes back: said at once, not after waiting for a probe.
+            self.open_or_closed()?;
             match self.call(name, args, CALL_TIMEOUT) {
                 Ok(Value::Null) | Err(ViewError::Unavailable(_))
                     if Instant::now() < deadline && self.is_open() =>
                 {
+                    // A document loaded a while ago that still has no probe is one the probe
+                    // never runs in (an SVG, an image, a file shown as it is): no use waiting.
+                    let loads = self.loads();
+                    let loaded = loads.finished > 0 && loads.started == loads.finished;
+                    let since = settled.get_or_insert_with(Instant::now);
+                    if !loaded {
+                        settled = None;
+                    } else if since.elapsed() >= UNREAD_AFTER_LOAD {
+                        return Err(ViewError::Unavailable(UNREADABLE.into()));
+                    }
                     std::thread::sleep(Duration::from_millis(30));
                 }
                 Ok(Value::Null) => {
@@ -189,6 +209,7 @@ impl WebviewDriver {
         let (reply, opened) = mpsc::sync_channel(1);
         self.send(Cmd::NewTab {
             url,
+            opener: None,
             reply: Some(reply),
         })?;
         answered(&opened)

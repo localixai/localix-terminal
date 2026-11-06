@@ -3,13 +3,64 @@
 //! material, rounded as a menu is. The page says where its list is (`glass x y w h`); the pane
 //! follows it, hidden while none is open.
 
-use objc2::msg_send;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Bool};
+use objc2::{class, msg_send};
 use wry::{WebView, WebViewExtMacOS};
 
 use super::capture::{CGPoint, CGRect, CGSize};
-use super::under::{below, material, shade};
+
+/// A view of AppKit's `material`, blurring what of the window is behind it.
+pub(super) fn material(material: isize) -> Retained<AnyObject> {
+    /// NSVisualEffectBlendingModeWithinWindow, NSVisualEffectStateActive.
+    const WITHIN: isize = 1;
+    const ACTIVE: isize = 1;
+    // SAFETY: `new` on NSVisualEffectView answers a retained view, laid out by its owner.
+    let view: Retained<AnyObject> = unsafe { msg_send![class!(NSVisualEffectView), new] };
+    // SAFETY: an NSVisualEffectView takes NSInteger modes.
+    let _: () = unsafe { msg_send![&*view, setBlendingMode: WITHIN] };
+    // SAFETY: as above.
+    let _: () = unsafe { msg_send![&*view, setState: ACTIVE] };
+    // SAFETY: as above.
+    let _: () = unsafe { msg_send![&*view, setMaterial: material] };
+    view
+}
+
+/// Put `view` just below the strip, among its siblings: over the pages, under the strip's page.
+pub(super) fn below(view: &AnyObject, strip: &WebView) -> Option<()> {
+    let strip = strip.webview();
+    // SAFETY: an NSView answers its superview, or nil.
+    let parent: Option<Retained<AnyObject>> = unsafe { msg_send![&*strip, superview] };
+    let parent = parent?;
+    // SAFETY: an NSView adds (or moves) a subview below a sibling (NSWindowBelow, -1).
+    let _: () =
+        unsafe { msg_send![&*parent, addSubview: view, positioned: -1_isize, relativeTo: &*strip] };
+    Some(())
+}
+
+/// The strip over every page, a page built since included: its open list lies over the page
+/// shown, which stays where it is.
+pub(super) fn raise(strip: &WebView) -> bool {
+    let view = strip.webview();
+    // SAFETY: an NSView answers its superview, or nil.
+    let parent: Option<Retained<AnyObject>> = unsafe { msg_send![&*view, superview] };
+    let Some(parent) = parent else {
+        return false;
+    };
+    // SAFETY: an NSView answers its subviews, an NSArray.
+    let subviews: Retained<AnyObject> = unsafe { msg_send![&*parent, subviews] };
+    // SAFETY: an NSArray answers its last object, or nil.
+    let last: Option<Retained<AnyObject>> = unsafe { msg_send![&*subviews, lastObject] };
+    let strip_view: &AnyObject = &view;
+    if !last.is_some_and(|last| std::ptr::eq(&*last, strip_view)) {
+        // A sibling added again goes on top (NSWindowAbove, 1, relative to none).
+        // SAFETY: an NSView adds (here: moves) a subview to the top of its siblings.
+        let _: () = unsafe {
+            msg_send![&*parent, addSubview: &*view, positioned: 1_isize, relativeTo: std::ptr::null::<AnyObject>()]
+        };
+    }
+    true
+}
 
 /// The glass under the strip's open list.
 pub(super) struct Pane(Retained<AnyObject>);
@@ -76,10 +127,5 @@ impl Pane {
         let _ = below(&self.0, strip);
         // SAFETY: an NSView takes a BOOL.
         let _: () = unsafe { msg_send![&*self.0, setHidden: Bool::NO] };
-    }
-
-    /// The pane in the appearance of the tab under it, as the strip's band.
-    pub(super) fn shade(&self, dark: Option<bool>) {
-        shade(&self.0, dark);
     }
 }

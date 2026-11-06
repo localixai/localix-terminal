@@ -1,0 +1,396 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>Settings</title>
+<style>
+/* The window's own Settings, drawn as the board is: the system's font and accent, hairlines and
+   veils mixed from the text colour, so light, dark and the glass all hold. */
+:root{
+  --fg:#1d1d1f;--solid:#f5f5f7;
+  --veil:color-mix(in srgb,currentColor 5.5%,transparent);
+  --hair:color-mix(in srgb,currentColor 11%,transparent);
+  --soft:color-mix(in srgb,currentColor 66%,transparent);
+  --faint:color-mix(in srgb,currentColor 46%,transparent);
+  --accent:#0a84ff;--accent:-apple-system-control-accent;
+  --warn:#d97706;
+  --ease:cubic-bezier(.2,.8,.2,1);
+  --ground:var(--solid);
+  color:var(--fg);
+  font:13px/1.35 var(--ui-font,-apple-system,BlinkMacSystemFont,system-ui,sans-serif);
+  -webkit-font-smoothing:antialiased;
+}
+@media (prefers-color-scheme: dark){:root{--fg:#e8e8ea;--solid:#161618;--warn:#f0a020}}
+html:not([data-glass]) body{background:var(--ground)}
+body{margin:0;cursor:default;user-select:none;-webkit-user-select:none;overflow:auto!important}
+main{max-width:680px;margin:0 auto;padding:26px 28px 48px}
+h1{font-size:22px;font-weight:650;letter-spacing:-.01em;margin:0 0 4px}
+.lead{color:var(--faint);margin:0 0 22px}
+h2{font-size:12px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--faint);margin:28px 4px 8px}
+.card{background:var(--veil);border-radius:12px;box-shadow:0 0 0 .5px var(--hair)}
+.row{display:flex;align-items:center;gap:14px;min-height:46px;padding:7px 14px;box-sizing:border-box}
+.row+.row{box-shadow:0 -.5px 0 var(--hair)}
+.row .l{flex:1;min-width:0}
+.row .l b{display:block;font-weight:500}
+.row .l small{display:block;color:var(--faint);font-size:11.5px;margin-top:2px}
+/* A segmented control, as the system's. */
+.seg{display:inline-flex;padding:2px;border-radius:8px;background:var(--veil);box-shadow:inset 0 0 0 .5px var(--hair)}
+.seg button{font:inherit;font-size:12px;color:inherit;border:0;background:none;padding:4px 11px;border-radius:6px;cursor:default;opacity:.75;transition:background-color .15s var(--ease),opacity .15s}
+.seg button:hover{opacity:1}
+.seg button.on{opacity:1;background:color-mix(in srgb,var(--ground) 70%,#fff);box-shadow:0 0 0 .5px var(--hair),0 1px 2px rgba(0,0,0,.12)}
+@media (prefers-color-scheme: dark){.seg button.on{background:color-mix(in srgb,currentColor 18%,transparent)}}
+select{font:inherit;font-size:12.5px;color:inherit;background:var(--veil);border:0;box-shadow:inset 0 0 0 .5px var(--hair);border-radius:7px;padding:5px 26px 5px 10px;-webkit-appearance:none;appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
+  background-position:calc(100% - 13px) 52%,calc(100% - 9px) 52%;background-size:4px 4px;background-repeat:no-repeat;min-width:160px}
+select:focus-visible,.seg button:focus-visible,.chip:focus-visible,.btn:focus-visible{outline:2px solid color-mix(in srgb,var(--accent) 70%,transparent);outline-offset:1px}
+.step{display:inline-flex;align-items:center;gap:2px;border-radius:8px;background:var(--veil);box-shadow:inset 0 0 0 .5px var(--hair)}
+.step button{font:inherit;font-size:15px;line-height:1;width:28px;height:26px;border:0;background:none;color:inherit;border-radius:7px;cursor:default}
+.step button:hover{background:var(--veil)}
+.step span{min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+.preview{margin:0 14px 12px;padding:10px 12px;border-radius:9px;background:color-mix(in srgb,currentColor 7%,transparent);font-family:var(--mono,ui-monospace,Menlo,monospace);font-size:var(--mono-size,13px);line-height:1.35;white-space:pre;overflow:hidden;user-select:text;-webkit-user-select:text}
+.preview .p{color:#3fb950}.preview .d{color:var(--faint)}
+@media (prefers-color-scheme: light){.preview .p{color:#1a7f37}}
+/* Shortcuts. */
+#find{display:flex;align-items:center;gap:8px;margin:0 0 10px;padding:0 10px;height:30px;border-radius:8px;background:var(--veil);box-shadow:inset 0 0 0 .5px var(--hair)}
+#find input{flex:1;font:inherit;color:inherit;background:none;border:0;outline:0;user-select:text;-webkit-user-select:text}
+#find svg{width:13px;height:13px;opacity:.5;fill:none;stroke:currentColor;stroke-width:1.5}
+.group{font-size:11.5px;font-weight:600;color:var(--faint);padding:12px 14px 4px}
+.k{min-height:38px}
+.chip{font:inherit;font-size:12px;color:inherit;min-width:64px;height:24px;padding:0 9px;border-radius:6px;border:0;background:var(--veil);box-shadow:inset 0 0 0 .5px var(--hair);cursor:default;letter-spacing:.06em;font-variant-numeric:tabular-nums;transition:box-shadow .15s}
+.chip:hover{box-shadow:inset 0 0 0 .5px var(--hair),0 0 0 3px var(--veil)}
+.chip.none{color:var(--faint);letter-spacing:0}
+.chip.rec{letter-spacing:0;color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent);animation:pulse 1.2s ease-in-out infinite}
+.chip.rec.short{color:var(--warn);box-shadow:inset 0 0 0 1.5px var(--warn);animation:none}
+@keyframes pulse{50%{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent) 40%,transparent)}}
+.chip.clash{box-shadow:inset 0 0 0 1px var(--warn)}
+.ic{width:24px;height:24px;border:0;background:none;color:inherit;border-radius:6px;display:grid;place-items:center;opacity:.55;cursor:default;padding:0}
+.ic:hover{opacity:1;background:var(--veil)}
+.ic svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.ic.gone{visibility:hidden}
+.note{font-size:11.5px;color:var(--warn);margin-top:2px}
+.ask{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px 10px;font-size:12px}
+.ask span{flex:1;min-width:200px;color:var(--soft)}
+.btn{font:inherit;font-size:12px;color:inherit;border:0;border-radius:7px;padding:5px 11px;background:var(--veil);box-shadow:inset 0 0 0 .5px var(--hair);cursor:default}
+.btn:hover{background:color-mix(in srgb,currentColor 9%,transparent)}
+.btn.go{background:var(--accent);color:#fff;box-shadow:none}
+.foot{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px}
+.foot span{color:var(--soft);font-size:12px}
+.empty{padding:14px;color:var(--faint);text-align:center}
+/* Integrations. */
+.state{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--faint)}
+.state.on{background:#34c759}
+.state.unavailable{background:transparent;box-shadow:inset 0 0 0 1px var(--faint)}
+.row.busy .btn{opacity:.5}
+#err.ok{background:color-mix(in srgb,var(--fg) 82%,transparent);color:var(--ground)}
+#err{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);padding:7px 12px;border-radius:8px;background:var(--warn);color:#fff;font-size:12px;opacity:0;transition:opacity .2s;pointer-events:none}
+#err.on{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Settings</h1>
+  <p class="lead">How the window looks, the keys that work it, and the tools it reaches. Changes apply at once.</p>
+
+  <h2>Appearance</h2>
+  <div class="card">
+    <div class="row"><div class="l"><b>Theme</b><small>Light, dark, or as the system is.</small></div>
+      <div class="seg" id="theme" role="radiogroup" aria-label="Theme"></div></div>
+    <div class="row"><div class="l"><b>Window transparency</b><small id="tnote">How much of the desktop shows through the glass.</small></div>
+      <div class="seg" id="transparency" role="radiogroup" aria-label="Window transparency"></div></div>
+    <div class="row"><div class="l"><b>Interface font</b><small>The tabs, the bar and these pages.</small></div>
+      <select id="ui_font" aria-label="Interface font"></select></div>
+    <div class="row"><div class="l"><b>Code font</b><small>Terminals; a font not installed falls back to the system's.</small></div>
+      <select id="code_font" aria-label="Code font"></select></div>
+    <div class="row"><div class="l"><b>Terminal font size</b></div>
+      <div class="step"><button id="smaller" aria-label="Smaller">−</button><span id="size"></span><button id="larger" aria-label="Larger">+</button></div></div>
+    <div class="preview" aria-hidden="true"><span class="p">~/project</span> <span class="d">$</span> cargo test
+running 230 tests  <span class="p">ok</span>  0O 1lI {}[]=&gt; -&gt;</div>
+  </div>
+
+  <h2>Integrations</h2>
+  <div class="card" id="integrations"><div class="empty">Looking for your tools…</div></div>
+  <div class="foot"><span>Another MCP host?</span><button class="btn" id="copy-mcp">Copy MCP Entry</button></div>
+
+  <h2>Keyboard Shortcuts</h2>
+  <label id="find"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><input id="q" placeholder="Search shortcuts" spellcheck="false" autocomplete="off"></label>
+  <div class="card" id="keys"></div>
+  <div class="foot" id="foot"></div>
+</main>
+<div id="err" role="status"></div>
+<script>
+"use strict";
+// The settings come as P(data) (settings.rs `page`); each change goes back as one object
+// ("k" and its JSON, as a panel's page posts what the person does), and the answer is P again.
+const post = (change) => window.ipc && window.ipc.postMessage("k" + JSON.stringify(change));
+const THEMES = [["system", "System"], ["light", "Light"], ["dark", "Dark"]];
+const LEVELS = [["off", "Off"], ["low", "Low"], ["standard", "Standard"], ["high", "High"]];
+let data = null, recording = null, asking = null, resetting = false;
+const el = (tag, cls, text) => {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+const icon = (paths) => {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  for (const d of paths) {
+    const path = document.createElementNS(NS, "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+  }
+  return svg;
+};
+function segmented(id, options, value, name) {
+  const holder = document.getElementById(id);
+  holder.replaceChildren(...options.map(([key, label]) => {
+    const button = el("button", key === value ? "on" : "", label);
+    button.setAttribute("role", "radio");
+    button.setAttribute("aria-checked", String(key === value));
+    button.addEventListener("click", () => post({ [name]: key }));
+    return button;
+  }));
+}
+function choices(id, fonts, value) {
+  const select = document.getElementById(id);
+  select.replaceChildren(...fonts.map((font) => {
+    const option = el("option", "", font.name);
+    option.value = font.id;
+    option.selected = font.id === value;
+    return option;
+  }));
+}
+for (const id of ["ui_font", "code_font"]) {
+  document.getElementById(id).addEventListener("change", (event) => post({ [id]: event.target.value }));
+}
+document.getElementById("smaller").addEventListener("click", () => post({ font_size: data.settings.font_size - 1 }));
+document.getElementById("larger").addEventListener("click", () => post({ font_size: data.settings.font_size + 1 }));
+document.getElementById("q").addEventListener("input", drawKeys);
+
+// A chord as the person pressed it, in the settings' words (shortcuts.rs `Chord`): by the key's
+// place, not the character a layout or Option makes of it.
+const CODES = { BracketLeft: "[", BracketRight: "]", Comma: ",", Period: ".", Slash: "/", Semicolon: ";",
+  Quote: "'", Minus: "-", Equal: "=", Backquote: "`", Backslash: "\\", Enter: "enter", NumpadEnter: "enter",
+  Tab: "tab", Space: "space", Backspace: "backspace", Delete: "delete", ArrowUp: "up", ArrowDown: "down",
+  ArrowLeft: "left", ArrowRight: "right" };
+// For a row of places (a tab by its place), any digit stands for the row: `cmd+digit`.
+function chordOf(event, row) {
+  const digit = /^Digit[1-9]$/.test(event.code);
+  if (row && !digit) return null;
+  const key = row ? "digit" : /^Key[A-Z]$/.test(event.code) ? event.code.slice(3).toLowerCase()
+    : /^Digit\d$/.test(event.code) ? event.code.slice(5) : CODES[event.code];
+  if (!key || !(event.metaKey || event.ctrlKey || event.altKey)) return null;
+  return [event.ctrlKey && "ctrl", event.altKey && "alt", event.shiftKey && "shift", event.metaKey && "cmd", key]
+    .filter(Boolean).join("+");
+}
+const MARKS = { ctrl: "⌃", alt: "⌥", shift: "⇧", cmd: "⌘" };
+const NAMED = { enter: "↩", tab: "⇥", space: "Space", backspace: "⌫", delete: "⌦", escape: "⎋",
+  up: "↑", down: "↓", left: "←", right: "→" };
+function shown(keys) {
+  const parts = keys.split("+");
+  const key = parts.pop();
+  return parts.map((part) => MARKS[part]).join("") + (key === "digit" ? "1…8" : NAMED[key] || key.toUpperCase());
+}
+// What the recording chip shows as the keys go down and up: the modifiers held (⌘⇧…), and a
+// key pressed without one, with what it needs.
+const MODIFIERS = ["Meta", "Shift", "Control", "Alt"];
+function held(event) {
+  return [event.ctrlKey && "ctrl", event.altKey && "alt", event.shiftKey && "shift", event.metaKey && "cmd"]
+    .filter(Boolean).map((part) => MARKS[part]).join("");
+}
+function preview(event) {
+  const chip = document.querySelector(".chip.rec");
+  if (!chip) return;
+  const mods = held(event);
+  chip.classList.remove("short");
+  if (MODIFIERS.includes(event.key) || event.type === "keyup") {
+    chip.textContent = mods ? mods + "\u2026" : "Press keys\u2026";
+    return;
+  }
+  const row = data.shortcuts.find((one) => one.id === recording)?.row;
+  if (row && !/^Digit[1-9]$/.test(event.code)) {
+    chip.textContent = (mods || "") + "1\u20268?";
+  } else if (!mods) {
+    const key = /^Key[A-Z]$/.test(event.code) ? event.code.slice(3) : NAMED[CODES[event.code]] || event.key.toUpperCase();
+    chip.textContent = key + ": add \u2318, \u2303 or \u2325";
+  } else {
+    return;
+  }
+  chip.classList.add("short");
+}
+addEventListener("keyup", (event) => recording && preview(event), true);
+// While a chip records, the keys are its: the window's own shortcuts wait.
+addEventListener("keydown", (event) => {
+  if (!recording) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.key === "Escape") return stop();
+  preview(event);
+  if ((event.key === "Backspace" || event.key === "Delete") && !(event.metaKey || event.ctrlKey || event.altKey)) {
+    const id = recording;
+    stop();
+    return post({ shortcut: [id, null] });
+  }
+  const id = recording;
+  const keys = chordOf(event, data.shortcuts.find((row) => row.id === id)?.row);
+  if (!keys) return;
+  stop();
+  const owner = data.shortcuts.find((row) => row.id !== id && row.keys && sameChord(row.keys, keys));
+  if (owner) {
+    asking = { id, keys, owner };
+    return drawKeys();
+  }
+  post({ shortcut: [id, keys] });
+}, true);
+// Whether two chords share a key: a row of places (`digit`) is each of 1 to 8.
+const each = (keys) => {
+  const parts = keys.split("+");
+  const key = parts.pop();
+  const mods = parts.sort().join("+");
+  return key === "digit" ? [1, 2, 3, 4, 5, 6, 7, 8].map((n) => mods + "+" + n) : [mods + "+" + key];
+};
+const sameChord = (a, b) => each(a).some((one) => each(b).includes(one));
+function stop() {
+  recording = null;
+  drawKeys();
+}
+addEventListener("blur", () => recording && stop());
+
+function drawKeys() {
+  if (!data) return;
+  const typed = document.getElementById("q").value.trim().toLowerCase();
+  const rows = data.shortcuts.filter((row) => !typed || (row.title + " " + (row.shown || "") + " " + row.group).toLowerCase().includes(typed));
+  const list = document.getElementById("keys");
+  if (!rows.length) return void list.replaceChildren(el("div", "empty", "No shortcut matches"));
+  const out = [];
+  let group = null;
+  for (const row of rows) {
+    if (row.group !== group) {
+      group = row.group;
+      out.push(el("div", "group", group));
+    }
+    const line = el("div", "row k");
+    const label = el("div", "l");
+    label.append(el("b", "", row.title));
+    if (row.row) label.append(el("small", "", "1 to 8: the project's tabs in order. The last tab, the next and the search have their own keys below."));
+    if (row.clash) {
+      const others = data.shortcuts.filter((other) => other.id !== row.id && other.keys && sameChord(other.keys, row.keys));
+      label.append(el("div", "note", "Also " + others.map((other) => other.title).join(", ") + ": only one works"));
+    }
+    const chip = el("button", "chip");
+    chip.setAttribute("aria-label", row.title + ": " + (row.shown || "none") + ". Press to change");
+    if (recording === row.id) {
+      chip.classList.add("rec");
+      chip.textContent = "Press keys…";
+    } else if (row.shown) {
+      chip.textContent = row.shown;
+      if (row.clash) chip.classList.add("clash");
+    } else {
+      chip.classList.add("none");
+      chip.textContent = "None";
+    }
+    chip.title = recording === row.id
+      ? (row.row ? "Press the modifiers with any digit. " : "") + "Esc cancels, ⌫ takes the shortcut off"
+      : "Default: " + (row.default || "none");
+    chip.addEventListener("click", () => {
+      asking = null;
+      recording = recording === row.id ? null : row.id;
+      drawKeys();
+    });
+    const reset = el("button", "ic" + (row.changed ? "" : " gone"));
+    reset.title = "Back to " + (row.default || "none");
+    reset.setAttribute("aria-label", "Reset " + row.title);
+    reset.append(icon(["M3.5 8a4.5 4.5 0 1 0 1.4-3.3", "M3.5 3v2.2h2.2"]));
+    reset.addEventListener("click", () => post({ reset: row.id }));
+    line.append(label, chip, reset);
+    out.push(line);
+    if (asking && asking.id === row.id) {
+      const ask = el("div", "ask");
+      ask.append(el("span", "", shown(asking.keys) + " is " + asking.owner.title + "'s. Give it to " + row.title + "?"));
+      const take = el("button", "btn go", "Use Here");
+      take.addEventListener("click", () => {
+        const { id, keys, owner } = asking;
+        asking = null;
+        post({ shortcut: [owner.id, null] });
+        post({ shortcut: [id, keys] });
+      });
+      const cancel = el("button", "btn", "Cancel");
+      cancel.addEventListener("click", () => { asking = null; drawKeys(); });
+      ask.append(take, cancel);
+      out.push(ask);
+    }
+  }
+  list.replaceChildren(...out);
+  const foot = document.getElementById("foot");
+  const changed = data.shortcuts.some((row) => row.changed);
+  if (resetting) {
+    const yes = el("button", "btn go", "Reset All");
+    yes.addEventListener("click", () => { resetting = false; post({ reset: "all" }); });
+    const no = el("button", "btn", "Cancel");
+    no.addEventListener("click", () => { resetting = false; drawKeys(); });
+    foot.replaceChildren(el("span", "", "Every shortcut back to its default?"), no, yes);
+  } else {
+    const all = el("button", "btn", "Reset All Shortcuts");
+    all.disabled = !changed;
+    all.style.opacity = changed ? "" : ".45";
+    all.addEventListener("click", () => { resetting = true; drawKeys(); });
+    foot.replaceChildren(all);
+  }
+}
+
+// The integrations (setup.rs `states`), each with its state and the act it takes; the answer
+// to a click comes as I again, and T says how it went.
+function I(list) {
+  const card = document.getElementById("integrations");
+  card.replaceChildren(...list.map((one) => {
+    const row = el("div", "row");
+    const label = el("div", "l");
+    const title = el("b");
+    title.append(el("span", "state " + one.state), one.title);
+    label.append(title, el("small", null, one.state === "on" ? one.note : one.gives + (one.note ? " — " + one.note : "")));
+    row.append(label);
+    if (one.state !== "unavailable") {
+      const on = one.state === "on";
+      const act = el("button", on ? "btn" : "btn go", on ? "Remove" : "Add");
+      act.addEventListener("click", () => {
+        row.classList.add("busy");
+        act.disabled = true;
+        act.textContent = on ? "Removing…" : "Adding…";
+        post({ integration: one.id, on: !on });
+      });
+      row.append(act);
+    }
+    return row;
+  }));
+}
+function T(text, error) {
+  const toast = document.getElementById("err");
+  toast.textContent = text;
+  toast.className = error ? "on" : "on ok";
+  clearTimeout(T.hide);
+  T.hide = setTimeout(() => { toast.className = ""; }, error ? 5000 : 3500);
+}
+document.getElementById("copy-mcp").addEventListener("click", () => post({ copy: "mcp" }));
+
+function P(next, error) {
+  data = next;
+  const s = data.settings;
+  segmented("theme", THEMES, s.theme, "theme");
+  segmented("transparency", LEVELS, s.transparency, "transparency");
+  choices("ui_font", data.ui_fonts, s.ui_font);
+  choices("code_font", data.code_fonts, s.code_font);
+  document.getElementById("size").textContent = s.font_size + " pt";
+  document.getElementById("smaller").disabled = s.font_size <= data.sizes[0];
+  document.getElementById("larger").disabled = s.font_size >= data.sizes[1];
+  drawKeys();
+  const toast = document.getElementById("err");
+  toast.textContent = error || "";
+  toast.className = error ? "on" : "";
+  if (error) setTimeout(() => { toast.className = ""; }, 3000);
+}
+</script>
+</body>
+</html>

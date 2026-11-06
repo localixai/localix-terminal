@@ -15,7 +15,6 @@ pub(super) fn on_window(
     window_id: WindowId,
     event: &WindowEvent<'_>,
     shared: &Shared,
-    on_close: fn(),
 ) {
     // The mini's own window: where the person moves it is where it stays.
     if presenter.owns(window_id) {
@@ -32,21 +31,10 @@ pub(super) fn on_window(
         reason = "tao's events: foreign, non-exhaustive"
     )]
     match event {
-        // The person closed the window: the browser's calls fail and the task is told, and the
-        // terminals' callers let their screens go. The browser is marked closed before the
-        // listener hears it: it then forgets every page at once, rather than asking this very
-        // loop for the window's tabs and waiting out the question's timeout.
-        WindowEvent::CloseRequested => {
-            let browser = open.web.is_some();
-            *deck = None;
-            if browser {
-                shared.closed();
-            }
-            shared.heard("window", Heard::WindowClosed(CLOSED_WINDOW));
-            if browser {
-                on_close();
-            }
-        }
+        // The window is the app's own: closing it is quitting the app, which the desk asks the
+        // person about when programs run. (On macOS its close button collapses it to the mini
+        // instead, nspanel.rs: the Dock and the menu bar quit it.)
+        WindowEvent::CloseRequested => shared.heard("", Heard::Quit),
         event if frame::relayout(event) => {
             open.layout();
             presenter.deck_moved(open, event, shared);
@@ -57,7 +45,3 @@ pub(super) fn on_window(
         _ => {}
     }
 }
-
-/// What the person's closing says, to whoever listens.
-const CLOSED_WINDOW: &str = "The person closed the window: its tabs are gone (terminal programs \
-run on, out of sight).";

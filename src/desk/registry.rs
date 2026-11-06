@@ -4,16 +4,18 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 use super::Call;
+use crate::projects::Project;
 
-/// Where an owner works and how, as its last calls showed: directory, environment, owner.
-pub(super) type Place = (PathBuf, Option<Vec<(String, String)>>, String);
+/// The most notes kept for one owner, until it takes them.
+const SAID_KEPT: usize = 200;
 
-/// An owner as its last call showed it.
+/// An owner as its last call showed it: an agent of a project.
 struct Known {
     cwd: PathBuf,
     vars: Option<Vec<(String, String)>>,
-    /// What its tabs are grouped under in the window: its project's name.
-    group: String,
+    project: Project,
+    /// Its name within the project; none: the project's own agent.
+    agent: Option<String>,
 }
 
 /// What the person sent about a tab, kept until it is delivered: in a call's answer, by
@@ -25,13 +27,6 @@ pub struct Said {
     pub text: String,
 }
 
-impl Said {
-    /// The `comment/added` notification's params.
-    pub fn note(&self, owner: &str) -> serde_json::Value {
-        serde_json::json!({"owner": owner, "id": self.id, "tab": self.tab, "text": self.text})
-    }
-}
-
 #[derive(Default)]
 pub(super) struct Registry {
     /// Tab key (`w1`, `t2`) to owner.
@@ -39,14 +34,6 @@ pub(super) struct Registry {
     said: HashMap<String, Vec<Said>>,
     next_said: u64,
     owners: HashMap<String, Known>,
-}
-
-/// The name of the project at `cwd`, or `owner` when it is a name an agent chose.
-pub(super) fn group(owner: &str) -> String {
-    std::path::Path::new(owner).file_name().map_or_else(
-        || owner.to_string(),
-        |name| name.to_string_lossy().into_owned(),
-    )
 }
 
 impl Registry {
@@ -58,7 +45,8 @@ impl Registry {
             .or_insert_with(|| Known {
                 cwd: call.cwd.to_path_buf(),
                 vars: None,
-                group: group(call.owner),
+                project: call.project.clone(),
+                agent: call.agent.map(str::to_string),
             });
         call.cwd.clone_into(&mut entry.cwd);
         if let Some(vars) = call.vars {
@@ -66,10 +54,16 @@ impl Registry {
         }
     }
 
+    /// The window's key of `owner`'s project ("" for an owner not known).
     pub(super) fn group_of(&self, owner: &str) -> String {
-        self.owners
-            .get(owner)
-            .map_or_else(|| group(owner), |known| known.group.clone())
+        (self.owners.get(owner))
+            .map_or_else(String::new, |known| crate::projects::key(known.project.id))
+    }
+
+    /// `owner`'s project and its name within it, when it is known.
+    pub(super) fn who(&self, owner: &str) -> Option<(&Project, Option<&str>)> {
+        let known = self.owners.get(owner)?;
+        Some((&known.project, known.agent.as_deref()))
     }
 
     pub(super) fn own(&mut self, key: &str, owner: &str) {
@@ -124,10 +118,11 @@ impl Registry {
             tab: key.to_string(),
             text: words.to_string(),
         };
-        self.said
-            .entry(owner.clone())
-            .or_default()
-            .push(said.clone());
+        let kept = self.said.entry(owner.clone()).or_default();
+        kept.push(said.clone());
+        // An owner that never calls again holds no more than the latest of them.
+        let over = kept.len().saturating_sub(SAID_KEPT);
+        kept.drain(..over);
         Some((owner, said))
     }
 
@@ -158,10 +153,13 @@ impl Registry {
         self.owners.remove(owner);
     }
 
-    /// The owner whose tabs are grouped under `group`, with its place: where the person's own
-    /// terminal ("+") starts.
-    pub(super) fn of_group(&self, group: &str) -> Option<Place> {
-        let (owner, known) = self.owners.iter().find(|(_, known)| known.group == group)?;
-        Some((known.cwd.clone(), known.vars.clone(), owner.clone()))
+    /// The environment an agent of project `id` last called with (its own agent's first): what
+    /// the person's own terminal ("+") starts with.
+    pub(super) fn vars_of(&self, id: crate::projects::ProjectId) -> Option<Vec<(String, String)>> {
+        let mut known: Vec<&Known> = (self.owners.values())
+            .filter(|known| known.project.id == id && known.vars.is_some())
+            .collect();
+        known.sort_by_key(|known| known.agent.is_some());
+        known.first().and_then(|known| known.vars.clone())
     }
 }

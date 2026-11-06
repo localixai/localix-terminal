@@ -33,7 +33,7 @@ fn a_bad_name_or_a_short_value_is_refused_and_no_name_leaves_the_directory() {
     let dir = scratch.path().join("secrets");
     assert!(save_in(&dir, "../key", "long enough").is_err());
     assert!(save_in(&dir, "PIN", "123").is_err());
-    assert_eq!(read_in(&dir, "../openrouter.key"), None);
+    assert_eq!(read_in(&dir, "../desk.key"), None);
     assert!(!valid_name(""));
     assert!(valid_name("work-mail_2"));
 }
@@ -74,7 +74,6 @@ fn a_named_secret_is_put_in_and_every_answer_after_shows_its_reference() {
     );
     let missing = vault.fill_in(Some(&dir), "{{secret:NOPE}}").unwrap_err();
     assert!(missing.contains("llx-desk secret NOPE < FILE"), "{missing}");
-    assert_eq!(vault.known().len(), 2);
 }
 
 #[test]

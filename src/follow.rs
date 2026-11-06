@@ -1,7 +1,7 @@
-//! `window --said --follow`: what the person sends from the window, printed as it comes, so a
-//! monitor in the calling agent (Claude Code's `Monitor`) wakes it on each comment. A
-//! subscription to the daemon's `comment/added`, not a poll; a note printed is acknowledged, so
-//! the daemon does not give it again.
+//! `window --said --follow`: what the person sends from the window, printed as it comes, so an
+//! agent that watches a command's output wakes on each comment. A
+//! subscription to the app's `comment/added`, not a poll; a note printed is acknowledged, so
+//! the app does not give it again.
 
 use std::io::Write;
 use std::sync::Arc;
@@ -10,18 +10,21 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use crate::client::{Client, Notes, Start};
+use crate::client::{Caller, Client, Notes, Start};
 
 /// How long to wait for a note before looking at whether the connection stands.
 const LOOK: Duration = Duration::from_secs(2);
-/// Between attempts to reach a daemon that is not there.
+/// Between attempts to reach an app that is not there.
 const RETRY: Duration = Duration::from_millis(500);
 
-/// Never returns: the monitor that started it stops it. A daemon not running yet, or gone, is
-/// waited for, so the follower can start before the first tab and outlive a daemon restart.
+/// Runs until the monitor that started it stops it, or is gone (an agent's session that ended
+/// without stopping it: it would wait for the app forever, printing to no one); then answers
+/// the exit code, 0. An app not running yet, or gone, is waited for, so the follower can
+/// start before the first tab and outlive an app restart.
 /// With `lines`, each note is one JSON string on a line of its own, for a program that reads
 /// it: a note's lines never come apart.
-pub fn follow(owner: &str, lines: bool) -> ! {
+pub fn follow(caller: &Caller, lines: bool) -> u8 {
+    let parent = parent();
     loop {
         let (notes, arrived) = sync_channel::<Value>(64);
         let hear: Notes = Arc::new(move |method, params| {
@@ -29,28 +32,46 @@ pub fn follow(owner: &str, lines: bool) -> ! {
                 let _ = notes.try_send(params.clone());
             }
         });
-        // Never starts a daemon: a follower waits for one.
+        // Never starts the app: a follower waits for one.
         if let Ok(Some(client)) = Client::connect(Start::Never, &hear) {
-            let events = json!(["comment/added", "daemon/stopping"]);
-            let subscribed = client.request(
-                "events/subscribe",
-                json!({"owner": owner, "events": events}),
-            );
+            let events = json!(["comment/added", "app/quitting"]);
+            let subscribed =
+                client.request("events/subscribe", caller.with(json!({"events": events})));
             while subscribed.is_ok() {
                 match arrived.recv_timeout(LOOK) {
-                    Ok(note) => print(&client, owner, &note, lines),
-                    Err(RecvTimeoutError::Timeout) if client.link.is_open() => {}
+                    Ok(note) => print(&client, caller, &note, lines),
+                    Err(RecvTimeoutError::Timeout) if client.link.is_open() => {
+                        if left(parent) {
+                            return 0;
+                        }
+                    }
                     Err(RecvTimeoutError::Timeout | RecvTimeoutError::Disconnected) => break,
                 }
             }
+        }
+        if left(parent) {
+            return 0;
         }
         pause();
     }
 }
 
+/// The process that started this one.
+fn parent() -> libc::pid_t {
+    // SAFETY: getppid only reads this process's parent; it cannot fail.
+    unsafe { libc::getppid() }
+}
+
+/// Whether `parent`, the monitor, is gone: an orphan is given to another parent (the system's
+/// first process, when it was gone already as this one began).
+fn left(parent: libc::pid_t) -> bool {
+    let now = self::parent();
+    now != parent || now == 1
+}
+
 /// One note, as one block written at once (the monitor reads lines; stdout's line buffer would
 /// let out each line on its own), then acknowledged. With `lines`, the block as a JSON string.
-fn print(client: &Client, owner: &str, note: &Value, lines: bool) {
+fn print(client: &Client, caller: &Caller, note: &Value, lines: bool) {
     let text = note["text"].as_str().unwrap_or_default().to_string();
     let block = crate::desk::said_block(&[text]);
     let shown = if lines {
@@ -62,12 +83,12 @@ fn print(client: &Client, owner: &str, note: &Value, lines: bool) {
     let _ = out.write_all(format!("{shown}\n").as_bytes());
     let _ = out.flush();
     drop(out);
-    let _ = client.request("comment/ack", json!({"owner": owner, "ids": [note["id"]]}));
+    let _ = client.request("comment/ack", caller.with(json!({"ids": [note["id"]]})));
 }
 
 #[expect(
     clippy::disallowed_methods,
-    reason = "a backoff before the daemon is looked for again: there is no event to wait on"
+    reason = "a backoff before the app is looked for again: there is no event to wait on"
 )]
 fn pause() {
     std::thread::sleep(RETRY);

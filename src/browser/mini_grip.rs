@@ -16,7 +16,6 @@ use tao::window::Window;
 
 use super::capture::{CGPoint, CGRect};
 use super::host::Cmd;
-use super::presence::Event;
 
 /// The corner the page keeps: its expand button, in points from the top right.
 const BUTTON: f64 = 40.0;
@@ -72,12 +71,8 @@ extern "C" fn mouse_down(this: &AnyObject, _sel: Sel, press: *mut AnyObject) {
     let start = pointer();
     // SAFETY: NSDate's class method answers a date.
     let never: Retained<AnyObject> = unsafe { msg_send![class!(NSDate), distantFuture] };
-    // SAFETY: NSString makes a string of a C string that lives for the program.
-    let mode: Retained<AnyObject> = unsafe {
-        msg_send![class!(NSString), stringWithUTF8String: c"NSEventTrackingRunLoopMode".as_ptr()]
-    };
-    // SAFETY: NSApplication's class method answers the app.
-    let app: Retained<AnyObject> = unsafe { msg_send![class!(NSApplication), sharedApplication] };
+    let mode = super::appkit::text("NSEventTrackingRunLoopMode");
+    let app = super::appkit::app();
     loop {
         // SAFETY: the app waits for the next event of the mask, in the mode, and takes it
         // off the queue: a press's own tracking loop, as AppKit's controls run one.
@@ -103,7 +98,7 @@ extern "C" fn mouse_down(this: &AnyObject, _sel: Sel, press: *mut AnyObject) {
 fn expand() {
     let proxy = PROXY.get().and_then(|held| crate::lock(held).clone());
     if let Some(proxy) = proxy {
-        let _ = proxy.send_event(Cmd::Presence(Event::Expand));
+        let _ = proxy.send_event(Cmd::Opened);
     }
 }
 

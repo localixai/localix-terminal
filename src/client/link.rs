@@ -1,5 +1,5 @@
-//! A connection to the daemon, as the client holds it: requests go out with ids, a thread reads
-//! what comes back and gives each answer to the call waiting for it, and the daemon's
+//! A connection to the app, as the client holds it: requests go out with ids, a thread reads
+//! what comes back and gives each answer to the call waiting for it, and the app's
 //! notifications to whoever listens. Calls on one link may be made from many threads at once.
 
 use std::collections::BTreeMap;
@@ -26,14 +26,14 @@ pub struct Answer {
 /// Why a request has no answer.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
-    /// The daemon answered with an error.
+    /// The app answered with an error.
     Rpc(RpcError),
     /// The connection is gone, or was never right; the request may or may not have been done:
     /// ask again with the same idempotency key.
     Broken(String),
     /// No answer within the time given; the connection is still there.
     Timeout,
-    /// The other end sent what is no protocol-2 message: a daemon of an older protocol.
+    /// The other end sent what is no protocol-2 message: an app of an older protocol.
     Foreign(String),
 }
 
@@ -42,7 +42,7 @@ impl std::fmt::Display for Error {
         match self {
             Self::Rpc(error) => f.write_str(&error.message),
             Self::Broken(why) | Self::Foreign(why) => f.write_str(why),
-            Self::Timeout => f.write_str("the daemon did not answer in time"),
+            Self::Timeout => f.write_str("the app did not answer in time"),
         }
     }
 }
@@ -91,7 +91,7 @@ pub struct Link {
 }
 
 impl Link {
-    /// Start reading `stream`; `notes` hears the daemon's notifications on the reader's thread.
+    /// Start reading `stream`; `notes` hears the app's notifications on the reader's thread.
     pub fn open(stream: UnixStream, notes: Notes) -> std::io::Result<Self> {
         let read = stream.try_clone()?;
         let out = Outbox::spawn(stream.try_clone()?, "desk-send")?;
@@ -153,13 +153,13 @@ impl Link {
             .send(Message::request(id, method, params).encode(None))
         {
             crate::lock(&self.shared.pending).waiting.remove(&id);
-            return Err(Error::Broken("the daemon went away".into()));
+            return Err(Error::Broken("the app went away".into()));
         }
         let got = match limit {
             Some(limit) => answer.recv_timeout(limit).map_err(|_gone| Error::Timeout),
             None => answer
                 .recv()
-                .map_err(|_gone| Error::Broken("the daemon went away".into())),
+                .map_err(|_gone| Error::Broken("the app went away".into())),
         };
         if got.is_err() {
             crate::lock(&self.shared.pending).waiting.remove(&id);
@@ -174,7 +174,7 @@ impl Drop for Link {
     }
 }
 
-/// Everything the daemon says, until it stops saying it; why it stopped.
+/// Everything the app says, until it stops saying it; why it stopped.
 fn read_all(mut input: BufReader<UnixStream>, shared: &Shared, notes: &Notes) -> Ended {
     loop {
         match read_frame(&mut input) {
@@ -198,12 +198,12 @@ fn read_all(mut input: BufReader<UnixStream>, shared: &Shared, notes: &Notes) ->
             },
             Ok(Next::Bad(error)) => {
                 return Ended::Foreign(format!(
-                    "the daemon speaks another protocol (an older build?): {}",
+                    "the app speaks another protocol (an older build?): {}",
                     error.message
                 ));
             }
-            Ok(Next::End) => return Ended::Gone("the daemon went away".into()),
-            Err(error) => return Ended::Gone(format!("the daemon went away ({error})")),
+            Ok(Next::End) => return Ended::Gone("the app went away".into()),
+            Err(error) => return Ended::Gone(format!("the app went away ({error})")),
         }
     }
 }

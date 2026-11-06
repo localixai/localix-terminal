@@ -16,8 +16,9 @@ pub(super) struct Pty {
     pub(super) master: File,
 }
 
-/// Start `command` (the user's shell when empty) in `dir`. With `vars` the program sees exactly
-/// those variables, else this process's.
+/// Start `command` (the user's shell when empty, as a login shell, as a terminal app starts it:
+/// it reads the person's profile, so an app started from the Finder still gives them their
+/// PATH) in `dir`. With `vars` the program sees exactly those variables, else this process's.
 pub(super) fn spawn(
     command: &str,
     dir: &Path,
@@ -30,7 +31,14 @@ pub(super) fn spawn(
         .or_else(|| std::env::var("SHELL").ok())
         .unwrap_or_else(|| "sh".into());
     let mut program = match command.trim() {
-        "" => Command::new(shell),
+        "" => {
+            let name = Path::new(&shell)
+                .file_name()
+                .map_or_else(|| "sh".into(), |name| name.to_string_lossy().into_owned());
+            let mut login = Command::new(&shell);
+            login.arg0(format!("-{name}"));
+            login
+        }
         command => {
             let mut sh = Command::new("sh");
             sh.arg("-c").arg(command);

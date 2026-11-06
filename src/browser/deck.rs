@@ -1,5 +1,6 @@
 //! The one window: the browser's tabs and the terminal sessions' screens are tabs of it, with a
-//! strip along its top (strip.rs) that names them and switches between them. The browser's tabs
+//! strip along its top (strip.rs) and the tabs listed down its left (the side), which the person
+//! slides shut and open. The browser's tabs
 //! are the agent's (tabs.rs): showing a terminal moves them aside, still rendering, and never
 //! changes the tab the agent acts on. A shown window opens with the first of either; a headless
 //! one is the browser's alone, with no strip. It closes when nothing is left in it. A terminal
@@ -43,32 +44,51 @@ pub(super) enum Shown {
     Term(u32),
 }
 
+/// What the strip's menu shows while it is open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Menu {
+    /// The tabs the window has held.
+    History,
+    /// The Event Center.
+    Events,
+}
+
 pub(super) struct Deck {
     pub(super) frame: Frame,
     look: Look,
     /// The strip, in a shown window.
     strip: Option<WebView>,
-    /// The blur under the strip, where the pages run under it.
-    band: Option<platform::Band>,
+    /// The tabs' column on the window's left: the strip's page in a view of its own. None where
+    /// the pages lie in a column (GTK), and the tabs are a row under the strip.
+    side: Option<WebView>,
+    /// The browser's toolbar over the pages (the strip's page again): back, forward, reload, the
+    /// address field, the page's size and comments. It shows over a page only.
+    nav: Option<WebView>,
+    /// The side is open, or slid shut.
+    side_open: bool,
+    /// The side's width while open, in points: `strip::SIDE` until the person drags its edge.
+    side_width: f64,
+    /// How much of the side shows now, in points: it slides between none and `side_width`.
+    side_now: f64,
+    /// Which slide is the latest: a step of an earlier one is passed over.
+    slide: u32,
     /// The glass under the strip's open list.
     pane: Option<platform::Pane>,
     pub(super) web: Option<Tabs>,
     terms: Vec<Open>,
     pub(super) shown: Shown,
-    /// The history menu is open: it takes the window, the pages stand aside.
-    menu: bool,
+    /// The menu open, if one is: it takes the window, the pages stand aside.
+    menu: Option<Menu>,
     /// The address field is open: its suggestions take the window as the menu does.
     typing: bool,
-    /// The strip has its row of projects: the window holds the tabs of more than one.
-    rows: AtomicBool,
+    /// What the offer bar under the strip shows now (offer.rs), if anything.
+    offer: std::sync::Mutex<Option<super::offer::Bar>>,
     /// The person comments on the pages (probe/feedback.js): a click picks, it does not press.
     commenting: bool,
     /// How many batches of comments were sent: a page drops the marks of earlier ones.
     sent: u32,
     /// The loop's own handle: a tab's picture, drawn later, comes back through it.
     proxy: EventLoopProxy<Cmd>,
-    /// The tabs' colours under the strip, and which are being drawn.
-    tints: std::sync::Mutex<super::tint::Memory<(Shown, u32)>>,
 }
 
 impl Deck {
@@ -109,7 +129,7 @@ impl Deck {
             false,
             (shared, proxy),
         )?;
-        deck.add_term(opening, proxy)?;
+        deck.add_term(opening, true, proxy)?;
         Ok(deck)
     }
 
@@ -140,9 +160,9 @@ impl Deck {
                 None,
             ),
         };
-        // Coated in the system's appearance: the titlebar and the strip are not the bare
-        // material's grey. The browser's pages paint their own ground over it, opaque.
-        let mut frame = Frame::build(target, (title, size, at), look, None)?;
+        // Coated in the person's theme: the titlebar and the strip are not the bare material's
+        // grey. The browser's pages paint their own ground over it, opaque.
+        let mut frame = Frame::build(target, (title, size, at), look)?;
         let strip = match headless {
             true => None,
             false => {
@@ -153,24 +173,43 @@ impl Deck {
                 Some(strip)
             }
         };
-        let band = strip.as_ref().and_then(platform::Band::behind);
+        // The tabs' column, where the pages lie side by side with it (not in GTK's column).
+        let side = match (&strip, cfg!(target_os = "linux")) {
+            (Some(_), false) => Some(side_view(&frame.native, look, proxy.clone())?),
+            _ => None,
+        };
+        let nav = match &strip {
+            Some(_) => Some(strip_page(&frame.native, look, proxy.clone(), Part::Nav)?),
+            None => None,
+        };
+        let (side_open, side_width) = {
+            let kept = crate::lock(&shared.kept);
+            (
+                kept.side.unwrap_or(true),
+                kept.side_width.unwrap_or(strip::SIDE),
+            )
+        };
         let pane = strip.as_ref().and_then(platform::Pane::under);
         Ok(Self {
             frame,
             look,
             strip,
-            band,
+            side,
+            nav,
+            side_open,
+            side_width,
+            side_now: if side_open { side_width } else { 0.0 },
+            slide: 0,
             pane,
             web: None,
             terms: vec![],
             shown: Shown::Web,
-            menu: false,
+            menu: None,
             typing: false,
-            rows: AtomicBool::new(false),
+            offer: std::sync::Mutex::default(),
             commenting: false,
             sent: 0,
             proxy: proxy.clone(),
-            tints: std::sync::Mutex::default(),
         })
     }
 
@@ -185,6 +224,9 @@ impl Deck {
         if self.strip.is_none() {
             // A headless window shows with its first page.
             self.frame.show(tabs.active());
+        } else {
+            // As every new tab: the window shows through until its page drew, never white first.
+            super::tabs::see_through_until_drawn(tabs.active(), 1, shared);
         }
         self.web = Some(tabs);
         self.shown = Shown::Web;
@@ -192,18 +234,19 @@ impl Deck {
     }
 
     /// Add a terminal session's screen as a tab, and show it.
+    /// A terminal's (or a board's) tab added; `shown` when it is of the project shown.
     pub(super) fn add_term(
         &mut self,
         opening: Opening,
+        shown: bool,
         proxy: &EventLoopProxy<Cmd>,
     ) -> Result<(), String> {
-        if let Some(ground) = opening.3 {
-            self.frame.ground(ground);
-        }
         let open = panel::open(opening, &self.frame.native, self.look, proxy.clone())?;
         // A session's id used again: the screen kept of the one before is not this one's.
         self.terms.retain(|kept| kept.id != open.id);
-        self.shown = Shown::Term(open.id);
+        if shown {
+            self.shown = Shown::Term(open.id);
+        }
         self.terms.push(open);
         Ok(())
     }
@@ -316,10 +359,49 @@ fn strip_view(
     look: Look,
     proxy: EventLoopProxy<Cmd>,
 ) -> Result<WebView, String> {
+    strip_page(native, look, proxy, Part::Strip)
+}
+
+/// The side: the strip's page again, listing the tabs; what the person clicks there is said as
+/// the strip says it, from the side (its points are the side's).
+fn side_view(
+    native: &tao::window::Window,
+    look: Look,
+    proxy: EventLoopProxy<Cmd>,
+) -> Result<WebView, String> {
+    strip_page(native, look, proxy, Part::Side)
+}
+
+/// Which part of the window the strip's page draws.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Part {
+    Strip,
+    Side,
+    Nav,
+}
+
+fn strip_page(
+    native: &tao::window::Window,
+    look: Look,
+    proxy: EventLoopProxy<Cmd>,
+    part: Part,
+) -> Result<WebView, String> {
+    // Every part draws the agents' marks (the side's tabs, the bar's crumbs and offer).
+    let page = frame::dress(strip::PAGE, look).replacen("/*MARKS*/{}", &super::agents::marks(), 1);
+    let page = match part {
+        Part::Strip => page,
+        Part::Side => page.replacen("<html", "<html data-part=\"side\"", 1),
+        Part::Nav => page.replacen("<html", "<html data-part=\"nav\"", 1),
+    };
     let first = AtomicBool::new(true);
     let loaded = proxy.clone();
     let builder = WebViewBuilder::new()
-        .with_html(frame::dress(strip::PAGE, look))
+        // The first click in a window that is not the key one reaches the page: the person
+        // never clicks twice, once to wake the window and once to do what they meant.
+        .with_accept_first_mouse(true)
+        .with_html(page)
+        // The person's fonts, before the page's own scripts (settings.rs).
+        .with_initialization_script(super::settings::look_script(&super::settings::now()))
         .with_transparent(look == Look::Glass)
         .with_incognito(true)
         .with_focused(false)
@@ -328,7 +410,12 @@ fn strip_view(
         .with_new_window_req_handler(|_, _| NewWindowResponse::Deny)
         .with_download_started_handler(|_, _| false)
         .with_ipc_handler(move |request| {
-            let _ = proxy.send_event(Cmd::Clicked(request.body().clone()));
+            let said = request.body().clone();
+            let _ = proxy.send_event(match part {
+                Part::Strip => Cmd::Clicked(said),
+                Part::Side => Cmd::SideClicked(said),
+                Part::Nav => Cmd::NavClicked(said),
+            });
         })
         // Its tabs are drawn once its page can draw them.
         .with_on_page_load_handler(move |_, _| {

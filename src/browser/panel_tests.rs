@@ -63,15 +63,16 @@ fn a_paint_says_whether_the_window_is_still_open() {
 fn what_a_panels_page_posts_is_keys_typed_or_its_menu_asked_for() {
     assert_eq!(said("kls\r"), Some(Said::Typed("ls\r")));
     assert_eq!(said("k"), Some(Said::Typed("")));
-    assert_eq!(
-        said("m 120 40 1"),
-        Some(Said::Menu(120, 40, Selection::Some))
-    );
-    assert_eq!(said("m 0 7 0"), Some(Said::Menu(0, 7, Selection::None)));
+    let Some(Said::Menu(120, 40, items)) = said(r#"m 120 40 [{"label":"Copy"},{"line":true}]"#)
+    else {
+        panic!("a page's menu is read");
+    };
+    assert_eq!(items.len(), 2);
     // Nothing else is typed: an old page's bare keys, or a menu said wrong, go nowhere.
     assert_eq!(said("ls"), None);
     assert_eq!(said("m 1 2"), None);
     assert_eq!(said("m 1 2 3"), None);
+    assert_eq!(said("m 1 2 [{\"nothing\":1}]"), None);
 }
 
 #[test]

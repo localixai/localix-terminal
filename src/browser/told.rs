@@ -5,19 +5,132 @@
 pub const MAX_TABS: usize = 8;
 
 /// What the person did in the window, in words.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Heard<'a> {
     /// They did something in a tab (went to an address): news for whoever works in it.
     Did(&'a str),
     /// They closed a tab: news for whoever works in it.
     Closed(&'a str),
-    /// They closed the window.
-    WindowClosed(&'a str),
+    /// They asked to quit the app (its menu, the Dock, or closing its window where it has no
+    /// mini): the desk decides, asking them first when programs run.
+    Quit,
+    /// They brought the app forward with nothing to show (its Dock icon, opening it again): the
+    /// desk gives them a window, with their shell when it has no tab.
+    Reopened,
     /// They sent their comments on a page: words for the agent, as a message of theirs.
     Sent(&'a str),
-    /// They asked for a terminal of their own ("+"), in the project the key names (a group:
-    /// the project of the tab shown, empty when it has none).
+    /// They asked for a tab of their own ("+"), in the project the key names (a group: the
+    /// project of the tab shown, empty when it has none).
+    Asked(Asked),
+    /// What they did in the Event Center.
+    Center(CenterDid),
+    /// The window shows another project now (the key `heard` gives): the one used last.
+    Showing,
+    /// They picked a folder to open as a project (Open Folder…): the app makes it one, and the
+    /// window goes to it.
+    Folder(&'a std::path::Path),
+    /// A page showed an address, or was titled: the ledger keeps it (popups too, which the
+    /// window opened itself).
+    Went(Went<'a>),
+}
+
+/// A question to the person: go on (`yes`) or Cancel. The desk words it; the window asks it as
+/// its system asks.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Confirm {
+    pub title: String,
+    pub detail: String,
+    pub yes: String,
+}
+
+/// Where the person's answers to the window's offers are kept (offer.rs asks; the app keeps
+/// them, `offers::Kept`).
+pub trait Answers: Send + Sync {
+    /// Whether offer `id` may be shown now.
+    fn due(&self, id: &str) -> bool;
+    /// The person answered offer `id`: took it (`taken`), or put it off.
+    fn answered(&self, id: &str, taken: bool);
+}
+
+/// What a page showed: its address and title, and the project its tab is of (empty: the
+/// window does not know, a popup's).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Went<'a> {
+    pub url: &'a str,
+    pub title: &'a str,
+    pub group: &'a str,
+}
+
+/// What a tab of a project's past is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TabKind {
+    Page,
     Terminal,
+    Board,
+}
+
+/// A tab of a project's past, as the history menu lists it: its row in the ledger, what it is,
+/// its title and its page (or folder), and its tab's key while it is open.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Past {
+    pub row: i64,
+    pub kind: TabKind,
+    pub title: String,
+    pub detail: String,
+    pub key: Option<String>,
+}
+
+/// A page a project showed, which the address field suggests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Visited {
+    pub title: String,
+    pub url: String,
+}
+
+/// What the window holds of a project's past: its tabs, the latest first, and its pages.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Ledger {
+    pub tabs: Vec<Past>,
+    pub visited: Vec<Visited>,
+}
+
+/// A project as the window shows it: the key its tabs are grouped by, what it is called (its
+/// folder's name, told apart from another of the same name), and its folder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Place {
+    pub key: String,
+    pub name: String,
+    pub folder: std::path::PathBuf,
+}
+
+/// What the person did in the Event Center.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CenterDid {
+    /// They opened it: all it shows is seen.
+    Opened,
+    /// They chose button `button` of the event numbered `event`.
+    Chose { event: u64, button: usize },
+    /// They cleared it: all it shows is dismissed.
+    Cleared,
+}
+
+/// A tab the person asked for: with "+", its keys, the history, the address field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Asked {
+    /// A page of theirs, at this address, or with none on the search page. The browser opens
+    /// for it when none is open.
+    Page(Option<String>),
+    /// A terminal of theirs, in this folder of the project, else in the project's.
+    Terminal(Option<std::path::PathBuf>),
+    /// The project's board, opened or shown.
+    Board,
+    /// A coding agent's program, in a terminal of theirs in the project's folder: its command.
+    Agent(&'static str),
+    /// A closed tab of the project's history, opened again: its row in the ledger.
+    Again(i64),
+    /// They went to the project, which has no tab open: what it had open when the app quit, or
+    /// their shell in its folder.
+    Project,
 }
 
 /// One tab as the agent reads it.

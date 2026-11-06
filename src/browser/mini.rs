@@ -19,7 +19,6 @@ use super::frame;
 use super::host::Cmd;
 use super::placement::MINI;
 use super::platform::{adopt_mini, grip_mini, hide_mini, keep_tab_rendering, show_mini};
-use super::presence::Event;
 use super::tab_view::build;
 
 /// The mini's page.
@@ -32,10 +31,18 @@ pub(super) struct Mini {
 
 /// What the mini's page said, as a command.
 fn heard(said: &str) -> Option<Cmd> {
-    (said == "expand").then_some(Cmd::Presence(Event::Expand))
+    (said == "expand").then_some(Cmd::Opened)
 }
 
 impl Mini {
+    /// The person's settings: its theme and its page's fonts.
+    pub(super) fn restyle(&self, settings: &super::settings::Settings) {
+        self.window.set_theme(frame::themed(settings.theme));
+        let _ = self
+            .webview
+            .evaluate_script(&super::settings::look_script(settings));
+    }
+
     /// The mini at `at` (its top left), out of sight until [`Mini::show`].
     pub(super) fn new(
         target: &EventLoopWindowTarget<Cmd>,
@@ -59,6 +66,8 @@ impl Mini {
         let said = proxy.clone();
         let builder = WebViewBuilder::new()
             .with_html(PAGE)
+            // The person's fonts, before the page's own scripts (settings.rs).
+            .with_initialization_script(super::settings::look_script(&super::settings::now()))
             .with_transparent(true)
             .with_incognito(true)
             .with_focused(false)

@@ -1,6 +1,7 @@
 //! A choice put to the person as GTK's own menu (Linux), where the pointer is: what the strip's
 //! buttons offer ("+": a page or a terminal; the history). A menu pops over the pages, so nothing
-//! of the window's layout changes for it; it answers the item picked, or none.
+//! of the window's layout changes for it; it answers the item picked, or none. A question (go on,
+//! or Cancel) is GTK's own dialog.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -12,26 +13,15 @@ use gtk::prelude::{
 };
 use wry::{WebView, WebViewExtUnix};
 
-/// Show `items` as a menu at the pointer, over `strip`'s window, and wait for the person: the
-/// index of the item picked, or none when they dismissed it.
-pub(super) fn choose(strip: &WebView, items: &[&str], marked: Option<usize>) -> Option<usize> {
+use super::choice::Entry;
+
+/// Show `entries` as a menu at the pointer, over `strip`'s window, and wait for the person: the
+/// place of the item picked among them (`choice::flat`), or none when they dismissed it.
+pub(super) fn show(strip: &WebView, entries: &[Entry]) -> Option<usize> {
     let menu = gtk::Menu::new();
     // The index picked, `usize::MAX` for none.
     let picked = Arc::new(AtomicUsize::new(usize::MAX));
-    for (at, label) in items.iter().enumerate() {
-        // The item chosen now (the page's size, commenting) is checked, as on macOS. Checked
-        // before the handler below is connected: checking an item activates it.
-        let entry: gtk::MenuItem = if marked == Some(at) {
-            let chosen = gtk::CheckMenuItem::with_label(label);
-            chosen.set_active(true);
-            chosen.upcast()
-        } else {
-            gtk::MenuItem::with_label(label)
-        };
-        let picked = Arc::clone(&picked);
-        entry.connect_activate(move |_| picked.store(at, Ordering::SeqCst));
-        menu.append(&entry);
-    }
+    fill(&menu, entries, &picked, &mut 0);
     menu.set_attach_widget(Some(&strip.webview()));
     menu.show_all();
     // A menu is closed before its item acts: the wait ends once both are done.
@@ -77,3 +67,62 @@ pub(super) fn choose(strip: &WebView, items: &[&str], marked: Option<usize>) -> 
     let at = picked.load(Ordering::SeqCst);
     (at < items.len()).then_some(at)
 }
+
+/// `entries` added to `menu`, their items numbered from `next` on.
+fn fill(menu: &gtk::Menu, entries: &[Entry], picked: &Arc<AtomicUsize>, next: &mut usize) {
+    for entry in entries {
+        match entry {
+            Entry::Line { .. } => menu.append(&gtk::SeparatorMenuItem::new()),
+            Entry::Sub { label, items } => {
+                let sub = gtk::Menu::new();
+                fill(&sub, items, picked, next);
+                let opens = gtk::MenuItem::with_label(label);
+                opens.set_submenu(Some(&sub));
+                menu.append(&opens);
+            }
+            Entry::Item {
+                label, marked, off, ..
+            } => {
+                let at = *next;
+                *next += 1;
+                // The item chosen now is checked, as on macOS; checked before the handler below
+                // is connected: checking an item activates it.
+                let item: gtk::MenuItem = if *marked {
+                    let chosen = gtk::CheckMenuItem::with_label(label);
+                    chosen.set_active(true);
+                    chosen.upcast()
+                } else {
+                    gtk::MenuItem::with_label(label)
+                };
+                item.set_sensitive(!off);
+                let picked = Arc::clone(picked);
+                item.connect_activate(move |_| picked.store(at, Ordering::SeqCst));
+                menu.append(&item);
+            }
+        }
+    }
+}
+
+/// `question` asked of the person in GTK's dialog: whether they went on.
+pub(super) fn confirm(question: &super::Confirm) -> bool {
+    use gtk::prelude::{DialogExt, GtkWindowExt, MessageDialogExt};
+    let dialog = gtk::MessageDialog::new(
+        None::<&gtk::Window>,
+        gtk::DialogFlags::MODAL,
+        gtk::MessageType::Question,
+        gtk::ButtonsType::None,
+        &question.title,
+    );
+    dialog.set_secondary_text(Some(&question.detail));
+    dialog.add_button("Cancel", gtk::ResponseType::Cancel);
+    dialog.add_button(&question.yes, gtk::ResponseType::Accept);
+    let answer = dialog.run();
+    dialog.close();
+    answer == gtk::ResponseType::Accept
+}
+
+/// Nothing outside the window quits the app here: its close does.
+pub(super) fn quit_through(_proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>) {}
+
+/// Elsewhere there is no menu bar to grey.
+pub(super) fn page_shown(_shown: bool) {}

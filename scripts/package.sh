@@ -1,6 +1,6 @@
 #!/bin/sh
-# Packs a release build: dist/llx-desk-TARGET.tar.gz with the program and the licence, the names
-# the plugin's launcher and install.sh download.
+# Packs a release build for Linux: dist/llx-desk-TARGET.tar.gz with the program and the licence,
+# what install.sh downloads (macOS gets LLX Desk.app instead, scripts/bundle-macos.sh).
 #   scripts/package.sh target/release/llx-desk x86_64-unknown-linux-gnu
 set -eu
 binary=$1

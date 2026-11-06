@@ -72,7 +72,7 @@ pub(super) fn pictured(
             .recv_timeout(PICTURE)
             .ok()
             .and_then(Result::ok)
-            .and_then(saved);
+            .and_then(|shot| saved(&shot));
         if let Some(file) = file {
             said = format!("{said}\nPicture of it: {}", file.display());
         }
@@ -86,17 +86,11 @@ pub(super) fn pictured(
     }
 }
 
-/// `shot` in a file of its own under the system's temporary directory, where an agent can read it.
-fn saved(shot: Shot) -> Option<PathBuf> {
+/// `shot` in a file of its own under the system's temporary directory, where an agent can read it;
+/// the newest few are kept, as screenshots are.
+fn saved(shot: &Shot) -> Option<PathBuf> {
     let dir = std::env::temp_dir().join("desk-comments");
-    std::fs::create_dir_all(&dir).ok()?;
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .ok()?
-        .as_millis();
-    let file = dir.join(format!("{}-{stamp}.jpg", std::process::id()));
-    std::fs::write(&file, shot.jpeg).ok()?;
-    Some(file)
+    crate::shots::save(&dir, &shot.jpeg).ok()
 }
 
 #[cfg(test)]

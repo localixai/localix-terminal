@@ -1,4 +1,4 @@
-//! Protocol v2 between a client and the daemon: JSON-RPC 2.0, one message per line. A response
+//! The protocol between a client and the app: JSON-RPC 2.0, one message per line. A response
 //! may carry bytes (a screenshot): its result announces them as `binary: {length, mime}`, and
 //! exactly that many raw bytes follow its line, on the same connection, as part of the same
 //! write. The protocol grows by optional fields and new methods; both sides ignore what they do
@@ -11,7 +11,7 @@ use std::io::{self, BufRead, Read};
 use serde_json::{Map, Value, json};
 
 /// The protocol version this build speaks. A breaking change is a new number.
-pub const PROTOCOL: u32 = 2;
+pub const PROTOCOL: u32 = 3;
 
 /// The longest line read: a request or a response without its bytes.
 const MAX_LINE: u64 = 8 << 20;
@@ -31,7 +31,7 @@ pub mod code {
     pub const FATAL: i64 = -32001;
     /// `initialize` has not come first.
     pub const NOT_INITIALIZED: i64 = -32002;
-    /// The daemon is stopping, or too busy to take the call.
+    /// The app is stopping, or too busy to take the call.
     pub const UNAVAILABLE: i64 = -32003;
 }
 
@@ -229,7 +229,7 @@ fn parse(value: Value) -> Result<Message, RpcError> {
     };
     if fields.get("jsonrpc") != Some(&json!("2.0")) {
         return Err(invalid(
-            "not JSON-RPC 2.0: this is protocol 2, and an older daemon speaks another",
+            "not JSON-RPC 2.0: an older app speaks another protocol",
         ));
     }
     let id = fields

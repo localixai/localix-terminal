@@ -1,56 +1,40 @@
-//! The client's side of the socket: find the daemon, start it when a call needs one, say
-//! `initialize`, and keep a [`Link`] to ask on. The CLI, `--said --follow` and the MCP relay are
-//! all clients of it.
+//! The client's side of the socket: find the server, start it when a call needs one (the app,
+//! through LaunchServices, when this program is the app's; else this program as `serve`), say
+//! `initialize`, and keep a [`Link`] to ask on. The CLI and `--said --follow` are its clients.
 
 mod link;
 mod params;
 
-use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::mpsc::{Receiver, sync_channel};
 use std::time::{Duration, Instant};
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
 
 pub use link::{Answer, Error, Link, Notes};
-pub use params::{host_project, window_params};
+pub use params::{Caller, environment, window_params};
 
 use crate::wire::PROTOCOL;
 
-/// Whether a call may start the daemon.
+/// Whether a call may start the app.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Start {
     /// Start it if nothing answers.
     Spawn,
-    /// Never: ending tabs or fetching comments must not bring a daemon up.
+    /// Never: ending tabs or fetching comments must not bring the app up.
     Never,
 }
 
-/// How long a started daemon has to listen.
+/// How long a started app has to listen.
 const READY: Duration = Duration::from_secs(20);
 /// How long the handshake may take.
 const SHAKE: Duration = Duration::from_secs(10);
 
-/// Why no connection could be made.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Trouble {
-    /// A daemon of an older protocol answers the socket: none is started beside it.
-    Older(String),
-    /// Anything else: it did not start, did not answer, or refused.
-    Failed(String),
-}
-
-impl std::fmt::Display for Trouble {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Older(why) | Self::Failed(why) => f.write_str(why),
-        }
-    }
-}
-
-/// What the daemon said of itself.
+/// What the app said of itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Server {
     pub version: String,
@@ -65,9 +49,9 @@ pub struct Client {
 }
 
 impl Client {
-    /// The daemon, or `None` when nothing listens and `start` is `Never`. `notes` hears the
-    /// daemon's notifications.
-    pub fn connect(start: Start, notes: &Notes) -> Result<Option<Self>, Trouble> {
+    /// The app, or `None` when nothing listens and `start` is `Never`. `notes` hears the
+    /// app's notifications.
+    pub fn connect(start: Start, notes: &Notes) -> Result<Option<Self>, String> {
         let socket = crate::paths::socket();
         if let Ok(stream) = UnixStream::connect(&socket) {
             return Self::over(stream, notes).map(Some);
@@ -75,7 +59,7 @@ impl Client {
         if start == Start::Never {
             return Ok(None);
         }
-        let exited = reap(spawn().map_err(Trouble::Failed)?).map_err(Trouble::Failed)?;
+        let exited = reap(start_server()?)?;
         let deadline = Instant::now() + READY;
         loop {
             if let Ok(stream) = UnixStream::connect(&socket) {
@@ -85,39 +69,41 @@ impl Client {
             if let Ok(status) = exited.try_recv()
                 && !status.success()
             {
-                return Err(Trouble::Failed(format!(
-                    "the daemon could not start ({status}): {}",
+                return Err(format!(
+                    "the server could not start ({status}): {}",
                     log_tail()
-                )));
+                ));
             }
             if Instant::now() >= deadline {
-                return Err(Trouble::Failed(format!(
-                    "the daemon did not start within {}s (see {})",
+                return Err(format!(
+                    "the server did not start within {}s (see {})",
                     READY.as_secs(),
-                    crate::paths::home().join("daemon.log").display()
-                )));
+                    crate::paths::log().display()
+                ));
             }
             backoff();
         }
     }
 
     /// The handshake over `stream`.
-    pub fn over(stream: UnixStream, notes: &Notes) -> Result<Self, Trouble> {
+    pub fn over(stream: UnixStream, notes: &Notes) -> Result<Self, String> {
         let link = Link::open(stream, Notes::clone(notes))
-            .map_err(|e| Trouble::Failed(format!("the daemon's socket: {e}")))?;
+            .map_err(|e| format!("the server's socket: {e}"))?;
         let hello = json!({
             "protocolVersion": PROTOCOL,
-            "clientInfo": {"name": "llx-desk", "version": env!("CARGO_PKG_VERSION"), "build": crate::daemon::build()},
+            "clientInfo": {"name": "llx-desk", "version": env!("CARGO_PKG_VERSION"), "build": crate::server::build()},
             "capabilities": {"binary": true},
         });
         let answer = link
             .request("initialize", hello, Some(SHAKE))
             .map_err(|why| match why {
-                Error::Foreign(detail) => Trouble::Older(older(&detail)),
+                Error::Foreign(detail) => format!(
+                    "another build's server answers, of another protocol: quit LLX Desk (`llx-desk quit`) and call again ({detail})"
+                ),
                 Error::Broken(_) | Error::Timeout => {
-                    Trouble::Failed(format!("the daemon did not complete the handshake: {why}"))
+                    format!("the server did not complete the handshake: {why}")
                 }
-                Error::Rpc(error) => Trouble::Failed(error.message),
+                Error::Rpc(error) => error.message,
             })?;
         let info = &answer.value["serverInfo"];
         let text = |name: &str| info[name].as_str().unwrap_or_default().to_string();
@@ -145,84 +131,117 @@ impl Client {
     }
 }
 
-/// What to say when the handshake gets no protocol-2 answer: an older daemon is running, and no
-/// second one is started beside it.
-fn older(detail: &str) -> String {
-    let pid = std::fs::read_to_string(crate::paths::lock()).unwrap_or_default();
-    format!(
-        "a daemon of an older protocol is running (pid {}): `llx-desk serve stop` ends it, and the next call starts this build's ({detail})",
-        pid.trim()
-    )
+/// Why a call has no answer.
+pub enum Trouble {
+    /// No server runs, and the call did not ask for one.
+    None,
+    /// The server spoke, and said no.
+    Refused(String),
+    /// The server could not be reached.
+    Lost(String),
 }
 
-/// An older daemon's `status` or `stop`, in its own protocol, so the new build can end it.
-pub fn legacy(op: &str) -> Result<String, String> {
-    let mut stream = UnixStream::connect(crate::paths::socket()).map_err(|e| e.to_string())?;
-    stream
-        .set_read_timeout(Some(SHAKE))
-        .map_err(|e| e.to_string())?;
-    writeln!(stream, "{{\"op\":\"{op}\"}}").map_err(|e| e.to_string())?;
-    let mut line = String::new();
-    BufReader::new(stream)
-        .read_line(&mut line)
-        .map_err(|e| e.to_string())?;
-    let said: Value = serde_json::from_str(&line).map_err(|e| e.to_string())?;
-    Ok(said["text"].as_str().unwrap_or_default().to_string())
+/// `method` asked of the server, once more after a connection that broke under it: the one
+/// request every adapter (the CLI, `llx-desk mcp`) makes.
+pub fn ask(start: Start, method: &str, params: &Value) -> Result<Answer, Trouble> {
+    let notes: Notes = Arc::new(|_, _| {});
+    // Every request has a key, so that the one made again is not done twice.
+    let mut params = params.clone();
+    if let Some(fields) = params.as_object_mut() {
+        fields
+            .entry("idempotencyKey")
+            .or_insert_with(|| json!(crate::token()));
+    }
+    let mut last = Trouble::None;
+    for _ in 0..2 {
+        let client = match Client::connect(start, &notes) {
+            Ok(Some(client)) => client,
+            Ok(None) => return Err(Trouble::None),
+            Err(why) => return Err(Trouble::Lost(why)),
+        };
+        match client.request(method, params.clone()) {
+            Ok(answer) => return Ok(answer),
+            Err(Error::Rpc(error)) => return Err(Trouble::Refused(error.message)),
+            Err(other @ (Error::Broken(_) | Error::Timeout | Error::Foreign(_))) => {
+                last = Trouble::Lost(other.to_string())
+            }
+        }
+    }
+    Err(last)
 }
 
-/// `llx-desk serve`, detached: its own session, no terminal, its output in the home's log.
-fn spawn() -> Result<Child, String> {
-    let home = crate::paths::ensure_home()
-        .map_err(|e| format!("{}: {e}", crate::paths::home().display()))?;
-    let exe = std::env::current_exe().map_err(|e| format!("cannot find itself: {e}"))?;
-    let log = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(home.join("daemon.log"))
-        .map_err(|e| format!("daemon.log: {e}"))?;
-    let err = log.try_clone().map_err(|e| format!("daemon.log: {e}"))?;
-    let mut daemon = Command::new(exe);
-    daemon
-        .arg("serve")
+/// The server started: the app through LaunchServices when this program is the app's (so it
+/// runs as the app, with its name and its Dock icon, and one of it), else this program as
+/// `serve`, in a session of its own. Either writes its own log (`server::log_to_home`).
+fn start_server() -> Result<Child, String> {
+    crate::paths::ensure_home().map_err(|e| format!("{}: {e}", crate::paths::home().display()))?;
+    let mut server = match crate::bundle::app() {
+        Some(app) => launch(&app),
+        None => {
+            let exe = std::env::current_exe().map_err(|e| format!("cannot find itself: {e}"))?;
+            let mut server = Command::new(exe);
+            // The server starts terminals too: with what the person set, not the caller's
+            // session.
+            server.env_clear().envs(params::scrubbed()).arg("serve");
+            // SAFETY: the hook calls only setsid, which is async-signal-safe: the server outlives
+            // this caller's terminal and its process group.
+            unsafe { server.pre_exec(detach) };
+            server
+        }
+    };
+    server
         .stdin(Stdio::null())
-        .stdout(Stdio::from(log))
-        .stderr(Stdio::from(err));
-    // SAFETY: the hook calls only setsid, which is async-signal-safe: the daemon outlives this
-    // caller's terminal and its process group.
-    unsafe { daemon.pre_exec(detach) };
-    // Not waited for to its end: it is a daemon, reaped by init once this process is gone.
-    daemon
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()
-        .map_err(|e| format!("could not start the daemon: {e}"))
+        .map_err(|e| format!("could not start the server: {e}"))
 }
 
-/// The daemon waited for on a thread of its own, so that it is reaped when it ends however long
-/// this process lives (a relay outlives many daemons); its exit status comes on the channel.
-fn reap(mut daemon: Child) -> Result<Receiver<ExitStatus>, String> {
+/// `open` asked to start `app` as the server, in the background (it never takes the person's
+/// keys), its files where this caller's are (`paths::MOVED_BY`).
+fn launch(app: &std::path::Path) -> Command {
+    let mut open = Command::new("/usr/bin/open");
+    open.arg("-g").arg("-a").arg(app);
+    for name in crate::paths::MOVED_BY {
+        if let Some(value) = std::env::var_os(name) {
+            let mut pair = std::ffi::OsString::from(name);
+            pair.push("=");
+            pair.push(value);
+            open.arg("--env").arg(pair);
+        }
+    }
+    open.arg("--args").arg("serve");
+    open
+}
+
+/// What started the server (`open`, or the server itself) waited for on a thread of its own, so
+/// that it is reaped when it ends however long this process lives; its exit status comes on the
+/// channel.
+fn reap(mut child: Child) -> Result<Receiver<ExitStatus>, String> {
     let (status, exited) = sync_channel(1);
     std::thread::Builder::new()
-        .name("daemon-reaper".into())
+        .name("server-reaper".into())
         .spawn(move || {
-            if let Ok(ended) = daemon.wait() {
+            if let Ok(ended) = child.wait() {
                 let _ = status.send(ended);
             }
         })
-        .map_err(|e| format!("could not wait for the daemon: {e}"))?;
+        .map_err(|e| format!("could not wait for the app: {e}"))?;
     Ok(exited)
 }
 
-/// The last line of the daemon's log: why it did not start.
+/// The last line of the app's log: why it did not start.
 fn log_tail() -> String {
-    let log = std::fs::read_to_string(crate::paths::home().join("daemon.log")).unwrap_or_default();
+    let log = std::fs::read_to_string(crate::paths::log()).unwrap_or_default();
     log.lines()
         .last()
-        .unwrap_or("no word in daemon.log")
+        .unwrap_or("no word in app.log")
         .to_string()
 }
 
 #[expect(
     clippy::disallowed_methods,
-    reason = "a backoff while the daemon starts: there is no event to wait on"
+    reason = "a backoff while the app starts: there is no event to wait on"
 )]
 fn backoff() {
     std::thread::sleep(Duration::from_millis(50));

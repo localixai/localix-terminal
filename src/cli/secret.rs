@@ -49,7 +49,7 @@ fn save(dir: &std::path::Path, name: &str) -> u8 {
     match crate::secrets::save_in(dir, name, &value) {
         Ok(path) => {
             say(&format!(
-                "Secret {name} is saved in {}. A call names it as {}: in a goal's values, or a terminal's input.",
+                "Secret {name} is saved in {}. A call names it as {}: in a page's `fill`, or a terminal's input.",
                 path.display(),
                 crate::secrets::reference(name)
             ));

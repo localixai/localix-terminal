@@ -3,22 +3,15 @@
 use super::*;
 
 #[test]
-fn the_page_takes_the_persons_colours() {
-    let theme = Theme {
-        fg: [0x10, 0x20, 0x30],
-        bg: [0xfe, 0xdc, 0xba],
-        cursor: [0, 0, 0xff],
-    };
-    let themed = page("session 1 · <b>&", Some(&theme));
-    assert!(themed.contains("--fg:#102030"), "{themed}");
-    assert!(themed.contains("--bg:#fedcba"));
-    assert!(themed.contains("--cursor:#0000ff"));
-    assert!(themed.contains("<title>session 1 · &lt;b&gt;&amp;</title>"));
-    assert!(themed.contains("Content-Security-Policy"));
-    // Without them, the system's light or dark.
-    let plain = page("session 1", None);
-    assert!(plain.contains("prefers-color-scheme: dark"));
-    assert!(!plain.contains("--fg:#102030"));
+fn the_page_is_in_the_windows_light_or_dark() {
+    let page = page("session 1 · <b>&");
+    assert!(
+        page.contains("<title>session 1 · &lt;b&gt;&amp;</title>"),
+        "{page}"
+    );
+    assert!(page.contains("Content-Security-Policy"));
+    assert!(page.contains("prefers-color-scheme: dark"));
+    assert!(!page.contains("{{theme}}"));
 }
 
 fn digest(text: &str) -> String {
@@ -29,7 +22,7 @@ fn digest(text: &str) -> String {
 
 #[test]
 fn the_terminal_page_runs_the_vendored_scripts_by_their_hashes_and_nothing_else() {
-    let page = page("session 2 · <i>", None);
+    let page = page("session 2 · <i>");
     assert!(page.contains(&format!("<script>{XTERM}</script>")));
     assert!(page.contains(&format!("<script>{FIT}</script>")));
     assert!(page.contains(&format!("<script>{GLUE}</script>")));

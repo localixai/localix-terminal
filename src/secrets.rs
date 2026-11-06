@@ -1,7 +1,7 @@
 //! Secrets an agent may have typed without ever seeing them: a password saved once with
-//! `llx-desk secret NAME < FILE`, kept 0600 in the config directory beside the OpenRouter key,
-//! and named in a call as `{{secret:NAME}}` (in a goal's `values`, or a terminal's `input`). The
-//! daemon puts the value in where it is typed, and every answer it gives shows `{{secret:NAME}}`
+//! `llx-desk secret NAME < FILE`, kept 0600 in the config directory, and named in a call as
+//! `{{secret:NAME}}` (a page's `fill`, or a terminal's `input`). The
+//! app puts the value in where it is typed, and every answer it gives shows `{{secret:NAME}}`
 //! wherever the value would be. Nothing prints a saved value.
 
 use std::fmt::Write as _;
@@ -16,9 +16,9 @@ const CLOSE: &str = "}}";
 /// A value shorter than this would be found in too much ordinary text to be told apart.
 pub const MIN_LEN: usize = 4;
 
-/// Where the secrets are: `secrets` beside the saved OpenRouter key.
+/// Where the secrets are: `secrets` in the person's config directory.
 pub fn dir() -> Option<PathBuf> {
-    crate::key::path().and_then(|key| key.parent().map(|dir| dir.join("secrets")))
+    crate::paths::config().map(|dir| dir.join("secrets"))
 }
 
 /// A name is letters, digits, `_` and `-`, at most 64 of them.
@@ -112,7 +112,7 @@ pub fn forget_in(dir: &Path, name: &str) -> io::Result<bool> {
     }
 }
 
-/// The secrets this daemon put in somewhere, by name: every answer is masked with them.
+/// The secrets this app put in somewhere, by name: every answer is masked with them.
 #[derive(Default)]
 pub struct Vault {
     known: Mutex<Vec<(String, String)>>,
@@ -141,11 +141,6 @@ impl Vault {
     pub fn mask(&self, text: &str) -> String {
         masked(&crate::lock(&self.known), text)
     }
-
-    /// The known secrets, for a goal's view to put in and mask.
-    pub fn known(&self) -> Vec<(String, String)> {
-        crate::lock(&self.known).clone()
-    }
 }
 
 /// `text` with each of `known` (name, value) shown as its reference, in every form of it. One
@@ -153,6 +148,9 @@ impl Vault {
 /// whole: a secret's value inside another's reference (`PASS` in `{{secret:PASSWORD}}`) is
 /// never a match.
 pub(crate) fn masked(known: &[(String, String)], text: &str) -> String {
+    if known.is_empty() {
+        return text.to_string();
+    }
     let mut all: Vec<(String, String)> = (known.iter())
         .flat_map(|(name, value)| forms(value).into_iter().map(|form| (form, reference(name))))
         .collect();

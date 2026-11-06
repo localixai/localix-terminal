@@ -3,7 +3,9 @@
 
 use std::time::{Duration, Instant};
 
-use llx_desk::browser::{Browser, Driver, Panel, WebviewDriver, Window};
+use llx_desk::browser::{
+    Browser, Driver, Ledger, Panel, Past, Place, TabKind, WebviewDriver, Window,
+};
 use serde_json::{Value, json};
 
 /// What the page shows: the first rows' text, the cursor, the title, and whether it has the
@@ -64,8 +66,8 @@ fn shown(
 }
 
 pub(crate) fn scenario(browser: &Browser, driver: &WebviewDriver) {
-    let page = llx_desk::terminal::page("session 1 · cat", None);
-    let panel = browser.panel(1, "session 1 · cat", page, None);
+    let page = llx_desk::terminal::page("session 1 · cat");
+    let panel = browser.panel(1, "session 1 · cat", page);
     let second = Duration::from_secs(1);
     let wait = Duration::from_secs(10);
 
@@ -212,9 +214,11 @@ pub(crate) fn glass(browser: &Browser, driver: &WebviewDriver, window: &Window, 
         std::thread::sleep(Duration::from_millis(100));
         size = driver.observe().unwrap().viewport;
     }
-    // A shown window fits the person's screen (960 to 1440 wide, its height), the strip of tabs above it.
+    // A shown window fits the person's screen (960 to 1440 wide, its height), the strip above
+    // the page and, but in GTK's column, the tabs' column (264 points) beside it.
+    let side = if cfg!(target_os = "linux") { 0 } else { 264 };
     assert!(
-        (960..=1440).contains(&size.w) && size.h >= 600,
+        (960 - side..=1440).contains(&size.w) && size.h >= 600,
         "{} by {}",
         size.w,
         size.h
@@ -241,8 +245,8 @@ pub(crate) fn glass(browser: &Browser, driver: &WebviewDriver, window: &Window, 
 /// A panel opened before any browser window draws as a shown page does, with animation frames
 /// (an emulator draws in them): WebKit must not take it for a hidden one.
 pub(crate) fn first(browser: &Browser) {
-    let page = llx_desk::terminal::page("session 0 · sh", None);
-    let panel = browser.panel(9, "session 0 · sh", page, None);
+    let page = llx_desk::terminal::page("session 0 · sh");
+    let panel = browser.panel(9, "session 0 · sh", page);
     let deadline = Instant::now() + Duration::from_secs(10);
     while browser.peek(&panel, "typeof W") != Ok(json!("function")) {
         assert!(Instant::now() < deadline, "the panel never loaded");
@@ -270,50 +274,115 @@ pub(crate) fn first(browser: &Browser) {
     let seen = browser.peek(&panel, read).unwrap();
     assert_eq!(seen[1], "visible", "{seen}");
     assert!(seen[0].as_u64() > Some(5), "no animation frames: {seen}");
-    // Two projects' tabs: a row of the projects, set as text; one project's, no row.
-    let labels = |want: Value| {
-        // Each pill: the project's name, then how many of its tabs are open.
-        let read = "[...document.querySelectorAll('.p')].map(p => p.firstChild.textContent)";
+    // Two projects: the switcher names the one shown, as text; a tab of the other opens out of
+    // sight there, the switcher marked, until the person goes to it.
+    let switcher = |name: &str, marked: bool| {
+        let read = "[document.querySelector('#pj .n')?.textContent ?? '', !!document.querySelector('#pj .d')]";
+        let want = json!([name, marked]);
         let deadline = Instant::now() + Duration::from_secs(10);
         while browser.peek_strip(read) != Ok(want.clone()) {
-            assert!(Instant::now() < deadline, "{:?}", browser.peek_strip(read));
+            assert!(
+                Instant::now() < deadline,
+                "{:?}, want {want}; {:?}",
+                browser.peek_strip(read),
+                browser.listing()
+            );
             std::thread::sleep(Duration::from_millis(20));
         }
     };
+    let own = |count: u64| {
+        let read = "document.querySelectorAll('.t').length";
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while browser.peek_tabs(read) != Ok(json!(count)) {
+            assert!(Instant::now() < deadline, "{:?}", browser.peek_tabs(read));
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let place = |key: &str| Place {
+        key: key.into(),
+        name: key.into(),
+        folder: std::env::temp_dir(),
+    };
+    browser.places(vec![place("alpha"), place("beta <i>")]);
     browser.group(&tab, "alpha");
+    switcher("alpha", false);
     browser.group("t8", "beta <i>");
-    let other = browser.panel(
-        8,
-        "session 8 · sh",
-        llx_desk::terminal::page("sh", None),
-        None,
+    let other = browser.panel(8, "session 8 · sh", llx_desk::terminal::page("sh"));
+    switcher("alpha", true);
+    own(1);
+    // The history menu lists the shown project's past, as the app tells it; what became of each
+    // open tab the window says.
+    let past = Past {
+        row: 8,
+        kind: TabKind::Terminal,
+        title: "session 8 · sh".into(),
+        detail: String::new(),
+        key: Some("t8".into()),
+    };
+    browser.ledger(
+        "beta <i>",
+        Ledger {
+            tabs: vec![past],
+            visited: vec![],
+        },
     );
-    labels(json!(["alpha", "beta <i>"]));
-    // Under the projects, the shown one's tabs alone.
-    let own = "document.querySelectorAll('.t').length";
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while browser.peek_strip(own) != Ok(json!(1)) {
-        assert!(Instant::now() < deadline, "{:?}", browser.peek_strip(own));
-        std::thread::sleep(Duration::from_millis(20));
+    browser.go("beta <i>");
+    switcher("beta <i>", false);
+    own(1);
+    // The side's edge dragged: the side takes the width, held to its narrowest; a double click
+    // sets the usual width back. An open menu leaves the side where it is.
+    if cfg!(target_os = "macos") {
+        let width = |want: u64| {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while browser.peek_tabs("window.innerWidth") != Ok(json!(want)) {
+                assert!(
+                    Instant::now() < deadline,
+                    "{:?}",
+                    browser.peek_tabs("window.innerWidth")
+                );
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        };
+        browser.click("side-width 300");
+        width(300);
+        browser.click("side-width 40 done");
+        width(180);
+        browser.click("history");
+        browser.click("side-width 260 done");
+        width(260);
+        browser.click("unmenu");
+        browser.click("side-width usual done");
+        width(264);
     }
     let listed = browser.listing().unwrap_or_default();
     let groups: Vec<&str> = listed.iter().map(|tab| tab.group.as_str()).collect();
     assert_eq!(groups, ["alpha", "beta <i>"]);
     // Closed by the person, a terminal is in the history menu, still running; a click there makes
     // it a tab again, its screen as live as before.
+    // Its project's last tab closed, the window goes to the tab it shows next (alpha's); gone
+    // back to, it lists none, and its history holds the terminal.
     browser.click("close t8");
-    labels(json!([]));
+    switcher("alpha", false);
+    browser.go("beta <i>");
+    switcher("beta <i>", false);
+    own(0);
     browser.click("history");
     let at = menu_entry(browser, "t8", "hidden");
     browser.click(&format!("visit {at}"));
-    labels(json!(["alpha", "beta <i>"]));
+    own(1);
     assert!(other.paint(&frame(&lines(&["back"]), None)));
     shown(browser, &other, Duration::from_secs(10), |read| {
         read["rows"][0] == "back"
     });
     drop(other);
-    labels(json!([]));
+    // Its project's history keeps the terminal that ended; the other project's tabs are as they
+    // were.
+    browser.go("beta <i>");
+    switcher("beta <i>", false);
     history_menu(browser);
+    browser.go("alpha");
+    switcher("alpha", false);
+    shortcuts(browser);
     // The last tab gone, the window is too.
     drop(panel);
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -321,6 +390,37 @@ pub(crate) fn first(browser: &Browser) {
         assert!(Instant::now() < deadline, "the window stayed");
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// The shortcuts do as the strip's clicks do (shortcuts.rs): Settings opens as the window's own
+/// tab (of no project, listed in each), a tab is shown by its place, and Settings closed is kept, shown again as it was.
+fn shortcuts(browser: &Browser) {
+    let until = |what: &str, done: &dyn Fn(&str, &[String]) -> bool| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let (shown, tabs) = showing(browser).unwrap_or_default();
+            if done(&shown, &tabs) {
+                return;
+            }
+            assert!(Instant::now() < deadline, "{what}: {shown} of {tabs:?}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let has = |tabs: &[String], key: &str| tabs.iter().any(|tab| tab == key);
+    browser.click("key settings");
+    until("settings shown", &|shown, tabs| {
+        shown == "s1" && has(tabs, "s1")
+    });
+    browser.click("key tab 1");
+    until("the first tab shown", &|shown, _| shown != "s1");
+    browser.click("key tab last");
+    until("the last tab shown", &|shown, _| shown == "s1");
+    browser.click("close s1");
+    until("settings closed", &|_, tabs| !has(tabs, "s1"));
+    browser.click("key settings");
+    until("settings again", &|shown, _| shown == "s1");
+    browser.click("close s1");
+    until("settings closed again", &|_, tabs| !has(tabs, "s1"));
 }
 
 /// The strip's buttons and its history menu: a click opens it over the window, another (the
@@ -338,9 +438,10 @@ fn history_menu(browser: &Browser) {
         }
     };
     let menu = "[document.getElementById('menu').style.display, document.querySelector('#menu .v[data-key=\"t8\"]')?.dataset.state ?? null]";
+    // Each button's hint says its shortcut (settings.rs `look`), as the person set it.
     said(
-        "[bk.title, fw.title, hs.title]",
-        json!(["Back", "Forward", "History"]),
+        "[bk.dataset.base, fw.dataset.base, hs.dataset.base, hs.title.startsWith('History  ')]",
+        json!(["Back", "Forward", "History", true]),
     );
     // The terminal that ended is there, its last screen kept.
     browser.click("history");

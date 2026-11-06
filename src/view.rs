@@ -1,42 +1,19 @@
-//! The view protocol: what a view shows and what can be done to it, for the decision model that
-//! drives it. A view shows controls by refs and is acted on by a ref and an operation, never a
-//! selector or coordinates. A view knows nothing of who drives it.
+//! The view protocol: what a view shows and what can be done to it. A view shows controls by refs
+//! and is acted on by a ref and an operation, never a selector or coordinates. A view knows nothing
+//! of who drives it.
 
 use std::fmt::Write as _;
 
 use serde::{Deserialize, Serialize};
 
-/// Something a decision model can see and act on: a document, a screen.
+/// Something an agent can see and act on by refs: a document, a screen.
 pub trait View {
-    /// How the view's world behaves, where it is not obvious (how its forms or menus work).
-    fn conventions(&self) -> &str {
-        ""
-    }
     fn observe(&self) -> ViewResult<Observation>;
     /// Perform `action` against the observation with `epoch`, then let the view settle.
     fn act(&self, epoch: &str, action: &Action) -> ViewResult<()>;
-    /// The paying controls an earlier goal on this view already clicked to some effect (an order
-    /// placed): a goal clicks one again only when its words ask to do it again.
-    fn paid(&self) -> Vec<String> {
-        Vec::new()
-    }
-    /// What the view takes besides acting on its controls: keys, an address.
-    fn abilities(&self) -> &'static [Ability] {
-        &[]
-    }
 }
 
-/// What a view takes besides its controls.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Ability {
-    /// A key pressed where the focus is (`Action::Press`).
-    Keys,
-    /// Going to an address (`Action::Go`).
-    Address,
-}
-
-/// The keys one names by name, the same everywhere: the `keys` of a call, what a goal's helper
-/// may press, what a page and a terminal take (`Ctrl+<letter>` and one character too, in a call).
+/// The keys one names by name, the same everywhere: the `keys` of a call, what a page and a terminal take (`Ctrl+<letter>` and one character too, in a call).
 pub const KEYS: [&str; 15] = [
     "ArrowUp",
     "ArrowDown",

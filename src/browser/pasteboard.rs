@@ -12,17 +12,13 @@ fn general() -> Option<Retained<AnyObject>> {
     unsafe { msg_send![class!(NSPasteboard), generalPasteboard] }
 }
 
-fn string(text: &std::ffi::CStr) -> Option<Retained<AnyObject>> {
-    // SAFETY: a NUL-terminated UTF-8 string, alive through the call; it answers a new string.
-    unsafe { msg_send![class!(NSString), stringWithUTF8String: text.as_ptr()] }
-}
-
 /// Put `text` on the pasteboard, in place of what was there.
 pub(super) fn copy(text: &str) {
-    let (Some(board), Ok(text)) = (general(), std::ffi::CString::new(text)) else {
+    let Some(board) = general() else {
         return;
     };
-    let (Some(text), Some(plain)) = (string(&text), string(PLAIN)) else {
+    let (Some(text), Some(plain)) = (super::appkit::string(text), super::appkit::literal(PLAIN))
+    else {
         return;
     };
     // SAFETY: a pasteboard clears its contents and answers a change count.
@@ -35,7 +31,7 @@ pub(super) fn copy(text: &str) {
 /// The pasteboard's text, if it holds any.
 pub(super) fn pasted() -> Option<String> {
     let board = general()?;
-    let plain = string(PLAIN)?;
+    let plain = super::appkit::literal(PLAIN)?;
     // SAFETY: a pasteboard answers its string of a type, or nil.
     let text: Option<Retained<AnyObject>> = unsafe { msg_send![&*board, stringForType: &*plain] };
     let text = text?;

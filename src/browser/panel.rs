@@ -9,7 +9,8 @@ use std::sync::{Arc, Mutex};
 use tao::event_loop::EventLoopProxy;
 use wry::{NewWindowResponse, PageLoadEvent, WebView, WebViewBuilder};
 
-use super::frame::{self, Look, Rgb};
+use super::choice::Entry;
+use super::frame::{self, Look};
 use super::host::Cmd;
 use super::tab_view::build;
 
@@ -20,11 +21,12 @@ pub(super) type Post = Box<dyn Fn(Cmd) -> bool + Send + Sync>;
 /// What a panel's page posts: keys the person typed or pasted (`k` and them), its size once it
 /// has loaded (`r COLS ROWS`) and when its pane changes (`s COLS ROWS`), or its menu asked for
 /// where they right-clicked, and whether something is selected (`m X Y 1`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Said<'a> {
     Typed(&'a str),
     Sized(Pane, u16, u16),
-    Menu(u32, u32, Selection),
+    /// The page's menu, where the person right-clicked: its own items.
+    Menu(u32, u32, Vec<Entry>),
 }
 
 /// What a page's size message says of the page.
@@ -34,13 +36,6 @@ pub enum Pane {
     Loaded,
     /// The pane changed size.
     Resized,
-}
-
-/// Whether the person selected something in a panel (its menu offers Copy).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Selection {
-    Some,
-    None,
 }
 
 /// What `body`, a message of a panel's page, says; none when it says nothing known.
@@ -54,18 +49,12 @@ pub(super) fn said(body: &str) -> Option<Said<'_>> {
             return Some(Said::Sized(pane, columns.parse().ok()?, rows.parse().ok()?));
         }
     }
-    let mut parts = body.strip_prefix("m ")?.split(' ');
+    // "m x y [items]": the page's menu, the items as `choice::Entry` reads them.
+    let mut parts = body.strip_prefix("m ")?.splitn(3, ' ');
     let x = parts.next()?.parse().ok()?;
     let y = parts.next()?.parse().ok()?;
-    let selection = match parts.next()? {
-        "1" => Selection::Some,
-        "0" => Selection::None,
-        _ => return None,
-    };
-    parts
-        .next()
-        .is_none()
-        .then_some(Said::Menu(x, y, selection))
+    let items = serde_json::from_str(parts.next()?).ok()?;
+    Some(Said::Menu(x, y, items))
 }
 
 /// What the person types in a panel, as its page sends it.
@@ -141,6 +130,11 @@ impl Panel {
         self.slot.alive.load(Ordering::SeqCst)
     }
 
+    /// Whether its tab is still the window's.
+    pub fn alive(&self) -> bool {
+        self.slot.alive.load(Ordering::SeqCst)
+    }
+
     /// Hand the page's size, when it loads and when its pane changes, to `sized`.
     pub fn sizing(&self, sized: Fitted) {
         *crate::lock(&self.slot.sized) = Some(sized);
@@ -178,13 +172,12 @@ pub(super) enum Held {
     Ended,
 }
 
-/// What a panel opens with: its id, title, page, ground (the page's own colour, if it has one),
-/// and what it shares with its caller.
-pub(super) type Opening = (u32, String, String, Option<Rgb>, Arc<Slot>);
+/// What a panel opens with: its id, title, page, and what it shares with its caller.
+pub(super) type Opening = (u32, String, String, Arc<Slot>);
 
 /// Open a panel as a tab of `native`, the window, in its `look`.
 pub(super) fn open(
-    (id, title, html, _, slot): Opening,
+    (id, title, html, slot): Opening,
     native: &tao::window::Window,
     look: Look,
     proxy: EventLoopProxy<Cmd>,
@@ -194,7 +187,12 @@ pub(super) fn open(
     let keys = Arc::clone(&slot);
     let menus = proxy.clone();
     let webview = WebViewBuilder::new()
+        // The first click in a window that is not the key one reaches the page: the person
+        // never clicks twice, once to wake the window and once to do what they meant.
+        .with_accept_first_mouse(true)
         .with_html(frame::dress(&html, look))
+        // The person's fonts, before the page's own scripts (settings.rs).
+        .with_initialization_script(super::settings::look_script(&super::settings::now()))
         // Over glass, the page is clear: the window's material and coat are its ground.
         .with_transparent(look == Look::Glass)
         .with_incognito(true)
@@ -220,8 +218,8 @@ pub(super) fn open(
                     sized(pane, columns, rows);
                 }
             }
-            Some(Said::Menu(x, y, selection)) => {
-                let _ = menus.send_event(Cmd::PanelMenu(id, (x, y), selection));
+            Some(Said::Menu(x, y, items)) => {
+                let _ = menus.send_event(Cmd::PanelMenu(id, (x, y), items));
             }
             None => {}
         })

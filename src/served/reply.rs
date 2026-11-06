@@ -14,10 +14,15 @@ use super::Root;
 const READ: Duration = Duration::from_secs(2);
 /// The most a request's head may be.
 const HEAD: usize = 16 * 1024;
+/// How long an answer may wait on a client that stopped reading.
+const WRITE: Duration = Duration::from_secs(10);
+/// The largest file served: what a page loads, not what a disk holds.
+const FILE_MOST: u64 = 64 << 20;
 
 /// One request read and answered, then the connection closed.
 pub(super) fn answer(mut stream: TcpStream, roots: &Mutex<HashMap<String, Root>>) {
     let _ = stream.set_read_timeout(Some(READ));
+    let _ = stream.set_write_timeout(Some(WRITE));
     let mut head = Vec::new();
     let mut chunk = [0u8; 2048];
     while !head.windows(4).any(|end| end == b"\r\n\r\n") && head.len() < HEAD {
@@ -112,6 +117,11 @@ fn found(
     }
     let inside = std::fs::canonicalize(&file).is_ok_and(|real| real.starts_with(&root.dir));
     match (inside, file.exists()) {
+        (true, _) if std::fs::metadata(&file).is_ok_and(|meta| meta.len() > FILE_MOST) => (
+            "413 Content Too Large",
+            "text/plain",
+            b"larger than the desk serves".to_vec(),
+        ),
         (true, _) => match std::fs::read(&file) {
             Ok(bytes) => ("200 OK", kind(&file), bytes),
             Err(_) => missing,

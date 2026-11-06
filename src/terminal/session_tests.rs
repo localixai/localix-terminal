@@ -135,3 +135,75 @@ fn the_program_runs_in_a_256_colour_truecolor_terminal() {
         Until::Matched
     );
 }
+
+#[test]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "a backoff while the shell starts the program: nothing to wait on"
+)]
+fn the_program_in_front_is_the_one_the_shell_runs_now() {
+    // A shell with job control, as the person's is: what is typed runs in a group of its own, in
+    // front of the shell.
+    let session = start("sh -c 'set -m; printf \"$ \"; read x; cat'");
+    assert_eq!(session.wait(Some("$"), 0, DEFAULT_WAIT), Until::Matched);
+    assert_eq!(session.foreground().as_deref(), Some("sh"));
+    let heard = Arc::new(Mutex::new(vec![]));
+    let told = Arc::clone(&heard);
+    session.on_front(move |program| crate::lock(&told).push(program.map(str::to_string)));
+    assert_eq!(*crate::lock(&heard), [Some("sh".to_string())]);
+    session.type_in("go\n", &[]).unwrap();
+    let deadline = Instant::now() + DEFAULT_WAIT;
+    while session.foreground().as_deref() != Some("cat") {
+        assert!(Instant::now() < deadline, "{:?}", session.foreground());
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // What the program in front prints tells whoever listens that it came in front.
+    session.type_in("hi\n", &[]).unwrap();
+    let deadline = Instant::now() + DEFAULT_WAIT;
+    while crate::lock(&heard).last() != Some(&Some("cat".to_string())) {
+        assert!(Instant::now() < deadline, "{:?}", crate::lock(&heard));
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "a backoff while the shell becomes the program: nothing to wait on"
+)]
+fn a_program_that_replaces_its_shell_is_heard_in_front() {
+    // As an agent opened from "+" starts: a shell that becomes the program (`exec`), in the
+    // same group, so only its name changes.
+    let session = start("sh -c 'printf \"$ \"; read x; exec cat'");
+    assert_eq!(session.wait(Some("$"), 0, DEFAULT_WAIT), Until::Matched);
+    let heard = Arc::new(Mutex::new(vec![]));
+    let told = Arc::clone(&heard);
+    session.on_front(move |program| crate::lock(&told).push(program.map(str::to_string)));
+    session.type_in("go\n", &[]).unwrap();
+    let deadline = Instant::now() + DEFAULT_WAIT;
+    while crate::lock(&heard).last() != Some(&Some("cat".to_string())) {
+        assert!(Instant::now() < deadline, "{:?}", crate::lock(&heard));
+        // Output of the program now in front, as a running agent keeps drawing.
+        session.type_in("hi\n", &[]).unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+#[test]
+fn a_restored_screen_shows_dimmed_before_the_programs_output() {
+    let session = Session::start_after(
+        "printf after",
+        &std::env::temp_dir(),
+        None,
+        None,
+        "one\ntwo",
+    )
+    .unwrap();
+    let until = session.wait(Some("after"), 0, Duration::from_secs(10));
+    assert_ne!(until, Until::Deadline, "{}", session.text());
+    assert!(
+        session.text().starts_with("one\ntwo\nafter"),
+        "{}",
+        session.text()
+    );
+}

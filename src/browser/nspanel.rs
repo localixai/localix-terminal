@@ -324,10 +324,7 @@ pub(super) fn watch_spaces(proxy: &EventLoopProxy<Cmd>) {
     let workspace: Retained<AnyObject> = unsafe { msg_send![class!(NSWorkspace), sharedWorkspace] };
     // SAFETY: an NSWorkspace answers its notification center.
     let center: Retained<AnyObject> = unsafe { msg_send![&*workspace, notificationCenter] };
-    // SAFETY: the argument is a NUL-terminated UTF-8 literal, alive for the whole program.
-    let name: Retained<AnyObject> = unsafe {
-        msg_send![class!(NSString), stringWithUTF8String: c"NSWorkspaceActiveSpaceDidChangeNotification".as_ptr()]
-    };
+    let name = super::appkit::text("NSWorkspaceActiveSpaceDidChangeNotification");
     // SAFETY: `mainQueue` is NSOperationQueue's class method: the block runs on the main thread.
     let queue: Retained<AnyObject> = unsafe { msg_send![class!(NSOperationQueue), mainQueue] };
     // SAFETY: a name, a nil object, a queue and a block of `void (^)(NSNotification *)`, which
@@ -345,6 +342,18 @@ pub(super) fn watch_spaces(proxy: &EventLoopProxy<Cmd>) {
 pub(super) fn hide(window: &Window) {
     // SAFETY: `orderOut:` takes a sender, which may be nil, and returns nothing.
     let _: () = unsafe { msg_send![native(window), orderOut: std::ptr::null::<AnyObject>()] };
+}
+
+/// llx-desk the active app and the panel its key window, for the person who just clicked it open:
+/// their next click and key go to it, as to any app they bring forward. Only their click calls it.
+pub(super) fn focus(window: &Window) {
+    if unseen() {
+        return;
+    }
+    super::appkit::activate();
+    // SAFETY: `makeKeyAndOrderFront:` takes a sender, which may be nil, and returns nothing.
+    let _: () =
+        unsafe { msg_send![native(window), makeKeyAndOrderFront: std::ptr::null::<AnyObject>()] };
 }
 
 fn front(object: &AnyObject) {

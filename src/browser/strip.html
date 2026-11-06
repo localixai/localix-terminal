@@ -5,31 +5,74 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>tabs</title>
 <style>
-:root{--ground:#f7f7f7;color:#1d1d1f;font:12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+:root{--ground:#f7f7f7;color:#1d1d1f;font:12px/1 var(--ui-font,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif);-webkit-font-smoothing:antialiased}
 @media (prefers-color-scheme: dark){:root{--ground:#070707;color:#e6e6e6}}
 body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
-/* Tinted in the colour of the tab under it (tint.rs): the bar and its words, not the menu. */
-/* The page's colour over the blur of the page scrolled under the strip (under.rs), as Safari's
-   bar: the page shows through, and the words inked for that colour read on it. */
-#head{transition:background-color .2s}
-html[data-tint] #head{background:color-mix(in srgb,var(--tint) 35%,transparent)}
-html[data-tint] #projects,html[data-tint] #bar,html[data-tint] #tabs{color:var(--ink);transition:color .2s}
+/* The bar is the window's own, in its theme, over whatever tab: never in a page's colours. */
 #head{position:relative;z-index:2}
-#projects{display:none;align-items:center;gap:4px;height:32px;padding:0 12px 4px;box-sizing:border-box;overflow:hidden}
-#projects.on{display:flex}
-.p{flex:none;max-width:220px;height:26px;padding:0 12px;border-radius:13px;display:flex;align-items:center;gap:7px;font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.55}
-.p .c{font-weight:400;opacity:.6;font-variant-numeric:tabular-nums}
-.p:hover{opacity:.85;background:color-mix(in srgb,currentColor 6%,transparent)}
-.p.on{opacity:1;background:color-mix(in srgb,currentColor 11%,transparent)}
+/* The offer bar (offer.rs): one offer at a time, under the toolbar, at the moment it fits, with
+   the button that does it and Not Now. Its height is the window's to lay out (offer::ROW). */
+#offer{display:none;height:36px;padding:0 10px 6px;box-sizing:border-box}
+#offer.on{display:block}
+#offer .card{height:100%;display:flex;align-items:center;gap:8px;padding:0 4px 0 10px;border-radius:8px;font-size:12px;background:color-mix(in srgb,currentColor 6%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 12%,transparent)}
+#offer .mk{flex:none;width:14px;height:14px;display:flex}
+#offer .mk svg{width:14px;height:14px;opacity:.85}
+#offer .mk:empty{display:none}
+#offer .says{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.78}
+#offer.busy .says{opacity:.5}
+#offer.failed .says{opacity:1;color:#d70015}
+@media (prefers-color-scheme: dark){#offer.failed .says{color:#ff6961}}
+#offer button{flex:none;border:0;color:inherit;cursor:pointer;font:500 11.5px/22px -apple-system,BlinkMacSystemFont,system-ui,sans-serif}
+#offer button.take{height:22px;padding:0 10px;border-radius:6px;background:color-mix(in srgb,currentColor 11%,transparent)}
+#offer button.take:hover{background:color-mix(in srgb,currentColor 17%,transparent)}
+#offer button.take:active{background:color-mix(in srgb,currentColor 22%,transparent)}
+#offer button.later{width:22px;height:22px;padding:0;border-radius:6px;background:none;opacity:.45;display:grid;place-items:center}
+#offer button.later:hover{opacity:.9;background:color-mix(in srgb,currentColor 8%,transparent)}
+#offer button.later svg{width:10px;height:10px;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;fill:none}
+/* The bar (38 points, a compact titlebar's): beside the window's buttons, where the shown tab
+   is, as crumbs: its project (a folder), then the tab; each a button whose menu is the system's
+   (host_project.rs): every project and Open Folder, or the project's tabs. A dot on the project's
+   crumb: something happened in another one, out of sight. Then the window's own buttons. */
+#cr{display:flex;align-items:center;gap:2px;min-width:0;overflow:hidden;white-space:nowrap}
+#cr .c{flex:0 1 auto;display:flex;align-items:center;gap:5px;min-width:0;height:24px;padding:0 6px;border-radius:6px;font-size:12px;font-weight:500;opacity:.62;transition:opacity .16s ease,background-color .16s ease}
+#cr .c:hover{opacity:1;background:color-mix(in srgb,currentColor 7%,transparent)}
+#cr .c:active{opacity:.6}
+#cr .c .n{min-width:0;overflow:hidden;text-overflow:ellipsis}
+#cr .c.here{flex:0 2 auto;font-size:13px;opacity:.95}
+#cr .c svg{flex:none;width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
+#cr .c .mk{display:flex}
+#cr .c .mk svg{fill:currentColor;stroke:none}
+#cr .c .dn{width:9px;height:9px;stroke-width:1.6;opacity:.6}
+#cr .c .d{flex:none;width:6px;height:6px;border-radius:3px;background:#0a84ff;background:-apple-system-control-accent}
+#cr .sep{flex:none;padding:0 1px;font-size:12px;opacity:.3}
+#cr .b{min-width:24px;height:24px;border-radius:6px;margin-left:2px}
+#cr .b svg{width:14px;height:14px}
 /* Three columns, as Safari's toolbar: the address field stays in the middle whatever comes and goes beside it. */
-#bar{display:grid;grid-template-columns:1fr minmax(120px,640px) 1fr;align-items:center;gap:10px;height:52px;padding:0 12px;box-sizing:border-box}
-#bar>.grp{justify-self:start}
+#bar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;height:38px;padding:0 8px 0 10px;box-sizing:border-box}
+#lead{display:flex;align-items:center;gap:4px;min-width:0}
 /* The buttons keep their room, and the address field gives way when the window is narrow; with
    less room still, the buttons go into "»" (fit). */
 [hidden]{display:none!important}
+/* Back, forward and reload, bare as in Safari's toolbar. */
+.b,#nav{transition:opacity .16s ease}
+#nav{flex:none;display:flex;align-items:center;gap:2px}
+#nav .b{width:30px;opacity:.6}
+#nav .b:hover{opacity:1}
+#nav svg{width:14px;height:14px;stroke-width:1.6}
+#rl svg{width:13px;height:13px}
 #end{display:flex;align-items:center;justify-content:flex-end;gap:8px}
-/* Buttons that go together share one capsule, as in the system's toolbars. */
-.grp{flex:none;display:flex;align-items:center;height:32px;padding:0 2px;border-radius:16px;background:color-mix(in srgb,currentColor 6%,transparent)}
+/* The browser's toolbar (data-part=nav): the same page in a view of its own over a page only,
+   back, forward and reload, the address field, the page's size and comments. The bar is the
+   strip's; this view shows nothing else, and the strip none of this. */
+#browse{display:none}
+html[data-part=nav] #bar,html[data-part=nav] #tabs,html[data-part=nav] #offer,html[data-part=nav] #menu,html[data-part=nav] #back{display:none!important}
+html[data-part=nav] #browse{display:grid;grid-template-columns:auto minmax(120px,1fr) auto;align-items:center;gap:10px;height:40px;padding:0 10px;box-sizing:border-box;box-shadow:inset 0 -1px 0 color-mix(in srgb,currentColor 8%,transparent)}
+html[data-part=nav]:not([data-glass]) #browse{background:var(--ground)}
+#browse #addr{justify-self:center;width:100%;max-width:720px}
+#tools{display:flex;align-items:center;gap:4px}
+/* The bar is bare: icons and words on the glass, no capsules. A button lights as the pointer
+   comes; only one that is on (comments, a page size) and the field being typed in have a ground. */
+.grp{flex:none;display:flex;align-items:center;gap:2px;height:28px}
 #tabs{display:flex;align-items:center;gap:4px;height:32px;padding:0 12px 4px;box-sizing:border-box;min-width:0;overflow:hidden}
 #tabs .t{flex:1 1 0;max-width:none;justify-content:center;position:relative;padding:0 28px;background:color-mix(in srgb,currentColor 3.5%,transparent)}
 #tabs .t .n{flex:0 1 auto}
@@ -37,7 +80,8 @@ html[data-tint] #projects,html[data-tint] #bar,html[data-tint] #tabs{color:var(-
 #tabs .t:hover{background:color-mix(in srgb,currentColor 6%,transparent)}
 #tabs .t.on{background:color-mix(in srgb,currentColor 11%,transparent);font-weight:500}
 /* The address field, as Safari's: the page's host while it rests, its whole address to edit. */
-#addr{position:relative;min-width:0;height:32px;border-radius:16px;display:flex;align-items:center;gap:8px;padding:0 3px 0 12px;box-sizing:border-box;background:color-mix(in srgb,currentColor 6%,transparent)}
+#addr{position:relative;min-width:0;height:28px;border-radius:14px;display:flex;align-items:center;gap:8px;padding:0 3px 0 12px;box-sizing:border-box;transition:background-color .16s ease}
+#addr:hover{background:color-mix(in srgb,currentColor 4%,transparent)}
 #addr:focus-within{background:color-mix(in srgb,currentColor 9%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,currentColor 22%,transparent)}
 #ai{flex:none;display:grid;place-items:center;opacity:.45}
 #ai svg,.i svg,.x svg{display:block;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
@@ -49,7 +93,6 @@ html[data-tint] #projects,html[data-tint] #bar,html[data-tint] #tabs{color:var(-
    (pane.rs, macOS; elsewhere the ground), compact rows, the accent on the row picked. */
 #sug,#menu{position:absolute;display:none;box-sizing:border-box;padding:5px;border-radius:10px;z-index:3;overflow-y:auto;font:13px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;box-shadow:0 0 0 .5px color-mix(in srgb,currentColor 24%,transparent),0 10px 28px rgba(0,0,0,.22)}
 html:not([data-glass]) #sug,html:not([data-glass]) #menu{background:var(--ground)}
-html[data-tint] #sug,html[data-tint] #menu{color:var(--ink)}
 #sug{max-height:calc(100vh - 60px)}
 .q{display:flex;align-items:center;gap:8px;height:24px;padding:0 8px;border-radius:5px;white-space:nowrap}
 .q .i{width:14px;text-align:center;opacity:.6}
@@ -59,8 +102,9 @@ html[data-tint] #sug,html[data-tint] #menu{color:var(--ink)}
 .q.on,.v:hover{background:#0a84ff;background:-apple-system-control-accent;color:#fff}
 .q.on .i,.q.on .u,.v:hover .u{opacity:.85}
 .g{padding:6px 8px 3px;font-size:11px;font-weight:600;opacity:.5}
-.b{flex:none;height:28px;min-width:30px;padding:0;box-sizing:border-box;border-radius:14px;display:grid;place-items:center;opacity:.72}
-.b:hover{opacity:1;background:color-mix(in srgb,currentColor 8%,transparent)}
+.b{flex:none;height:26px;min-width:28px;padding:0;box-sizing:border-box;border-radius:13px;display:grid;place-items:center;opacity:.72}
+.b:hover{opacity:1}
+.b:active{opacity:.5}
 .b.on{opacity:1;background:color-mix(in srgb,currentColor 14%,transparent)}
 .b svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
 .t{display:flex;align-items:center;gap:7px;min-width:0;max-width:220px;height:26px;padding:0 6px 0 10px;border-radius:9px;font-size:12.5px;opacity:.62}
@@ -81,43 +125,118 @@ html[data-tint] #sug,html[data-tint] #menu{color:var(--ink)}
 .v.off .h{opacity:.62}
 .v .u{display:block;margin-top:1px;padding-left:17px;font-size:11px;opacity:.5;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .e{padding:12px 9px;opacity:.5}
+/* The Event Center: the bell's count, and each event with what it is, its words and its buttons. */
+#ev{position:relative}
+#evn{position:absolute;top:2px;right:2px;min-width:14px;height:14px;padding:0 3.5px;box-sizing:border-box;border-radius:7px;background:#ff3b30;color:#fff;font:600 9.5px/14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;text-align:center;display:none}
+#evn.on{display:block}
+.ev{display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:center;column-gap:9px;padding:5px 8px;border-radius:7px;cursor:pointer}
+.ev:hover{background:color-mix(in srgb,currentColor 7%,transparent)}
+.ev .dot{width:7px;height:7px;border-radius:4px;background:var(--hue);opacity:.35}
+.ev.new .dot{opacity:1}
+.ev .tx{min-width:0}
+.ev .n{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev .u{display:block;margin-top:1px;font-size:11.5px;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev .side{display:flex;align-items:center;gap:4px}
+.ev .w{font-size:11px;opacity:.45;min-width:22px;text-align:right}
+.ev .act{height:20px;padding:0 9px;border:0;border-radius:10px;font:500 11.5px/20px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#fff;background:var(--hue);cursor:pointer}
+.ev .act:hover{filter:brightness(1.1)}
+.ev .x{width:18px;height:18px;border-radius:9px;display:none;place-items:center;cursor:pointer;opacity:.55}
+.ev:hover .x{display:grid}
+.ev:hover .w{display:none}
+.ev .x:hover{opacity:1;background:color-mix(in srgb,currentColor 12%,transparent)}
+.ev .x svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
+.evh{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 4px 8px;font-weight:600}
+.evh .clr{font:inherit;font-size:11px;font-weight:500;color:var(--accent,#0a84ff);background:none;border:0;border-radius:5px;padding:2px 6px;cursor:pointer}
+.evh .clr:hover{background:rgba(127,127,127,.16)}
+.evg{padding:8px 8px 2px;font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;opacity:.45}
 
 .s{display:none;flex:none;height:28px;padding:0 13px;border-radius:14px;align-items:center;font-weight:500;background:color-mix(in srgb,currentColor 10%,transparent)}
 .s.on{display:flex}
 .s:hover{background:color-mix(in srgb,currentColor 15%,transparent)}
 /* Whose turn, in quiet words at the end of the address field: nothing while the agent is idle. */
-#tn{display:none;position:absolute;right:36px;top:50%;transform:translateY(-50%);font-size:11.5px;white-space:nowrap;opacity:.5;pointer-events:none}
+#tn{display:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:11.5px;white-space:nowrap;opacity:.5;pointer-events:none}
 #tn.on{display:block}
 /* Glass (macOS): the strip is the titlebar, its toolbar row clear of the window's buttons (a unified toolbar's: 18 to 80 points); the projects and the tabs under it run from the edge. */
-html[data-glass] #bar{padding-left:92px}
-#rl{height:26px;min-width:26px;border-radius:13px}
+html[data-glass] #bar{padding-left:78px}
+/* The side (data-part=side): the same page in a view of its own down the window's left, listing
+   the shown project's tabs; the strip then has no row of them (data-side). */
+html[data-side] #tabs{display:none}
+html[data-part=side] #head,html[data-part=side] #back{display:none}
+#side{display:none}
+html[data-part=side],html[data-part=side] body{height:100%;overflow:hidden}
+html[data-part=side]:not([data-glass]) body{background:var(--ground)}
+html[data-part=side] #side{display:flex;flex-direction:column;gap:8px;height:100%;padding:6px 8px 8px 10px;box-sizing:border-box;box-shadow:inset -1px 0 0 color-mix(in srgb,currentColor 9%,transparent)}
+/* The side's head: the search as a line of the column, no field drawn around it, and its two
+   buttons beside it. */
+#sh{flex:none;display:flex;align-items:center;gap:2px;height:28px;padding-left:4px}
+#sk{flex:1;min-width:0;display:flex;align-items:center;gap:7px;height:100%;cursor:text}
+#si{flex:none;display:grid;opacity:.5;pointer-events:none}
+#si svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round}
+#sq{flex:1;min-width:0;height:100%;border:0;outline:0;padding:0;background:none;color:inherit;font:12.5px/1 var(--ui-font,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif)}
+#sq::placeholder{color:currentColor;opacity:.45}
+#sk:focus-within #si{opacity:.8}
+#sh .b{min-width:26px;height:26px;border-radius:7px}
+#sl{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+#sl .t{flex:none;max-width:none;height:auto;padding:7px 6px 7px 8px;gap:10px;border-radius:10px;opacity:.78}
+#sl .t.on{opacity:1}
+#sl .ic{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;opacity:1;background:color-mix(in srgb,currentColor 9%,transparent)}
+#sl .ic svg{width:14px;height:14px}
+#sl .ic .mk{display:grid;place-items:center}
+#sl .ic .mk svg{width:16px;height:16px}
+#sl .t.on .ic{background:color-mix(in srgb,currentColor 16%,transparent)}
+#sl .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+#sl .n{font-size:13px;font-weight:500}
+#sl .u{font-size:11px;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sl .e{padding:10px 8px;font-size:12px}
+/* The side's edge: dragged, the side is wider or narrower; a double click sets it back. */
+#grip{display:none;position:fixed;top:0;right:0;bottom:0;width:7px;cursor:col-resize;z-index:4}
+html[data-part=side] #grip{display:block}
+#grip::after{content:"";position:absolute;top:0;bottom:0;right:0;width:2px;background:transparent;transition:background-color .15s}
+#grip:hover::after,html.resizing #grip::after{background:color-mix(in srgb,var(--accent,#0a84ff) 70%,transparent)}
+html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
+html[data-part=side] #side{transition:none}
 </style>
 </head>
 <body>
 <div id="head">
   <div id="bar">
-    <div class="grp">
-      <span class="b" id="bk" title="Back"><svg viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></span>
-      <span class="b" id="fw" title="Forward"><svg viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5"/></svg></span>
+    <div id="lead">
+    <span class="b" id="sb" title="Tabs" hidden><svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.6"/><path d="M6.3 3v10"/></svg></span>
+    <nav id="cr" aria-label="Where the tab is"></nav>
     </div>
-    <div id="addr"><span id="ai"></span><input id="url" spellcheck="false" autocomplete="off" placeholder="Search or enter website name"><span id="tn"></span><span class="b" id="rl" title="Reload"><svg viewBox="0 0 16 16"><path d="M12.6 8.2a4.6 4.6 0 1 1-1.4-3.5M12.6 3.2v2.6H10"/></svg></span></div>
     <div id="end">
-    <span class="s" id="sd" title="Send the comments to the agent"></span>
     <div class="grp">
-      <span class="b" id="fs" title="Page size: the window"></span>
-      <span class="b" id="cm" title="Comment on the page: click what to change"><svg viewBox="0 0 16 16"><path d="M3.5 4.2c0-.7.5-1.2 1.2-1.2h6.6c.7 0 1.2.5 1.2 1.2v5.1c0 .7-.5 1.2-1.2 1.2H7.6L5 12.8v-2.3h-.3c-.7 0-1.2-.5-1.2-1.2z"/></svg></span>
-      <span class="b" id="nt" title="New tab"><svg viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9"/></svg></span>
       <span class="b" id="hs" title="History"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.3"/></svg></span>
+      <span class="b" id="mn" title="Mini Player"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.6"/><rect x="8" y="8" width="4.5" height="3.4" rx=".7"/></svg></span>
+      <span class="b" id="ev" title="Events"><svg viewBox="0 0 16 16"><path d="M4.2 11V7.4a3.8 3.8 0 0 1 7.6 0V11l1 1.2H3.2zM6.6 13.4a1.5 1.5 0 0 0 2.8 0"/></svg><span id="evn"></span></span>
       <span class="b" id="mo" title="More" hidden><svg viewBox="0 0 16 16"><path d="M4.5 4.5 8 8l-3.5 3.5M8.5 4.5 12 8l-3.5 3.5"/></svg></span>
     </div>
     </div>
   </div>
-  <div id="projects"></div>
+  <div id="browse">
+    <div id="nav">
+      <span class="b" id="bk" title="Back"><svg viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></span>
+      <span class="b" id="fw" title="Forward"><svg viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5"/></svg></span>
+      <span class="b" id="rl" title="Reload"><svg viewBox="0 0 16 16"><path d="M12.6 8.2a4.6 4.6 0 1 1-1.4-3.5M12.6 3.2v2.6H10"/></svg></span>
+    </div>
+    <div id="addr"><span id="ai"></span><input id="url" spellcheck="false" autocomplete="off" placeholder="Search or enter website name"><span id="tn"></span></div>
+    <div id="tools">
+      <span class="s" id="sd" title="Send the comments to the agent"></span>
+      <span class="b" id="fs" title="Page size: the window"></span>
+      <span class="b" id="cm" title="Comment on the page: click what to change"><svg viewBox="0 0 16 16"><path d="M3.5 4.2c0-.7.5-1.2 1.2-1.2h6.6c.7 0 1.2.5 1.2 1.2v5.1c0 .7-.5 1.2-1.2 1.2H7.6L5 12.8v-2.3h-.3c-.7 0-1.2-.5-1.2-1.2z"/></svg></span>
+    </div>
+  </div>
+  <div id="offer"><div class="card"><span class="mk"></span><span class="says"></span><button class="take"></button><button class="later"><svg viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"/></svg></button></div></div>
   <div id="tabs"></div>
   <div id="menu"></div>
   <div id="sug"></div>
 </div>
 <div id="back"></div>
+<div id="side">
+  <div id="sh"><label id="sk"><span id="si"></span><input id="sq" spellcheck="false" autocomplete="off" placeholder="Search tabs…"></label><span class="b" id="sg" title="Settings"><svg viewBox="0 0 16 16"><path d="M6.71 3.17 7.02 1.47h1.96l.31 1.7 1.21.5 1.43-.98 1.38 1.38-.98 1.43.5 1.21 1.7.31v1.96l-1.7.31-.5 1.21.98 1.43-1.38 1.38-1.43-.98-1.21.5-.31 1.7H7.02l-.31-1.7-1.21-.5-1.43.98-1.38-1.38.98-1.43-.5-1.21-1.7-.31V7.02l1.7-.31.5-1.21-.98-1.43 1.38-1.38 1.43.98z"/><circle cx="8" cy="8" r="2.1"/></svg></span><span class="b" id="sn" title="New tab"><svg viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9"/></svg></span><span class="b" id="sc" title="Hide the tabs"><svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.6"/><path d="M6.3 3v10"/></svg></span></div>
+  <div id="sl"></div>
+</div>
+<div id="grip" title="Drag to resize; double-click for the usual width"></div>
 <script>
 "use strict";
 // The strip's small pictures, drawn as the buttons are; never text characters. Built element by
@@ -125,8 +244,13 @@ html[data-glass] #bar{padding-left:92px}
 const GLYPHS = {
   web: [["circle", { cx: 8, cy: 8, r: 5.6 }], ["path", { d: "M2.6 8h10.8M8 2.4c1.6 1.6 1.6 9.6 0 11.2M8 2.4c-1.6 1.6-1.6 9.6 0 11.2" }]],
   term: [["path", { d: "m4 5.5 2.5 2.5L4 10.5M8.5 10.5H12" }]],
+  board: [["rect", { x: 2.5, y: 3, width: 11, height: 10, rx: 1.4 }], ["path", { d: "M6.2 3v10M9.8 3v10" }]],
+  settings: [["path", { d: "M6.71 3.17 7.02 1.47h1.96l.31 1.7 1.21.5 1.43-.98 1.38 1.38-.98 1.43.5 1.21 1.7.31v1.96l-1.7.31-.5 1.21.98 1.43-1.38 1.38-1.43-.98-1.21.5-.31 1.7H7.02l-.31-1.7-1.21-.5-1.43.98-1.38-1.38.98-1.43-.5-1.21-1.7-.31V7.02l1.7-.31.5-1.21-.98-1.43 1.38-1.38 1.43.98z" }], ["circle", { cx: 8, cy: 8, r: 2.1 }]],
   search: [["circle", { cx: 7.2, cy: 7.2, r: 4.2 }], ["path", { d: "m10.3 10.3 3 3" }]],
   close: [["path", { d: "m4.5 4.5 7 7M11.5 4.5l-7 7" }]],
+  folder: [["path", { d: "M2.5 4.6c0-.6.4-1.1 1-1.1h2.8l1.3 1.4h4.9c.6 0 1 .5 1 1.1v5.9c0 .6-.4 1.1-1 1.1h-9c-.6 0-1-.5-1-1.1z" }]],
+  down: [["path", { d: "m4.5 6.5 3.5 3.5 3.5-3.5" }]],
+  plus: [["path", { d: "M8 3.5v9M3.5 8h9" }]],
   fill: [["path", { d: "M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3" }]],
   phone: [["rect", { x: 5, y: 2.5, width: 6, height: 11, rx: 1.4 }], ["path", { d: "M7.3 11.6h1.4" }]],
   tablet: [["rect", { x: 3.5, y: 2.5, width: 9, height: 11, rx: 1.4 }], ["path", { d: "M7.3 11.6h1.4" }]],
@@ -144,75 +268,278 @@ function glyph(name) {
   }
   return svg;
 }
-// The colour of the tab under the strip and the ink that reads on it, or null: its own again.
-function T(tint) {
-  const root = document.documentElement;
-  if (tint === null) return void root.removeAttribute("data-tint");
-  root.style.setProperty("--tint", tint.ground);
-  root.style.setProperty("--ink", tint.ink === "dark" ? "#1d1d1f" : "#f2f2f2");
-  root.setAttribute("data-tint", "");
-}
-// The project shown last in each tab, so a click on a project goes back to where it was.
-const lastOf = new Map();
-// Draw the tabs: with several projects, a row of them above and under it the shown project's
-// tabs; every name is set as text. A click says which tab, and what to do with it.
+// Draw what this part of the window shows: the side its list, the browser's toolbar the page's
+// address, the bar the projects open, where the shown tab is, and (with no side) the tabs' row.
+// Every name is set as text.
 function S(data) {
+  const part = document.documentElement.dataset.part;
+  if (part === "side") return side(data);
   const shown = data.tabs.find((tab) => tab.key === data.shown);
-  const project = shown ? shown.group : undefined;
-  if (project !== undefined) lastOf.set(project, data.shown);
-  const names = [...new Set(data.tabs.map((tab) => tab.group))].filter((name) => name !== undefined);
-  const row = document.getElementById("projects");
-  row.className = names.length > 0 ? "on" : "";
-  row.replaceChildren(...names.map((name) => {
-    const pill = document.createElement("div");
-    pill.className = name === project ? "p on" : "p";
-    const own = data.tabs.filter((tab) => tab.group === name);
-    const label = document.createElement("span");
-    label.textContent = name || "Other";
-    const count = document.createElement("span");
-    count.className = "c";
-    count.textContent = own.length;
-    pill.append(label, count);
-    pill.title = name;
-    pill.addEventListener("click", () => {
-      const back = lastOf.get(name);
-      const there = own.find((tab) => tab.key === back) || own[0];
-      if (there) window.ipc.postMessage("show " + there.key);
-    });
-    return pill;
-  }));
-  address(shown, data.visited || []);
-  const tabs = data.tabs.filter((tab) => tab.group === project);
+  if (part === "nav") return address(shown, data.visited || []);
+  const sided = data.side !== null && data.side !== undefined;
+  document.documentElement.toggleAttribute("data-side", sided);
+  // Open, the side has its own button to hide it, beside Settings and "+"; hidden, the bar's
+  // brings it back.
+  const toggle = document.getElementById("sb");
+  toggle.hidden = !sided || data.side;
+  titled(toggle, "Show the tabs");
+  const project = data.project;
+  const places = data.places || [];
+  crumbs(shown, places, project);
+  // With a side, the tabs are listed there, not in a row here.
+  const tabs = sided ? [] : data.tabs.filter((tab) => ours(tab, project));
   document.getElementById("tabs").replaceChildren(...tabs.map((tab) => {
     const item = document.createElement("div");
     item.className = tab.key === data.shown ? "t on" : "t";
     item.title = tab.title;
     const icon = document.createElement("span");
     icon.className = "i";
-    icon.append(glyph(tab.kind === "term" ? "term" : "web"));
+    icon.append(glyph(GLYPHS[tab.kind] ? tab.kind : "web"));
     const name = document.createElement("span");
     name.className = "n";
     name.textContent = tab.title;
     const close = document.createElement("span");
     close.className = "x";
     close.append(glyph("close"));
-    close.addEventListener("click", (event) => {
-      event.stopPropagation();
-      window.ipc.postMessage("close " + tab.key);
-    });
-    item.addEventListener("click", () => window.ipc.postMessage("show " + tab.key));
-    // Its menu is the system's (host_tab_menu.rs), where the person clicked.
-    item.addEventListener("contextmenu", (event) => {
-      event.preventDefault();
-      window.ipc.postMessage("menu " + tab.key + " " + Math.round(event.clientX) + " " + Math.round(event.clientY));
-    });
+    wire(item, close, tab.key);
     item.append(icon, name, close);
     return item;
   }));
+  fit();
 }
+// Whether `tab` is listed with `project` shown: it is the project's, or the window's own.
+const ours = (tab, project) => tab.group === project || tab.group === "";
+// Where the shown tab is, as crumbs: its project (a folder; a dot when another has news), then
+// the tab (its picture and name). Each opens its menu, the system's, under it (host_project.rs):
+// the projects and Open Folder, or the project's tabs.
+function crumbs(shown, places, project) {
+  const trail = document.getElementById("cr");
+  const place = places.find((one) => one.key === project);
+  const crumb = (said, parts, title, here) => {
+    const button = document.createElement("span");
+    button.className = here ? "c here" : "c";
+    button.title = title;
+    const name = document.createElement("span");
+    name.className = "n";
+    name.textContent = parts.name;
+    button.append(...[parts.icon, name, parts.dot].filter(Boolean));
+    const down = glyph("down");
+    down.classList.add("dn");
+    button.append(down);
+    button.addEventListener("click", () => {
+      const box = button.getBoundingClientRect();
+      window.ipc.postMessage(said + " " + Math.round(box.left) + " " + Math.round(box.bottom + 4));
+    });
+    return button;
+  };
+  const news = places.some((one) => one.marked && one.key !== project);
+  const dot = news ? Object.assign(document.createElement("span"), { className: "d" }) : null;
+  const parts = [crumb("projects", { icon: glyph("folder"), name: place ? place.name : "Home", dot },
+    place ? place.folder : "Projects", !shown)];
+  if (shown) {
+    const sep = document.createElement("span");
+    sep.className = "sep";
+    sep.textContent = "/";
+    const icon = shown.agent ? agentMark(shown.agent) : glyph(GLYPHS[shown.kind] ? shown.kind : "web");
+    const title = shown.agent ? shown.name + " \u2014 " + shown.title : shown.title;
+    parts.push(sep, crumb("tabs", { icon, name: shown.name || shown.title }, title, true));
+  }
+  // "+" ends the crumbs: a new tab of the project, its menu the system's (menu.rs) under it.
+  const add = document.createElement("span");
+  add.className = "b";
+  add.id = "nt";
+  add.append(glyph("plus"));
+  titled(add, "New tab");
+  add.addEventListener("click", () => {
+    const box = add.getBoundingClientRect();
+    window.ipc.postMessage("new " + Math.round(box.left) + " " + Math.round(box.bottom + 4));
+  });
+  parts.push(add);
+  trail.replaceChildren(...parts);
+  // The project's crumb is what the projects key (⌃⌘P) opens.
+  parts[0].id = "pj";
+}
+// A tab's row, in the strip or the side: a click shows it, its × closes it, and its menu is the
+// system's (host_tab_menu.rs), where the person clicked.
+function wire(item, close, key) {
+  close.addEventListener("click", (event) => {
+    event.stopPropagation();
+    window.ipc.postMessage("close " + key);
+  });
+  item.addEventListener("click", () => window.ipc.postMessage("show " + key));
+  item.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    window.ipc.postMessage("menu " + key + " " + Math.round(event.clientX) + " " + Math.round(event.clientY));
+  });
+}
+// The shortcuts (shortcuts.rs), as the window's settings give them (settings.rs `look`): each
+// button's hint says its key.
+let HINTS = {};
+const HINTED = { bk: "back", fw: "forward", rl: "reload", fs: "page-size", cm: "comment", nt: "new-page",
+  hs: "history", ev: "events", mn: "collapse", sb: "sidebar", sc: "sidebar", sd: "send", sn: "new-page", sg: "settings", url: "address", sq: "find-tab",
+  pj: "projects" };
+function titled(node, base) {
+  node.dataset.base = base;
+  const key = HINTS[HINTED[node.id]];
+  node.title = key ? base + "  " + key : base;
+}
+function looked(look) {
+  HINTS = (look && look.keys) || {};
+  for (const id of Object.keys(HINTED)) {
+    const node = document.getElementById(id);
+    if (node) titled(node, node.dataset.base ?? node.title);
+  }
+}
+addEventListener("desk-look", (event) => looked(event.detail));
+// A shortcut's doing here (deck_acts.rs `keyed_in_strip`, `find_tab`): what a click would do.
+function K(what) {
+  if (what === "address") {
+    const field = document.getElementById("url");
+    field.focus();
+    field.select();
+  } else if (what === "find") {
+    const search = document.getElementById("sq");
+    search.focus();
+    search.select();
+  } else if (what === "projects") {
+    const box = document.getElementById("pj").getBoundingClientRect();
+    window.ipc.postMessage("projects " + Math.round(box.left) + " " + Math.round(box.bottom + 4));
+  } else if (what === "size") {
+    const box = document.getElementById("fs").getBoundingClientRect();
+    window.ipc.postMessage("frame " + Math.round(box.left) + " " + Math.round(box.bottom + 4));
+  }
+}
+// The side: the shown project's tabs, each its kind's picture, its title and what it holds (a
+// page's address, a terminal's command), filtered by what is typed in its search.
+let listed = [], listedShown = "";
+function side(data) {
+  listed = data.tabs.filter((tab) => ours(tab, data.project));
+  listedShown = data.shown;
+  drawSide();
+}
+// Under a tab's name: a page's address, what a terminal's program says it is doing (the
+// title it set), else what the tab is.
+const holds = (tab) => {
+  if (tab.kind === "board") return "Board of cards";
+  if (tab.kind === "settings") return "Appearance and shortcuts";
+  if (tab.kind === "term") return tab.detail || (tab.agent ? "Starting" : "Terminal");
+  const what = (tab.detail || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
+  return what || "New tab";
+};
+// A coding agent's mark (agents.rs), drawn in the text's colour; the page is given them as
+// SVG at load, as MARKS.
+const MARKS = /*MARKS*/{};
+function agentMark(agent) {
+  const svg = new DOMParser().parseFromString(MARKS[agent] || "", "image/svg+xml").documentElement;
+  if (svg.nodeName !== "svg") return glyph("term");
+  const holder = document.createElement("span");
+  holder.className = "mk";
+  holder.append(document.importNode(svg, true));
+  return holder;
+}
+// The key that shows the tab at `at` of the project's (shortcuts.rs: 1 to 8 by place, the last
+// on its own), as its hint says it.
+function placeKey(at) {
+  const row = HINTS["tab-place"];
+  const key = at === listed.length - 1 && HINTS["tab-last"] ? HINTS["tab-last"]
+    : at < 8 && row ? row.replace("1\u20268", String(at + 1)) : "";
+  return key ? "  " + key : "";
+}
+function drawSide() {
+  const typed = document.getElementById("sq").value.trim().toLowerCase();
+  const rows = listed.filter((tab) => !typed || (tab.title + " " + (tab.name || "") + " " + holds(tab)).toLowerCase().includes(typed));
+  const list = document.getElementById("sl");
+  if (!rows.length) {
+    const none = document.createElement("div");
+    none.className = "e";
+    none.textContent = typed ? "No tab matches" : "No tabs";
+    return void list.replaceChildren(none);
+  }
+  list.replaceChildren(...rows.map((tab) => {
+    const item = document.createElement("div");
+    item.className = tab.key === listedShown ? "t on" : "t";
+    item.dataset.key = tab.key;
+    item.title = (tab.agent ? tab.name + " — " + tab.title : tab.title) + placeKey(listed.indexOf(tab));
+    const icon = document.createElement("span");
+    icon.className = "i ic";
+    icon.append(tab.agent ? agentMark(tab.agent) : glyph(GLYPHS[tab.kind] ? tab.kind : "web"));
+    const text = document.createElement("span");
+    text.className = "tx";
+    const name = document.createElement("span");
+    name.className = "n";
+    name.textContent = tab.name || tab.title;
+    const sub = document.createElement("span");
+    sub.className = "u";
+    sub.textContent = holds(tab);
+    text.append(name, sub);
+    const close = document.createElement("span");
+    close.className = "x";
+    close.append(glyph("close"));
+    wire(item, close, tab.key);
+    item.append(icon, text, close);
+    return item;
+  }));
+}
+if (document.documentElement.dataset.part === "side") {
+  const search = document.getElementById("sq");
+  document.getElementById("si").append(glyph("search"));
+  search.addEventListener("input", drawSide);
+  search.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      search.value = "";
+      drawSide();
+      search.blur();
+    } else if (event.key === "Enter") {
+      const first = document.querySelector("#sl .t");
+      if (first) window.ipc.postMessage("show " + first.dataset.key);
+    }
+  });
+  // The edge: the width follows the hand, said once a frame; let go, it is kept. Let go far
+  // enough left, the side slides shut, and opens again at the width it had.
+  const grip = document.getElementById("grip");
+  const SHUT_AT = 110;
+  let dragging = null, pending = null;
+  const say = () => {
+    if (pending !== null) window.ipc.postMessage("side-width " + pending);
+    pending = null;
+    if (dragging) requestAnimationFrame(say);
+  };
+  grip.addEventListener("mousedown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    dragging = { from: window.innerWidth, grab: window.innerWidth - event.clientX };
+    document.documentElement.classList.add("resizing");
+    requestAnimationFrame(say);
+  });
+  addEventListener("mousemove", (event) => {
+    if (!dragging) return;
+    pending = Math.max(0, Math.round(event.clientX + dragging.grab));
+  });
+  addEventListener("mouseup", (event) => {
+    if (!dragging) return;
+    const at = Math.round(event.clientX + dragging.grab), from = dragging.from;
+    dragging = null;
+    pending = null;
+    document.documentElement.classList.remove("resizing");
+    if (event.clientX < SHUT_AT) {
+      window.ipc.postMessage("side-width " + from + " done");
+      window.ipc.postMessage("side");
+    } else {
+      window.ipc.postMessage("side-width " + at + " done");
+    }
+  });
+  grip.addEventListener("dblclick", () => window.ipc.postMessage("side-width usual done"));
+  document.getElementById("sn").addEventListener("click", () => {
+    const box = document.getElementById("sn").getBoundingClientRect();
+    window.ipc.postMessage("new " + Math.round(box.left) + " " + Math.round(box.bottom + 4));
+  });
+  document.getElementById("sg").addEventListener("click", () => window.ipc.postMessage("key settings"));
+  document.getElementById("sc").addEventListener("click", () => window.ipc.postMessage("side"));
+}
+looked(window.__deskLook);
 // The strip is the window's own: no page's menu (Reload, AutoFill) but in the address field.
 document.addEventListener("contextmenu", (event) => {
-  if (event.target !== field) event.preventDefault();
+  if (event.target !== field && event.target.id !== "sq") event.preventDefault();
 });
 // The address field: the shown tab's page (a terminal's command, not to edit), and as the person
 // types, where Enter goes (the address, else a search) and the pages seen that match it.
@@ -227,9 +554,8 @@ const host = (url) => {
 const addressy = (text) => /^https?:\/\//.test(text) || (!/\s/.test(text) && /^(localhost|127\.0\.0\.1|[^.\s]+\.[^\s]+)/.test(text));
 function address(shown, visited) {
   seen = visited;
-  here = shown ? { url: shown.url || "", web: shown.kind === "web", title: shown.title } : { url: "", web: true };
-  field.readOnly = !here.web;
-  document.getElementById("ai").replaceChildren(glyph(here.web ? "web" : "term"));
+  here = shown ? { url: shown.kind === "web" ? shown.detail || "" : "", web: shown.kind === "web", kind: shown.kind, title: shown.title } : { url: "", web: true, kind: "web" };
+  document.getElementById("ai").replaceChildren(glyph(GLYPHS[here.kind] ? here.kind : "web"));
   if (document.activeElement !== field) field.value = here.web ? host(here.url) : here.title || "";
 }
 function suggest() {
@@ -297,10 +623,11 @@ function go(item) {
   window.ipc.postMessage("go " + item.go);
   field.blur();
 }
+// Over a page its address, to edit; over a terminal, the board or the settings an empty field: what
+// is typed there opens a new page.
 field.addEventListener("focus", () => {
-  if (!here.web) return;
   window.ipc.postMessage("typing on");
-  field.value = here.url;
+  field.value = here.web ? here.url : "";
   field.select();
 });
 field.addEventListener("input", suggest);
@@ -324,11 +651,33 @@ field.addEventListener("keydown", (event) => {
   }
 });
 document.getElementById("rl").addEventListener("click", () => window.ipc.postMessage("reload"));
-// "+": the system's menu under the button, a page or a terminal (menu.rs).
-document.getElementById("nt").addEventListener("click", () => {
-  const box = document.getElementById("nt").getBoundingClientRect();
-  window.ipc.postMessage("new " + Math.round(box.left) + " " + Math.round(box.bottom + 4));
-});
+// A menu opens under the button that opened it, its right edge on the button's, as a toolbar's
+// pop-over does; it runs down to the window's bottom at most.
+function under(menu, id) {
+  const box = document.getElementById(id).getBoundingClientRect();
+  const top = Math.round(box.bottom + 6);
+  menu.style.top = top + "px";
+  menu.style.right = Math.max(8, Math.round(innerWidth - box.right)) + "px";
+  menu.style.maxHeight = "calc(100vh - " + (top + 12) + "px)";
+}
+// The offer bar: what the app offers now (offer.rs), or null. Its words are set as text.
+function O(bar) {
+  const row = document.getElementById("offer");
+  row.className = bar ? "on" + (bar.busy ? " busy" : "") + (bar.failed ? " failed" : "") : "";
+  if (!bar) return;
+  row.querySelector(".says").textContent = row.querySelector(".says").title = bar.says;
+  row.querySelector(".mk").replaceChildren(...(bar.agent ? agentMark(bar.agent).childNodes : []));
+  const take = row.querySelector(".take");
+  take.hidden = !bar.take;
+  take.textContent = bar.take || "";
+  // Putting it off (or closing what came of it) is the cross: its words are its tooltip.
+  const later = row.querySelector(".later");
+  later.hidden = !bar.later;
+  later.title = bar.later || "";
+  later.setAttribute("aria-label", bar.later || "Close");
+}
+document.querySelector("#offer .take").addEventListener("click", () => window.ipc.postMessage("offer take"));
+document.querySelector("#offer .later").addEventListener("click", () => window.ipc.postMessage("offer later"));
 // The history menu: the tabs the window has held, newest first, each with what became of it;
 // null closes it. Titles, pages and projects are set as text.
 const SAID = { open: "open", hidden: "closed · still running", ended: "ended", closed: "closed" };
@@ -340,7 +689,7 @@ function M(rows) {
   menu.style.display = document.getElementById("back").style.display = open ? "block" : "none";
   document.getElementById("hs").className = open ? "b on" : "b";
   if (!open) return menu.replaceChildren();
-  menu.style.top = document.getElementById("head").offsetHeight + 2 + "px";
+  under(menu, "hs");
   if (rows.length === 0) {
     const none = document.createElement("div");
     none.className = "e";
@@ -358,10 +707,10 @@ function M(rows) {
     item.title = row.detail || row.title;
     const icon = document.createElement("span");
     icon.className = "i";
-    icon.append(glyph(row.kind === "term" ? "term" : "web"));
+    icon.append(glyph(GLYPHS[row.kind] ? row.kind : "web"));
     const name = document.createElement("span");
     name.className = "n";
-    name.textContent = row.title || row.detail || (row.kind === "term" ? "Terminal" : "New tab");
+    name.textContent = row.title || row.detail || ({ term: "Terminal", board: "Board", settings: "Settings" }[row.kind] || "New tab");
     const head = document.createElement("span");
     head.className = "h";
     head.append(icon, name);
@@ -372,6 +721,108 @@ function M(rows) {
     item.addEventListener("click", () => window.ipc.postMessage("visit " + row.at));
     return item;
   }));
+}
+// The Event Center: what waits for the person, newest first, under the bell; the bell counts what
+// wants them and they have not seen. While it is `open` the list is in the menu, each event with its buttons,
+// whose place is said back. Every word is set as text.
+// An event says how it is shown: its section's heading and place, its tone, whether the bell
+// counts it, and what each of its buttons is for. The strip knows no kind of event of its own.
+const TONES = { purple: "#bf5af2", blue: "#0a84ff", orange: "#ff9f0a", red: "#ff453a", green: "#30d158" };
+function ago(at) {
+  const s = Math.max(0, Date.now() / 1000 - at);
+  return s < 60 ? "now" : s < 3600 ? Math.floor(s / 60) + "m" : s < 86400 ? Math.floor(s / 3600) + "h" : Math.floor(s / 86400) + "d";
+}
+function V(events, open) {
+  // The bell counts what wants the person and is new; what ended well is listed, quietly.
+  const unseen = events.filter((event) => event.unseen && event.urgent).length;
+  const count = document.getElementById("evn");
+  count.className = unseen > 0 ? "on" : "";
+  count.textContent = unseen > 9 ? "9+" : String(unseen);
+  const bell = document.getElementById("ev");
+  bell.title = events.length ? "Events: " + events.length + (unseen ? ", " + unseen + " new" : "") : "Events";
+  bell.classList.toggle("on", open);
+  if (!open) return;
+  requestAnimationFrame(glass);
+  const menu = document.getElementById("menu");
+  menu.style.display = document.getElementById("back").style.display = "block";
+  under(menu, "ev");
+  document.getElementById("hs").className = "b";
+  const head = document.createElement("div");
+  head.className = "evh";
+  const title = document.createElement("span");
+  title.textContent = "Events";
+  head.append(title);
+  if (events.length) {
+    const clear = document.createElement("button");
+    clear.className = "clr";
+    clear.textContent = "Clear All";
+    clear.title = "Dismiss every event: each comes back only when it changes";
+    clear.addEventListener("click", () => window.ipc.postMessage("clear"));
+    head.append(clear);
+  }
+  if (events.length === 0) {
+    const none = document.createElement("div");
+    none.className = "e";
+    none.textContent = "Nothing waits for you";
+    return menu.replaceChildren(head, none);
+  }
+  const several = new Set(events.map((event) => event.group)).size > 1;
+  const rows = [head];
+  // They come in their sections' order: a heading where a section begins.
+  events.forEach((event, at) => {
+    if (at === 0 || events[at - 1].rank !== event.rank) {
+      const group = document.createElement("div");
+      group.className = "evg";
+      group.textContent = event.section + " · " + events.filter((other) => other.rank === event.rank).length;
+      rows.push(group);
+    }
+    rows.push(row(event, several));
+  });
+  menu.replaceChildren(...rows);
+}
+// A row's own click opens what it is about; its one button acts on it; its x dismisses it.
+function row(event, several) {
+  const say = (at) => window.ipc.postMessage("event " + event.n + " " + at);
+  const item = document.createElement("div");
+  item.className = event.unseen ? "ev new" : "ev";
+  item.style.setProperty("--hue", TONES[event.tone] || "#8e8e93");
+  const dot = document.createElement("span");
+  dot.className = "dot";
+  const text = document.createElement("span");
+  text.className = "tx";
+  const name = document.createElement("span");
+  name.className = "n";
+  name.textContent = event.title || event.section;
+  const words = document.createElement("span");
+  words.className = "u";
+  words.textContent = [event.detail, event.tab, several ? event.group : ""].filter(Boolean).join(" · ");
+  text.append(name, words);
+  item.title = event.detail;
+  const side = document.createElement("span");
+  side.className = "side";
+  const when = document.createElement("span");
+  when.className = "w";
+  when.textContent = ago(event.at);
+  side.append(when);
+  const at = (role) => event.buttons.findIndex((button) => button.role === role);
+  if (at("open") >= 0) item.addEventListener("click", () => say(at("open")));
+  if (at("act") >= 0) {
+    const button = document.createElement("button");
+    button.className = "act";
+    button.textContent = event.buttons[at("act")].label;
+    button.addEventListener("click", (e) => { e.stopPropagation(); say(at("act")); });
+    side.append(button);
+  }
+  if (at("dismiss") >= 0) {
+    const x = document.createElement("span");
+    x.className = "x";
+    x.title = event.buttons[at("dismiss")].label;
+    x.append(glyph("close"));
+    x.addEventListener("click", (e) => { e.stopPropagation(); say(at("dismiss")); });
+    side.append(x);
+  }
+  item.append(dot, text, side);
+  return item;
 }
 // The comment button, on while the person comments on the pages, and Send while some are held.
 function C(on, held) {
@@ -402,7 +853,7 @@ function F(size) {
   fs.replaceChildren(glyph(kind));
   fs.className = size ? "b on" : "b";
   const shown = size && size.percent < 100 ? ", shown at " + size.percent + "% to fit the window" : "";
-  fs.title = size ? "Page size: " + size.name + ", " + size.width + " × " + size.height + shown : "Page size: the window";
+  titled(fs, size ? "Page size: " + size.name + ", " + size.width + " × " + size.height + shown : "Page size: the window");
 }
 F(null);
 // "Page size": the system's menu under the button (frame.rs), the sizes to pick from.
@@ -411,16 +862,18 @@ document.getElementById("fs").addEventListener("click", () => {
   window.ipc.postMessage("frame " + Math.round(box.left) + " " + Math.round(box.bottom + 4));
 });
 // Buttons with no room, as Safari's: the rightmost go first into "»", whose system menu holds
-// them (strip.rs's Tool), until the address field has its room again.
-const TOOLS = ["fs", "cm", "nt", "hs"];
-const ROOM = 200;
+// them (strip.rs's Tool), until the crumbs have room again. Only the bar's: the browser's
+// toolbar keeps its few, and its address field gives way.
+const TOOLS = ["hs", "mn", "ev"];
+const ROOM = 160;
 function fit() {
-  const addr = document.getElementById("addr");
+  if (document.documentElement.dataset.part) return;
+  const lead = document.getElementById("lead");
   const bar = document.getElementById("bar");
   const more = document.getElementById("mo");
   for (const id of TOOLS) document.getElementById(id).hidden = false;
   more.hidden = true;
-  const tight = () => addr.getBoundingClientRect().width < ROOM || bar.scrollWidth > bar.clientWidth;
+  const tight = () => lead.getBoundingClientRect().width < ROOM || bar.scrollWidth > bar.clientWidth;
   for (const id of [...TOOLS].reverse()) {
     if (!tight()) break;
     document.getElementById(id).hidden = true;
@@ -434,7 +887,7 @@ document.getElementById("mo").addEventListener("click", () => {
   window.ipc.postMessage("more " + Math.round(box.left) + " " + Math.round(box.bottom + 4) + " " + held.join(" "));
 });
 // The strip's empty part moves the window, and a double click zooms it, as a titlebar does.
-for (const id of ["projects", "bar", "tabs", "end"]) {
+for (const id of ["bar", "lead", "cr", "tabs", "end"]) {
   const part = document.getElementById(id);
   part.addEventListener("mousedown", (event) => {
     if (event.target === part && event.button === 0 && event.detail === 1) window.ipc.postMessage("drag");
@@ -443,7 +896,7 @@ for (const id of ["projects", "bar", "tabs", "end"]) {
     if (event.target === part) window.ipc.postMessage("zoom");
   });
 }
-for (const [id, what] of [["sd", "send"], ["cm", "comment"], ["bk", "back"], ["fw", "forward"], ["hs", "history"], ["back", "history"]]) {
+for (const [id, what] of [["mn", "collapse"], ["sb", "side"], ["sd", "send"], ["cm", "comment"], ["bk", "back"], ["fw", "forward"], ["hs", "history"], ["ev", "events"], ["back", "unmenu"]]) {
   document.getElementById(id).addEventListener("click", () => window.ipc.postMessage(what));
 }
 </script>

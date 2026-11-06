@@ -96,7 +96,11 @@ fn a_notification_has_no_id_and_a_v1_frame_is_refused_with_a_reason() {
     let Next::Bad(error) = read(b"{\"ok\":false,\"text\":\"not a frame\"}\n") else {
         panic!("not refused");
     };
-    assert!(error.message.contains("protocol 2"), "{}", error.message);
+    assert!(
+        error.message.contains("another protocol"),
+        "{}",
+        error.message
+    );
 }
 
 #[test]
