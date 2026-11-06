@@ -126,6 +126,17 @@ pub(super) fn watch_spaces(proxy: &tao::event_loop::EventLoopProxy<super::host::
     super::nspanel::watch_spaces(proxy);
 }
 
+/// The person's presses in the app's windows, told to the loop: a split window's half pressed
+/// is the one in use.
+#[cfg(target_os = "macos")]
+pub(super) fn watch_presses(proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>) {
+    super::presses::watch(proxy);
+}
+
+/// Elsewhere the window is not split.
+#[cfg(not(target_os = "macos"))]
+pub(super) fn watch_presses(_proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>) {}
+
 /// Elsewhere there are no Spaces to watch.
 #[cfg(not(target_os = "macos"))]
 pub(super) fn watch_spaces(_proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>) {}

@@ -142,7 +142,7 @@ impl Offers {
         let read = std::thread::Builder::new()
             .name("desk-offer-read".into())
             .spawn(move || {
-                let _ = proxy.send_event(Cmd::Offered(id, crate::setup::is_on(id)));
+                let _ = proxy.send_event(Cmd::Offered(id, !crate::setup::offered(id)));
             });
         if let Err(why) = read {
             log::warn!("offers: integration {id} was not read (no thread: {why})");
@@ -158,12 +158,14 @@ impl Offers {
     pub(super) fn read_all(&self, states: &serde_json::Value) {
         for integration in crate::setup::INTEGRATIONS.iter() {
             let state = (states.as_array().into_iter().flatten())
-                .find(|state| state["id"] == integration.id)
-                .and_then(|state| state["state"].as_str());
+                .find(|state| state["id"] == integration.id);
+            // Off and not taken out by the person: offered; anything else is not.
             match state {
-                Some("on") => self.known(integration.id, true),
-                Some("off") => self.known(integration.id, false),
-                _ => drop(crate::lock(&self.on).remove(integration.id)),
+                Some(state) => {
+                    let offered = state["state"] == "off" && state["declined"] != true;
+                    self.known(integration.id, !offered);
+                }
+                None => drop(crate::lock(&self.on).remove(integration.id)),
             }
         }
     }

@@ -12,7 +12,7 @@ use super::super::tabs::Tabs;
 
 use super::super::host::Shared;
 
-use super::super::strip::{self, BAR, HEIGHT, Item, Key, NAV, SIDE_MAX, SIDE_MIN};
+use super::super::strip::{self, BAR, HEIGHT, Item, Key, NAV, RAIL, SIDE_MAX, SIDE_MIN};
 use super::super::tabs::{pin, place};
 use super::{Deck, Menu, Shown};
 
@@ -86,9 +86,86 @@ impl Deck {
     }
 
     /// The shown tab's part of the window, under the strip (and a page's toolbar) and beside the
-    /// side: its size, and how far from the window's left and top it starts.
+    /// side, its half of a split one: its size, and how far from the window's left and top it
+    /// starts.
     pub(super) fn content(&self) -> (LogicalSize<f64>, f64, f64) {
-        self.area(self.browsing())
+        let (size, left, top) = self.area(self.browsing());
+        match self.halves(size.width, left) {
+            Some(halves) => {
+                let now = self.shown_key();
+                let (_, x, width) = halves
+                    .into_iter()
+                    .find(|half| Some(half.0) == now)
+                    .unwrap_or(halves[0]);
+                (LogicalSize::new(width, size.height), x, top)
+            }
+            None => (size, left, top),
+        }
+    }
+
+    /// A split window's halves across `width` points from `left`: each one's tab, left and
+    /// width.
+    fn halves(&self, width: f64, left: f64) -> Option<[(Key, f64, f64); 2]> {
+        let (first, second) = self.pair()?;
+        let ((x, w), (x2, w2)) = super::super::split::halves(width, left, self.split.share);
+        Some([(first, x, w), (second, x2, w2)])
+    }
+
+    /// The tab in the half at `x`, `y` of the window (points from its top left), when the window
+    /// is split and the press is on a page.
+    pub(in super::super) fn half_at(&self, x: f64, y: f64) -> Option<Key> {
+        let (size, left, top) = self.area(false);
+        if y < top {
+            return None;
+        }
+        let halves = self.halves(size.width, left)?;
+        (halves.into_iter())
+            .find(|&(_, from, width)| x >= from && x < from + width)
+            .map(|half| half.0)
+    }
+
+    /// Which half of the pages `x`, `y` of the window is over (whether the right one): a split
+    /// window's own, a whole one's even halves. None off the pages.
+    pub(in super::super) fn drop_target(&self, x: f64, y: f64) -> Option<bool> {
+        let (size, left, top) = self.area(false);
+        if x < left || y < top {
+            return None;
+        }
+        let right = match self.halves(size.width, left) {
+            Some([_, second]) => second.1,
+            None => super::super::split::halves(size.width, left, 0.5).1.0,
+        };
+        Some(x >= right)
+    }
+
+    /// A tab dragged over the pages at `at` (a point of the window), or not (none): the half it
+    /// would go into shows.
+    pub(in super::super) fn drop_over(&mut self, at: Option<(f64, f64)>) {
+        let drop = at.and_then(|(x, y)| self.drop_target(x, y));
+        if drop == self.drop {
+            return;
+        }
+        self.drop = drop;
+        if let Some(line) = &self.line {
+            let flag = if drop.is_some() { "true" } else { "false" };
+            let _ = line.evaluate_script(&format!(
+                "document.documentElement.toggleAttribute('data-drop', {flag})"
+            ));
+        }
+        self.layout();
+    }
+
+    /// The line between the halves dragged `moved` points since the person took hold of it; let
+    /// go of when `done`.
+    pub(in super::super) fn drag_split(&mut self, moved: i32, done: bool) {
+        let (size, ..) = self.area(false);
+        let room = (size.width - super::super::split::GAP).max(1.0);
+        let from = *self.split.grabbed.get_or_insert(self.split.share);
+        self.split.share = super::super::split::held(from + f64::from(moved) / room);
+        if done {
+            self.split.grabbed = None;
+        }
+        self.layout();
     }
 
     /// The tabs' part of the window: a page's under its toolbar (`nav`), a terminal's under the
@@ -122,12 +199,31 @@ impl Deck {
             pin(strip, LogicalSize::new(width, height));
             raised = super::super::platform::raise(strip);
         }
+        // Split, the window shows two tabs, each in its half; the one in use has the toolbar.
+        let halves = if over {
+            None
+        } else {
+            self.halves(size.width, left)
+        };
+        let in_use = self.shown_key();
+        let (used_x, used_width) = (halves.iter().flatten())
+            .find(|half| Some(half.0) == in_use)
+            .map_or((left, size.width), |half| (half.1, half.2));
         if let Some(nav) = &self.nav {
-            let browsing = self.browsing();
-            let x = if browsing { left } else { -(width + 100.0) };
-            let tall = if self.typing { size.height } else { NAV };
+            let blank = self.nav.is_some() && self.blank();
+            let x = if self.browsing() || blank {
+                used_x
+            } else {
+                -(width + 100.0)
+            };
+            let tall = if self.typing || blank {
+                size.height
+            } else {
+                NAV
+            };
+            let wide = if blank { size.width } else { used_width };
             let _ = nav.set_bounds(super::super::frame::fill(
-                LogicalSize::new(size.width, tall),
+                LogicalSize::new(wide, tall),
                 x,
                 top,
             ));
@@ -135,26 +231,89 @@ impl Deck {
                 raised = super::super::platform::raise(nav) || raised;
             }
         }
-        // The side slides in from the left, its width kept: what of it shows is `left`. An open
-        // menu leaves it in place: the strip, clear but for the menu, lies over it then.
+        // The side narrows to its rail and widens again, its page laid out at each width: `left`
+        // of it shows. An open menu leaves it in place: the strip, clear but for the menu, lies
+        // over it then.
         if let Some(side) = &self.side {
-            let shows = left > 0.5;
-            let wide = self.side_width;
-            let x = if shows { left - wide } else { -(wide + 100.0) };
-            let column = LogicalSize::new(wide, size.height);
-            let _ = side.set_bounds(super::super::frame::fill(column, x, top));
+            let column = LogicalSize::new(left, size.height);
+            let _ = side.set_bounds(super::super::frame::fill(column, 0.0, top));
             super::super::platform::follow(side, super::super::platform::Follow::Side);
         }
         // Where the strip lies over the pages, they stay under an open menu.
         let over = over && !raised;
         if let Some(web) = &self.web {
-            let (size, left, top) = self.area(self.nav.is_some());
-            web.layout(size, left, top, self.shown == Shown::Web && !over);
+            let toolbar = if self.nav.is_some() { NAV } else { 0.0 };
+            let pages: Vec<super::super::tabs::Pane> = match halves {
+                Some(halves) => (halves.into_iter())
+                    .filter_map(|(key, x, w)| match key {
+                        Key::Web(id) => {
+                            let above = if Some(key) == in_use { toolbar } else { 0.0 };
+                            let tall = (size.height - above).max(0.0);
+                            Some((id, LogicalSize::new(w, tall), x, top + above))
+                        }
+                        Key::Term(_) => None,
+                    })
+                    .collect(),
+                None if self.shown == Shown::Web && !over => {
+                    let (size, left, top) = self.area(self.nav.is_some());
+                    vec![(web.active_id(), size, left, top)]
+                }
+                None => vec![],
+            };
+            web.layout(&pages);
         }
         for open in &self.terms {
-            let here = self.shown == Shown::Term(open.id) && !over;
-            let x = if here { left } else { -(width + 100.0) };
-            place(&open.webview, x, top, size, here);
+            let spot = match halves {
+                Some(halves) => (halves.into_iter())
+                    .find(|half| half.0 == Key::Term(open.id))
+                    .map(|half| (half.1, half.2)),
+                None => (self.shown == Shown::Term(open.id) && !over).then_some((left, size.width)),
+            };
+            match spot {
+                Some((x, w)) => place(
+                    &open.webview,
+                    x,
+                    top,
+                    LogicalSize::new(w, size.height),
+                    true,
+                ),
+                None => place(&open.webview, -(width + 100.0), top, size, false),
+            }
+        }
+        self.place_line(halves, (size, left, top), width);
+    }
+
+    /// The line's view: over the half a tab dragged out over the pages would go into, else on the
+    /// line between a split window's halves, else out of sight.
+    fn place_line(
+        &self,
+        halves: Option<[(Key, f64, f64); 2]>,
+        (size, left, top): (LogicalSize<f64>, f64, f64),
+        width: f64,
+    ) {
+        // A tab dragged over the pages: the line's view lies over the half it would go into.
+        if let (Some(line), Some(right)) = (&self.line, self.drop) {
+            let (first, second) = match self.halves(size.width, left) {
+                Some([first, second]) => ((first.1, first.2), (second.1, second.2)),
+                None => super::super::split::halves(size.width, left, 0.5),
+            };
+            let (x, w) = if right { second } else { first };
+            let _ = line.set_bounds(super::super::frame::fill(
+                LogicalSize::new(w, size.height),
+                x,
+                top,
+            ));
+            super::super::platform::raise(line);
+        } else if let Some(line) = &self.line {
+            let at = halves.map(|[_, second]| second.1 - super::super::split::GAP);
+            let x = at.map_or(-(width + 100.0), |at| {
+                at + super::super::split::GAP / 2.0 - super::super::split::LINE / 2.0
+            });
+            let column = LogicalSize::new(super::super::split::LINE, size.height);
+            let _ = line.set_bounds(super::super::frame::fill(column, x, top));
+            if at.is_some() {
+                super::super::platform::raise(line);
+            }
         }
     }
 
@@ -167,7 +326,11 @@ impl Deck {
         self.side_open = !self.side_open;
         crate::lock(&shared.kept).side = Some(self.side_open);
         self.slide = self.slide.wrapping_add(1);
-        let to = if self.side_open { self.side_width } else { 0.0 };
+        let to = if self.side_open {
+            self.side_width
+        } else {
+            RAIL
+        };
         let (from, slide) = (self.side_now, self.slide);
         let proxy = self.proxy.clone();
         let started = std::thread::Builder::new()
@@ -232,7 +395,11 @@ impl Deck {
         }
         self.side_now = now;
         self.layout();
-        let to = if self.side_open { self.side_width } else { 0.0 };
+        let to = if self.side_open {
+            self.side_width
+        } else {
+            RAIL
+        };
         if (now - to).abs() < 0.5 {
             self.refresh(shared);
         }
@@ -283,10 +450,22 @@ impl Deck {
                 .collect(),
         };
         let drawn = strip::script(&items, shown, &self.visited(shared), side, &projects);
+        // The split's two tabs, left and right: the side lists them as one, the bar's button lit
+        // while the window shows them; another tab shown, the project's split still listed so.
+        let on = self.pair().map(|(left, right)| [left.name(), right.name()]);
+        let kept = crate::lock(&shared.splits)
+            .get(&project)
+            .map(super::super::split::sides);
+        let split = format!(
+            "SP({}, {})",
+            serde_json::json!(on.clone().or(kept)),
+            on.is_some()
+        );
         for view in [Some(strip), self.side.as_ref(), self.nav.as_ref()]
             .into_iter()
             .flatten()
         {
+            let _ = view.evaluate_script(&split);
             let _ = view.evaluate_script(&drawn);
         }
         let rows = (self.menu == Some(Menu::History)).then(|| self.rows(shared));

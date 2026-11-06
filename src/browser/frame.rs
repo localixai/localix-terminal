@@ -114,9 +114,9 @@ pub(super) fn material(dark: bool) -> isize {
 )]
 pub(super) fn coat(dark: bool) -> (Rgb, f64) {
     match dark {
-        // Thin: the desktop shows through, text still reads.
-        true => (DARK, 0.15),
-        false => (LIGHT, 0.25),
+        // Half: the desktop shows through as a system window's does, text reads on any of it.
+        true => (DARK, 0.5),
+        false => (LIGHT, 0.6),
     }
 }
 

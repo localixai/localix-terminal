@@ -78,12 +78,16 @@ fn an_agent_starting_reads_its_integration_again_and_settings_tell_what_they_rea
     assert!(!crate::lock(&offers.on).contains_key("claude-code"));
     // What Settings read is what the bar knows.
     offers.read_all(&serde_json::json!([
-        {"id": "claude-code", "state": "off"},
-        {"id": "codex", "state": "on"},
-        {"id": "cursor", "state": "unavailable"},
+        {"id": "claude-code", "state": "off", "declined": false},
+        {"id": "codex", "state": "on", "declined": false},
+        {"id": "gemini", "state": "unavailable", "declined": false},
+        {"id": "hermes", "state": "off", "declined": true},
     ]));
     let on = crate::lock(&offers.on).clone();
+    // Offered: off, and not taken out by the person.
     assert_eq!(on.get("claude-code"), Some(&Some(false)));
     assert_eq!(on.get("codex"), Some(&Some(true)));
-    assert!(!on.contains_key("cursor"));
+    assert_eq!(on.get("gemini"), Some(&Some(true)));
+    assert_eq!(on.get("hermes"), Some(&Some(true)));
+    assert!(!on.contains_key("copilot"));
 }

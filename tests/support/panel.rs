@@ -77,10 +77,11 @@ pub(crate) fn scenario(browser: &Browser, driver: &WebviewDriver) {
     assert_eq!(read["rows"], json!(["hi", "there", ""]));
     assert_eq!(read["focus"], false, "the panel took the keyboard");
     assert_eq!(read["visible"], "visible");
-    // The page fills its window (960 by 700 points, less the title bar), and the grid follows.
+    // The page fills the pages' part (the window less the bar, and the tabs' side when it shows:
+    // the window stays from the scenarios before, as they left it), and the grid follows.
     let (width, height) = (read["width"].as_f64(), read["height"].as_f64());
     assert!(
-        width >= Some(900.0) && height >= Some(600.0),
+        width >= Some(600.0) && height >= Some(600.0),
         "{width:?} by {height:?}"
     );
     assert!(read["cols"].as_u64() > Some(80), "{read}");
@@ -383,11 +384,17 @@ pub(crate) fn first(browser: &Browser) {
     browser.go("alpha");
     switcher("alpha", false);
     shortcuts(browser);
-    // The last tab gone, the window is too.
+    // The last tab gone, the window stays: no tab shown, and the browser's toolbar has the pages'
+    // part, as the start of a new tab.
     drop(panel);
+    let blank = "document.documentElement.hasAttribute('data-blank')";
     let deadline = Instant::now() + Duration::from_secs(5);
-    while showing(browser).is_some() {
-        assert!(Instant::now() < deadline, "the window stayed");
+    loop {
+        let left = showing(browser).expect("the window stays with no tab");
+        if left.0.is_empty() && browser.peek_nav(blank) == Ok(json!(true)) {
+            break;
+        }
+        assert!(Instant::now() < deadline, "no start of a new tab: {left:?}");
         std::thread::sleep(Duration::from_millis(50));
     }
 }

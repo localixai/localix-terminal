@@ -20,6 +20,8 @@ enum Item {
     CopyAddress,
     NewTerminal,
     Reveal,
+    Split,
+    Unsplit,
     Close,
     CloseOthers,
     CloseRight,
@@ -34,6 +36,8 @@ impl Item {
             Self::CopyAddress => "Copy Address",
             Self::NewTerminal => "New Terminal Here",
             Self::Reveal => platform::REVEAL,
+            Self::Split => "Open in Split View",
+            Self::Unsplit => "Close Split View",
             Self::Close => "Close Tab",
             Self::CloseOthers => "Close Other Tabs",
             Self::CloseRight => "Close Tabs to the Right",
@@ -42,12 +46,14 @@ impl Item {
 }
 
 /// What is around a tab: whether its project's folder is known, and whether its project has
-/// other tabs, and tabs to its right.
+/// other tabs, and tabs to its right; and the split: whether it can go beside the tab shown
+/// (`Some(false)`), or is one of a split window's halves (`Some(true)`).
 #[derive(Debug, Clone, Copy, Default)]
 struct Around {
     folder: bool,
     others: bool,
     right: bool,
+    split: Option<bool>,
 }
 
 /// The menu's groups for a tab of `key`'s kind, at `url` (a page's), with `around` it: none of
@@ -70,6 +76,11 @@ fn groups(key: Key, url: &str, around: Around) -> Vec<Vec<Item>> {
         project.push(Item::Reveal);
     }
     groups.push(project);
+    groups.push(match around.split {
+        Some(true) => vec![Item::Unsplit],
+        Some(false) => vec![Item::Split],
+        None => vec![],
+    });
     let mut close = vec![Item::Close];
     if around.others {
         close.push(Item::CloseOthers);
@@ -115,10 +126,29 @@ impl On<'_> {
                 .find(|place| place.key == group)
                 .map(|place| place.folder.clone())
         });
+        // A tab of the shown one's project (or the window's own) can go beside it; one of the
+        // halves can make the window whole.
+        let shown = open.shown_key();
+        let halves = open
+            .pair()
+            .is_some_and(|(left, right)| key == left || key == right);
+        let alike = (listed.iter().find(|tab| tab.shown))
+            .is_some_and(|tab| tab.group == group || group.is_empty() || tab.group.is_empty());
+        // Any tab can be split: another goes beside the shown one, the shown one beside the next.
+        let split = if halves {
+            Some(true)
+        } else if (Some(key) != shown && shown.is_some() && alike)
+            || (Some(key) == shown && !others.is_empty())
+        {
+            Some(false)
+        } else {
+            None
+        };
         let around = Around {
             folder: folder.is_some(),
             others: !others.is_empty(),
             right: !right.is_empty(),
+            split,
         };
         let groups = groups(key, &url, around);
         let mut entries = vec![];
@@ -161,6 +191,9 @@ impl On<'_> {
                     platform::reveal(&folder);
                 }
             }
+            Item::Split if Some(key) == shown => self.split_view(),
+            Item::Split => self.split_beside(Some(key)),
+            Item::Unsplit => self.split_beside(None),
             Item::Close => self.close(key),
             Item::CloseOthers => others.into_iter().for_each(|other| self.close(other)),
             Item::CloseRight => right.into_iter().for_each(|other| self.close(other)),

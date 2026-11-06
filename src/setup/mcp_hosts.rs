@@ -1,96 +1,210 @@
-//! The window tool in the MCP hosts the person has (Cursor, Codex): an `llx-desk` server in each
-//! one's own configuration, run as `<this program> mcp`. Any other host is given the same entry
-//! to paste (`snippet`).
+//! The window tool in the coding agents that take MCP servers (Codex, Gemini CLI, GitHub Copilot,
+//! OpenCode, Hermes): an `llx-desk` server in each one's own configuration, run as
+//! `<this program> mcp`. Each is put in and taken out with the agent's own commands
+//! (`<agent> mcp add` / `remove`), where it has them for a local server; OpenCode has none, and its
+//! JSON is written. Whether it is there is read from the agent's configuration file, which is
+//! quick and needs none of its programs to start. Any other host is given the entry to paste
+//! (`snippet`).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::{Value, json};
 
 use super::State;
+use super::shell::{login_path, run_with, which};
 
-/// The name of the server in a host's configuration.
-const NAME: &str = "llx-desk";
+/// The name of the server in an agent's configuration.
+pub(super) const NAME: &str = "llx-desk";
+/// How long an agent's `mcp` command may take (Hermes connects to the server to list its tools).
+const MOST: std::time::Duration = std::time::Duration::from_secs(60);
 
-/// An MCP host, by how its configuration is written.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Host {
-    /// `~/.cursor/mcp.json`: `mcpServers` in JSON.
-    Cursor,
-    /// `~/.codex/config.toml`: an `[mcp_servers.<name>]` table.
-    Codex,
+/// How an agent's configuration names the server's command.
+#[derive(Debug, Clone, Copy)]
+enum Kept {
+    /// JSON: the command (a string) at this path.
+    Json(&'static [&'static str]),
+    /// JSON: the command line (an array, the program first) at this path.
+    JsonLine(&'static [&'static str]),
+    /// TOML: `command` in the `[mcp_servers.llx-desk]` table.
+    Toml,
+    /// YAML: `command:` under `llx-desk:`.
+    Yaml,
+}
+
+/// A coding agent that takes MCP servers.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Host {
+    /// Its integration's id, its agent's (agents.rs).
+    pub(super) id: &'static str,
+    /// Its program, on the person's PATH.
+    program: &'static str,
+    /// Its configuration, under the home directory, and how it keeps the server.
+    config: &'static str,
+    kept: Kept,
+    /// Its command that adds the server (`{exe}`: this program), none when it has none; what it
+    /// is answered when it asks.
+    add: Option<&'static [&'static str]>,
+    answer: Option<&'static str>,
+    /// Its command that takes the server out.
+    remove: Option<&'static [&'static str]>,
+    /// What to do after, in words.
+    after: &'static str,
+}
+
+/// Every agent that takes MCP servers, as integrations.rs lists them.
+pub(super) const HOSTS: [Host; 5] = [
+    Host {
+        id: "codex",
+        program: "codex",
+        config: ".codex/config.toml",
+        kept: Kept::Toml,
+        add: Some(&["mcp", "add", NAME, "--", "{exe}", "mcp"]),
+        answer: None,
+        remove: Some(&["mcp", "remove", NAME]),
+        after: "start Codex again to use it",
+    },
+    Host {
+        id: "gemini",
+        program: "gemini",
+        config: ".gemini/settings.json",
+        kept: Kept::Json(&["mcpServers", NAME, "command"]),
+        add: Some(&["mcp", "add", "--scope", "user", NAME, "{exe}", "mcp"]),
+        answer: None,
+        remove: Some(&["mcp", "remove", "--scope", "user", NAME]),
+        after: "start Gemini CLI again to use it",
+    },
+    Host {
+        id: "copilot",
+        program: "copilot",
+        config: ".copilot/mcp-config.json",
+        kept: Kept::Json(&["mcpServers", NAME, "command"]),
+        add: Some(&["mcp", "add", NAME, "--", "{exe}", "mcp"]),
+        answer: None,
+        remove: Some(&["mcp", "remove", NAME]),
+        after: "start Copilot again to use it",
+    },
+    Host {
+        id: "opencode",
+        program: "opencode",
+        config: ".config/opencode/opencode.json",
+        kept: Kept::JsonLine(&["mcp", NAME, "command"]),
+        add: None,
+        answer: None,
+        remove: None,
+        after: "start OpenCode again to use it",
+    },
+    Host {
+        id: "hermes",
+        program: "hermes",
+        config: ".hermes/config.yaml",
+        kept: Kept::Yaml,
+        add: Some(&["mcp", "add", NAME, "--command", "{exe}", "--args", "mcp"]),
+        // It lists the server's tools and asks whether to enable them all.
+        answer: Some("Y\n"),
+        remove: Some(&["mcp", "remove", NAME]),
+        after: "run /reload-mcp in Hermes, or start it again",
+    },
+];
+
+/// The agent of integration `id`, when it takes MCP servers.
+pub(super) fn host(id: &str) -> Option<&'static Host> {
+    HOSTS.iter().find(|host| host.id == id)
 }
 
 impl Host {
-    fn file(self, home: &Path) -> PathBuf {
-        match self {
-            Self::Cursor => home.join(".cursor/mcp.json"),
-            Self::Codex => home.join(".codex/config.toml"),
-        }
+    /// Its program and the PATH to run it with, when it is installed.
+    fn installed(&self) -> Result<(std::path::PathBuf, String), String> {
+        let path = login_path().ok_or("the login shell did not say its PATH")?;
+        let program = which(self.program, &path)
+            .ok_or_else(|| format!("not installed (no `{}` on the PATH)", self.program))?;
+        Ok((program, path))
     }
 
-    /// The host is there: its directory is.
-    fn present(self, home: &Path) -> bool {
-        self.file(home).parent().is_some_and(Path::is_dir)
-    }
-
-    pub(super) fn state(self, home: &Path, exe: &Path) -> State {
-        if !self.present(home) {
-            return State::Unavailable(format!("not installed (no {})", parent(&self.file(home))));
+    pub(super) fn state(&self, home: &Path, exe: &Path) -> State {
+        if let Err(why) = self.installed() {
+            return State::Unavailable(why);
         }
-        let text = std::fs::read_to_string(self.file(home)).unwrap_or_default();
+        let text = std::fs::read_to_string(home.join(self.config)).unwrap_or_default();
         match self.entry(&text) {
             Some(command) if command == exe.display().to_string() => {
-                State::On(format!("in {}", self.file(home).display()))
+                State::On(format!("in ~/{}", self.config))
             }
             Some(_) => State::Off("another program is named there".into()),
             None => State::Off("not added".into()),
         }
     }
 
-    /// The command the configuration runs for the server, if it has one.
-    fn entry(self, text: &str) -> Option<String> {
-        match self {
-            Self::Cursor => {
-                let config: Value = serde_json::from_str(text).ok()?;
-                config["mcpServers"][NAME]["command"]
-                    .as_str()
-                    .map(String::from)
-            }
-            Self::Codex => {
-                let table = table_of(text)?;
-                let line = table
-                    .lines()
-                    .find(|line| line.trim_start().starts_with("command"))?;
-                let value = line.split_once('=')?.1.trim();
-                serde_json::from_str::<String>(value).ok()
-            }
+    /// The command its configuration runs for the server, if it has one.
+    fn entry(&self, text: &str) -> Option<String> {
+        match self.kept {
+            Kept::Json(at) => at_path(&serde_json::from_str(text).ok()?, at)?
+                .as_str()
+                .map(String::from),
+            Kept::JsonLine(at) => at_path(&serde_json::from_str(text).ok()?, at)?
+                .get(0)?
+                .as_str()
+                .map(String::from),
+            Kept::Toml => toml_command(text),
+            Kept::Yaml => yaml_command(text),
         }
     }
 
-    pub(super) fn turn(self, home: &Path, exe: &Path, on: bool) -> Result<String, String> {
-        let file = self.file(home);
-        if !self.present(home) {
-            return Err(format!("not installed (no {})", parent(&file)));
-        }
-        let text = std::fs::read_to_string(&file).unwrap_or_default();
-        let written = match self {
-            Self::Cursor => cursor(&text, exe, on)?,
-            Self::Codex => codex(&text, exe, on),
+    pub(super) fn turn(&self, home: &Path, exe: &Path, on: bool) -> Result<String, String> {
+        let (program, path) = self.installed()?;
+        let exe_text = exe.display().to_string();
+        let asked = match on {
+            true => self.add,
+            false => self.remove,
         };
+        let Some(args) = asked else {
+            return self.write(home, exe, on);
+        };
+        // One that names another program goes first: `add` keeps an entry it has.
+        let had = std::fs::read_to_string(home.join(self.config)).unwrap_or_default();
+        if on
+            && self.entry(&had).is_some()
+            && let Some(remove) = self.remove
+        {
+            let _ = run_with(&program, remove, &path, MOST, None);
+        }
+        let args: Vec<&str> = (args.iter())
+            .map(|arg| {
+                if *arg == "{exe}" {
+                    exe_text.as_str()
+                } else {
+                    arg
+                }
+            })
+            .collect();
+        let ran = run_with(&program, &args, &path, MOST, self.answer.filter(|_| on))?;
+        if !ran.ok {
+            return Err(ran.out.trim().to_string());
+        }
+        Ok(match on {
+            true => format!("added: {}", self.after),
+            false => "taken out".into(),
+        })
+    }
+
+    /// The server put in or taken out of the agent's JSON, the rest as it was (OpenCode's).
+    fn write(&self, home: &Path, exe: &Path, on: bool) -> Result<String, String> {
+        let file = home.join(self.config);
+        let text = std::fs::read_to_string(&file).unwrap_or_default();
+        let written = opencode(&text, exe, on)?;
+        if let Some(dir) = file.parent() {
+            std::fs::create_dir_all(dir).map_err(|why| format!("{}: {why}", dir.display()))?;
+        }
         std::fs::write(&file, written).map_err(|why| format!("{}: {why}", file.display()))?;
         Ok(match on {
-            true => format!(
-                "added to {}: restart it to use the window tool",
-                file.display()
-            ),
-            false => format!("taken out of {}", file.display()),
+            true => format!("added: {}", self.after),
+            false => "taken out".into(),
         })
     }
 }
 
-fn parent(file: &Path) -> String {
-    file.parent()
-        .map_or_else(String::new, |dir| dir.display().to_string())
+/// The value at `path` in `config`.
+fn at_path<'a>(config: &'a Value, path: &[&str]) -> Option<&'a Value> {
+    path.iter().try_fold(config, |value, key| value.get(*key))
 }
 
 /// The server's entry, as every MCP host's JSON has it.
@@ -98,24 +212,27 @@ pub(super) fn snippet(exe: &Path) -> Value {
     json!({"mcpServers": {NAME: {"command": exe.display().to_string(), "args": ["mcp"]}}})
 }
 
-/// Cursor's configuration with the server added or taken out, the rest as it was.
-fn cursor(text: &str, exe: &Path, on: bool) -> Result<String, String> {
+/// OpenCode's configuration with the server put in (a local one, its command line) or taken
+/// out, the rest as it was.
+fn opencode(text: &str, exe: &Path, on: bool) -> Result<String, String> {
     let mut config: Value = match text.trim() {
         "" => json!({}),
         text => serde_json::from_str(text)
-            .map_err(|why| format!("~/.cursor/mcp.json is no JSON: {why}"))?,
+            .map_err(|why| format!("the OpenCode configuration is no JSON: {why}"))?,
     };
     let servers = config
         .as_object_mut()
-        .ok_or("~/.cursor/mcp.json is no JSON object")?
-        .entry("mcpServers")
+        .ok_or("the OpenCode configuration is no JSON object")?
+        .entry("mcp")
         .or_insert_with(|| json!({}));
-    let servers = servers
-        .as_object_mut()
-        .ok_or("its mcpServers is no object")?;
+    let servers = servers.as_object_mut().ok_or("its `mcp` is no object")?;
     match on {
         true => {
-            servers.insert(NAME.into(), snippet(exe)["mcpServers"][NAME].clone());
+            let line = json!([exe.display().to_string(), "mcp"]);
+            servers.insert(
+                NAME.into(),
+                json!({"type": "local", "command": line, "enabled": true}),
+            );
         }
         false => {
             servers.remove(NAME);
@@ -127,77 +244,34 @@ fn cursor(text: &str, exe: &Path, on: bool) -> Result<String, String> {
 }
 
 /// The heading of the server's table in Codex's TOML.
-const CODEX_TABLE: &str = "[mcp_servers.llx-desk]";
+const TOML_TABLE: &str = "[mcp_servers.llx-desk]";
 
-/// The server's table in `text` (from its heading to the next table), if it has one.
-fn table_of(text: &str) -> Option<&str> {
-    let (_, rest) = text.split_once(CODEX_TABLE)?;
-    Some(match rest.split_once("\n[") {
-        // Up to its last line's end: the next table's `[` stays.
-        Some((table, _)) => rest.get(..=table.len()).unwrap_or(table),
-        None => rest,
-    })
+/// `command` in the server's TOML table (from its heading to the next table).
+fn toml_command(text: &str) -> Option<String> {
+    let (_, rest) = text.split_once(TOML_TABLE)?;
+    let table = rest.split_once("\n[").map_or(rest, |(table, _)| table);
+    let line = table
+        .lines()
+        .find(|line| line.trim_start().starts_with("command"))?;
+    let value = line.split_once('=')?.1.trim();
+    serde_json::from_str::<String>(value).ok()
 }
 
-/// Codex's configuration with the server's table put in or taken out, the rest as it was.
-fn codex(text: &str, exe: &Path, on: bool) -> String {
-    let mut kept = text.to_string();
-    if let Some(start) = kept.find(CODEX_TABLE) {
-        let table = table_of(&kept).map_or(0, str::len);
-        kept.replace_range(start..start + CODEX_TABLE.len() + table, "");
-    }
-    if !on {
-        return kept;
-    }
-    let command = serde_json::to_string(&exe.display().to_string()).unwrap_or_default();
-    let gap = match kept.is_empty() || kept.ends_with("\n\n") {
-        true => "",
-        false if kept.ends_with('\n') => "\n",
-        false => "\n\n",
-    };
-    format!("{kept}{gap}{CODEX_TABLE}\ncommand = {command}\nargs = [\"mcp\"]\n")
+/// `command:` under the server's key in YAML: the first one more indented than the key, before
+/// the next key as indented as it.
+fn yaml_command(text: &str) -> Option<String> {
+    let mut lines = text.lines();
+    let indent = |line: &str| line.len() - line.trim_start().len();
+    let key = lines.find(|line| line.trim() == format!("{NAME}:"))?;
+    let depth = indent(key);
+    let value = lines
+        .take_while(|line| line.trim().is_empty() || indent(line) > depth)
+        .find_map(|line| line.trim().strip_prefix("command:"))?
+        .trim();
+    let unquoted = value.trim_matches(|c| c == '"' || c == '\'');
+    (!unquoted.is_empty()).then(|| unquoted.to_string())
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{Host, codex, cursor};
-    use std::path::Path;
-
-    #[test]
-    fn cursor_keeps_the_other_servers_and_takes_out_only_its_own() {
-        let exe = Path::new("/A/llx-desk");
-        let had = r#"{"mcpServers": {"other": {"command": "x"}}, "theme": 1}"#;
-        let on = cursor(had, exe, true).unwrap();
-        assert_eq!(Host::Cursor.entry(&on).as_deref(), Some("/A/llx-desk"));
-        assert!(on.contains("\"other\"") && on.contains("\"theme\""));
-        let off = cursor(&on, exe, false).unwrap();
-        assert_eq!(Host::Cursor.entry(&off), None);
-        assert!(off.contains("\"other\""));
-        assert!(cursor("", exe, true).unwrap().contains("llx-desk"));
-    }
-
-    #[test]
-    fn codex_gets_its_table_once_and_loses_only_it() {
-        let exe = Path::new("/A/llx-desk");
-        let had = "model = \"o3\"\n\n[mcp_servers.other]\ncommand = \"x\"\n";
-        let on = codex(had, exe, true);
-        assert_eq!(Host::Codex.entry(&on).as_deref(), Some("/A/llx-desk"));
-        assert_eq!(
-            codex(&on, exe, true)
-                .matches("[mcp_servers.llx-desk]")
-                .count(),
-            1
-        );
-        let off = codex(&on, exe, false);
-        assert_eq!(Host::Codex.entry(&off), None);
-        assert!(off.contains("[mcp_servers.other]") && off.contains("model = \"o3\""));
-        // A table in the middle goes without what follows it.
-        let middle = "[mcp_servers.llx-desk]\ncommand = \"/old\"\nargs = [\"mcp\"]\n[mcp_servers.other]\ncommand = \"x\"\n";
-        let moved = codex(middle, exe, true);
-        assert!(
-            moved.contains("[mcp_servers.other]\ncommand = \"x\""),
-            "{moved}"
-        );
-        assert_eq!(Host::Codex.entry(&moved).as_deref(), Some("/A/llx-desk"));
-    }
-}
+#[path = "mcp_hosts_tests.rs"]
+mod tests;

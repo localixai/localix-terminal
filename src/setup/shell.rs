@@ -15,11 +15,19 @@ pub(super) struct Ran {
 /// The PATH a new terminal of the person's has: their login shell's. None when the shell does
 /// not answer within a few seconds.
 pub(super) fn login_path() -> Option<String> {
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
-    let mut asked = Command::new(&shell);
-    asked.args(["-l", "-i", "-c", "printf %s \"$PATH\""]);
-    let ran = within(asked, Duration::from_secs(5))?;
-    ran.ok.then_some(ran.out).filter(|path| !path.is_empty())
+    // Asked once a process: a login shell may take seconds to start (a version manager's setup),
+    // and every integration's state asks for it, several at once. One that did not answer is
+    // asked again next time.
+    static KNOWN: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+    let mut known = crate::lock(&KNOWN);
+    if known.is_none() {
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+        let mut asked = Command::new(&shell);
+        asked.args(["-l", "-i", "-c", "printf %s \"$PATH\""]);
+        let ran = within(asked, Duration::from_secs(30))?;
+        *known = ran.ok.then_some(ran.out).filter(|path| !path.is_empty());
+    }
+    known.clone()
 }
 
 /// Whether `dir` is on `path`.
@@ -41,9 +49,20 @@ pub(super) fn run(
     path: &str,
     most: Duration,
 ) -> Result<Ran, String> {
+    run_with(program, args, path, most, None)
+}
+
+/// As [`run`], with `input` for what the program asks (its standard input; none: nothing).
+pub(super) fn run_with(
+    program: &Path,
+    args: &[&str],
+    path: &str,
+    most: Duration,
+    input: Option<&str>,
+) -> Result<Ran, String> {
     let mut command = Command::new(program);
     command.args(args).env("PATH", path);
-    within(command, most).ok_or_else(|| {
+    within_given(command, most, input).ok_or_else(|| {
         format!(
             "{} {} did not end within {}s",
             program.display(),
@@ -56,16 +75,26 @@ pub(super) fn run(
 /// What `command` says, when it ends within `most`; one that does not is stopped. Its output
 /// goes to a file, not a pipe: an interactive shell leaves helpers behind (a prompt's git
 /// watcher) that would hold a pipe open long after the shell ended.
-pub(super) fn within(mut command: Command, most: Duration) -> Option<Ran> {
+pub(super) fn within(command: Command, most: Duration) -> Option<Ran> {
+    within_given(command, most, None)
+}
+
+/// As [`within`], `input` given as the program's standard input (a file too, never a pipe).
+fn within_given(mut command: Command, most: Duration, input: Option<&str>) -> Option<Ran> {
     static ASKED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let n = ASKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let file = std::env::temp_dir().join(format!("llx-desk-setup-{}-{n}", std::process::id()));
+    let given = std::env::temp_dir().join(format!("llx-desk-setup-{}-{n}.in", std::process::id()));
+    let stdin = match input {
+        Some(input) => {
+            std::fs::write(&given, input).ok()?;
+            Stdio::from(std::fs::File::open(&given).ok()?)
+        }
+        None => Stdio::null(),
+    };
     let out = std::fs::File::create(&file).ok()?;
     let err = out.try_clone().ok()?;
-    let spawned = (command.stdin(Stdio::null()))
-        .stdout(out)
-        .stderr(err)
-        .spawn();
+    let spawned = (command.stdin(stdin)).stdout(out).stderr(err).spawn();
     let ran = spawned.ok().and_then(|mut child| {
         let pid = child.id();
         let (done, ended) = std::sync::mpsc::sync_channel(1);
@@ -89,6 +118,7 @@ pub(super) fn within(mut command: Command, most: Duration) -> Option<Ran> {
         Some(Ran { ok, out })
     });
     let _ = std::fs::remove_file(&file);
+    let _ = std::fs::remove_file(&given);
     ran
 }
 

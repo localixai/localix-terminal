@@ -79,6 +79,17 @@ pub(super) fn marks() -> String {
     serde_json::Value::Object(marks).to_string()
 }
 
+/// The agents installed (their command on this process's `PATH`), for a page: a JSON array of
+/// their place in [`AGENTS`], id and name.
+pub(super) fn installed() -> String {
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let found: Vec<serde_json::Value> = (AGENTS.iter().enumerate())
+        .filter(|(_, agent)| agent.command_on(&path).is_some())
+        .map(|(at, agent)| serde_json::json!({"at": at, "id": agent.id, "name": agent.name}))
+        .collect();
+    serde_json::Value::Array(found).to_string()
+}
+
 /// The agent a terminal's command line starts, read as a shell would start it: past variables
 /// set in front (`FOO=1`) and the programs that run another (`env`, `exec`, `nohup`, `time`,
 /// `command`), the first word's file name, whatever directory it is named in.

@@ -17,7 +17,7 @@ use wry::{NewWindowResponse, WebView, WebViewBuilder};
 use super::frame::{self, Frame, Look};
 use super::host::{Cmd, Shared, Window};
 use super::panel::{self, Held, Open, Opening};
-use super::strip::{self, HEIGHT};
+use super::strip::{self, HEIGHT, Key};
 use super::{placement, platform};
 
 #[path = "deck_acts.rs"]
@@ -29,7 +29,6 @@ mod layout;
 use super::tab_view::build;
 use super::tabs::Tabs;
 use super::viewport::Viewport;
-pub(super) use acts::After;
 pub(super) use history::Revisit;
 
 /// How many ended terminals keep their last screen.
@@ -64,11 +63,20 @@ pub(super) struct Deck {
     /// The browser's toolbar over the pages (the strip's page again): back, forward, reload, the
     /// address field, the page's size and comments. It shows over a page only.
     nav: Option<WebView>,
+    /// The line between a split window's halves, which the person drags (the strip's page
+    /// again): out of sight while the window is whole.
+    line: Option<WebView>,
+    /// The window split in two, or whole (split.rs).
+    pub(super) split: super::split::Split,
+    /// The tabs in the order the person dragged them to; one not in it follows, as it came.
+    order: Vec<Key>,
+    /// A tab dragged over the pages: whether it would go into the right half (else the left).
+    drop: Option<bool>,
     /// The side is open, or slid shut.
     side_open: bool,
     /// The side's width while open, in points: `strip::SIDE` until the person drags its edge.
     side_width: f64,
-    /// How much of the side shows now, in points: it slides between none and `side_width`.
+    /// How much of the side shows now, in points: it slides between its rail and `side_width`.
     side_now: f64,
     /// Which slide is the latest: a step of an earlier one is passed over.
     slide: u32,
@@ -182,6 +190,11 @@ impl Deck {
             Some(_) => Some(strip_page(&frame.native, look, proxy.clone(), Part::Nav)?),
             None => None,
         };
+        // Split only where the pages lie side by side with the side (not in GTK's column).
+        let line = match &side {
+            Some(_) => Some(strip_page(&frame.native, look, proxy.clone(), Part::Line)?),
+            None => None,
+        };
         let (side_open, side_width) = {
             let kept = crate::lock(&shared.kept);
             (
@@ -196,9 +209,13 @@ impl Deck {
             strip,
             side,
             nav,
+            line,
+            split: super::split::Split::default(),
+            order: vec![],
+            drop: None,
             side_open,
             side_width,
-            side_now: if side_open { side_width } else { 0.0 },
+            side_now: if side_open { side_width } else { strip::RAIL },
             slide: 0,
             pane,
             web: None,
@@ -257,7 +274,7 @@ impl Deck {
 
     /// Terminal `id`'s caller let it go: its last screen is kept, out of the tabs, the oldest
     /// such one let go past a few. Whether anything is left in the window.
-    pub(super) fn end_term(&mut self, id: u32) -> bool {
+    pub(super) fn end_term(&mut self, id: u32) {
         if let Some(open) = self.terms.iter_mut().find(|open| open.id == id) {
             open.held = Held::Ended;
             open.slot.alive.store(false, Ordering::SeqCst);
@@ -269,19 +286,17 @@ impl Deck {
             self.terms.remove(at);
         }
         self.settle();
-        self.holds()
     }
 
     /// The person closed terminal `id`'s tab: its program runs on, and its screen is painted
-    /// out of sight until it is shown again. Whether anything is left in the window.
-    pub(super) fn hide_term(&mut self, id: u32) -> bool {
+    /// out of sight until it is shown again.
+    pub(super) fn hide_term(&mut self, id: u32) {
         self.held(id, Held::Live, Held::Hidden);
         self.settle();
-        self.holds()
     }
 
     /// Terminal `id` a tab again, if the person had closed it.
-    pub(super) fn unhide_term(&mut self, id: u32) {
+    pub(in super::super) fn unhide_term(&mut self, id: u32) {
         self.held(id, Held::Hidden, Held::Live);
     }
 
@@ -292,17 +307,20 @@ impl Deck {
         }
     }
 
-    /// Whether the window holds a tab: the browser, or a terminal's.
-    fn holds(&self) -> bool {
-        self.web.is_some() || self.terms.iter().any(|open| open.held == Held::Live)
+    /// Whether no tab is shown: every one closed. The window stays, and the browser's toolbar
+    /// takes the pages' part as the start of a new tab.
+    fn blank(&self) -> bool {
+        match self.shown {
+            Shown::Web => self.web.is_none(),
+            Shown::Term(id) => self.term(id).is_none_or(|open| open.held != Held::Live),
+        }
     }
 
-    /// The browser is gone from the window (closed by the agent, or its last tab by the person);
-    /// whether anything is left in it.
-    pub(super) fn remove_web(&mut self) -> bool {
+    /// The browser is gone from the window (closed by the agent, or its last tab by the person).
+    /// The window stays, with no tab left too: then its start of a new tab shows.
+    pub(super) fn remove_web(&mut self) {
         self.web = None;
         self.settle();
-        self.holds()
     }
 
     /// Every terminal's caller is told the window is gone.
@@ -331,6 +349,48 @@ impl Deck {
 
     /// What is shown is still a tab: else the newest terminal's, else the browser. (An ended
     /// screen the history menu showed is let go of here too.)
+    /// The tab shown, as the strip names it: none while an ended screen shows.
+    pub(super) fn shown_key(&self) -> Option<Key> {
+        match self.shown {
+            Shown::Web => self.web.as_ref().map(|web| Key::Web(web.active_id())),
+            Shown::Term(id) => (self.term(id))
+                .filter(|open| open.held == Held::Live)
+                .map(|_| Key::Term(id)),
+        }
+    }
+
+    /// Whether tab `key` is open in the window.
+    fn there(&self, key: Key) -> bool {
+        match key {
+            Key::Web(id) => (self.web.as_ref()).is_some_and(|web| web.listed().0.contains(&id)),
+            Key::Term(id) => self.term(id).is_some_and(|open| open.held == Held::Live),
+        }
+    }
+
+    /// The two tabs side by side, left and right, when the window is split.
+    pub(super) fn pair(&self) -> Option<(Key, Key)> {
+        super::split::pair(self.shown_key(), self.split.beside, |key| self.there(key))
+    }
+
+    /// Split the window, tab `key` beside the one shown, on the right; or make it whole (none).
+    pub(super) fn split_with(&mut self, key: Option<Key>) {
+        self.split.beside = key.map(|key| super::split::Beside { key, right: true });
+        self.split.grabbed = None;
+    }
+
+    /// Whether `window` (an NSWindow's address) is this window.
+    #[cfg(target_os = "macos")]
+    pub(super) fn is_window(&self, window: usize) -> bool {
+        use tao::platform::macos::WindowExtMacOS;
+        self.frame.native.ns_window().addr() == window
+    }
+
+    /// Elsewhere no press is told of.
+    #[cfg(not(target_os = "macos"))]
+    pub(super) fn is_window(&self, _window: usize) -> bool {
+        false
+    }
+
     fn settle(&mut self) {
         let gone = match self.shown {
             Shown::Web => self.web.is_none(),
@@ -378,6 +438,8 @@ enum Part {
     Strip,
     Side,
     Nav,
+    /// The line between a split window's halves.
+    Line,
 }
 
 fn strip_page(
@@ -387,11 +449,14 @@ fn strip_page(
     part: Part,
 ) -> Result<WebView, String> {
     // Every part draws the agents' marks (the side's tabs, the bar's crumbs and offer).
-    let page = frame::dress(strip::PAGE, look).replacen("/*MARKS*/{}", &super::agents::marks(), 1);
+    let page = frame::dress(strip::PAGE, look)
+        .replacen("/*MARKS*/{}", &super::agents::marks(), 1)
+        .replacen("/*AGENTS*/[]", &super::agents::installed(), 1);
     let page = match part {
         Part::Strip => page,
         Part::Side => page.replacen("<html", "<html data-part=\"side\"", 1),
         Part::Nav => page.replacen("<html", "<html data-part=\"nav\"", 1),
+        Part::Line => page.replacen("<html", "<html data-part=\"line\"", 1),
     };
     let first = AtomicBool::new(true);
     let loaded = proxy.clone();
@@ -412,7 +477,7 @@ fn strip_page(
         .with_ipc_handler(move |request| {
             let said = request.body().clone();
             let _ = proxy.send_event(match part {
-                Part::Strip => Cmd::Clicked(said),
+                Part::Strip | Part::Line => Cmd::Clicked(said),
                 Part::Side => Cmd::SideClicked(said),
                 Part::Nav => Cmd::NavClicked(said),
             });

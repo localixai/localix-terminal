@@ -32,7 +32,7 @@ const fn at(
 
 /// Every shortcut, in the order Settings lists them. The chords follow the system's browsers and
 /// editors, so the hand already knows them.
-pub(super) const SHORTCUTS: [Shortcut; 27] = [
+pub(super) const SHORTCUTS: [Shortcut; 28] = [
     at(
         "open-folder",
         "Open Folder\u{2026}",
@@ -89,6 +89,7 @@ pub(super) const SHORTCUTS: [Shortcut; 27] = [
         "key reopen",
     ),
     at("find-tab", "Search Tabs", "Tabs", "cmd+shift+a", "key find"),
+    at("split", "Split View", "Tabs", "cmd+shift+\\", "key split"),
     at("address", "Open Location", "Page", "cmd+l", "key address"),
     at("reload", "Reload Page", "Page", "cmd+r", "reload"),
     at(

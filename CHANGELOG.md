@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Split View.** Two of a project's tabs side by side, any kind in either half: the bar's split
+  button, ⇧⌘\, any tab's menu (Open in Split View / Close Split View), or a tab dragged from the
+  side onto the pages (the half it would go into shows as it moves). The side lists the two as one
+  row, the half in use lit. Another tab picked shows it whole, the split kept: either of its
+  tabs picked again (still one row in the side), the window splits as it was; so too on coming
+  back to the project, and after the app restarts.
+- **Tabs drag.** A tab dragged along the side goes where it is let go of, the others sliding aside;
+  ⌘1–⌘9 follow the order. The rail's button and tabs are one tile size, lit under the pointer.
+- In a split window a click in a half makes it the one in use: it has the page's toolbar; a tab
+  dropped on it takes its place. The line between the halves drags to resize and double-clicks to
+  even them. A split window shows one project.
 - **A compact bar, and a toolbar of its own for a page.** The bar is one row, a compact
   titlebar's height: crumbs beside the window's buttons, 📁 the project ⌄ / the tab ⌄ (the
   project's menu: Open Folder…, every project, Close Project; the tab's: the project's tabs), and
@@ -20,6 +31,18 @@
   session's end takes its asks with it; a crumb's terminal stays inside the project (no `..`);
   what the last run left open is history once the project has a tab again. Settings are the
   window's own, listed in every project.
+- **The window stays when every tab is closed.** It shows, centred, what can be opened: New Page,
+  New Terminal, Board, and each agent installed. Every empty place (the tabs, the history, the
+  Event Center) says so the same way: a glyph, a quiet line, centred.
+- **The glass's levels are even steps**, Standard as a system window's (half the desktop through),
+  Low and High a step either side, Off opaque.
+- **The side shuts to a rail** of the tabs' pictures, its button where it was, instead of
+  leaving the window. An agent showing a tab of a project the window does not show gives it its tab back there,
+  without moving the window.
+- **Every agent connected by itself.** Each time the app opens it puts its integrations in place
+  for whatever agent is installed: the Claude Code plugin, and the window tool in Codex, Gemini
+  CLI, GitHub Copilot, OpenCode and Hermes, each with the agent's own `mcp add` (OpenCode's JSON,
+  as it has no such command). One the person removes stays removed. Cursor is no longer one.
 - Settings' icon is a gear; a shortcut being recorded shows the keys held as they go down.
 - `window --said --follow` ends on its own when the session that started it is gone: no follower
   is left behind waiting for the app.

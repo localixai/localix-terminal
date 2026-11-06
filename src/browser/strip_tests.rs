@@ -482,3 +482,26 @@ fn none() -> Projects<'static> {
         places: vec![],
     }
 }
+
+#[test]
+fn a_dragged_tab_says_where_it_goes() {
+    assert_eq!(
+        click("move w2 t3"),
+        Some(Click::Move(Key::Web(2), Some(Key::Term(3))))
+    );
+    assert_eq!(click("move t3 end"), Some(Click::Move(Key::Term(3), None)));
+    assert_eq!(click("drop-over 400 120"), Some(Click::DropOver(400, 120)));
+    assert_eq!(click("drop-off"), Some(Click::DropOff));
+    assert_eq!(
+        click("drop w1 400 120"),
+        Some(Click::Drop(Key::Web(1), 400, 120))
+    );
+    assert_eq!(
+        click("split-move -40 done"),
+        Some(Click::SplitMove(-40, true))
+    );
+    assert_eq!(click("move w2"), None);
+    // The side's points are the window's once moved down by the bar.
+    assert_eq!(moved("drop w1 400 120", (0.0, 38.0)), "drop w1 400 158");
+    assert_eq!(moved("drop-over 400 120", (0.0, 38.0)), "drop-over 400 158");
+}

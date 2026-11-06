@@ -44,7 +44,7 @@ impl Default for Timing {
 pub(super) enum Event {
     /// A window with tabs is on screen, where there was none.
     Appeared,
-    /// Its last tab closed.
+    /// The window is gone (no window at all, not one with no tab: that stays).
     Vanished,
     /// The person clicked the mini.
     Expand,

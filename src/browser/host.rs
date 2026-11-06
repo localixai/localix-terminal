@@ -22,7 +22,8 @@ use super::comments::Comments;
 use super::panel;
 use super::strip::{Click, Key};
 pub use super::told::{
-    Answers, Asked, CenterDid, Confirm, Heard, Ledger, Past, Place, Tab, TabKind, Visited, Went,
+    Answers, Asked, CenterDid, Confirm, Halves, Heard, Ledger, Past, Place, Tab, TabKind, Visited,
+    Went,
 };
 use super::viewport::Viewport;
 
@@ -146,6 +147,9 @@ pub(super) enum Cmd {
     Offered(&'static str, bool),
     /// The window goes to the project of this key (one the app just made, the person's pick).
     Go(String),
+    /// The app kept the split of the project of this key (`Browser::split`): the window splits
+    /// so when it shows that project.
+    SplitKept(String, super::split::Kept),
     /// Take in the popups pages opened (popup.rs), and show the last.
     #[cfg_attr(
         not(target_os = "macos"),
@@ -163,6 +167,9 @@ pub(super) enum Cmd {
     Act(Click, SyncSender<Result<(), String>>),
     /// What the agent or the person did to the window's presence (presence.rs).
     Presence(super::presence::Event),
+    /// The person pressed in one of the app's windows (an NSWindow's address), at `x`, `y`
+    /// points from its top left (presses.rs).
+    Pressed(usize, f64, f64),
     /// The person clicked the mini open: expanded, and the app they use from then on.
     Opened,
     /// The mini's picture, taken or not.
@@ -214,6 +221,9 @@ pub(super) struct Shared {
     /// Each project's past (its tabs, its pages), as the app tells it (`Browser::ledger`), by
     /// the project's key: for the history menu and the address field's suggestions.
     pub(super) ledgers: Mutex<HashMap<String, Ledger>>,
+    /// Each project's split window, by the project's key, kept while the window shows another
+    /// (split.rs).
+    pub(super) splits: Mutex<HashMap<String, super::split::Kept>>,
     /// The person's comments on the pages, until they send them.
     pub(super) comments: Comments,
     /// Whose turn it is: the agent's actions wait while the person comments.

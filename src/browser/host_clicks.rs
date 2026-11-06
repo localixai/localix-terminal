@@ -11,7 +11,7 @@ use super::On;
 use crate::browser::agents::AGENTS;
 use crate::browser::capture::Shot;
 use crate::browser::choice::Entry;
-use crate::browser::deck::{After, Deck, Revisit, Shown};
+use crate::browser::deck::{Deck, Revisit, Shown};
 use crate::browser::presence::Event as Presence;
 use crate::browser::sizes;
 use crate::browser::strip::{Click, Key, Keyed, Tool, click, went};
@@ -60,7 +60,7 @@ impl On<'_> {
         self.presenter.opened(&mut stage);
     }
 
-    /// The person's click: closing the browser's last tab is closing its window.
+    /// The person's click. Closing the last tab leaves the window, with its start of a new tab.
     pub(super) fn clicked(&mut self, said: &str) {
         if let Some(url) = went(said) {
             return self.go(url);
@@ -71,12 +71,46 @@ impl On<'_> {
             Some(Click::Collapse) => return self.presence(Presence::Collapse),
             Some(Click::Quit) => return self.shared.heard("", Heard::Quit),
             Some(Click::NewTab(x, y)) => return self.plus(x, y),
+            Some(Click::Agent(at)) => return self.agent(at),
             Some(Click::Projects(x, y)) => return self.project_menu(x, y),
             Some(Click::Tabs(x, y)) => return self.tabs_menu(x, y),
             // Once a frame while the edge is dragged: laid out, nothing redrawn but at the end.
             Some(Click::SideWidth(width, done)) => {
                 if let Some(open) = self.deck.as_mut() {
                     open.size_side(f64::from(width), done, self.shared);
+                }
+                return;
+            }
+            Some(Click::SplitMove(moved, done)) => {
+                if let Some(open) = self.deck.as_mut() {
+                    open.drag_split(moved, done);
+                }
+                return;
+            }
+            Some(Click::Move(key, before)) => {
+                if let Some(open) = self.deck.as_mut() {
+                    open.move_tab(key, before, self.shared);
+                    open.refresh(self.shared);
+                }
+                return;
+            }
+            Some(Click::DropOver(x, y)) => {
+                if let Some(open) = self.deck.as_mut() {
+                    open.drop_over(Some((f64::from(x), f64::from(y))));
+                }
+                return;
+            }
+            Some(Click::DropOff) => {
+                if let Some(open) = self.deck.as_mut() {
+                    open.drop_over(None);
+                }
+                return;
+            }
+            Some(Click::Drop(key, x, y)) => return self.dropped(key, f64::from(x), f64::from(y)),
+            Some(Click::SplitEven) => {
+                if let Some(open) = self.deck.as_mut() {
+                    open.split.share = 0.5;
+                    open.layout();
                 }
                 return;
             }
@@ -151,6 +185,7 @@ impl On<'_> {
         let labels: Vec<&str> = tools.iter().map(|tool| tool.label()).collect();
         let at = (f64::from(x), f64::from(y));
         match open.choose(at, &labels, None).and_then(|at| tools.get(at)) {
+            Some(Tool::Split) => self.clicked("key split"),
             Some(Tool::History) => self.clicked("history"),
             Some(Tool::Mini) => self.clicked("collapse"),
             Some(Tool::Events) => self.clicked("events"),
@@ -241,8 +276,27 @@ impl On<'_> {
             },
             None => return,
         };
+        self.ask(asked);
+    }
+
+    /// The person asks for a new tab of the project shown.
+    fn ask(&self, asked: Asked) {
+        let Some(open) = self.deck.as_ref() else {
+            return;
+        };
         let group = open.shown_project(self.shared);
         self.shared.heard(&group, Heard::Asked(asked));
+    }
+
+    /// Agent `at` (its place in the agents' list) started in a terminal, where it is installed.
+    fn agent(&self, at: u8) {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let command = AGENTS
+            .get(usize::from(at))
+            .and_then(|agent| agent.command_on(&path));
+        if let Some(command) = command {
+            self.ask(Asked::Agent(command));
+        }
     }
 
     /// A shortcut's doing (shortcuts.rs) that no button of the strip does.
@@ -298,6 +352,7 @@ impl On<'_> {
             Keyed::Find => return open.find_tab(self.shared),
             Keyed::Address => return open.keyed_in_strip("address"),
             Keyed::Size => return open.keyed_in_strip("size"),
+            Keyed::Split => return self.split_view(),
             Keyed::Settings => return self.settings(),
             Keyed::Projects => return open.keyed_in_strip("projects"),
             Keyed::OpenFolder => return self.open_folder(),
@@ -380,10 +435,8 @@ impl On<'_> {
 /// Show or close the tab `said` names.
 pub(super) fn act(deck: &mut Option<Deck>, said: Click, shared: &Shared) -> Result<(), String> {
     let open = deck.as_mut().ok_or("the window is not open")?;
-    match open.act(said, shared)? {
-        After::Empty | After::BrowserGone { empty: true } => *deck = None,
-        After::Kept | After::BrowserGone { .. } => open.refresh(shared),
-    }
+    open.act(said, shared)?;
+    open.refresh(shared);
     Ok(())
 }
 

@@ -191,10 +191,29 @@ impl Desk {
         if left.is_empty() {
             return self.person_terminal(call, group, "");
         }
+        // Each tab's new key, by the row it was: a split kept splits the window again.
+        let mut keys = std::collections::HashMap::new();
         for tab in &left {
+            let before: std::collections::HashSet<String> =
+                crate::lock(&self.ledger).keys().cloned().collect();
             if let Err(why) = self.again_tab(call, group, tab) {
                 log::warn!("a tab of {} did not open again: {why}", call.project.name);
+                continue;
             }
+            let new = (crate::lock(&self.ledger).iter())
+                .find(|(key, (_, project))| *project == tab.project && !before.contains(*key))
+                .map(|(key, _)| key.clone());
+            if let Some(key) = new {
+                keys.insert(tab.row, key);
+            }
+        }
+        let kept = (self.feed.store()).read(|db| super::splits::kept(db, group));
+        let halves = (kept.ok().flatten()).and_then(|kept| super::splits::halves(&kept, &keys));
+        // Kept by the rows the tabs are now, and the window split as it was; a split whose tabs
+        // did not open again is kept no more.
+        self.split_told(group, halves);
+        if let (Some(halves), Some(browser)) = (halves, self.browser.as_ref()) {
+            browser.split(group, halves);
         }
         Ok(())
     }

@@ -49,10 +49,12 @@ On macOS that is **LLX Desk.app** in `~/Applications` (or take `LLX-Desk-macos.z
 regular Mac app: Dock icon, menu bar, ⌘Q. Opened, it links `llx-desk` into `~/.local/bin` and
 brings the window to you, with your shell in it when it has no tab yet.
 
-Then **Settings → Integrations** (⌘,) connects your agents, each with one click: the Claude Code
-plugin (skills, a worker subagent, a mod that follows your comments), and the window tool as an MCP
-server in Cursor and Codex. Any other MCP host takes the entry *Copy MCP Entry* gives. In a
-terminal, `llx-desk setup` does the same.
+The app connects your agents by itself, each time it opens, for whichever is installed: the Claude
+Code plugin (skills, a worker subagent, a mod that follows your comments), and the window tool as
+an MCP server in Codex, Gemini CLI, GitHub Copilot, OpenCode and Hermes, each put in with the
+agent's own `mcp add`. **Settings → Integrations** (⌘,) shows them; one you remove stays removed
+until you add it back. Any other MCP host takes the entry *Copy MCP Entry* gives. In a terminal,
+`llx-desk setup` does the same.
 
 <details>
 <summary>More install options</summary>
@@ -126,7 +128,7 @@ Under "The page said" the report lists what the page told besides its content: d
 <details>
 <summary>The window: tabs, shortcuts and settings</summary>
 
-The bar is one compact row, as crumbs beside the window's buttons: 📁 the project ⌄ / the tab ⌄ +. The project's crumb lists **Open Folder…** (⌘O), every project you used (a dot: an agent did something there), and **Close Project** (⌃⌘W); ⌃⌘P opens it. The tab's crumb lists the project's tabs. "+" after them opens a new tab of the project. Then the window's buttons: history, the mini player, events. A page has its own toolbar over it: back, forward, reload, the address field, its size and comments. `llx-desk open .` opens the window on the current folder as a project. A project you come back to opens as you left it: its pages, a shell in each of its terminals' folders with the last screen above, its board. Its history (⌘Y) lists its own closed tabs, and the address field suggests its own pages. The project's pages, terminals, board and Settings are a column on the left (drag its edge to resize, ⌃⌘S hides it). A terminal running a coding agent (Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode, Hermes) shows the agent's mark and, under its name, the title its session sets. "+" opens a page, a terminal, the board, or one of those agents installed on your `PATH`.
+The bar is one compact row, as crumbs beside the window's buttons: 📁 the project ⌄ / the tab ⌄ +. The project's crumb lists **Open Folder…** (⌘O), every project you used (a dot: an agent did something there), and **Close Project** (⌃⌘W); ⌃⌘P opens it. The tab's crumb lists the project's tabs. "+" after them opens a new tab of the project. Then the window's buttons: history, the mini player, events. A page has its own toolbar over it: back, forward, reload, the address field, its size and comments. `llx-desk open .` opens the window on the current folder as a project. A project you come back to opens as you left it: its pages, a shell in each of its terminals' folders with the last screen above, its board. Its history (⌘Y) lists its own closed tabs, and the address field suggests its own pages. The project's pages, terminals, board and Settings are a column on the left (drag its edge to resize, drag a tab to reorder, ⌃⌘S shuts it to a rail). **Split View** (the bar's split button, ⇧⌘\, a tab's menu, or a tab dragged from the column onto the pages) shows two of the project's tabs side by side, listed in the column as one row: a click in a half makes it the one in use (it has the toolbar), drag the line between them to resize, double-click it to even them. Another tab picked shows alone; either of the two picked again splits the window as it was, as does coming back to the project or reopening the app. A terminal running a coding agent (Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode, Hermes) shows the agent's mark and, under its name, the title its session sets. "+" opens a page, a terminal, the board, or one of those agents installed on your `PATH`.
 
 | Keys | Does | Keys | Does |
 | --- | --- | --- | --- |
@@ -137,6 +139,7 @@ The bar is one compact row, as crumbs beside the window's buttons: 📁 the proj
 | ⇧⌘A | search the tabs | ⌘Y, ⇧⌘E | history, Event Center |
 | ⌘, | Settings | ⌘M | the mini player |
 | ⌘O | open a folder as a project | ⌃⌘P, ⌃⌘W | switch project, close the project |
+| ⇧⌘\ | split view: the tab beside the next one of its project, or whole again | | |
 | ⇧⌘O | open the page in your default browser | | |
 
 In a terminal: ⌘K clears, ⌘← ⌘→ line start and end, ⌥← ⌥→ words, ⌘⌫ ⌥⌫ delete to the start and a word, ⌘↑ ⌘↓ top and bottom.

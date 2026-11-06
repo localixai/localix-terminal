@@ -1,6 +1,7 @@
 //! `llx-desk setup`: the integrations (setup.rs) from a terminal, as Settings → Integrations
 //! shows them in the window. With nothing, each and its state; with an id, that one put in
-//! place (`--off`: taken out); `mcp`, the MCP server's entry for any other host.
+//! place (`--off`: taken out); `all`, every one put in place as the app does when it opens;
+//! `mcp`, the MCP server's entry for any other host.
 
 use super::{FAILED, OK, UNREACHABLE};
 use crate::out::{say, warn};
@@ -20,8 +21,18 @@ pub(super) fn run(args: &[String]) -> u8 {
                 say(&format!("{word:<3} {:<12} {note}", integration.id));
             }
             say(
-                "\n`llx-desk setup <id>` puts one in place, `--off` takes it out; `llx-desk setup mcp` prints the MCP entry for any other host.",
+                "\n`llx-desk setup <id>` puts one in place, `--off` takes it out for good; `llx-desk setup all` puts every one in place; `llx-desk setup mcp` prints the MCP entry for any other host.",
             );
+            OK
+        }
+        [id] if id.as_str() == "all" => {
+            let said = crate::setup::auto();
+            if said.is_empty() {
+                say("everything is in place");
+            }
+            for line in said {
+                say(&line);
+            }
             OK
         }
         [id] if id.as_str() == "mcp" => match crate::setup::mcp_entry() {
@@ -45,7 +56,7 @@ pub(super) fn run(args: &[String]) -> u8 {
             }
         },
         _ => {
-            warn("llx-desk setup [<id> [--off] | mcp]");
+            warn("llx-desk setup [<id> [--off] | all | mcp]");
             UNREACHABLE
         }
     }

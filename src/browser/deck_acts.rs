@@ -9,39 +9,31 @@ use super::super::strip::{self, Click, Key};
 use super::{Deck, Menu, Shown};
 use crate::WindowTab;
 
-/// What became of the window.
-#[derive(Debug, PartialEq, Eq)]
-pub(in super::super) enum After {
-    Kept,
-    /// The browser's last tab closed; `empty` once nothing is left in the window.
-    BrowserGone {
-        empty: bool,
-    },
-    Empty,
-}
-
 impl Deck {
     /// Show or close the tab `click` names; why not, when it is not there.
-    pub(crate) fn act(&mut self, click: Click, shared: &Shared) -> Result<After, String> {
+    pub(crate) fn act(&mut self, click: Click, shared: &Shared) -> Result<(), String> {
         let (key, closing) = match click {
             Click::Show(key) => (key, false),
             Click::Close(key) => (key, true),
             Click::History | Click::Events | Click::Unmenu | Click::Event(..) | Click::Clear => {
                 self.menu_click(click, shared);
-                return Ok(After::Kept);
+                return Ok(());
             }
             Click::Typing(open) => {
                 // The suggestions need the window, which the strip has only where it lies over
                 // the pages (macOS); in GTK's column it would take their place.
                 self.typing = open && cfg!(target_os = "macos");
-                return Ok(After::Kept);
+                return Ok(());
             }
-            Click::Back | Click::Forward => return Ok(self.walk(click)),
+            Click::Back | Click::Forward => {
+                self.walk(click);
+                return Ok(());
+            }
             // The host opens its page: the tab it needs is built on the event loop.
-            Click::Visit(_) | Click::Offer(_) => return Ok(After::Kept),
+            Click::Visit(_) | Click::Offer(_) | Click::Agent(_) => return Ok(()),
             Click::Drag => {
                 let _ = self.frame.native.drag_window();
-                return Ok(After::Kept);
+                return Ok(());
             }
             // The host's: the window's presence, and a tab built on the event loop.
             Click::Collapse
@@ -54,32 +46,38 @@ impl Deck {
             | Click::Menu(..)
             | Click::Key(_)
             | Click::Glass(_) => {
-                return Ok(After::Kept);
+                return Ok(());
             }
             Click::Side => {
                 self.slide_side(shared);
-                return Ok(After::Kept);
+                return Ok(());
             }
             // The host's: laid out without a refresh while the edge is dragged.
-            Click::SideWidth(..) => return Ok(After::Kept),
+            Click::SideWidth(..)
+            | Click::SplitMove(..)
+            | Click::SplitEven
+            | Click::Move(..)
+            | Click::DropOver(..)
+            | Click::DropOff
+            | Click::Drop(..) => return Ok(()),
             Click::Reload => {
                 if let (Some(web), Shown::Web) = (&self.web, self.shown) {
                     let _ = web.active().reload();
                 }
-                return Ok(After::Kept);
+                return Ok(());
             }
             Click::Outside => {
                 self.outside(shared);
-                return Ok(After::Kept);
+                return Ok(());
             }
             Click::Zoom => {
                 let native = &self.frame.native;
                 native.set_maximized(!native.is_maximized());
-                return Ok(After::Kept);
+                return Ok(());
             }
             Click::Send | Click::Comment => {
                 self.comment_click(&click, shared);
-                return Ok(After::Kept);
+                return Ok(());
             }
         };
         self.menu = None;
@@ -95,36 +93,32 @@ impl Deck {
                 ids.join(", ")
             ));
         }
-        Ok(match (closing, key) {
+        if !closing {
+            self.split_follows(key);
+        }
+        match (closing, key) {
             (false, Key::Web(id)) => {
                 if let Some(web) = self.web.as_mut() {
                     web.switch(id, shared)?;
                 }
                 self.show(Shown::Web);
-                After::Kept
             }
-            (false, Key::Term(id)) => {
-                self.show(Shown::Term(id));
-                After::Kept
-            }
-            (true, Key::Term(id)) => match self.hide_term(id) {
-                true => After::Kept,
-                false => After::Empty,
-            },
+            (false, Key::Term(id)) => self.show(Shown::Term(id)),
+            // The last tab closed leaves the window: its start of a new tab shows.
+            (true, Key::Term(id)) => self.hide_term(id),
             (true, Key::Web(id)) => {
                 let left = self.web.as_mut().map(|web| web.close(id, shared));
                 match left {
                     Some(Ok(false)) => {
                         shared.closed();
-                        After::BrowserGone {
-                            empty: !self.remove_web(),
-                        }
+                        self.remove_web();
                     }
                     Some(Err(why)) => return Err(why),
-                    _ => After::Kept,
+                    _ => {}
                 }
             }
-        })
+        }
+        Ok(())
     }
 
     /// A click on the menus: one opens or closes, or the Event Center's button is chosen.
@@ -154,6 +148,13 @@ impl Deck {
             | Click::Forward
             | Click::Visit(_)
             | Click::Offer(_)
+            | Click::Agent(_)
+            | Click::SplitMove(..)
+            | Click::SplitEven
+            | Click::Move(..)
+            | Click::DropOver(..)
+            | Click::DropOff
+            | Click::Drop(..)
             | Click::Comment
             | Click::Send
             | Click::Drag
@@ -223,7 +224,7 @@ impl Deck {
     }
 
     /// Back or forward in the page shown, when a page is.
-    fn walk(&mut self, click: Click) -> After {
+    fn walk(&mut self, click: Click) {
         self.menu = None;
         if let (Some(web), Shown::Web) = (&self.web, self.shown) {
             let script = if click == Click::Back {
@@ -233,7 +234,6 @@ impl Deck {
             };
             let _ = web.active().evaluate_script(script);
         }
-        After::Kept
     }
 
     /// The comment button turns commenting on or off; Send hands the comments held to the agent
@@ -362,6 +362,31 @@ impl Deck {
                 group: group(Key::Term(open.id)),
             });
         }
+        // As the person ordered them, the rest as they came; each project's together.
+        out.sort_by_key(|tab| {
+            Key::parse(&tab.id)
+                .and_then(|key| self.order.iter().position(|kept| *kept == key))
+                .unwrap_or(usize::MAX)
+        });
         strip::by_group(out, |tab| tab.group.as_str())
+    }
+
+    /// Split, the tab picked (`key`) takes the half in use, or changes places with the one beside.
+    fn split_follows(&mut self, key: Key) {
+        let was = self.shown_key();
+        self.split.beside = super::super::split::after_show(self.split.beside, was, key);
+    }
+
+    /// Tab `key` dragged before tab `before` (none: to the end).
+    pub(in super::super) fn move_tab(&mut self, key: Key, before: Option<Key>, shared: &Shared) {
+        let mut order: Vec<Key> = (self.listing(shared).iter())
+            .filter_map(|tab| Key::parse(&tab.id))
+            .filter(|tab| *tab != key)
+            .collect();
+        let at = before
+            .and_then(|before| order.iter().position(|tab| *tab == before))
+            .unwrap_or(order.len());
+        order.insert(at, key);
+        self.order = order;
     }
 }

@@ -107,3 +107,30 @@ fn a_row_of_places_takes_a_digit_and_a_single_shortcut_does_not() {
             .is_err()
     );
 }
+
+#[test]
+fn the_glass_levels_are_even_steps_from_opaque_to_clearest() {
+    for standard in [
+        crate::browser::frame::coat(true).1,
+        crate::browser::frame::coat(false).1,
+    ] {
+        let levels = [
+            Transparency::Off,
+            Transparency::Low,
+            Transparency::Standard,
+            Transparency::High,
+        ]
+        .map(|level| level.coat(standard));
+        assert!((levels[0] - 1.0).abs() < f64::EPSILON, "off is opaque");
+        let steps: Vec<f64> = levels.windows(2).map(|pair| pair[0] - pair[1]).collect();
+        assert!(
+            steps.iter().all(|step| *step > 0.1),
+            "each clearer: {levels:?}"
+        );
+        let (least, most) = (
+            steps.iter().copied().fold(1.0, f64::min),
+            steps.iter().copied().fold(0.0, f64::max),
+        );
+        assert!(most - least < 0.12, "even steps: {levels:?}");
+    }
+}

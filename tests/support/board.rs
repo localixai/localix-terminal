@@ -92,8 +92,8 @@ pub(crate) fn scenario(browser: &Browser) {
     drop(panel);
 }
 
-/// The person closes the board's tab, the window's last: the window goes, and the agent's
-/// `show` gives the board a tab again, painted as it is.
+/// The person closes the board's tab, the window's last: the window stays with no tab, and the
+/// agent's `show` gives the board a tab again, painted as it is.
 pub(crate) fn reopened(browser: &Browser) {
     let home = std::env::temp_dir().join(format!("llx-desk-board-{}", std::process::id()));
     std::fs::create_dir_all(home.join(".git")).unwrap();
@@ -124,22 +124,20 @@ pub(crate) fn reopened(browser: &Browser) {
         &json!({"action": "interact", "tab": "b1", "op": "add", "title": "Cart"}),
     )
     .unwrap();
-    until("the board's tab is shown", || {
-        browser.peek_strip("1").is_ok()
-    });
+    let listed =
+        |id: &str| (browser.listing()).is_some_and(|tabs| tabs.iter().any(|tab| tab.id == id));
+    until("the board's tab is shown", || listed("b1"));
     browser.click("close b1");
-    until("the window goes with its last tab", || {
-        browser.peek_strip("1").is_err()
+    until("the window stays with no tab", || {
+        browser.listing().is_some_and(|tabs| tabs.is_empty())
     });
     let shown = desk
         .window(&call, &json!({"action": "show", "tab": "b1"}))
         .unwrap();
     assert!(shown.contains("c1 Cart"), "{shown}");
-    until("the board has a tab again", || {
-        browser.peek_strip("1").is_ok()
-    });
+    until("the board has a tab again", || listed("b1"));
     browser.click("close b1");
-    until("and goes again", || browser.peek_strip("1").is_err());
+    until("and goes again", || !listed("b1"));
     let _ = std::fs::remove_dir_all(&home);
 }
 

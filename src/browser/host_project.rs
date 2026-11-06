@@ -104,8 +104,9 @@ impl On<'_> {
         }
     }
 
-    /// The person goes to project `project`: its last tab shown, else the app opens what it
-    /// had open (or their shell in its folder).
+    /// The person goes to project `project`: its last tab shown, else, coming from another, the
+    /// app opens what it had open (or their shell in its folder). Already there with no tab (the
+    /// person closed them), nothing is opened again: what they asked for next opens alone.
     pub(super) fn go_project(&mut self, project: &str) {
         let Some(open) = self.deck.as_ref() else {
             return self.shared.heard(project, Heard::Asked(Asked::Project));
@@ -114,6 +115,10 @@ impl On<'_> {
             .filter(|tab| tab.group == project)
             .map(|tab| tab.id)
             .collect();
+        let here = crate::lock(&self.shared.scope).shown() == project;
+        if here && own.is_empty() {
+            return open.refresh(self.shared);
+        }
         let shown = crate::lock(&self.shared.scope).go(project, &own);
         self.shared.heard(project, Heard::Showing);
         match shown.as_deref().and_then(Key::parse) {

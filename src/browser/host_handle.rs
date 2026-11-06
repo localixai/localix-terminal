@@ -217,6 +217,19 @@ impl Browser {
         let _ = self.proxy.send_event(Cmd::Strip);
     }
 
+    /// Project `project`'s split, kept by the app across a restart, now its tabs are open again:
+    /// tab `shown` in use, `beside` on the right (`right`) or left. The window splits so when it
+    /// shows that project. Kept by the window once it has the tabs (this comes after them), lest
+    /// it find the split's tabs gone before they come.
+    pub fn split(&self, project: &str, halves: super::Halves<'_>) {
+        let kept = crate::browser::split::Kept {
+            shown: halves.shown.to_string(),
+            beside: halves.beside.to_string(),
+            right: halves.right,
+        };
+        let _ = (self.proxy).send_event(Cmd::SplitKept(project.to_string(), kept));
+    }
+
     /// The person shows tab `id`: the window goes to its project, then to it.
     pub fn reveal(&self, id: &str) -> Result<(), String> {
         let project = crate::lock(&self.shared.groups).get(id).cloned();

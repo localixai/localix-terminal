@@ -37,11 +37,14 @@ mod placement;
 mod platform;
 mod popup;
 mod presence;
+#[cfg(target_os = "macos")]
+mod presses;
 mod scope;
 mod script;
 mod settings;
 mod shortcuts;
 mod sizes;
+mod split;
 mod strip;
 mod tab_view;
 mod tabs;
@@ -60,7 +63,7 @@ use serde::{Deserialize, Serialize};
 pub use capture::{Clip, Shot};
 pub use guard::loadable;
 pub use host::{
-    Answers, Asked, Browser, CenterDid, Confirm, Dressing, Heard, Ledger, Past, Place, Tab,
+    Answers, Asked, Browser, CenterDid, Confirm, Dressing, Halves, Heard, Ledger, Past, Place, Tab,
     TabKind, Visited, Went, Window, host,
 };
 pub use notices::{Armed, Notice};

@@ -65,6 +65,7 @@ where
     }
 
     platform::watch_spaces(&proxy);
+    platform::watch_presses(&proxy);
     let mut deck: Option<Deck> = None;
     let mut presenter = Presenter::new();
     let mut docked = false;
@@ -140,6 +141,7 @@ fn fresh() -> Arc<Shared> {
         undrawn: Mutex::default(),
         center: Mutex::default(),
         ledgers: Mutex::default(),
+        splits: Mutex::default(),
         comments: Comments::default(),
         turn: Default::default(),
         notices: Default::default(),
@@ -157,6 +159,8 @@ mod offer_bar;
 mod project;
 #[path = "host_settings.rs"]
 mod settings_tab;
+#[path = "host_split.rs"]
+mod split_view;
 #[path = "host_tab_menu.rs"]
 mod tab_menu;
 use clicks::act;
@@ -178,6 +182,8 @@ impl On<'_> {
         let settles = matches!(
             command,
             Cmd::Strip
+                | Cmd::Go(_)
+                | Cmd::SplitKept(..)
                 | Cmd::Panel(_)
                 | Cmd::Unpanel(_)
                 | Cmd::Act(..)
@@ -193,6 +199,7 @@ impl On<'_> {
         self.carry_out(command);
         if settles {
             self.settle();
+            self.keep_split();
             if let Some(open) = self.deck.as_ref() {
                 open.refresh(shared);
             }
@@ -216,10 +223,8 @@ impl On<'_> {
             }
             Cmd::Unpanel(id) => {
                 if let Some(open) = self.deck.as_mut() {
-                    match open.end_term(id) {
-                        true => open.refresh(shared),
-                        false => *self.deck = None,
-                    }
+                    open.end_term(id);
+                    open.refresh(shared);
                 }
             }
             Cmd::Titled(id, title) => {
@@ -231,6 +236,7 @@ impl On<'_> {
             Cmd::Strip => self.renamed(),
             Cmd::Offered(id, on) => self.offered(id, on),
             Cmd::Go(project) => self.go_project(&project),
+            Cmd::SplitKept(project, kept) => self.split_kept(&project, kept),
             Cmd::Presence(event) => self.presence(event),
             Cmd::Opened => self.opened(),
             Cmd::Pictured(shot) => self.pictured(&shot),
@@ -241,6 +247,7 @@ impl On<'_> {
                 let _ = reply.send(platform::confirm(&question));
             }
             Cmd::Clicked(said) => self.clicked(&said),
+            Cmd::Pressed(window, x, y) => self.pressed(window, x, y),
             // The side's points are the strip's, once moved down by the strip's height: the
             // menus a click there opens are placed in the strip's view.
             Cmd::SideClicked(said) => {
@@ -277,10 +284,8 @@ impl On<'_> {
                 // The agent closed the browser: the terminals stay.
                 if let Some(open) = self.deck.as_mut() {
                     shared.closed();
-                    match open.remove_web() {
-                        true => open.refresh(shared),
-                        false => *self.deck = None,
-                    }
+                    open.remove_web();
+                    open.refresh(shared);
                 }
             }
             command @ (Cmd::Eval { .. }
@@ -302,6 +307,12 @@ impl On<'_> {
         if let Click::Show(key) = said
             && self.out_of_sight(&key.name())
         {
+            // Its project is not the one shown: the window stays where the person is, and a
+            // terminal whose tab they closed is a tab of its project again.
+            if let (Key::Term(id), Some(open)) = (key, self.deck.as_mut()) {
+                open.unhide_term(id);
+                open.refresh(self.shared);
+            }
             self.presence(Presence::Show);
             let _ = reply.send(Ok(()));
             return;

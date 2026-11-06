@@ -65,10 +65,42 @@ body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
    back, forward and reload, the address field, the page's size and comments. The bar is the
    strip's; this view shows nothing else, and the strip none of this. */
 #browse{display:none}
+/* A tab dragged: it lifts under the pointer, its place in the list held faintly, the others moving
+   aside; dragged out over the pages, the half it would go into is shown there (the line's view). */
+#sl .t.held{opacity:.3}
+.t.lift{position:fixed;z-index:9;margin:0;pointer-events:none;border-radius:10px;opacity:.97;background:color-mix(in srgb,currentColor 10%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);box-shadow:0 10px 28px rgba(0,0,0,.28),inset 0 0 0 .5px color-mix(in srgb,currentColor 14%,transparent);transition:opacity .16s,scale .16s;scale:1.03}
+.t.lift.out{opacity:.55;scale:.92}
+html.dragging,html.dragging *{cursor:grabbing!important;user-select:none}
+html[data-part=line][data-drop] #line{cursor:default}
+html[data-part=line][data-drop] #line::after{content:"";inset:6px;left:6px;width:auto;transform:none;border-radius:12px;background:color-mix(in srgb,var(--accent,#0a84ff) 14%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent,#0a84ff) 55%,transparent);animation:landing .16s ease-out}
+@keyframes landing{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:none}}
+#line{display:none}
+html[data-part=line] body>*:not(#line){display:none!important}
+html[data-part=line],html[data-part=line] body{background:transparent!important}
+html[data-part=line] #line{display:block;position:fixed;inset:0;cursor:col-resize}
+html[data-part=line] #line::after{content:"";position:absolute;top:0;bottom:0;left:50%;width:1px;transform:translateX(-50%);border-radius:2px;background:color-mix(in srgb,currentColor 12%,transparent);transition:width .15s,background .15s}
+html[data-part=line] #line:hover::after,html[data-part=line] #line.held::after{width:3px;background:color-mix(in srgb,currentColor 32%,transparent)}
 html[data-part=nav] #bar,html[data-part=nav] #tabs,html[data-part=nav] #offer,html[data-part=nav] #menu,html[data-part=nav] #back{display:none!important}
 html[data-part=nav] #browse{display:grid;grid-template-columns:auto minmax(120px,1fr) auto;align-items:center;gap:10px;height:40px;padding:0 10px;box-sizing:border-box;box-shadow:inset 0 -1px 0 color-mix(in srgb,currentColor 8%,transparent)}
 html[data-part=nav]:not([data-glass]) #browse{background:var(--ground)}
 #browse #addr{justify-self:center;width:100%;max-width:720px}
+/* Every empty place says so the same way, centred: a glyph, a quiet line, and what can be done
+   there. No tab left, the browser's toolbar gives the pages' whole part to it. */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:26px 16px;box-sizing:border-box}
+.empty .g{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:color-mix(in srgb,currentColor 7%,transparent);opacity:.7}
+.empty .g svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
+.empty .w{font-size:13px;opacity:.5}
+.empty .row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:440px}
+.empty .row:first-of-type{margin-top:4px}
+.empty button{font:inherit;font-size:12px;color:inherit;border:0;border-radius:8px;height:28px;padding:0 11px;background:color-mix(in srgb,currentColor 6%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 11%,transparent);cursor:default;display:flex;gap:7px;align-items:center;opacity:.85;transition:background-color .15s,opacity .15s}
+.empty button:hover{background:color-mix(in srgb,currentColor 11%,transparent);opacity:1}
+.empty button .mk{display:grid;place-items:center}
+.empty button .mk svg{width:13px;height:13px;fill:currentColor}
+#sl .empty{flex:1}
+#blank{display:none}
+html[data-part=nav][data-blank] #browse{display:none}
+html[data-part=nav][data-blank] #blank{position:fixed;inset:0;display:flex}
+#blank .empty{flex:1}
 #tools{display:flex;align-items:center;gap:4px}
 /* The bar is bare: icons and words on the glass, no capsules. A button lights as the pointer
    comes; only one that is on (comments, a page size) and the field being typed in have a ground. */
@@ -124,7 +156,6 @@ html:not([data-glass]) #sug,html:not([data-glass]) #menu{background:var(--ground
 .v .n{display:block}
 .v.off .h{opacity:.62}
 .v .u{display:block;margin-top:1px;padding-left:17px;font-size:11px;opacity:.5;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.e{padding:12px 9px;opacity:.5}
 /* The Event Center: the bell's count, and each event with what it is, its words and its buttons. */
 #ev{position:relative}
 #evn{position:absolute;top:2px;right:2px;min-width:14px;height:14px;padding:0 3.5px;box-sizing:border-box;border-radius:7px;background:#ff3b30;color:#fff;font:600 9.5px/14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;text-align:center;display:none}
@@ -187,7 +218,17 @@ html[data-part=side] #side{display:flex;flex-direction:column;gap:8px;height:100
 #sl .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 #sl .n{font-size:13px;font-weight:500}
 #sl .u{font-size:11px;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#sl .e{padding:10px 8px;font-size:12px}
+/* A split window's two tabs: one group, each its own row as any tab's (stacked, a hairline
+   between), in a frame of their own; the one in use lit. */
+#sl .t.pair{flex-direction:column;align-items:stretch;gap:0;padding:2px;border-radius:12px;background:color-mix(in srgb,currentColor 4%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 13%,transparent);opacity:1}
+#sl .t.pair.on{background:color-mix(in srgb,currentColor 4%,transparent)}
+#sl .t.pair .half{display:flex;align-items:center;gap:10px;min-width:0;padding:5px 4px 5px 6px;border-radius:10px;opacity:.78;transition:background-color .15s,opacity .15s}
+#sl .t.pair .half:hover{opacity:1;background:color-mix(in srgb,currentColor 6%,transparent)}
+#sl .t.pair .half.on{opacity:1;background:color-mix(in srgb,currentColor 9%,transparent)}
+#sl .t.pair .half:not(.on) .ic{background:color-mix(in srgb,currentColor 9%,transparent);box-shadow:none}
+#sl .t.pair .half .x{display:none}
+#sl .t.pair .half:hover .x{display:grid}
+#sl .t.pair .cut{flex:none;height:1px;margin:1px 10px;background:color-mix(in srgb,currentColor 10%,transparent)}
 /* The side's edge: dragged, the side is wider or narrower; a double click sets it back. */
 #grip{display:none;position:fixed;top:0;right:0;bottom:0;width:7px;cursor:col-resize;z-index:4}
 html[data-part=side] #grip{display:block}
@@ -195,17 +236,43 @@ html[data-part=side] #grip{display:block}
 #grip:hover::after,html.resizing #grip::after{background:color-mix(in srgb,var(--accent,#0a84ff) 70%,transparent)}
 html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
 html[data-part=side] #side{transition:none}
+/* Shut, the side is a rail: its button where it was, and each tab's picture, the one shown lit,
+   its name as the pointer rests on it. */
+@media (max-width:120px){
+  html[data-part=side] #side{padding:6px 0 8px;align-items:center}
+  html[data-part=side] #sh{padding:0;justify-content:center;width:100%}
+  html[data-part=side] #sk,html[data-part=side] #sg,html[data-part=side] #sn,html[data-part=side] #grip{display:none}
+  html[data-part=side] #sl{align-items:center;width:100%;gap:4px}
+  html[data-part=side] #sl .t{padding:0;width:auto;justify-content:center;background:none;opacity:1}
+  html[data-part=side] #sl .t > :not(.ic){display:none}
+  html[data-part=side] #sl .empty{display:none}
+  /* One tile for all: the button and each tab the same size, a glyph the same size in each; the
+     one shown filled, the one under the pointer lit, a press sinking it. */
+  html[data-part=side] #sh .b,html[data-part=side] #sl .ic{width:32px;min-width:32px;height:32px;border-radius:9px;opacity:.6;background:transparent;transition:background-color .16s,opacity .16s,transform .12s}
+  html[data-part=side] #sh .b svg,html[data-part=side] #sl .ic svg{width:16px;height:16px}
+  html[data-part=side] #sl .ic .mk svg{width:17px;height:17px}
+  html[data-part=side] #sl .t.on .ic{opacity:1;background:color-mix(in srgb,currentColor 15%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 14%,transparent)}
+  html[data-part=side] #sh .b:hover,html[data-part=side] #sl .t:hover .ic{opacity:1;background:color-mix(in srgb,currentColor 10%,transparent)}
+  html[data-part=side] #sl .t.on:hover .ic{background:color-mix(in srgb,currentColor 19%,transparent)}
+  html[data-part=side] #sh .b:active,html[data-part=side] #sl .t:active .ic{transform:scale(.92)}
+  html[data-part=side] #sl .t.pair{flex-direction:column;gap:3px;padding:3px;border-radius:12px}
+  html[data-part=side] #sl .t.pair .half{flex:none;padding:0;justify-content:center;background:none;opacity:1}
+  html[data-part=side] #sl .t.pair .half > :not(.ic),html[data-part=side] #sl .t.pair .cut{display:none}
+  html[data-part=side] #sl .t.pair .half.on .ic{opacity:1;background:color-mix(in srgb,currentColor 15%,transparent)}
+  html[data-part=side] #sl .t.pair .half:not(.on) .ic{background:transparent;opacity:.6}
+  html[data-part=side] #sl .t.pair .half:hover .ic{opacity:1;background:color-mix(in srgb,currentColor 10%,transparent)}
+}
 </style>
 </head>
 <body>
 <div id="head">
   <div id="bar">
     <div id="lead">
-    <span class="b" id="sb" title="Tabs" hidden><svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.6"/><path d="M6.3 3v10"/></svg></span>
     <nav id="cr" aria-label="Where the tab is"></nav>
     </div>
     <div id="end">
     <div class="grp">
+      <span class="b" id="sp" title="Split View"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.6"/><path d="M8 3.4v9.2"/></svg></span>
       <span class="b" id="hs" title="History"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.3"/></svg></span>
       <span class="b" id="mn" title="Mini Player"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.6"/><rect x="8" y="8" width="4.5" height="3.4" rx=".7"/></svg></span>
       <span class="b" id="ev" title="Events"><svg viewBox="0 0 16 16"><path d="M4.2 11V7.4a3.8 3.8 0 0 1 7.6 0V11l1 1.2H3.2zM6.6 13.4a1.5 1.5 0 0 0 2.8 0"/></svg><span id="evn"></span></span>
@@ -226,6 +293,7 @@ html[data-part=side] #side{transition:none}
       <span class="b" id="cm" title="Comment on the page: click what to change"><svg viewBox="0 0 16 16"><path d="M3.5 4.2c0-.7.5-1.2 1.2-1.2h6.6c.7 0 1.2.5 1.2 1.2v5.1c0 .7-.5 1.2-1.2 1.2H7.6L5 12.8v-2.3h-.3c-.7 0-1.2-.5-1.2-1.2z"/></svg></span>
     </div>
   </div>
+  <div id="blank"></div>
   <div id="offer"><div class="card"><span class="mk"></span><span class="says"></span><button class="take"></button><button class="later"><svg viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"/></svg></button></div></div>
   <div id="tabs"></div>
   <div id="menu"></div>
@@ -237,6 +305,7 @@ html[data-part=side] #side{transition:none}
   <div id="sl"></div>
 </div>
 <div id="grip" title="Drag to resize; double-click for the usual width"></div>
+<div id="line" title="Drag to resize the halves; double-click to even them"></div>
 <script>
 "use strict";
 // The strip's small pictures, drawn as the buttons are; never text characters. Built element by
@@ -278,11 +347,6 @@ function S(data) {
   if (part === "nav") return address(shown, data.visited || []);
   const sided = data.side !== null && data.side !== undefined;
   document.documentElement.toggleAttribute("data-side", sided);
-  // Open, the side has its own button to hide it, beside Settings and "+"; hidden, the bar's
-  // brings it back.
-  const toggle = document.getElementById("sb");
-  toggle.hidden = !sided || data.side;
-  titled(toggle, "Show the tabs");
   const project = data.project;
   const places = data.places || [];
   crumbs(shown, places, project);
@@ -376,7 +440,7 @@ function wire(item, close, key) {
 // button's hint says its key.
 let HINTS = {};
 const HINTED = { bk: "back", fw: "forward", rl: "reload", fs: "page-size", cm: "comment", nt: "new-page",
-  hs: "history", ev: "events", mn: "collapse", sb: "sidebar", sc: "sidebar", sd: "send", sn: "new-page", sg: "settings", url: "address", sq: "find-tab",
+  sp: "split", hs: "history", ev: "events", mn: "collapse", sb: "sidebar", sc: "sidebar", sd: "send", sn: "new-page", sg: "settings", url: "address", sq: "find-tab",
   pj: "projects" };
 function titled(node, base) {
   node.dataset.base = base;
@@ -412,7 +476,11 @@ function K(what) {
 // The side: the shown project's tabs, each its kind's picture, its title and what it holds (a
 // page's address, a terminal's command), filtered by what is typed in its search.
 let listed = [], listedShown = "";
+// The split's two tabs, left and right (none while the window is whole); a tab being dragged in the
+// side, and whether the list waits to be drawn again until it is let go of.
+let splitPair = null, lifting = false, redraw = false;
 function side(data) {
+  titled(document.getElementById("sc"), data.side ? "Hide the tabs" : "Show the tabs");
   listed = data.tabs.filter((tab) => ours(tab, data.project));
   listedShown = data.shown;
   drawSide();
@@ -429,6 +497,41 @@ const holds = (tab) => {
 // A coding agent's mark (agents.rs), drawn in the text's colour; the page is given them as
 // SVG at load, as MARKS.
 const MARKS = /*MARKS*/{};
+// The agents installed, by their place in the app's list.
+const AGENTS = /*AGENTS*/[];
+// An empty place, said the same way everywhere: the glyph of the button `glyphOf`, `words`, and
+// rows of what can be done there.
+function emptied(glyphOf, words, rows) {
+  const box = document.createElement("div");
+  box.className = "empty";
+  const svg = document.querySelector("#" + glyphOf + " svg");
+  if (svg) {
+    const glyph = document.createElement("div");
+    glyph.className = "g";
+    glyph.append(svg.cloneNode(true));
+    box.append(glyph);
+  }
+  const said = document.createElement("div");
+  said.className = "w";
+  said.textContent = words;
+  box.append(said);
+  for (const row of rows || []) {
+    if (!row.length) continue;
+    const line = document.createElement("div");
+    line.className = "row";
+    line.append(...row);
+    box.append(line);
+  }
+  return box;
+}
+// A button of an empty place: what it says, the message it sends, a picture before it.
+function doing(label, message, picture) {
+  const button = document.createElement("button");
+  if (picture) button.append(picture);
+  button.append(label);
+  button.addEventListener("click", () => window.ipc.postMessage(message));
+  return button;
+}
 function agentMark(agent) {
   const svg = new DOMParser().parseFromString(MARKS[agent] || "", "image/svg+xml").documentElement;
   if (svg.nodeName !== "svg") return glyph("term");
@@ -446,39 +549,62 @@ function placeKey(at) {
   return key ? "  " + key : "";
 }
 function drawSide() {
+  // A tab held is not drawn over: the list is drawn again once it is let go.
+  if (lifting) return void (redraw = true);
   const typed = document.getElementById("sq").value.trim().toLowerCase();
   const rows = listed.filter((tab) => !typed || (tab.title + " " + (tab.name || "") + " " + holds(tab)).toLowerCase().includes(typed));
   const list = document.getElementById("sl");
-  if (!rows.length) {
-    const none = document.createElement("div");
-    none.className = "e";
-    none.textContent = typed ? "No tab matches" : "No tabs";
-    return void list.replaceChildren(none);
+  if (!rows.length) return void list.replaceChildren(emptied("sc", typed ? "No tab matches" : "No tabs"));
+  const pair = splitPair && rows.filter((tab) => splitPair.includes(tab.key)).length === 2 ? splitPair : null;
+  const drawn = [];
+  for (const tab of rows) {
+    if (!pair || !pair.includes(tab.key)) drawn.push(sideRow(tab));
+    else if (!drawn.some((row) => row.classList.contains("pair"))) {
+      const [left, right] = pair.map((key) => rows.find((tab) => tab.key === key));
+      drawn.push(pairRow(left, right));
+    }
   }
-  list.replaceChildren(...rows.map((tab) => {
-    const item = document.createElement("div");
-    item.className = tab.key === listedShown ? "t on" : "t";
-    item.dataset.key = tab.key;
-    item.title = (tab.agent ? tab.name + " — " + tab.title : tab.title) + placeKey(listed.indexOf(tab));
-    const icon = document.createElement("span");
-    icon.className = "i ic";
-    icon.append(tab.agent ? agentMark(tab.agent) : glyph(GLYPHS[tab.kind] ? tab.kind : "web"));
-    const text = document.createElement("span");
-    text.className = "tx";
-    const name = document.createElement("span");
-    name.className = "n";
-    name.textContent = tab.name || tab.title;
-    const sub = document.createElement("span");
-    sub.className = "u";
-    sub.textContent = holds(tab);
-    text.append(name, sub);
-    const close = document.createElement("span");
-    close.className = "x";
-    close.append(glyph("close"));
-    wire(item, close, tab.key);
-    item.append(icon, text, close);
-    return item;
-  }));
+  list.replaceChildren(...drawn);
+}
+// One tab's row in the side.
+function sideRow(tab) {
+  const item = document.createElement("div");
+  item.className = tab.key === listedShown ? "t on" : "t";
+  item.dataset.key = tab.key;
+  item.title = (tab.agent ? tab.name + " — " + tab.title : tab.title) + placeKey(listed.indexOf(tab));
+  const icon = document.createElement("span");
+  icon.className = "i ic";
+  icon.append(tab.agent ? agentMark(tab.agent) : glyph(GLYPHS[tab.kind] ? tab.kind : "web"));
+  const text = document.createElement("span");
+  text.className = "tx";
+  const name = document.createElement("span");
+  name.className = "n";
+  name.textContent = tab.name || tab.title;
+  const sub = document.createElement("span");
+  sub.className = "u";
+  sub.textContent = holds(tab);
+  text.append(name, sub);
+  const close = document.createElement("span");
+  close.className = "x";
+  close.append(glyph("close"));
+  wire(item, close, tab.key);
+  item.append(icon, text, close);
+  return item;
+}
+// A split window's two tabs as one row, left and right as they lie: each half its own tab (a click
+// shows it, its menu is its own), the one in use lit.
+function pairRow(left, right) {
+  const item = document.createElement("div");
+  item.className = [left, right].some((tab) => tab.key === listedShown) ? "t pair on" : "t pair";
+  const cut = document.createElement("span");
+  cut.className = "cut";
+  const [first, second] = [left, right].map((tab) => {
+    const half = sideRow(tab);
+    half.className = tab.key === listedShown ? "half on" : "half";
+    return half;
+  });
+  item.append(first, cut, second);
+  return item;
 }
 if (document.documentElement.dataset.part === "side") {
   const search = document.getElementById("sq");
@@ -536,6 +662,154 @@ if (document.documentElement.dataset.part === "side") {
   document.getElementById("sg").addEventListener("click", () => window.ipc.postMessage("key settings"));
   document.getElementById("sc").addEventListener("click", () => window.ipc.postMessage("side"));
 }
+// A tab dragged in the side: along the list it goes where it is let go of, the others moving
+// aside as it passes; out over the pages, the half it would go into shows, and let go there it
+// opens in that half (split.rs). A press that moves less than a few points is a click.
+if (document.documentElement.dataset.part === "side") {
+  const list = document.getElementById("sl");
+  let drag = null, swallow = false, queued = false;
+  const rows = () => [...list.querySelectorAll(".t")];
+  // A row's first tab: a split's row is its two tabs.
+  const keyOf = (row) => row?.dataset.key ?? row?.querySelector("[data-key]")?.dataset.key ?? "end";
+  // Rows move to their new places from where they were: each one slides, none jumps.
+  const flip = (change) => {
+    const before = new Map(rows().map((row) => [row, row.getBoundingClientRect()]));
+    change();
+    for (const row of rows()) {
+      const was = before.get(row), now = row.getBoundingClientRect();
+      if (!was || (was.top === now.top && was.left === now.left)) continue;
+      row.style.transition = "none";
+      row.style.transform = `translate(${was.left - now.left}px, ${was.top - now.top}px)`;
+      requestAnimationFrame(() => {
+        row.style.transition = "transform .18s cubic-bezier(.2,.8,.2,1)";
+        row.style.transform = "";
+      });
+    }
+  };
+  const lift = (event) => {
+    const box = drag.row.getBoundingClientRect();
+    drag.ghost = drag.row.cloneNode(true);
+    drag.ghost.classList.remove("on", "held");
+    drag.ghost.classList.add("lift");
+    Object.assign(drag.ghost.style, { left: box.left + "px", top: box.top + "px", width: box.width + "px", height: box.height + "px" });
+    drag.box = box;
+    document.body.append(drag.ghost);
+    drag.row.classList.add("held");
+    document.documentElement.classList.add("dragging");
+    lifting = true;
+    drag.next = keyOf(drag.row.nextElementSibling);
+  };
+  const over = (event) => {
+    const out = event.clientX > innerWidth - 2;
+    drag.ghost.style.transform = `translate(${event.clientX - drag.x}px, ${event.clientY - drag.y}px)`;
+    drag.ghost.classList.toggle("out", out);
+    if (out !== drag.out) {
+      drag.out = out;
+      if (!out) window.ipc.postMessage("drop-off");
+    }
+    if (out) {
+      drag.at = [Math.round(event.clientX), Math.round(event.clientY)];
+      if (!queued) {
+        queued = true;
+        requestAnimationFrame(() => {
+          queued = false;
+          if (drag?.out) window.ipc.postMessage("drop-over " + drag.at.join(" "));
+        });
+      }
+      return;
+    }
+    // Along the list: before the first row whose middle is past the pointer.
+    const others = rows().filter((row) => row !== drag.row);
+    const next = others.find((row) => {
+      const box = row.getBoundingClientRect();
+      return event.clientY < box.top + box.height / 2;
+    }) ?? null;
+    if (drag.row.nextElementSibling !== next && next !== drag.row) {
+      flip(() => list.insertBefore(drag.row, next));
+    }
+  };
+  const land = (event) => {
+    drag.ghost.remove();
+    drag.row.classList.remove("held");
+    document.documentElement.classList.remove("dragging");
+    lifting = false;
+    if (drag.out) {
+      window.ipc.postMessage("drop " + drag.key + " " + Math.round(event.clientX) + " " + Math.round(event.clientY));
+    } else {
+      // A split's row moves both its tabs, in their order.
+      const next = keyOf(drag.row.nextElementSibling);
+      if (next !== drag.next) for (const key of drag.keys) window.ipc.postMessage("move " + key + " " + next);
+    }
+    if (redraw) {
+      redraw = false;
+      drawSide();
+    }
+  };
+  list.addEventListener("mousedown", (event) => {
+    // The tab pressed (a split's half), and the row it is in, which moves along the list.
+    const tab = event.target.closest("[data-key]");
+    if (!tab || event.button !== 0 || event.target.closest(".x")) return;
+    const row = tab.closest(".t") ?? tab;
+    const keys = row === tab ? [tab.dataset.key] : [...row.querySelectorAll("[data-key]")].map((half) => half.dataset.key);
+    drag = { row, key: tab.dataset.key, keys, x: event.clientX, y: event.clientY, moving: false, out: false };
+  });
+  addEventListener("mousemove", (event) => {
+    if (!drag) return;
+    if (!drag.moving) {
+      if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 5) return;
+      drag.moving = true;
+      lift(event);
+    }
+    over(event);
+  });
+  addEventListener("mouseup", (event) => {
+    const was = drag;
+    drag = null;
+    if (!was?.moving) return;
+    drag = was;
+    land(event);
+    drag = null;
+    swallow = true;
+    setTimeout(() => { swallow = false; }, 0);
+  });
+  // The click that ends a drag shows nothing.
+  addEventListener("click", (event) => {
+    if (!swallow) return;
+    swallow = false;
+    event.stopPropagation();
+    event.preventDefault();
+  }, true);
+}
+// The line between a split window's halves: dragged, the window lays the halves out again as
+// it moves (by how far since it was taken hold of); double-clicked, they are even again.
+if (document.documentElement.dataset.part === "line") {
+  const line = document.getElementById("line");
+  let from = null, moved = 0, queued = false;
+  line.addEventListener("mousedown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    from = event.screenX;
+    moved = 0;
+    line.classList.add("held");
+  });
+  addEventListener("mousemove", (event) => {
+    if (from === null) return;
+    moved = Math.round(event.screenX - from);
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      if (from !== null) window.ipc.postMessage("split-move " + moved);
+    });
+  });
+  addEventListener("mouseup", () => {
+    if (from === null) return;
+    from = null;
+    line.classList.remove("held");
+    window.ipc.postMessage("split-move " + moved + " done");
+  });
+  line.addEventListener("dblclick", () => window.ipc.postMessage("split-even"));
+}
 looked(window.__deskLook);
 // The strip is the window's own: no page's menu (Reload, AutoFill) but in the address field.
 document.addEventListener("contextmenu", (event) => {
@@ -554,7 +828,9 @@ const host = (url) => {
 const addressy = (text) => /^https?:\/\//.test(text) || (!/\s/.test(text) && /^(localhost|127\.0\.0\.1|[^.\s]+\.[^\s]+)/.test(text));
 function address(shown, visited) {
   seen = visited;
-  here = shown ? { url: shown.kind === "web" ? shown.detail || "" : "", web: shown.kind === "web", kind: shown.kind, title: shown.title } : { url: "", web: true, kind: "web" };
+  // No tab shown: the start of a new one. What is typed opens a page, as over a terminal.
+  document.documentElement.toggleAttribute("data-blank", !shown);
+  here = shown ? { url: shown.kind === "web" ? shown.detail || "" : "", web: shown.kind === "web", kind: shown.kind, title: shown.title } : { url: "", web: false, kind: "web", title: "" };
   document.getElementById("ai").replaceChildren(glyph(GLYPHS[here.kind] ? here.kind : "web"));
   if (document.activeElement !== field) field.value = here.web ? host(here.url) : here.title || "";
 }
@@ -690,13 +966,7 @@ function M(rows) {
   document.getElementById("hs").className = open ? "b on" : "b";
   if (!open) return menu.replaceChildren();
   under(menu, "hs");
-  if (rows.length === 0) {
-    const none = document.createElement("div");
-    none.className = "e";
-    none.textContent = "No tabs yet";
-    menu.replaceChildren(none);
-    return;
-  }
+  if (rows.length === 0) return void menu.replaceChildren(emptied("hs", "No history yet"));
   const several = new Set(rows.map((row) => row.group)).size > 1;
   menu.replaceChildren(...rows.map((row) => {
     const item = document.createElement("div");
@@ -760,12 +1030,7 @@ function V(events, open) {
     clear.addEventListener("click", () => window.ipc.postMessage("clear"));
     head.append(clear);
   }
-  if (events.length === 0) {
-    const none = document.createElement("div");
-    none.className = "e";
-    none.textContent = "Nothing waits for you";
-    return menu.replaceChildren(head, none);
-  }
+  if (events.length === 0) return menu.replaceChildren(head, emptied("ev", "Nothing waits for you"));
   const several = new Set(events.map((event) => event.group)).size > 1;
   const rows = [head];
   // They come in their sections' order: a heading where a section begins.
@@ -825,6 +1090,13 @@ function row(event, several) {
   return item;
 }
 // The comment button, on while the person comments on the pages, and Send while some are held.
+// The window split (its two tabs, left and right), or whole (null): the split button is lit while
+// it is, and the side lists the two as one.
+// The project's split (its two tabs, left and right), and whether the window shows it.
+function SP(pair, on) {
+  splitPair = pair;
+  document.getElementById("sp").classList.toggle("on", !!on);
+}
 function C(on, held) {
   document.getElementById("cm").className = on ? "b on" : "b";
   const send = document.getElementById("sd");
@@ -864,7 +1136,7 @@ document.getElementById("fs").addEventListener("click", () => {
 // Buttons with no room, as Safari's: the rightmost go first into "»", whose system menu holds
 // them (strip.rs's Tool), until the crumbs have room again. Only the bar's: the browser's
 // toolbar keeps its few, and its address field gives way.
-const TOOLS = ["hs", "mn", "ev"];
+const TOOLS = ["sp", "hs", "mn", "ev"];
 const ROOM = 160;
 function fit() {
   if (document.documentElement.dataset.part) return;
@@ -896,9 +1168,14 @@ for (const id of ["bar", "lead", "cr", "tabs", "end"]) {
     if (event.target === part) window.ipc.postMessage("zoom");
   });
 }
-for (const [id, what] of [["mn", "collapse"], ["sb", "side"], ["sd", "send"], ["cm", "comment"], ["bk", "back"], ["fw", "forward"], ["hs", "history"], ["ev", "events"], ["back", "unmenu"]]) {
+for (const [id, what] of [["sp", "key split"], ["mn", "collapse"], ["sd", "send"], ["cm", "comment"], ["bk", "back"], ["fw", "forward"], ["hs", "history"], ["ev", "events"], ["back", "unmenu"]]) {
   document.getElementById(id).addEventListener("click", () => window.ipc.postMessage(what));
 }
+// No tab left: the kinds of tab, and the agents installed, each one click.
+document.getElementById("blank").replaceChildren(emptied("sn", "No tabs open", [
+  [doing("New Page", "key new page"), doing("New Terminal", "key new terminal"), doing("Board", "key new board")],
+  AGENTS.map((agent) => doing(agent.name, "agent " + agent.at, agentMark(agent.id))),
+]));
 </script>
 </body>
 </html>

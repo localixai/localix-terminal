@@ -33,13 +33,14 @@ pub(super) enum Transparency {
 }
 
 impl Transparency {
-    /// The coat's alpha for one that is `standard` at this level.
+    /// The coat's alpha for one that is `standard` at this level: even steps, each about as
+    /// much clearer than the one before.
     pub(super) fn coat(self, standard: f64) -> f64 {
         match self {
             Self::Off => 1.0,
-            Self::Low => standard + (1.0 - standard) * 0.55,
+            Self::Low => standard + (1.0 - standard) * 0.45,
             Self::Standard => standard,
-            Self::High => standard * 0.4,
+            Self::High => standard * 0.55,
         }
     }
 }

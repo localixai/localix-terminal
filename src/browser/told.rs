@@ -32,6 +32,18 @@ pub enum Heard<'a> {
     /// A page showed an address, or was titled: the ledger keeps it (popups too, which the
     /// window opened itself).
     Went(Went<'a>),
+    /// The window split in the project of this key (its halves' tabs), or made whole there
+    /// (none): the app keeps it, to split the window again once the project's tabs open again.
+    Split(Option<Halves<'a>>),
+}
+
+/// A project's split window: the tab in use, the one beside it, and whether that one is on the
+/// right.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Halves<'a> {
+    pub shown: &'a str,
+    pub beside: &'a str,
+    pub right: bool,
 }
 
 /// A question to the person: go on (`yes`) or Cancel. The desk words it; the window asks it as

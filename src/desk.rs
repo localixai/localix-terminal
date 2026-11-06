@@ -20,6 +20,7 @@ mod open;
 mod registry;
 mod relay;
 mod scope;
+mod splits;
 mod term;
 mod told;
 mod web;
@@ -27,7 +28,7 @@ mod web;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use serde_json::{Value, json};
@@ -160,6 +161,8 @@ pub struct Desk {
     me: Weak<Self>,
     /// Each open tab's row in the ledger, and its project, by key.
     ledger: Mutex<HashMap<String, (crate::ledger::Row, ProjectId)>>,
+    /// The app is ending: its tabs go with it, yet stay open in the ledger, a split kept.
+    ending: AtomicBool,
     /// The projects that have had a tab this run: what another run left open in them is past.
     begun: Mutex<std::collections::HashSet<ProjectId>>,
     /// What ends the app when the person quits it (`on_quit`).
@@ -208,6 +211,7 @@ impl Desk {
                 projects: Mutex::default(),
                 me: Weak::clone(weak),
                 ledger: Mutex::default(),
+                ending: AtomicBool::new(false),
                 begun: Mutex::default(),
                 quit: OnceLock::new(),
             }
@@ -352,6 +356,7 @@ impl Desk {
             Heard::Went(went) => self.went(key, &went),
             Heard::Folder(folder) => self.open_folder(folder),
             Heard::Showing => self.showing(key),
+            Heard::Split(halves) => self.split_told(key, halves),
             Heard::Quit => self.quit_asked(),
             Heard::Reopened => self.reopened(),
             Heard::Asked(asked) => self.person_asked(key, asked),
@@ -485,7 +490,8 @@ impl Desk {
     /// Every terminal ends; the window stays the process's to close.
     pub fn shutdown(&self) {
         // The tabs open now stay open in the ledger, their screens kept: the app opens them
-        // again. Their sessions end below, and must not close them.
+        // again. Their sessions end below, and must not close them, nor the split they make.
+        self.ending.store(true, std::sync::atomic::Ordering::SeqCst);
         self.keep_screens();
         crate::lock(&self.ledger).clear();
         self.feed.stop();

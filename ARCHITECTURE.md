@@ -68,6 +68,14 @@ browser/  terminal/  board/          setup/  what the app puts in place: the com
   `desk/lifecycle.rs` decides: a quit asks first (`Browser::confirm`, the system's alert) while
   terminals run a program, then stops the server (`Desk::on_quit`); a reopen brings the window on
   the project used last, as it was left (its ledger), else the person's login shell in it. `appkit.rs` holds AppKit's common messages once.
+  A split window (`split.rs`: which tab is beside the shown one, on which side, and the halves'
+  share) lays two tabs out side by side, the one shown with the toolbar; a fourth view, the line
+  between them, is dragged to resize. A page or a terminal takes its own clicks, so the window
+  hears of presses through the system (`presses.rs`, a local event monitor) and a press in the
+  other half shows its tab (`host_split.rs`). Another tab shown makes the window whole, and its project
+  keeps the split (`Shared::splits`): one of its two tabs shown again, it splits as it was. A
+  split window shows one project; the app keeps each project's across restarts by its tabs' rows
+  (`desk/splits.rs`, in the store's `state`) and tells the window once they open again.
 - **`board.rs`, `board/`** are the board: its cards and the rules every move keeps (one card in Doing
   per worker, a worker acts on its own cards, Done is the person's), the person's actions from the
   window (`person.rs`), the board as text for the agent (`text.rs`), where it is kept
@@ -138,10 +146,15 @@ browser/  terminal/  board/          setup/  what the app puts in place: the com
 - **`setup.rs`, `setup/`** are the integrations, reached from Settings → Integrations and from
   `llx-desk setup`: the command (`command.rs`: a link in `~/.local/bin` to the program, the login
   shell's profile when its PATH lacks it; a desktop entry on Linux), the Claude Code plugin
-  (`claude.rs`: installed from the bundle's marketplace with `claude plugin`, refreshed when the app
-  updates), and the MCP hosts (`mcp_hosts.rs`: Cursor's JSON, Codex's TOML; any other is given the
-  entry to paste). The person's programs run as their terminal would (`shell.rs`: their login
-  shell's PATH, a deadline each). An integration names the agent it is for and what to offer.
+  (`claude.rs`: installed from the bundle's marketplace with `claude plugin`), and the window tool
+  in the other agents of the window's that take MCP servers (`mcp_hosts.rs`: one table of Codex,
+  Gemini CLI, Copilot, OpenCode, Hermes — each put in and taken out with its own `mcp add` /
+  `remove`, OpenCode's JSON written as it has none; whether it is there read from its
+  configuration file). The app puts every one in place itself when it opens (`opened`, `auto`),
+  for each agent installed; what the person takes out is remembered in the store's `state`
+  (`integration.declined.<id>`) and left out. The person's programs run as their terminal would
+  (`shell.rs`: their login shell's PATH, a deadline each, an answer for one that asks). An
+  integration names the agent it is for and what to offer.
 - **`offers.rs`, `browser/offer.rs`** are what the app offers the person at the moment it fits:
   one quiet bar under the strip: the agent's mark, the button that does it, and a cross that puts it off (Not Now). `offers.rs` keeps their answers
   (`answers` in the store; the window asks through `browser::Answers`): taken is never offered again, put off waits a day, three,

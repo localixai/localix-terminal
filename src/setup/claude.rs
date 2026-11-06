@@ -109,17 +109,6 @@ pub(super) fn turn_off() -> Result<String, String> {
     }
 }
 
-/// The plugin of an older app installed: brought to this one's. Nothing when it is not
-/// installed: that is the person's to choose.
-pub(super) fn refresh() {
-    if let State::Off(why) = state()
-        && why.contains("older")
-        && let Err(why) = turn_on()
-    {
-        log::warn!("setup: the Claude Code plugin was not updated: {why}");
-    }
-}
-
 /// Whether Claude Code's marketplace of the name is `dir`.
 fn points_at(claude: &(PathBuf, String), dir: &Path) -> bool {
     let Ok(listed) = ask(claude, &["plugin", "marketplace", "list", "--json"]) else {

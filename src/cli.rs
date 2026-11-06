@@ -31,8 +31,10 @@ Usage:
   llx-desk quit                          quit the app: its tabs and terminals end
   llx-desk mcp [--as NAME]               the window tool as an MCP server on stdio, for an agent
                                          whose host speaks MCP (Settings → Integrations adds it)
-  llx-desk setup [<id> [--off] | mcp]    what the app puts in place: the command, the Claude Code
-                                         plugin, Cursor's and Codex's MCP entries (Settings → Integrations)
+  llx-desk setup [<id> [--off] | all | mcp]
+                                         what the app puts in place by itself: the command, the
+                                         Claude Code plugin, the window tool in Codex, Gemini CLI,
+                                         Copilot, OpenCode, Hermes; `--off` takes one out for good
   llx-desk open [DIR]                    the app: the window to you (the app's icon does the same);
                                          with DIR, on that folder as a project (`llx-desk open .`)
   llx-desk secret NAME < FILE            save a secret (a password) a call types as {{secret:NAME}}, never shown

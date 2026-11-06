@@ -102,6 +102,11 @@ impl Tabs {
         &self.slots[self.active as usize - 1].webview
     }
 
+    /// The id of the tab acted on.
+    pub(super) fn active_id(&self) -> u32 {
+        self.active
+    }
+
     /// Tab `id` while it is open, else none; with no id, the one acted on. A tab closed after its
     /// driver looked is never swapped for another.
     pub(super) fn at(&self, id: Option<u32>) -> Option<&WebView> {
@@ -216,7 +221,7 @@ impl Tabs {
     }
 
     /// Close tab `id`, showing the one before it when it was shown. Returns whether tabs are left:
-    /// with none, the window closes.
+    /// with none, the browser part goes, and the window stays.
     pub(super) fn close(&mut self, id: u32, shared: &Shared) -> Result<bool, String> {
         self.check(id)?;
         let slot = &mut self.slots[id as usize - 1];
@@ -274,18 +279,22 @@ impl Tabs {
         };
     }
 
-    /// The active tab fills `size`, `top` points down, while the browser is `shown`; the others
-    /// (and all of them while a terminal is shown) stand beside it, out of sight.
-    /// The pages in the window's part `size`, `left` and `top` points from its corner.
-    pub(super) fn layout(&self, size: LogicalSize<f64>, left: f64, top: f64, shown: bool) {
+    /// The tabs `shown` (one, or two side by side), each its id and its part of the window: its
+    /// size, and `left` and `top` points from the window's corner. The others stand beside,
+    /// out of sight.
+    pub(super) fn layout(&self, shown: &[Pane]) {
         for (at, slot) in self.slots.iter().enumerate() {
-            let here = shown && id_of(at) == self.active;
+            let pane = shown.iter().find(|pane| pane.0 == id_of(at));
+            let here = pane.is_some();
+            let (_, size, left, top) =
+                pane.copied()
+                    .unwrap_or((0, LogicalSize::new(0.0, 0.0), 0.0, 0.0));
             fit(&slot.webview, None);
             let away = |x: f64| {
                 if here {
                     left + x
                 } else {
-                    -(size.width + left + 100.0)
+                    -(size.width + left + 10_000.0)
                 }
             };
             if let Some(frame) = self.frames.get(&id_of(at)) {
@@ -359,6 +368,9 @@ pub(super) fn drawn(shared: &Shared, id: u32, proxy: &EventLoopProxy<Cmd>) {
 
 /// Where a tab stands. A WebView in a GTK box has no bounds of its own, so there the tabs not
 /// shown are hidden instead (WebKitGTK keeps running a hidden view's timers).
+/// A page shown: its tab's id, its size, and where it starts.
+pub(super) type Pane = (u32, LogicalSize<f64>, f64, f64);
+
 #[cfg(not(target_os = "linux"))]
 pub(super) fn place(webview: &WebView, x: f64, top: f64, size: LogicalSize<f64>, _shown: bool) {
     let _ = webview.set_bounds(super::frame::fill(size, x, top));

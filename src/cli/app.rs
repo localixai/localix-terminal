@@ -25,11 +25,11 @@ pub(super) fn run() -> u8 {
             said.push("the app serves".into());
             note(&said);
             // The person's own programs run (`claude`): not before the window.
-            let refreshing = std::thread::Builder::new()
+            let setting_up = std::thread::Builder::new()
                 .name("desk-setup".into())
-                .spawn(crate::setup::refresh);
-            if let Err(why) = refreshing {
-                log::warn!("setup: nothing refreshed (no thread: {why})");
+                .spawn(|| note(&crate::setup::auto()));
+            if let Err(why) = setting_up {
+                note(&[format!("the agents were not set up (no thread: {why})")]);
             }
             let serve = Serving {
                 headless: false,

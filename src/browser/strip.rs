@@ -24,6 +24,8 @@ pub(super) const HEIGHT: f64 = BAR + 32.0;
 /// The side's width while it is open, in points, until the person drags it wider or narrower:
 /// the tabs listed down the window's left.
 pub(super) const SIDE: f64 = 264.0;
+/// The side shut: a rail of the tabs' pictures, its button where it was.
+pub(super) const RAIL: f64 = 52.0;
 /// The narrowest and widest the person can drag the side; never more than half the window.
 pub(super) const SIDE_MIN: f64 = 180.0;
 pub(super) const SIDE_MAX: f64 = 480.0;
@@ -82,6 +84,7 @@ impl Key {
 /// A toolbar button the strip had no room for: it waits in the "»" menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Tool {
+    Split,
     History,
     Mini,
     Events,
@@ -89,11 +92,12 @@ pub(super) enum Tool {
 
 impl Tool {
     /// The buttons, in the toolbar's order (and the menu's).
-    pub(super) const ALL: [Self; 3] = [Self::History, Self::Mini, Self::Events];
+    pub(super) const ALL: [Self; 4] = [Self::Split, Self::History, Self::Mini, Self::Events];
 
     /// The button the strip names by its id.
     fn parse(id: &str) -> Option<Self> {
         Some(match id {
+            "sp" => Self::Split,
             "hs" => Self::History,
             "mn" => Self::Mini,
             "ev" => Self::Events,
@@ -104,6 +108,7 @@ impl Tool {
     /// Its line in the "»" menu.
     pub(super) fn label(self) -> &'static str {
         match self {
+            Self::Split => "Split View",
             Self::History => "History",
             Self::Mini => "Mini Player",
             Self::Events => "Events",
@@ -116,6 +121,7 @@ impl Tool {
             Self::History => 1,
             Self::Mini => 2,
             Self::Events => 4,
+            Self::Split => 8,
         }
     }
 }
@@ -133,6 +139,8 @@ pub(super) enum Click {
     Visit(i64),
     /// The offer bar's button that does it (`true`), or the other.
     Offer(bool),
+    /// An agent started in a terminal of the project shown: its place in the agents' list.
+    Agent(u8),
     /// The Event Center opens or closes.
     Events,
     /// The open menu closes (a click beside it).
@@ -160,6 +168,19 @@ pub(super) enum Click {
     Side,
     /// The person drags the side's edge: its width now, in points, and whether they let go.
     SideWidth(u32, bool),
+    /// The person drags the line between a split window's halves: by how many points since
+    /// they took hold of it, and whether they let go.
+    SplitMove(i32, bool),
+    /// The line between the halves, double-clicked: the halves even again.
+    SplitEven,
+    /// The person dragged a tab along the list: it goes before the other (none: to the end).
+    Move(Key, Option<Key>),
+    /// A tab dragged out over the pages, at a point of the window: where it would go shows.
+    DropOver(u32, u32),
+    /// The dragged tab back over the list (or let go there): nothing shows on the pages.
+    DropOff,
+    /// A tab let go of over the pages, at a point of the window: it goes into that half.
+    Drop(Key, u32, u32),
     /// "+" at these points of the strip: a new page or terminal, as the person picks.
     NewTab(u32, u32),
     /// The size button at these points of the strip: the page's size, as the person picks.
@@ -193,6 +214,8 @@ pub(super) enum Keyed {
     OpenFolder,
     /// The project shown closes: its tabs.
     CloseProject,
+    /// The window splits, its tab shown beside another of its project's, or joins again.
+    Split,
     LastTab,
     Next,
     Previous,
@@ -216,6 +239,7 @@ impl Keyed {
     fn parse(words: &str) -> Option<Self> {
         Some(match words {
             "tab last" => Self::LastTab,
+            "split" => Self::Split,
             "next" => Self::Next,
             "previous" => Self::Previous,
             "new page" => Self::NewPage,
@@ -243,6 +267,16 @@ impl Keyed {
 
 /// A message from the strip's page: `show w3`, `close t1`, `back`, `forward`, `history`,
 /// `visit 2`, `comment`, `send`, `drag`, `zoom`, `collapse`. Anything else is nothing.
+/// A drag's message after its name: how far (its first word), and whether the person let go
+/// (`done` after it).
+fn dragged(rest: &str) -> Option<(&str, bool)> {
+    match rest.split_once(' ') {
+        Some((far, "done")) => Some((far, true)),
+        Some(_) => None,
+        None => Some((rest, false)),
+    }
+}
+
 pub(super) fn click(body: &str) -> Option<Click> {
     let (verb, rest) = match body.split_once(' ') {
         Some((verb, rest)) => (verb, Some(rest)),
@@ -268,13 +302,14 @@ pub(super) fn click(body: &str) -> Option<Click> {
         ("reload", None) => Some(Click::Reload),
         ("outside", None) => Some(Click::Outside),
         ("side", None) => Some(Click::Side),
+        ("split-even", None) => Some(Click::SplitEven),
+        ("split-move", Some(rest)) => {
+            let (by, done) = dragged(rest)?;
+            by.parse().ok().map(|by| Click::SplitMove(by, done))
+        }
         ("key", Some(words)) => Keyed::parse(words).map(Click::Key),
         ("side-width", Some(rest)) => {
-            let (width, done) = match rest.split_once(' ') {
-                Some((width, "done")) => (width, true),
-                Some(_) => return None,
-                None => (rest, false),
-            };
+            let (width, done) = dragged(rest)?;
             // `usual`: the width the side has until the person drags it.
             #[expect(
                 clippy::cast_possible_truncation,
@@ -320,6 +355,7 @@ pub(super) fn click(body: &str) -> Option<Click> {
         ("typing", Some("off")) => Some(Click::Typing(false)),
         ("offer", Some("take")) => Some(Click::Offer(true)),
         ("offer", Some("later")) => Some(Click::Offer(false)),
+        ("agent", Some(at)) => at.parse().ok().map(Click::Agent),
         ("visit", Some(at)) if at.bytes().all(|b| b.is_ascii_digit()) => {
             at.parse().ok().map(Click::Visit)
         }
@@ -339,6 +375,33 @@ pub(super) fn click(body: &str) -> Option<Click> {
         }
         ("show", Some(key)) => Key::parse(key).map(Click::Show),
         ("close", Some(key)) => Key::parse(key).map(Click::Close),
+        (verb, rest) => dragged_tab(verb, rest),
+    }
+}
+
+/// A tab the person drags: along the list (`move KEY BEFORE|end`), over the pages
+/// (`drop-over X Y`, `drop-off`), let go of over them (`drop KEY X Y`).
+fn dragged_tab(verb: &str, rest: Option<&str>) -> Option<Click> {
+    let point = |at: &str| -> Option<(u32, u32)> {
+        let (x, y) = at.split_once(' ')?;
+        Some((x.parse().ok()?, y.parse().ok()?))
+    };
+    match (verb, rest) {
+        ("move", Some(rest)) => {
+            let (key, before) = rest.split_once(' ')?;
+            let before = match before {
+                "end" => None,
+                before => Some(Key::parse(before)?),
+            };
+            Some(Click::Move(Key::parse(key)?, before))
+        }
+        ("drop-off", None) => Some(Click::DropOff),
+        ("drop-over", Some(at)) => point(at).map(|(x, y)| Click::DropOver(x, y)),
+        ("drop", Some(rest)) => {
+            let (key, at) = rest.split_once(' ')?;
+            let (x, y) = point(at)?;
+            Some(Click::Drop(Key::parse(key)?, x, y))
+        }
         _ => None,
     }
 }
@@ -359,6 +422,8 @@ pub(super) fn moved(body: &str, (x, y): (f64, f64)) -> String {
     let point = |px: &str, py: &str| Some(format!("{} {}", at(px, x)?, at(py, y)?));
     let moved = match parts.as_slice() {
         ["menu", key, px, py] => point(px, py).map(|p| format!("menu {key} {p}")),
+        ["drop", key, px, py] => point(px, py).map(|p| format!("drop {key} {p}")),
+        ["drop-over", px, py] => point(px, py).map(|p| format!("drop-over {p}")),
         [
             verb @ ("new" | "frame" | "projects" | "tabs"),
             px,

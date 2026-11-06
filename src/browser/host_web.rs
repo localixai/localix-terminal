@@ -131,10 +131,7 @@ pub(super) fn on_browser(
             let _ = reply.send(closed);
             if emptied {
                 shared.closed();
-                if !open.remove_web() {
-                    *deck = None;
-                    return;
-                }
+                open.remove_web();
             }
         }
         Cmd::Open { .. }
@@ -153,10 +150,12 @@ pub(super) fn on_browser(
         | Cmd::Strip
         | Cmd::Offered(..)
         | Cmd::Go(_)
+        | Cmd::SplitKept(..)
         | Cmd::Dressed(_)
         | Cmd::Listing(_)
         | Cmd::Act(..)
         | Cmd::Presence(_)
+        | Cmd::Pressed(..)
         | Cmd::Opened
         | Cmd::Pictured(_)
         | Cmd::Presented(_)

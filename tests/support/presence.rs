@@ -49,7 +49,9 @@ pub(crate) fn scenario(browser: &Browser, window: &Window, origin: &str) {
         headless: false,
         ..window.clone()
     };
-    assert_eq!(browser.presented(), Some("hidden"), "nothing is open yet");
+    // The window the scenarios before left: no tab in it, as they closed theirs.
+    let empty = browser.listing().is_some_and(|tabs| tabs.is_empty());
+    assert!(empty, "nothing is open yet");
     let driver = browser.open(shown).expect("a shown window opens");
     driver.wait_loaded(Duration::from_secs(10)).unwrap();
 
@@ -151,9 +153,17 @@ pub(crate) fn scenario(browser: &Browser, window: &Window, origin: &str) {
     // A screenshot is the same whichever state the window is in.
     driver.screenshot(None).expect("a picture while collapsed");
 
-    // The last tab closed, the window and its mini are gone.
+    // The last tab closed, the window stays, with no tab.
     driver.close();
-    until("hidden", || browser.presented() == Some("hidden"));
+    until("no tab left", || {
+        browser.listing().is_some_and(|tabs| tabs.is_empty())
+    });
+    assert_ne!(browser.presented(), Some("hidden"), "the window stays");
+    // As the person leaves it: the window, not the mini, for the scenarios after.
+    browser.click_mini();
+    until("the window again", || {
+        browser.presented() == Some("expanded")
+    });
 }
 
 /// Whether this process is the app the person's keys go to, polled while `during` runs.

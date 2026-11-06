@@ -58,7 +58,7 @@ fn each_appearance_has_its_own_material_and_coat() {
     let (light_coat, light_alpha) = coat(false);
     assert_eq!((dark_coat, light_coat), (DARK, LIGHT));
     // Mostly glass, as Safari's bar: at most a quarter coat, lighter where the text is dark.
-    assert!(dark_alpha < light_alpha && dark_alpha >= 0.1 && light_alpha <= 0.25);
+    assert!(dark_alpha < light_alpha && dark_alpha >= 0.4 && light_alpha <= 0.7);
     // A neutral coat, near-black or near-white, so the material never reads grey.
     let neutral = |[red, green, blue]: Rgb| red == green && green == blue;
     assert!(neutral(DARK) && DARK[0] < 0x10 && neutral(LIGHT) && LIGHT[0] > 0xf0);
