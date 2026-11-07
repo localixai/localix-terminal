@@ -101,3 +101,26 @@ fn a_secret_inside_another_secrets_reference_is_left_alone() {
         "{{secret:PASSWORD}} then {{secret:PASSWORD}} and {{secret:SHORT}}"
     );
 }
+
+#[test]
+fn a_value_that_holds_a_reference_is_put_in_as_it_is_and_never_read_again() {
+    let scratch = crate::testing::Scratch::new();
+    let dir = scratch.path().join("secrets");
+    save_in(&dir, "ONE", "see {{secret:TWO}} here").unwrap();
+    save_in(&dir, "TWO", "second-value").unwrap();
+    let vault = Vault::default();
+    assert_eq!(
+        vault.fill_in(Some(&dir), "{{secret:TWO}} {{secret:ONE}}"),
+        Ok("second-value see {{secret:TWO}} here".into())
+    );
+}
+
+#[test]
+fn a_secret_saved_again_leaves_no_file_beside_it_and_a_name_is_never_the_temporary_one() {
+    let scratch = crate::testing::Scratch::new();
+    let dir = scratch.path().join("secrets");
+    save_in(&dir, "PW", "first-value").unwrap();
+    save_in(&dir, "PW", "second-value").unwrap();
+    assert_eq!(read_in(&dir, "PW").as_deref(), Some("second-value"));
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+}

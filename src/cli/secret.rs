@@ -42,6 +42,12 @@ pub(super) fn run(args: &[String]) -> u8 {
 }
 
 fn save(dir: &std::path::Path, name: &str) -> u8 {
+    // On a terminal there is no prompt, and what is typed would show (and stay in its scrollback).
+    if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        return usage(&format!(
+            "give the value on stdin, not typed: llx-desk secret {name} < FILE"
+        ));
+    }
     let mut value = String::new();
     if let Err(why) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut value) {
         return usage(&format!("cannot read the secret from stdin: {why}"));
@@ -55,6 +61,13 @@ fn save(dir: &std::path::Path, name: &str) -> u8 {
             ));
             OK
         }
-        Err(why) => usage(&format!("cannot save secret {name}: {why}")),
+        // A name or a value that is no good is the arguments'; the rest is the disk's.
+        Err(why) if why.kind() == std::io::ErrorKind::InvalidInput => {
+            usage(&format!("cannot save secret {name}: {why}"))
+        }
+        Err(why) => {
+            warn(&format!("llx-desk: cannot save secret {name}: {why}"));
+            FAILED
+        }
     }
 }

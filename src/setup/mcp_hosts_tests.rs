@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use super::{HOSTS, host, opencode};
+use super::{HOSTS, host, opencode, write_over};
 
 const EXE: &str = "/Users/me/Applications/LLX Desk.app/Contents/MacOS/llx-desk";
 
@@ -43,4 +43,38 @@ fn opencode_keeps_the_rest_and_takes_out_only_its_own() {
     assert_eq!(host("opencode").unwrap().entry(&off), None);
     assert!(off.contains("\"other\""));
     assert!(opencode("", exe, true).unwrap().contains("llx-desk"));
+}
+
+#[test]
+fn taking_the_server_out_of_a_configuration_without_it_changes_nothing() {
+    let exe = Path::new(EXE);
+    // No configuration, no `mcp`, another server only: all as they were, not even reformatted.
+    assert_eq!(opencode("", exe, false).unwrap(), "");
+    let bare = r#"{"$schema":"s"}"#;
+    assert_eq!(opencode(bare, exe, false).unwrap(), bare);
+    let other = r#"{"mcp":{"other":{"type":"local"}}}"#;
+    assert_eq!(opencode(other, exe, false).unwrap(), other);
+}
+
+#[test]
+fn a_configuration_is_written_over_whole_and_through_a_link() {
+    let scratch = crate::testing::Scratch::new();
+    let real = scratch.path().join("dotfiles/opencode.json");
+    std::fs::create_dir_all(real.parent().unwrap()).unwrap();
+    std::fs::write(&real, "old").unwrap();
+    let link = scratch.path().join("opencode.json");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    write_over(&link, "new").unwrap();
+    // The link is still one, and the file it leads to has the text; nothing else is left.
+    assert!(
+        std::fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(std::fs::read_to_string(&real).unwrap(), "new");
+    assert_eq!(
+        std::fs::read_dir(real.parent().unwrap()).unwrap().count(),
+        1
+    );
 }

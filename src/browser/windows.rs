@@ -117,12 +117,7 @@ impl Windows {
 
     /// The window in use is gone (not the main one, which stays): the main one is in use again.
     pub(super) fn close_current(&mut self, shared: &Shared) {
-        if self.current == 0 {
-            return;
-        }
-        let gone = self.current;
-        self.focus(0, shared);
-        self.slots.remove(gone);
+        self.remove(self.current, shared);
     }
 
     /// Window `at` is the one in use: its scope is the one `Shared` keeps.
@@ -228,21 +223,9 @@ impl Windows {
         self.current
     }
 
-    /// Window `at` is in use again (as it was before a command for another).
-    pub(super) fn back(&mut self, at: usize, shared: &Shared) {
-        if at < self.slots.len() {
-            self.focus(at, shared);
-        }
-    }
-
     /// How many windows there are.
     pub(super) fn count(&self) -> usize {
         self.slots.len()
-    }
-
-    /// Window `at` is in use, for a while (`back` after): drawing each window in turn.
-    pub(super) fn visit(&mut self, at: usize, shared: &Shared) {
-        self.focus(at, shared);
     }
 
     /// Window `at`'s deck, when it has one.
@@ -291,7 +274,8 @@ impl Windows {
         }
     }
 
-    /// Window `at` is the one in use from now on.
+    /// Window `at` is the one in use from now on (and again, as it was before a command for
+    /// another, or for a while, drawing each window in turn).
     pub(super) fn use_at(&mut self, at: usize, shared: &Shared) {
         if at < self.slots.len() {
             self.focus(at, shared);

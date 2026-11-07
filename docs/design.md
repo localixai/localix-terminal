@@ -1,4 +1,4 @@
-# The app, protocol v2 and updates (design)
+# The app, protocol and updates (design)
 
 What llx-desk is to an agent: one command, `llx-desk window '<json>'`, that reaches the one app
 of the user, which holds the window and all its state. The desk calls no model and knows no agent:
@@ -29,10 +29,10 @@ an integration ──▶ llx-desk window --said --follow ══one socket══�
 - Only the app creates a window and owns its life: open, show, hide, close, the tabs, the
   mini, the strip. No other process ever makes one.
 - Two clients starting an app at the same moment end with one.
-- `LLX_DESK_HOME` only says where files go (logs, comments). Tests get an app with no
+- `LLX_DESK_HOME` only says where files go (logs, screenshots, comments). Tests get an app with no
   window that exists in test builds alone.
 
-## Protocol v2 (client and app)
+## The protocol (client and app)
 
 - JSON-RPC 2.0, one frame per line. `initialize` first and once: protocol version, build,
   capabilities, both ways. The protocol grows by optional fields and new methods, both sides
@@ -64,7 +64,7 @@ One thing moves: the app. The command, the MCP server and the Claude Code plugin
 - **The app.** `install.sh` (or the release's `LLX-Desk-macos.zip`) replaces it whole. A running
   app is the old one until it quits; the next call starts the new one.
 - **The command and the MCP entries** name the app's program, so they follow it; an MCP entry
-  that names a program that moved is written again when the app opens (`setup::refresh`).
+  that names a program that moved is written again when the app opens (`setup::auto`).
 - **The plugin** is in the app's bundle, of its version; the app opened after an update brings an
   installed plugin to that version (`claude plugin update`).
 - **Client and server.** `initialize` compares protocol versions; a server of another protocol is
@@ -73,7 +73,7 @@ One thing moves: the app. The command, the MCP server and the Claude Code plugin
 ## Order
 
 1. One server per user; a second start is quiet.
-2. Protocol v2: `initialize`, ids and pipelining, notifications, binary screenshots, idempotent
+2. The protocol: `initialize`, ids and pipelining, notifications, binary screenshots, idempotent
    retries.
 3. The app as the server; the API that describes itself; the adapters on it (CLI, MCP, plugin).
 4. Setup from the app: the command, the plugin, the MCP hosts.

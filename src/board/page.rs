@@ -1,4 +1,4 @@
-//! The board's page in the window: four columns the person drags cards across, a card opened
+//! The board's page in the window: six columns the person drags cards across, a card opened
 //! beside them to edit, accept, send back or comment on. Its one script runs by its SHA-384, so
 //! a page that was altered never runs one; the desk paints the board into it whole (`B`), and
 //! what it refused (`E`).
@@ -9,7 +9,7 @@ use super::Board;
 
 /// The page's script, and its SHA-384: the page's policy runs it by that hash.
 const SCRIPT: &str = include_str!("page.js");
-const SCRIPT_SHA384: &str = "s79x9D4A0qtUlxFVhQ5ngva0jdra2Xl1BJ/t43fSma5wxGxD5jLQUS3OnURTe1Bw";
+const SCRIPT_SHA384: &str = "3W9iQqDu0W4kdC48lTEpENOuvd/klBgNH9vlyxWudfaffgOsLK8v+kH9Ae/rGP75";
 
 /// The page, titled `title`.
 pub fn page(title: &str) -> String {

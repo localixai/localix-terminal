@@ -3,7 +3,13 @@
 //! greyed where it is not. The desk only starts the program, as a terminal the person opened:
 //! it knows nothing of the agent, and the agent works in it as anyone would.
 
+use std::ffi::{OsStr, OsString};
 use std::path::Path;
+use std::sync::Mutex;
+
+use tao::event_loop::EventLoopProxy;
+
+use super::host::Cmd;
 
 /// A coding agent's command line program.
 pub(super) struct Agent {
@@ -58,7 +64,7 @@ pub(super) const AGENTS: [Agent; 6] = [
 
 impl Agent {
     /// The command to run, found on `path` (a `PATH`): none where the agent is not installed.
-    pub(super) fn command_on(&self, path: &std::ffi::OsStr) -> Option<&'static str> {
+    pub(super) fn command_on(&self, path: &OsStr) -> Option<&'static str> {
         let dirs: Vec<_> = std::env::split_paths(path).collect();
         self.commands
             .iter()
@@ -79,15 +85,89 @@ pub(super) fn marks() -> String {
     serde_json::Value::Object(marks).to_string()
 }
 
-/// The agents installed (their command on this process's `PATH`), for a page: a JSON array of
-/// their place in [`AGENTS`], id and name.
+/// What the agents are looked for on, and what was found there when the pages last asked.
+struct Known {
+    /// The `PATH`: the process's, then the person's login shell's once it has said (an app
+    /// started from the Finder or the Dock has only the system's).
+    path: OsString,
+    /// The agents found on it, as [`installed`] says them.
+    installed: String,
+}
+
+static KNOWN: Mutex<Option<Known>> = Mutex::new(None);
+
+/// The `PATH` the agents are looked for on.
+pub(super) fn path() -> OsString {
+    let mut known = crate::lock(&KNOWN);
+    known
+        .get_or_insert_with(|| Known::on(process_path()))
+        .path
+        .clone()
+}
+
+fn process_path() -> OsString {
+    std::env::var_os("PATH").unwrap_or_default()
+}
+
+impl Known {
+    fn on(path: OsString) -> Self {
+        let found: Vec<serde_json::Value> = (AGENTS.iter().enumerate())
+            .filter(|(_, agent)| agent.command_on(&path).is_some())
+            .map(|(at, agent)| serde_json::json!({"at": at, "id": agent.id, "name": agent.name}))
+            .collect();
+        Self {
+            path,
+            installed: serde_json::Value::Array(found).to_string(),
+        }
+    }
+}
+
+/// `login`, the PATH of the person's login shell, then what the process has beyond it.
+fn merged(login: &str, process: &OsStr) -> OsString {
+    let mut dirs: Vec<std::path::PathBuf> = std::env::split_paths(login).collect();
+    for dir in std::env::split_paths(process) {
+        if !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
+    }
+    std::env::join_paths(dirs).unwrap_or_else(|_| process.to_os_string())
+}
+
+/// Ask the person's login shell for its `PATH`, on a thread (it may take seconds, and runs their
+/// profile): the agents are looked for on it from then on, and the window told to draw again.
+pub(super) fn learn(proxy: &EventLoopProxy<Cmd>) {
+    let proxy = proxy.clone();
+    let asked = std::thread::Builder::new()
+        .name("desk-agents-path".into())
+        .spawn(move || {
+            let Some(login) = crate::setup::login_path() else {
+                return;
+            };
+            *crate::lock(&KNOWN) = Some(Known::on(merged(&login, &process_path())));
+            let _ = proxy.send_event(Cmd::Strip);
+        });
+    if let Err(error) = asked {
+        super::debug(|| format!("the login PATH was not asked for: {error}"));
+    }
+}
+
+/// The agents installed (their command on [`path`]), for a page being built: a JSON array of
+/// their place in [`AGENTS`], id and name. Looked for again as it is asked.
 pub(super) fn installed() -> String {
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    let found: Vec<serde_json::Value> = (AGENTS.iter().enumerate())
-        .filter(|(_, agent)| agent.command_on(&path).is_some())
-        .map(|(at, agent)| serde_json::json!({"at": at, "id": agent.id, "name": agent.name}))
-        .collect();
-    serde_json::Value::Array(found).to_string()
+    let mut known = crate::lock(&KNOWN);
+    let path = (known.as_ref()).map_or_else(process_path, |known| known.path.clone());
+    let now = Known::on(path);
+    let installed = now.installed.clone();
+    *known = Some(now);
+    installed
+}
+
+/// The call that gives a page that is up the agents installed, as it last looked: said on a
+/// refresh, so a page built before the login shell answered learns it too.
+pub(super) fn script() -> String {
+    let mut known = crate::lock(&KNOWN);
+    let known = known.get_or_insert_with(|| Known::on(process_path()));
+    format!("agentsInstalled({})", known.installed)
 }
 
 /// The agent a terminal's command line starts, read as a shell would start it: past variables

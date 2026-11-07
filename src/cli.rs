@@ -20,6 +20,8 @@ const HELP: &str = "llx-desk: a native window of browser pages and terminals tha
 Usage:
   llx-desk window '<json>' [--as NAME] [--project DIR]   one call: open, interact, screenshot,
                                          close, show, list
+  llx-desk window '<json>' --peek        as above, a look for a pane: what the person sent stays for your
+                                         own next call
   llx-desk window                        how to call it: the actions and their arguments (JSON Schema)
   llx-desk window --end [--as NAME]      close the caller's tabs
   llx-desk window --said [--as NAME]     print what the person sent from the window since last asked
@@ -55,7 +57,9 @@ pub fn run(args: Vec<String>) -> ExitCode {
         return ExitCode::from(app::run());
     }
     let mut args = args.into_iter();
-    let code = match args.next().as_deref() {
+    let command = args.next();
+    let rest: Vec<String> = args.collect();
+    let code = match command.as_deref() {
         None | Some("help" | "-h" | "--help") => {
             say(HELP);
             OK
@@ -64,18 +68,26 @@ pub fn run(args: Vec<String>) -> ExitCode {
             say(concat!("llx-desk ", env!("CARGO_PKG_VERSION")));
             OK
         }
-        Some("window") => call::window(&args.collect::<Vec<_>>()),
-        Some("serve") => return serve(&args.collect::<Vec<_>>()),
+        Some("window") => call::window(&rest),
+        Some("serve") => return serve(&rest),
+        Some(name @ ("status" | "quit")) if !rest.is_empty() => {
+            call::usage(&format!("{name} takes no arguments"))
+        }
         // Not running is an answer to `status`, but one a script tells apart; nothing to quit is
         // done.
         Some("status") => call::admin("app/status", UNREACHABLE),
         Some("quit") => call::admin("app/quit", OK),
-        Some("secret") => secret::run(&args.collect::<Vec<_>>()),
-        Some("mcp") => crate::mcp::run(&args.collect::<Vec<_>>()),
-        Some("setup") => setup::run(&args.collect::<Vec<_>>()),
-        Some("open") => match args.next() {
-            Some(dir) => app::open_in(&dir),
-            None => app::open(),
+        Some("secret") => secret::run(&rest),
+        Some("mcp") => crate::mcp::run(&rest),
+        Some("setup") => setup::run(&rest),
+        Some("open") => match rest.as_slice() {
+            [] => app::open(),
+            [help] if matches!(help.as_str(), "-h" | "--help") => {
+                say(HELP);
+                OK
+            }
+            [dir] => app::open_in(dir),
+            _ => call::usage("open takes one folder at most"),
         },
         Some(other) => {
             warn(&format!("llx-desk: no command `{other}`\n\n{HELP}"));

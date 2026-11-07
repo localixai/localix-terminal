@@ -23,8 +23,10 @@
   }
 
   function chord(text) {
-    const parts = String(text).trim().split('+').map((p) => p.trim())
-    let key = parts.pop() || (String(text).endsWith('+') ? '+' : '')
+    const raw = String(text)
+    // A lone space is the space key, not blank to be trimmed away.
+    const parts = raw === ' ' ? [' '] : raw.trim().split('+').map((p) => p.trim())
+    let key = parts.pop() || (raw.endsWith('+') ? '+' : '')
     const mods = new Set(parts.map((m) => m.toLowerCase()))
     key = NAMED_KEYS[key.toLowerCase()] ?? key
     return {
@@ -106,7 +108,10 @@
       }
     }
     fire('keyup')
-    if (proceed && init.key === 'Enter' && target.form) target.form.requestSubmit()
+    // Enter in a text area or an editable element is a line break, and on a plain button no submit.
+    const plain = target.tagName === 'TEXTAREA' || target.isContentEditable || (target.tagName === 'BUTTON' && target.type !== 'submit') ||
+      (target.tagName === 'INPUT' && ['button', 'reset'].includes(target.type))
+    if (proceed && init.key === 'Enter' && target.form && !plain) target.form.requestSubmit()
     if (proceed && init.key === 'Tab') {
       const order = [...document.querySelectorAll('a[href],button,input,select,textarea,[tabindex]')]
         .filter((e) => e.tabIndex >= 0 && !e.disabled && visible(e))

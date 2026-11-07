@@ -38,10 +38,12 @@ impl Desk {
                 return;
             };
             let before = kept.board.clone();
+            let mut changed = false;
             let done = action
                 .and_then(|action| kept.board.person(&action))
                 .and_then(|did| {
-                    if kept.board != before {
+                    changed = kept.board != before;
+                    if changed {
                         self.save_board(project, &kept.board)?;
                     }
                     Ok(did)
@@ -51,8 +53,11 @@ impl Desk {
                 kept.board = before;
             }
             let refused = match done {
+                // What changed nothing (a card dropped where it was) is news to no agent.
                 Ok(did) => {
-                    kept.heard.push(did);
+                    if changed {
+                        kept.heard.push(did);
+                    }
                     None
                 }
                 Err(why) => Some(board::refused(&why)),

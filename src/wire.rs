@@ -4,11 +4,15 @@
 //! write. The protocol grows by optional fields and new methods; both sides ignore what they do
 //! not know.
 
+mod line;
+pub(crate) mod peer;
 pub mod pipe;
 
 use std::io::{self, BufRead, Read};
 
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
+
+pub use line::respond;
 
 /// The protocol version this build speaks. A breaking change is a new number.
 pub const PROTOCOL: u32 = 3;
@@ -27,8 +31,6 @@ pub mod code {
     pub const INTERNAL: i64 = -32603;
     /// The call failed; the next may not.
     pub const FAILED: i64 = -32000;
-    /// Nothing like it will work until something outside changes (a key, a network).
-    pub const FATAL: i64 = -32001;
     /// `initialize` has not come first.
     pub const NOT_INITIALIZED: i64 = -32002;
     /// The app is stopping, or too busy to take the call.
@@ -126,44 +128,11 @@ impl Message {
     /// The message as bytes to write in one piece: its line, then `blob`'s bytes when the message
     /// is a response with a result to announce them in.
     pub fn encode(&self, blob: Option<&Blob>) -> Vec<u8> {
-        let mut object = Map::new();
-        object.insert("jsonrpc".into(), json!("2.0"));
         match self {
-            Self::Request { id, method, params } => {
-                object.insert("id".into(), id.clone());
-                object.insert("method".into(), json!(method));
-                object.insert("params".into(), params.clone());
-            }
-            Self::Notification { method, params } => {
-                object.insert("method".into(), json!(method));
-                object.insert("params".into(), params.clone());
-            }
-            Self::Response { id, outcome } => {
-                object.insert("id".into(), id.clone());
-                match outcome {
-                    Ok(result) => {
-                        let mut result = result.clone();
-                        if let (Some(blob), Some(fields)) = (blob, result.as_object_mut()) {
-                            fields.insert(
-                                "binary".into(),
-                                json!({"length": blob.bytes.len(), "mime": blob.mime}),
-                            );
-                        }
-                        object.insert("result".into(), result);
-                    }
-                    Err(error) => {
-                        let error = json!({"code": error.code, "message": error.message});
-                        object.insert("error".into(), error);
-                    }
-                }
-            }
+            Self::Request { id, method, params } => line::request(id, method, params),
+            Self::Notification { method, params } => line::notification(method, params),
+            Self::Response { id, outcome } => respond(id, outcome, blob),
         }
-        let mut line = Value::Object(object).to_string().into_bytes();
-        line.push(b'\n');
-        if let (Some(blob), Self::Response { outcome: Ok(_), .. }) = (blob, self) {
-            line.extend_from_slice(&blob.bytes);
-        }
-        line
     }
 }
 
@@ -175,10 +144,13 @@ pub fn read_frame<R: BufRead>(input: &mut R) -> io::Result<Next> {
         return Ok(Next::End);
     }
     if line.last() != Some(&b'\n') && line.len() as u64 >= MAX_LINE {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "a line too long",
-        ));
+        // Read past the rest of it, keeping none: the connection stays usable, and the sender
+        // is told why instead of finding the app gone.
+        skip_line(input)?;
+        return Ok(Next::Bad(RpcError::new(
+            code::INVALID,
+            "a message is at most 8 MiB",
+        )));
     }
     let value: Value = match serde_json::from_slice(&line) {
         Ok(value) => value,
@@ -196,6 +168,26 @@ pub fn read_frame<R: BufRead>(input: &mut R) -> io::Result<Next> {
         Message::Request { .. } | Message::Notification { .. } | Message::Response { .. } => None,
     };
     Ok(Next::Got(Frame { message, blob }))
+}
+
+/// Read up to the end of the current line, keeping nothing.
+fn skip_line<R: BufRead>(input: &mut R) -> io::Result<()> {
+    loop {
+        let seen = input.fill_buf()?;
+        if seen.is_empty() {
+            return Ok(());
+        }
+        match seen.iter().position(|byte| *byte == b'\n') {
+            Some(at) => {
+                input.consume(at + 1);
+                return Ok(());
+            }
+            None => {
+                let all = seen.len();
+                input.consume(all);
+            }
+        }
+    }
 }
 
 /// The bytes a result announced, read.
@@ -232,9 +224,21 @@ fn parse(value: Value) -> Result<Message, RpcError> {
             "not JSON-RPC 2.0: an older app speaks another protocol",
         ));
     }
-    let id = fields
-        .remove("id")
-        .filter(|id| id.is_string() || id.is_number());
+    let sent = fields.remove("id");
+    if sent
+        .as_ref()
+        .is_some_and(|id| !id.is_null() && !id.is_string() && !id.is_number())
+    {
+        return Err(invalid("a message id is a string or a number"));
+    }
+    // A null id is JSON-RPC's own for an error that could not name its request (a line that did
+    // not parse, a connection refused): kept for an error response, nothing else.
+    let null_error = if sent == Some(Value::Null) {
+        fields.remove("error").map(|error| error_of(&error))
+    } else {
+        None
+    };
+    let id = sent.filter(|id| id.is_string() || id.is_number());
     let params = fields.remove("params").unwrap_or(Value::Null);
     match (fields.remove("method"), id) {
         (Some(Value::String(method)), Some(id)) => Ok(Message::Request { id, method, params }),
@@ -245,7 +249,10 @@ fn parse(value: Value) -> Result<Message, RpcError> {
             (Some(result), None) => Ok(Message::done(id, result)),
             (None, None) => Err(invalid("a response has a `result` or an `error`")),
         },
-        (None, None) => Err(invalid("a message has a `method` or an `id`")),
+        (None, None) => match null_error {
+            Some(error) => Ok(Message::failed(Value::Null, error)),
+            None => Err(invalid("a message has a `method` or an `id`")),
+        },
     }
 }
 

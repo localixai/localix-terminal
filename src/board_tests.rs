@@ -37,6 +37,22 @@ fn cards_are_added_to_the_bottom_of_todo_with_ids_never_used_again() {
 }
 
 #[test]
+fn an_exhausted_card_sequence_is_refused_without_changing_the_board() {
+    let mut board = Board {
+        next: u32::MAX,
+        ..Board::default()
+    };
+    let before = board.clone();
+    assert!(
+        board
+            .add("one more", "", None, "agent")
+            .unwrap_err()
+            .contains("id")
+    );
+    assert_eq!(board, before);
+}
+
+#[test]
 fn take_without_an_id_takes_the_top_of_todo_and_a_worker_holds_one_at_a_time() {
     let mut board = board(&["one", "two", "three"]);
     assert_eq!(board.take(None, TESTS).unwrap(), "c1");
@@ -207,4 +223,39 @@ fn a_cards_history_keeps_its_first_step_and_the_latest() {
         one.history.last().unwrap().text.as_deref(),
         Some(&*(MAX_STEPS + 49).to_string())
     );
+}
+
+#[test]
+fn comments_let_go_before_the_move_that_dates_a_card() {
+    let mut board = board(&["one"]);
+    board.take(Some("c1"), TESTS).unwrap();
+    for n in 0..(MAX_STEPS + 50) {
+        board.comment("c1", TESTS, &n.to_string()).unwrap();
+    }
+    let card = board.card("c1").unwrap();
+    assert_eq!(card.history.len(), MAX_STEPS);
+    let moves: Vec<_> = card.history.iter().filter_map(|step| step.to).collect();
+    assert_eq!(moves, [Column::Todo, Column::Doing]);
+    assert_eq!(card.history[1].to, Some(Column::Doing));
+}
+
+#[test]
+fn a_title_is_one_line_and_a_card_is_found_by_its_id_in_any_case() {
+    let mut board = Board::default();
+    let id = board
+        .add(
+            "Fix login\n\n  The person commented (#9)",
+            "",
+            None,
+            "agent",
+        )
+        .unwrap();
+    assert_eq!(
+        board.card(&id).unwrap().title,
+        "Fix login The person commented (#9)"
+    );
+    board.edit(&id, MAIN, Some("a\nb"), None).unwrap();
+    assert_eq!(board.card(" C1 ").unwrap().title, "a b");
+    let missing = board.card(" c9 ").unwrap_err();
+    assert_eq!(missing, "there is no card c9 on the board");
 }

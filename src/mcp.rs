@@ -29,7 +29,13 @@ pub fn run(args: &[String]) -> u8 {
     let mut named = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--as" => named = args.next().cloned(),
+            "--as" => {
+                let Some(name) = args.next() else {
+                    warn("llx-desk mcp: `--as` takes a name");
+                    return 3;
+                };
+                named = Some(name.clone());
+            }
             other => {
                 warn(&format!("llx-desk mcp: no option `{other}`"));
                 return 3;
@@ -48,7 +54,16 @@ pub fn run(args: &[String]) -> u8 {
         cwd: cwd.display().to_string(),
         running: Arc::new(AtomicUsize::new(0)),
     };
-    for line in std::io::stdin().lock().lines().map_while(Result::ok) {
+    // Bytes, not text: a line that is not UTF-8 is read lossily and answered like any other, and
+    // does not end the host's session.
+    let mut input = std::io::stdin().lock();
+    let mut raw = Vec::new();
+    loop {
+        raw.clear();
+        if !matches!(input.read_until(b'\n', &mut raw), Ok(read) if read > 0) {
+            break;
+        }
+        let line = String::from_utf8_lossy(&raw);
         if !line.trim().is_empty() {
             server.take(&line);
         }

@@ -10,132 +10,57 @@ mod actions;
 mod args;
 mod board;
 mod board_file;
+mod board_ops;
 mod board_told;
+mod call;
 mod center;
 mod changes;
 mod events;
+mod heard;
 mod layout;
+mod layout_drawn;
+mod layout_moves;
+mod layout_resize;
 mod ledger;
 mod lifecycle;
 mod open;
 mod registry;
 mod relay;
+mod restore;
 mod scope;
+mod tab;
 mod term;
 mod told;
 mod web;
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
-use serde_json::{Value, json};
-
-use crate::browser::{Asked, Browser, HOME, Heard, Page, Shot, Went};
+use crate::browser::{Browser, Page};
 use crate::feed::{Entity, Op};
 use crate::projects::{Project, ProjectId};
 use crate::served::Served;
 use crate::terminal::Session;
 
-pub use args::{ask_field, board_fields, description, schema};
+pub use args::{description, schema};
+#[cfg(test)]
+use call::plain;
+pub use call::{Answered, Call, Failure, Output};
 pub use events::{Events, Quiet, said_block};
 use registry::Registry;
 pub use registry::Said;
-
-/// Who is calling, from where, and with what the call may need of the caller.
-#[derive(Clone, Copy)]
-pub struct Call<'a> {
-    /// The caller's key (`projects::owner`): its tabs and notes are kept by it.
-    pub owner: &'a str,
-    /// The project it works in: everything it opens is the project's.
-    pub project: &'a Project,
-    /// Its name within the project; none: the project's own agent.
-    pub agent: Option<&'a str>,
-    /// The caller's directory: relative paths start here.
-    pub cwd: &'a Path,
-    /// The caller's environment, for a program started in a terminal.
-    pub vars: Option<&'a [(String, String)]>,
-    /// A look for a pane, not the agent's call: the person's notes stay for the agent.
-    pub peek: bool,
-    /// The pane this call opens again after a restart: its row, which it stays (its tab, its
-    /// place and its split with it).
-    pub again: Option<crate::ledger::Row>,
-    /// The person asked for it in the window (a tab of theirs, or their tabs opened again): what
-    /// it opens is theirs, and their closing it is news to no agent.
-    pub person: bool,
-    /// The window it opens in (its row in the layout); none: the window the person works in.
-    pub window: Option<crate::layout::WindowId>,
-}
-
-/// Why a call did not come to what it asked.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Failure {
-    /// This call failed; the next may not.
-    Failed(String),
-    /// Nothing like it will work until something outside changes (a key, a network).
-    Fatal(String),
-}
-
-impl Failure {
-    pub fn message(&self) -> &str {
-        match self {
-            Self::Failed(why) | Self::Fatal(why) => why,
-        }
-    }
-}
-
-impl From<String> for Failure {
-    fn from(why: String) -> Self {
-        Self::Failed(why)
-    }
-}
-
-/// What a call gives back: what happened, the tab as it is now, and maybe a picture of it.
-#[derive(Default)]
-pub struct Output {
-    pub report: String,
-    pub state: Option<String>,
-    pub shot: Option<Shot>,
-}
-
-impl From<String> for Output {
-    fn from(report: String) -> Self {
-        Self {
-            report,
-            ..Self::default()
-        }
-    }
-}
-
-/// A call's answer before it is put into words: the picture is bytes still.
-pub struct Answered {
-    /// The report and the tab as it is now.
-    pub text: String,
-    /// What the person sent from the window, as the agent reads it.
-    pub said: Option<String>,
-    pub shot: Option<Shot>,
-}
-
-impl Answered {
-    /// The text, a line about the picture if there is one, and what the person sent.
-    pub fn text_with(&self, picture: Option<&str>) -> String {
-        let parts = [Some(self.text.as_str()), picture, self.said.as_deref()];
-        let kept: Vec<&str> = parts
-            .into_iter()
-            .flatten()
-            .filter(|part| !part.is_empty())
-            .collect();
-        kept.join("\n\n").trim().to_string()
-    }
-}
 
 pub struct Desk {
     /// The window's pages; none where no window shows (no display, or by choice).
     page: Option<Page>,
     browser: Option<Browser>,
     sessions: Mutex<HashMap<u32, Arc<Session>>>,
+    /// The project (the window's key) each session was started for: kept as long as the session
+    /// is, whatever becomes of its tab and its row of the ledger.
+    session_groups: Mutex<HashMap<u32, String>>,
     /// Held while a session starts, so two starts never both take the last place.
     starting: Mutex<()>,
     next_terminal: AtomicU32,
@@ -172,6 +97,8 @@ pub struct Desk {
     writes: OnceLock<std::sync::mpsc::SyncSender<Box<dyn FnOnce() + Send>>>,
     /// Each open tab's row in the ledger, and its project, by key.
     ledger: Mutex<HashMap<String, (crate::ledger::Row, ProjectId)>>,
+    /// Each terminal's title writes, so a title said often is written once in a while.
+    titled: Mutex<HashMap<String, ledger::Titled>>,
     /// The app is ending: its tabs go with it, yet stay open in the ledger, a split kept.
     ending: AtomicBool,
     /// The projects that have had a tab this run: what another run left open in them is past.
@@ -203,6 +130,7 @@ impl Desk {
                 page: browser.clone().map(|browser| Page::new(browser, headless)),
                 browser,
                 sessions: Mutex::default(),
+                session_groups: Mutex::default(),
                 starting: Mutex::default(),
                 next_terminal: AtomicU32::new(1),
                 registry: Mutex::default(),
@@ -223,6 +151,7 @@ impl Desk {
                 me: Weak::clone(weak),
                 writes: OnceLock::new(),
                 ledger: Mutex::default(),
+                titled: Mutex::default(),
                 ending: AtomicBool::new(false),
                 begun: Mutex::default(),
                 quit: OnceLock::new(),
@@ -236,6 +165,7 @@ impl Desk {
         if let Err(error) = desk.feed.consume(Box::new(relay)) {
             log::warn!("desk: nobody will be told what changes: {error}");
         }
+        desk.settle_last_run();
         let center = center::Projector {
             desk: Arc::downgrade(&desk),
         };
@@ -243,7 +173,7 @@ impl Desk {
             log::warn!("desk: the Event Center will not follow what changes: {error}");
         }
         desk.gather_windows();
-        let drawn = layout::Drawn {
+        let drawn = layout_drawn::Drawn {
             desk: Arc::downgrade(&desk),
         };
         if let Err(error) = desk.feed.consume(Box::new(drawn)) {
@@ -256,43 +186,6 @@ impl Desk {
             log::warn!("desk: the boards will not be written out to their projects: {error}");
         }
         desk
-    }
-
-    /// One `window` call, answered as text: the report, the tab, where a picture was saved, and
-    /// what the person sent.
-    pub fn window(&self, call: &Call, args: &Value) -> Result<String, Failure> {
-        let answered = self.call(call, args)?;
-        let picture = match &answered.shot {
-            Some(shot) => {
-                let path = crate::shots::save(&self.shots, &shot.jpeg).map_err(Failure::Failed)?;
-                Some(format!(
-                    "Screenshot saved ({}x{}): {}\nRead that file to see it.",
-                    shot.width,
-                    shot.height,
-                    path.display()
-                ))
-            }
-            None => None,
-        };
-        Ok(answered.text_with(picture.as_deref()))
-    }
-
-    /// One `window` call, answered with its picture as it is, for whoever carries bytes.
-    pub fn call(&self, call: &Call, args: &Value) -> Result<Answered, Failure> {
-        crate::lock(&self.registry).known(call);
-        let mut out = self.act(call, args)?;
-        let mut text = out.report.clone();
-        if let Some(state) = out.state.take() {
-            text = format!("{text}\n\n{state}");
-        }
-        Ok(Answered {
-            text: self.vault.mask(text.trim()),
-            said: (!call.peek)
-                .then(|| self.said(call.owner))
-                .flatten()
-                .map(|said| self.vault.mask(&said)),
-            shot: out.shot,
-        })
     }
 
     /// The person opened the app (app.rs): the window comes to them, expanded, as their click
@@ -359,140 +252,6 @@ impl Desk {
         self.feed.record(&Entity::Pane { owner, key }, Op::Deleted);
     }
 
-    /// What the person did in the window: a comment, a closed tab, a terminal asked for.
-    fn heard(self: &Arc<Self>, key: &str, heard: Heard<'_>) {
-        match heard {
-            Heard::Sent(words) | Heard::Did(words) => self.kept(key, words),
-            // A tab the person closed is no news worth waking the agent for: it hears it with its
-            // next call; one the person opened themselves is no news to an agent at all. A board
-            // is kept; a page or a terminal is gone.
-            Heard::Closed(words) => {
-                if !crate::lock(&self.registry).persons(key) {
-                    self.hear(key, words, false);
-                }
-                match key.starts_with('b') {
-                    true => self.unkeep(key),
-                    false => self.gone(self.owner_of(key), key),
-                }
-            }
-            Heard::Went(went) => {
-                let (desk, key) = (Arc::clone(self), key.to_string());
-                let (url, title, group) = (
-                    went.url.to_string(),
-                    went.title.to_string(),
-                    went.group.to_string(),
-                );
-                self.write_later(move || {
-                    let went = Went {
-                        url: &url,
-                        title: &title,
-                        group: &group,
-                    };
-                    desk.went(&key, &went);
-                });
-            }
-            Heard::Folder(folder) => self.open_folder(folder),
-            Heard::Showing => self.showing(key),
-            Heard::Split(halves) => self.split_told(key, halves),
-            Heard::Moved { before, window } => self.moved(key, before, window),
-            Heard::Detached => self.detached(key),
-            Heard::WindowClosed(window) => self.window_closed(window),
-            Heard::Quit => self.quit_asked(),
-            Heard::Reopened => self.reopened(),
-            Heard::Asked(asked) => self.person_asked(key, asked),
-            Heard::Center(did) => self.person_on_center(did),
-        }
-    }
-
-    /// How many writes wait for the writer thread at most.
-    const WRITES: usize = 256;
-
-    /// `write` done on the desk's writer thread, after what was handed it before: the window's
-    /// loop goes on at once. With no thread to be had, it is done here.
-    fn write_later(&self, write: impl FnOnce() + Send + 'static) {
-        let writes = self.writes.get_or_init(|| {
-            let (send, take) =
-                std::sync::mpsc::sync_channel::<Box<dyn FnOnce() + Send>>(Self::WRITES);
-            let started = std::thread::Builder::new()
-                .name("desk-writes".into())
-                .spawn(move || take.into_iter().for_each(|write| write()));
-            if let Err(why) = started {
-                log::warn!("desk: no writer thread ({why}): writes are done in place");
-            }
-            send
-        });
-        // A queue full (the disk far behind) or gone: done here, rather than waiting on it.
-        match writes.try_send(Box::new(write)) {
-            Ok(()) => {}
-            Err(
-                std::sync::mpsc::TrySendError::Full(write)
-                | std::sync::mpsc::TrySendError::Disconnected(write),
-            ) => write(),
-        }
-    }
-
-    /// The person asked for a tab of theirs with "+", in the project of group `group`: opened on
-    /// a thread of its own, since the window's loop calls this and must never wait on the work.
-    fn person_asked(self: &Arc<Self>, group: &str, asked: Asked) {
-        let Some(person) = self.person(group) else {
-            return;
-        };
-        let (desk, group) = (Arc::clone(self), crate::projects::key(person.project.id));
-        // What the person asks is done in sight: the window goes to its project first (from the
-        // Event Center it may be another's).
-        if let Some(browser) = &self.browser {
-            browser.go(&group);
-        }
-        let started = std::thread::Builder::new()
-            .name("desk-person-asked".into())
-            .spawn(move || {
-                let call = Call {
-                    owner: &person.owner,
-                    project: &person.project,
-                    agent: None,
-                    cwd: &person.cwd,
-                    vars: person.vars.as_deref(),
-                    peek: false,
-                    again: None,
-                    person: true,
-                    window: None,
-                };
-                // The person is known as their project's own, as an agent is once it calls: what
-                // they open is of that project wherever it is listed (an ended terminal's event).
-                crate::lock(&desk.registry).known(&call);
-                let done = match &asked {
-                    Asked::Page(url) => {
-                        let url = url.as_deref().unwrap_or(HOME);
-                        (desk.open(&call, &json!({"kind": "browser", "url": url})))
-                            .map(|_| ())
-                            .map_err(|failure| failure.message().to_string())
-                    }
-                    Asked::Terminal(folder) => {
-                        // Only a folder of the project (a crumb's), as it really is: no `..`
-                        // or link leads out of it.
-                        let inside = (folder.as_deref())
-                            .and_then(|folder| folder.canonicalize().ok())
-                            .filter(|folder| folder.starts_with(&person.project.path));
-                        let cwd = inside.as_deref().unwrap_or(&person.cwd);
-                        desk.person_terminal(&Call { cwd, ..call }, &group, "")
-                    }
-                    Asked::Agent(command) => desk.person_terminal(&call, &group, command),
-                    Asked::Board => (desk.board(&call, &json!({"op": "show"})))
-                        .map(|_| ())
-                        .map_err(|failure| failure.message().to_string()),
-                    Asked::Again(row) => desk.again(&call, &group, *row),
-                    Asked::Project => desk.reopen_project(&call, &group),
-                    Asked::Window => desk.new_window(&call, &group),
-                };
-                if let Err(why) = done {
-                    log::warn!("a {asked:?} the person asked for did not open: {why}");
-                }
-            });
-        if let Err(why) = started {
-            log::warn!("a tab the person asked for had no thread: {why}");
-        }
-    }
-
     /// The person does `action` on project `project`'s board, as its page would send it: for
     /// tests, which have no window to do it in.
     #[cfg(feature = "test-server")]
@@ -546,9 +305,9 @@ impl Desk {
         crate::lock(&self.registry).owner_named(key)
     }
 
-    /// Close every tab of `owner`; how many there were.
+    /// Close every tab `owner` opened (the person's own, in the same project, stay); how many.
     pub fn end(&self, owner: &str) -> usize {
-        let tabs = crate::lock(&self.registry).tabs_of(owner);
+        let tabs = crate::lock(&self.registry).tabs_opened_by(owner);
         for tab in &tabs {
             let _ = self.close_tab(tab);
         }
@@ -565,6 +324,7 @@ impl Desk {
         self.ending.store(true, std::sync::atomic::Ordering::SeqCst);
         self.keep_screens();
         crate::lock(&self.ledger).clear();
+        crate::lock(&self.session_groups).clear();
         self.feed.stop();
         let sessions = std::mem::take(&mut *crate::lock(&self.sessions));
         sessions.values().for_each(|session| session.close());
@@ -588,6 +348,12 @@ impl Desk {
             "window: {window}\nterminals: {}",
             crate::lock(&self.sessions).len()
         );
+        if let Some(why) = self.feed.store().kept_in_memory() {
+            let _ = write!(
+                out,
+                "\nstorage: memory only, nothing is kept (database: {why})"
+            );
+        }
         for (owner, tabs) in registry.owners() {
             let _ = write!(out, "\n{owner}: {}", tabs.join(" "));
         }

@@ -66,3 +66,14 @@ fn a_page_gets_each_mark_in_the_text_colour() {
         );
     }
 }
+
+#[test]
+fn the_logins_path_comes_first_and_the_process_keeps_what_it_added() {
+    let process = std::env::join_paths(["/usr/bin", "/opt/dev"]).unwrap();
+    let merged = merged("/home/me/.local/bin:/usr/bin", &process);
+    let dirs: Vec<_> = std::env::split_paths(&merged).collect();
+    assert_eq!(
+        dirs,
+        ["/home/me/.local/bin", "/usr/bin", "/opt/dev"].map(std::path::PathBuf::from)
+    );
+}

@@ -15,6 +15,8 @@
   // Key by key only up to this many characters: a long text is a paste, as a person pastes it.
   const MAX_KEYED = 200
   const KEY_PAUSE = 12
+  // Inputs that are not typed into: clicked, or (a file) not set by a page's script at all.
+  const NOT_TEXT = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'image', 'file'])
 
   function setValue(e, value) {
     const view = e.ownerDocument.defaultView
@@ -26,12 +28,17 @@
     const view = e.ownerDocument.defaultView
     e.focus?.({ preventScroll: true })
     const field = e instanceof view.HTMLInputElement || e instanceof view.HTMLTextAreaElement
+    // A checkbox or a button takes no text: writing its `value` would report a fill and toggle nothing.
+    if (field && NOT_TEXT.has(e.type)) {
+      throw new Error(e.type === 'file' ? 'a file field cannot be filled'
+        : `this is a ${e.type}, not a field: click it instead of filling it`)
+    }
     if (!field && e.isContentEditable) {
       e.textContent = text
       e.dispatchEvent(new view.InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }))
       return
     }
-    if (!field) throw new Error('not_editable')
+    if (!field) throw new Error('not editable: this is not a text field; fill takes a textbox, a searchbox or a field of the outline')
     const value = e.type === 'date' ? isoDate(text) : text
     setValue(e, value)
     e.dispatchEvent(new view.InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }))

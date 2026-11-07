@@ -15,10 +15,19 @@ use crate::feed::{Entity, Op};
 use crate::projects::ProjectId;
 
 use super::args::text;
+use super::board_ops::worker_op;
 use super::{Call, Desk, Failure, Output};
 
 /// The person's actions on a board that wait to be worked; more than a person makes at once.
 const ACTIONS_WAITING: usize = 64;
+
+/// What a board's worker thread is handed, in the order it came.
+enum Work {
+    /// The person did this in the page.
+    Posted(String),
+    /// The page loaded, late or again: the board is painted whole.
+    Repaint,
+}
 
 /// A project's board as the desk holds it.
 pub(super) struct Kept {
@@ -39,9 +48,6 @@ impl Kept {
     }
 }
 
-const OPS: &str =
-    "look, show, card, add, take, review, block, unblock, release, comment, edit, remove";
-
 impl Desk {
     /// A `board` call: `op` on the project's board, and the board as the worker reads it after.
     pub(super) fn board(&self, call: &Call, args: &Value) -> Result<Output, Failure> {
@@ -55,11 +61,24 @@ impl Desk {
                     none.insert(self.new_board(call)?)
                 }
             };
-            let before = kept.board.clone();
-            let report = worker_op(&mut kept.board, op, args, worker)?;
-            let changed = kept.board != before;
+            // What a look, a card read whole or a show does not change is not copied to be
+            // compared; an op that changes it is restored to what it was when it fails midway
+            // (`add` of several cards, the third without a title).
+            let before = (!matches!(op, "look" | "show" | "card")).then(|| kept.board.clone());
+            let report = match worker_op(&mut kept.board, op, args, worker) {
+                Ok(report) => report,
+                Err(why) => {
+                    if let Some(before) = before {
+                        kept.board = before;
+                    }
+                    return Err(why.into());
+                }
+            };
+            let changed = before.as_ref().is_some_and(|before| kept.board != *before);
             if changed && let Err(why) = self.save_board(call.project.id, &kept.board) {
-                kept.board = before;
+                if let Some(before) = before {
+                    kept.board = before;
+                }
                 return Err(why.into());
             }
             let state = kept.board.text(&kept.key, worker, board::now());
@@ -77,7 +96,7 @@ impl Desk {
         {
             // The window went with the board's tab (the person closed its last one): the board
             // gets a tab again, painted as it is.
-            self.reopen_board(call.project.id);
+            self.reopen_board(call);
             browser.act(&key, false)?;
         }
         Ok(Output {
@@ -141,8 +160,10 @@ impl Desk {
         Ok(kept)
     }
 
-    /// Project `project`'s board in a new tab, its old one gone with the window.
-    fn reopen_board(&self, project: ProjectId) {
+    /// The call's project's board in a new tab, its old one gone with the window: a pane of the
+    /// project's ledger and layout again, as it was when the board first opened.
+    fn reopen_board(&self, call: &Call) {
+        let project = call.project.id;
         let mut boards = crate::lock(&self.boards);
         let Some(kept) = boards.get_mut(&project) else {
             return;
@@ -150,6 +171,11 @@ impl Desk {
         let Some(n) = kept.key.strip_prefix('b').and_then(|n| n.parse().ok()) else {
             return;
         };
+        let facts = super::ledger::Facts {
+            title: "Board",
+            ..super::ledger::Facts::default()
+        };
+        self.own(&kept.key, call, crate::ledger::Kind::Board, facts);
         // The old panel let go first: it shares the new one's id.
         drop(kept.panel.take());
         kept.panel = self.board_panel(n, &kept.key, &kept.project, project);
@@ -167,33 +193,37 @@ impl Desk {
         browser.group(key, &crate::projects::key(project));
         let panel = Arc::new(browser.panel(id, &title, board::page(&title)));
         let me = Weak::clone(&self.me);
-        // The window's loop calls this: the board is worked (and saved) on a thread of its own,
-        // the person's actions in the order they came; it ends with the panel.
-        let (to_worker, actions) = std::sync::mpsc::sync_channel::<String>(ACTIONS_WAITING);
+        // The window's loop calls these: the board is worked, saved and painted on a thread of its
+        // own, the person's actions and the page's loads in the order they came; it ends with the
+        // panel.
+        let (to_worker, actions) = std::sync::mpsc::sync_channel::<Work>(ACTIONS_WAITING);
+        let tab = key.to_string();
         let worker = std::thread::Builder::new()
             .name("desk-person-board".into())
             .spawn(move || {
-                for posted in actions {
-                    match me.upgrade() {
-                        Some(desk) => desk.person_on_board(project, &posted),
-                        None => return,
+                for work in actions {
+                    let Some(desk) = me.upgrade() else { return };
+                    match work {
+                        Work::Posted(posted) => desk.person_on_board(project, &posted),
+                        Work::Repaint => desk.repaint_board(&tab),
                     }
                 }
             });
         if let Err(why) = worker {
             log::warn!("the board takes no action from the person: {why}");
         }
+        let loaded = to_worker.clone();
         panel.keyboard(Arc::new(move |posted: &str| {
-            if to_worker.try_send(posted.to_string()).is_err() {
+            if to_worker
+                .try_send(Work::Posted(posted.to_string()))
+                .is_err()
+            {
                 log::warn!("the person's action on the board was dropped: too many wait");
             }
         }));
-        let (me, key) = (Weak::clone(&self.me), key.to_string());
         panel.sizing(Arc::new(move |pane, _, _| {
-            if pane == Pane::Loaded
-                && let Some(desk) = me.upgrade()
-            {
-                desk.repaint_board(&key);
+            if pane == Pane::Loaded && loaded.try_send(Work::Repaint).is_err() {
+                log::warn!("the board was not painted as its page loaded: too many wait");
             }
         }));
         Some(panel)
@@ -209,6 +239,11 @@ impl Desk {
         if let Some((panel, frame)) = paint {
             panel.paint(&frame);
         }
+    }
+
+    /// Whether tab `key` is project `project`'s board.
+    pub(super) fn board_of(&self, project: ProjectId, key: &str) -> bool {
+        (crate::lock(&self.boards).get(&project)).is_some_and(|kept| kept.key == key)
     }
 
     /// The board in tab `key`, as the main agent reads it.
@@ -238,123 +273,6 @@ impl Desk {
             "Closed {key}; the board is kept, and opens again as it was."
         ))
     }
-}
-
-/// What `op` does to `board` for `worker`, in words; an empty report for a look.
-fn worker_op(board: &mut Board, op: &str, args: &Value, worker: Worker) -> Result<String, String> {
-    let card = || {
-        text(args, "card").ok_or_else(|| format!("`card` is needed for `{op}`: an id such as c3"))
-    };
-    let note = text(args, "note");
-    match op {
-        "look" | "show" => Ok(String::new()),
-        "card" => board.card_text(card()?, board::now()),
-        "add" => add(board, args, worker),
-        "take" => {
-            // A card already the worker's in Doing is said so: the person may have moved it there.
-            let had = text(args, "card")
-                .and_then(|id| board.card(id).ok())
-                .is_some_and(|card| {
-                    card.column == board::Column::Doing && card.who.as_deref() == worker.0
-                });
-            let id = board.take(text(args, "card"), worker)?;
-            let whole = board.card_text(&id, board::now())?;
-            let said = if had {
-                let by = (board.card(&id).ok())
-                    .and_then(|card| card.history.last())
-                    .map(|step| step.by.as_str());
-                match by {
-                    Some("person") => {
-                        format!("{id} is yours already: the person moved it to Doing")
-                    }
-                    _ => format!("{id} is yours already, in Doing"),
-                }
-            } else {
-                format!("took {id}")
-            };
-            Ok(format!(
-                "{said}: it is {}'s until it is handed in with `review`.\n\n{whole}",
-                worker.name()
-            ))
-        }
-        "review" => {
-            let id = card()?;
-            board.review(id, worker, note.unwrap_or(""))?;
-            Ok(format!(
-                "handed {id} in: it waits in Review for the person to accept or send back."
-            ))
-        }
-        "block" => {
-            let id = card()?;
-            let reason = text(args, "reason")
-                .or(note)
-                .ok_or("`reason` says what the card waits for")?;
-            board.block(id, worker, Some(reason))?;
-            Ok(format!(
-                "{id} is blocked; the person sees what it waits for."
-            ))
-        }
-        "unblock" => board
-            .block(card()?, worker, None)
-            .map(|()| "unblocked.".into()),
-        "release" => board
-            .release(card()?, worker, note)
-            .map(|()| "released: back in Todo.".into()),
-        "comment" => {
-            let said = note.ok_or("`note` is what to say about the card")?;
-            board
-                .comment(card()?, worker, said)
-                .map(|()| "noted.".into())
-        }
-        "edit" => {
-            let id = card()?;
-            board.edit(
-                id,
-                worker,
-                text(args, "title"),
-                args.get("note").and_then(Value::as_str),
-            )?;
-            Ok(format!("edited {id}."))
-        }
-        "remove" => board
-            .remove(card()?, worker)
-            .map(|card| format!("removed {}.", card.id)),
-        other => Err(format!("no board op `{other}`: {OPS}")),
-    }
-}
-
-/// One card (`title`, `note`, `tab`) or several (`cards`, each with its `title` and `note`).
-fn add(board: &mut Board, args: &Value, worker: Worker) -> Result<String, String> {
-    let (tab, by) = (text(args, "tab"), worker.name());
-    // Todo, or Backlog for an idea the person may take up later.
-    let column = match text(args, "to") {
-        Some(name) => board::Column::parse(name).ok_or("`to` is todo or backlog")?,
-        None => board::Column::Todo,
-    };
-    let mut added = vec![];
-    if let Some(cards) = args.get("cards").and_then(Value::as_array) {
-        for card in cards {
-            let title = text(card, "title").ok_or("each of `cards` has a `title`")?;
-            added.push(board.add_to(
-                column,
-                title,
-                text(card, "note").unwrap_or(""),
-                text(card, "tab").or(tab),
-                &by,
-            )?);
-        }
-    }
-    if let Some(title) = text(args, "title") {
-        added.push(board.add_to(column, title, text(args, "note").unwrap_or(""), tab, &by)?);
-    }
-    if added.is_empty() {
-        return Err("`title` (one card) or `cards` (several) is needed for `add`".into());
-    }
-    Ok(format!(
-        "added {} to the bottom of {}.",
-        added.join(", "),
-        column.title()
-    ))
 }
 
 #[cfg(test)]

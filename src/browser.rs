@@ -56,7 +56,6 @@ mod tabs;
 mod told;
 mod toolbar;
 mod turn;
-#[cfg(target_os = "macos")]
 mod viewport;
 mod webview;
 mod windows;
@@ -78,6 +77,7 @@ pub use panel::{Fitted, Pane, Panel};
 pub use strip::BOARD;
 pub use strip::HOME;
 pub use tabs::MAX_TABS;
+pub(crate) use toolbar::owns;
 pub use viewport::Viewport;
 pub use webview::WebviewDriver;
 
@@ -141,7 +141,6 @@ impl From<Observation> for crate::view::Observation {
             busy: page.busy,
             scroll: page.scroll.y,
             revision: page.revision,
-            notices: vec![],
         }
     }
 }
@@ -153,6 +152,8 @@ pub trait Driver {
     /// up to `timeout`.
     fn wait_loaded(&self, timeout: Duration) -> ViewResult<()>;
     fn observe(&self) -> ViewResult<Observation>;
+    /// The epoch of the document now, without observing it whole.
+    fn epoch(&self) -> ViewResult<String>;
     /// Perform `action` against the observation with `epoch`, then let the page settle.
     fn act(&self, epoch: &str, action: &Action) -> ViewResult<()>;
     /// Give the page a size of its own, as `size` names it (`iPhone 15 Pro`, `mobile`, `393x852`;

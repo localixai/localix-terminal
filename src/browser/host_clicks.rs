@@ -5,60 +5,48 @@ use std::sync::Arc;
 
 use serde_json::Value;
 
-use super::super::presence::Stage;
+use super::super::presence::{Presenter, Stage};
 use super::super::{Asked, Cmd, Heard, MINI, Shared, WINDOW_CLOSED};
 use super::On;
-use crate::browser::agents::AGENTS;
 use crate::browser::capture::Shot;
-use crate::browser::choice::Entry;
 use crate::browser::deck::{Deck, Revisit, Shown};
-use crate::browser::icons;
 use crate::browser::presence::Event as Presence;
 use crate::browser::sizes;
-use crate::browser::strip::{Click, Key, Keyed, Tool, click, went};
+use crate::browser::strip::{Click, Key, Tool, click, went};
 
 impl On<'_> {
-    /// The mini names the tab shown again: its project may be known by now.
-    pub(super) fn renamed(&mut self) {
+    /// The mini's presenter, and the stage it works on: the window in use.
+    fn staged(&mut self) -> (&mut Presenter, Stage<'_>) {
         let stage = Stage {
             deck: &mut *self.deck,
             target: self.target,
             shared: self.shared,
             proxy: self.proxy,
         };
-        self.presenter.rename(&stage);
+        (&mut *self.presenter, stage)
+    }
+
+    /// The mini names the tab shown again: its project may be known by now.
+    pub(super) fn renamed(&mut self) {
+        let (presenter, stage) = self.staged();
+        presenter.rename(&stage);
     }
 
     pub(super) fn pictured(&mut self, shot: &Result<Shot, String>) {
-        let mut stage = Stage {
-            deck: &mut *self.deck,
-            target: self.target,
-            shared: self.shared,
-            proxy: self.proxy,
-        };
-        self.presenter.pictured(shot, &mut stage);
+        let (presenter, mut stage) = self.staged();
+        presenter.pictured(shot, &mut stage);
     }
 
     /// `event` for the window's presence.
     pub(super) fn presence(&mut self, event: Presence) {
-        let mut stage = Stage {
-            deck: &mut *self.deck,
-            target: self.target,
-            shared: self.shared,
-            proxy: self.proxy,
-        };
-        self.presenter.event(event, &mut stage);
+        let (presenter, mut stage) = self.staged();
+        presenter.event(event, &mut stage);
     }
 
     /// The person clicked the mini open.
     pub(super) fn opened(&mut self) {
-        let mut stage = Stage {
-            deck: &mut *self.deck,
-            target: self.target,
-            shared: self.shared,
-            proxy: self.proxy,
-        };
-        self.presenter.opened(&mut stage);
+        let (presenter, mut stage) = self.staged();
+        presenter.opened(&mut stage);
     }
 
     /// Whether `said` is one of what a drag sends a frame at a time (the side's edge, the line
@@ -102,6 +90,9 @@ impl On<'_> {
                 if let Some(open) = self.deck.as_mut() {
                     open.drag_split(moved, done);
                 }
+                if done {
+                    self.split_sized();
+                }
                 return;
             }
             // The list shows the move already: the layout keeps it, and tells the window back.
@@ -135,6 +126,7 @@ impl On<'_> {
                     open.split.grabbed = None;
                     open.layout();
                 }
+                self.split_sized();
                 return;
             }
             Some(Click::Frame(x, y)) => return self.size_menu(x, y),
@@ -173,21 +165,35 @@ impl On<'_> {
     /// closing it would, and whoever works in it is told; then the window goes.
     pub(super) fn close_window(&mut self) {
         let keys = self.deck.as_ref().map(Deck::keys).unwrap_or_default();
-        for key in keys {
-            self.close(key);
-        }
+        // Not drawn: its window is about to go.
+        self.close_all(keys, false);
         *self.deck = None;
     }
 
     /// The person closes tab `key`, and whoever works in it is told.
     pub(super) fn close(&mut self, key: Key) {
-        if act(self.deck, Click::Close(key), self.shared).is_ok() {
-            let what = match key.kind() {
-                "web" => CLOSED_PAGE,
-                "board" => CLOSED_BOARD,
-                _ => CLOSED_TERMINAL,
+        self.close_all([key], true);
+    }
+
+    /// The person closes tabs `keys` one after another, each told to whoever works in it; the
+    /// window is drawn once after them all (`draw`), not once per tab.
+    pub(super) fn close_all(&mut self, keys: impl IntoIterator<Item = Key>, draw: bool) {
+        for key in keys {
+            let closed = match self.deck.as_mut() {
+                Some(open) => open.act(Click::Close(key), self.shared),
+                None => Err("the window is not open".to_string()),
             };
-            self.shared.heard(&key.name(), Heard::Closed(what));
+            if closed.is_ok() {
+                let what = match key.kind() {
+                    "web" => CLOSED_PAGE,
+                    "board" => CLOSED_BOARD,
+                    _ => CLOSED_TERMINAL,
+                };
+                self.shared.heard(&key.name(), Heard::Closed(what));
+            }
+        }
+        if draw && let Some(open) = self.deck.as_ref() {
+            open.refresh(self.shared);
         }
     }
 
@@ -206,7 +212,7 @@ impl On<'_> {
             return;
         };
         let _ = web.active().load_url(&url);
-        let id = web.listed().1;
+        let id = web.active_id();
         let said = format!("The person went to {url} in this browser tab.");
         self.shared.heard(&Key::Web(id).name(), Heard::Did(&said));
     }
@@ -251,7 +257,7 @@ impl On<'_> {
         else {
             return;
         };
-        let id = web.listed().1;
+        let id = web.active_id();
         let said = match &frame {
             Some(frame) => format!(
                 "The person set this tab's page size to {} ({}).",
@@ -262,160 +268,6 @@ impl On<'_> {
         };
         let _ = self.proxy.send_event(Cmd::Frame(Some(id), frame));
         self.shared.heard(&Key::Web(id).name(), Heard::Did(&said));
-    }
-
-    /// "+": the system's menu under it, then a page, a terminal or the board of the project
-    /// shown, opened by the app as it opens the agent's (so a page opens even when the window
-    /// holds no page yet).
-    fn plus(&mut self, x: u32, y: u32) {
-        let Some(open) = self.deck.as_ref() else {
-            return;
-        };
-        let at = (f64::from(x), f64::from(y));
-        // The coding agents under "Agents", each with its mark: the ones on the PATH to pick,
-        // the rest shown greyed.
-        let path = std::env::var_os("PATH").unwrap_or_default();
-        let found: Vec<Option<&'static str>> =
-            AGENTS.iter().map(|agent| agent.command_on(&path)).collect();
-        // Each with its picture and the person's own keys for it, as the menu bar shows them.
-        let keyed = |label: &str, kind: &str, id: &str| Entry::Item {
-            label: label.into(),
-            marked: false,
-            off: false,
-            paste: false,
-            icon: Some(icons::of_kind(kind)),
-            key: crate::browser::shortcuts::keys_of(id),
-        };
-        let item = |label: String, off: bool, icon: Option<&'static str>| Entry::Item {
-            label,
-            marked: false,
-            off,
-            paste: false,
-            icon,
-            key: None,
-        };
-        let agents = (AGENTS.iter().zip(&found))
-            .map(|(agent, command)| match command {
-                Some(_) => item(agent.name.to_string(), false, Some(agent.mark)),
-                None => item(
-                    format!("{} \u{2014} not installed", agent.name),
-                    true,
-                    Some(agent.mark),
-                ),
-            })
-            .collect();
-        let entries = [
-            keyed("New Page", "web", "new-page"),
-            keyed("New Terminal", "term", "new-terminal"),
-            keyed("Board", "board", "board"),
-            Entry::Line { line: true },
-            Entry::Sub {
-                label: "Agents".into(),
-                items: agents,
-            },
-        ];
-        let asked = match open.pick(at, &entries) {
-            Some(0) => Asked::Page(None),
-            Some(1) => Asked::Terminal(None),
-            Some(2) => Asked::Board,
-            Some(at) => match found.get(at - 3).copied().flatten() {
-                Some(command) => Asked::Agent(command),
-                None => return,
-            },
-            None => return,
-        };
-        self.ask(asked);
-    }
-
-    /// The person asks for a new tab of the project shown.
-    fn ask(&self, asked: Asked) {
-        let Some(open) = self.deck.as_ref() else {
-            return;
-        };
-        let group = open.shown_project(self.shared);
-        self.shared.heard(&group, Heard::Asked(asked));
-    }
-
-    /// Agent `at` (its place in the agents' list) started in a terminal, where it is installed.
-    fn agent(&self, at: u8) {
-        let path = std::env::var_os("PATH").unwrap_or_default();
-        let command = AGENTS
-            .get(usize::from(at))
-            .and_then(|agent| agent.command_on(&path));
-        if let Some(command) = command {
-            self.ask(Asked::Agent(command));
-        }
-    }
-
-    /// A shortcut's doing (shortcuts.rs) that no button of the strip does.
-    fn keyed(&mut self, keyed: Keyed) {
-        let Some(open) = self.deck.as_mut() else {
-            return;
-        };
-        let listed = open.listing(self.shared);
-        let shown = listed.iter().position(|tab| tab.shown);
-        let group = open.shown_project(self.shared);
-        // The tabs the person sees listed: the project's shown, and the window's own (of none).
-        let tabs: Vec<Key> = (listed.iter())
-            .filter(|tab| tab.group == group || tab.group.is_empty())
-            .filter_map(|tab| Key::parse(&tab.id))
-            .collect();
-        let here = shown
-            .and_then(|at| listed.get(at))
-            .and_then(|tab| tabs.iter().position(|key| key.name() == tab.id));
-        let step = |forward: bool| {
-            let count = tabs.len();
-            let at = match (here, forward) {
-                (Some(at), true) => (at + 1) % count.max(1),
-                (Some(at), false) => (at + count.max(1) - 1) % count.max(1),
-                (None, _) => 0,
-            };
-            tabs.get(at).copied()
-        };
-        let asked = |asked: Asked| self.shared.heard(&group, Heard::Asked(asked));
-        let show = match keyed {
-            Keyed::Tab(at) => tabs.get(usize::from(at) - 1).copied(),
-            Keyed::LastTab => tabs.last().copied(),
-            Keyed::Next => step(true),
-            Keyed::Previous => step(false),
-            Keyed::NewWindow => return asked(Asked::Window),
-            Keyed::NewPage => return asked(Asked::Page(None)),
-            Keyed::NewTerminal => return asked(Asked::Terminal(None)),
-            Keyed::NewBoard => return asked(Asked::Board),
-            Keyed::Close => {
-                if let Some(key) = shown.and_then(|at| Key::parse(&listed.get(at)?.id)) {
-                    self.close(key);
-                }
-                return;
-            }
-            Keyed::Reopen => {
-                use crate::browser::strip::State;
-                let rows = open.rows(self.shared);
-                let closed =
-                    (rows.iter()).find(|row| matches!(row.state, State::Closed | State::Hidden));
-                if let Some(at) = closed.map(|row| row.at) {
-                    self.visit(at);
-                }
-                return;
-            }
-            Keyed::Find => return open.find_tab(self.shared),
-            Keyed::Address => return open.keyed_in_strip("address"),
-            Keyed::Size => return open.keyed_in_strip("size"),
-            Keyed::Split => return self.split_view(),
-            Keyed::Settings => return self.settings(),
-            Keyed::Projects => return open.keyed_in_strip("projects"),
-            Keyed::OpenFolder => return self.open_folder(),
-            Keyed::CloseProject => {
-                let shown = crate::lock(&self.shared.scope).shown().to_string();
-                return self.close_project(&shown);
-            }
-        };
-        if let Some(key) = show
-            && act(self.deck, Click::Show(key), self.shared).is_ok()
-            && let Some(open) = self.deck.as_ref()
-        {
-            open.focus_shown();
-        }
     }
 
     /// The history as the system's menu, newest first; an entry picked is shown again.
@@ -449,7 +301,7 @@ impl On<'_> {
 
     /// Row `at` of the shown project's history shown again: an open tab here, else the app
     /// opens it again (a page at its address, a terminal in its folder, the board).
-    fn visit(&mut self, at: i64) {
+    pub(super) fn visit(&mut self, at: i64) {
         let Some(open) = self.deck.as_mut() else {
             return;
         };
@@ -478,7 +330,11 @@ impl On<'_> {
             panel => self.deck.as_ref().and_then(|open| open.page(panel)),
         };
         match page {
-            Some(page) => drop(page.evaluate_script_with_callback(script, reply)),
+            Some(page) => {
+                if let Err(why) = page.evaluate_script_with_callback(script, reply) {
+                    self.shared.answer(id, Err(why.to_string()));
+                }
+            }
             None => self.shared.answer(id, Err(WINDOW_CLOSED.into())),
         }
     }

@@ -1,5 +1,7 @@
 //! Tests of `web`.
 
+use super::controls::control;
+use super::reading::{TITLE_LIMIT, clipped, short_refs, text_end};
 use super::*;
 
 #[test]
@@ -41,4 +43,30 @@ fn each_control_shows_its_ref_shortly_and_a_call_names_it_any_way() {
     for wrong in ["12", "e", "button", "e1x"] {
         assert!(control(wrong).is_err(), "{wrong}");
     }
+    // The toolbar's controls are in the outline with their refs: a call may name them.
+    for given in ["back", "@reload", "[back]"] {
+        assert!(
+            ["back", "reload"].contains(&control(given).unwrap().as_str()),
+            "{given}"
+        );
+    }
+}
+
+#[test]
+fn a_pages_title_is_cut_where_it_is_too_long() {
+    assert_eq!(clipped("short", 200), "short");
+    assert_eq!(clipped("héllo wörld", 5), "héllo…");
+    let long = "A".repeat(10_000_000);
+    assert_eq!(clipped(&long, TITLE_LIMIT).chars().count(), TITLE_LIMIT + 1);
+}
+
+#[test]
+fn a_window_of_text_ends_in_the_probes_units() {
+    assert_eq!(text_end(10, "abc"), 13);
+    assert_eq!(
+        text_end(0, "a😀b"),
+        4,
+        "an emoji is two units, as the page counts"
+    );
+    assert_eq!(text_end(5, ""), 5);
 }

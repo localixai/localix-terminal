@@ -68,7 +68,8 @@ fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Project> {
     })
 }
 
-/// The project at canonical `path`, made the first time; opened `now`.
+/// The project at canonical `path`, made the first time (at `now`). Finding it, or making it, is
+/// not the person going to it: only [`opened`] moves what is used last.
 ///
 /// # Errors
 /// SQLite could not.
@@ -76,8 +77,8 @@ pub fn find_or_make(tx: &Transaction<'_>, path: &Path, now: u64) -> Result<Proje
     let text = |why: rusqlite::Error| why.to_string();
     let shown = path.display().to_string();
     tx.execute(
-        "INSERT INTO projects (path, name, created, opened) VALUES (?1, ?2, ?3, ?3)
-         ON CONFLICT (path) DO UPDATE SET opened = excluded.opened",
+        "INSERT INTO projects (path, name, created, opened) VALUES (?1, ?2, ?3, 0)
+         ON CONFLICT (path) DO NOTHING",
         params![shown, name_of(path), now],
     )
     .map_err(text)?;

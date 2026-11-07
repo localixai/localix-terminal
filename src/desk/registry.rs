@@ -97,10 +97,6 @@ impl Registry {
             .collect()
     }
 
-    pub(super) fn owner_of(&self, key: &str) -> Option<&str> {
-        self.tabs.get(key).map(String::as_str)
-    }
-
     /// `owner`'s tabs, pages first, in the order they were opened.
     pub(super) fn tabs_of(&self, owner: &str) -> Vec<String> {
         let mut keys: Vec<String> = (self.tabs.iter())
@@ -113,6 +109,13 @@ impl Registry {
                 key.get(1..).and_then(|n| n.parse::<u32>().ok()),
             )
         });
+        keys
+    }
+
+    /// `owner`'s tabs that it opened itself: not the person's, which carry its key too.
+    pub(super) fn tabs_opened_by(&self, owner: &str) -> Vec<String> {
+        let mut keys = self.tabs_of(owner);
+        keys.retain(|key| !self.persons.contains(key));
         keys
     }
 
@@ -168,13 +171,11 @@ impl Registry {
         self.owners.remove(owner);
     }
 
-    /// The environment an agent of project `id` last called with (its own agent's first): what
-    /// the person's own terminal ("+") starts with.
+    /// The environment the project's own agent (not one named with `--as`: its environment is its
+    /// own) of project `id` last called with: what the person's own terminal ("+") starts with.
     pub(super) fn vars_of(&self, id: crate::projects::ProjectId) -> Option<Vec<(String, String)>> {
-        let mut known: Vec<&Known> = (self.owners.values())
-            .filter(|known| known.project.id == id && known.vars.is_some())
-            .collect();
-        known.sort_by_key(|known| known.agent.is_some());
-        known.first().and_then(|known| known.vars.clone())
+        (self.owners.values())
+            .filter(|known| known.project.id == id && known.agent.is_none())
+            .find_map(|known| known.vars.clone())
     }
 }

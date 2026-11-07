@@ -1,24 +1,31 @@
-//! The one window: the browser's tabs and the terminal sessions' screens are tabs of it, with a
+//! One window: the browser's tabs and the terminal sessions' screens are tabs of it, with a
 //! strip along its top (strip.rs) and the tabs listed down its left (the side), which the person
-//! slides shut and open. The browser's tabs
+//! slides shut and open. The app has several (windows.rs), each its own deck. The browser's tabs
 //! are the agent's (tabs.rs): showing a terminal moves them aside, still rendering, and never
 //! changes the tab the agent acts on. A shown window opens with the first of either; a headless
-//! one is the browser's alone, with no strip. It closes when nothing is left in it. A terminal
-//! the person closes stays live out of sight, and one whose session ended keeps its last screen,
-//! both for the history menu (deck_history.rs) to show again.
+//! one is the browser's alone, with no strip. A window the person made stays when nothing is
+//! left in it (its start of a new tab shows), and goes when they close it, its tabs with it. A
+//! terminal the person closes stays live out of sight, and one whose session ended keeps its last
+//! screen, both for the history menu (deck_history.rs) to show again.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 
-use tao::dpi::{LogicalPosition, LogicalSize};
-use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
-use wry::{NewWindowResponse, WebView, WebViewBuilder};
+use tao::event_loop::EventLoopProxy;
+use wry::WebView;
 
-use super::frame::{self, Frame, Look};
+use super::frame::{Frame, Look};
 use super::host::{Cmd, Shared, Window};
 use super::panel::{self, Held, Open, Opening};
-use super::strip::{self, HEIGHT, Key};
-use super::{placement, platform};
+use super::platform;
+use super::strip::Key;
+
+#[path = "deck_build.rs"]
+mod construction;
+#[path = "deck_drop.rs"]
+mod dropping;
+#[path = "deck_render.rs"]
+mod render;
 
 #[path = "deck_acts.rs"]
 mod acts;
@@ -28,9 +35,7 @@ mod history;
 mod layout;
 #[path = "deck_tear.rs"]
 mod tear;
-use super::tab_view::build;
 use super::tabs::{self, Tabs};
-use super::viewport::Viewport;
 pub(super) use history::Revisit;
 
 /// How many ended terminals keep their last screen.
@@ -92,7 +97,7 @@ pub(super) struct Deck {
     pane: Option<platform::Pane>,
     /// What each part of the strip was last told, by kind (a hash of the script), and the count
     /// of page loads it was told since: the same again is not sent (`Deck::say`).
-    pub(super) said: std::sync::Mutex<Said>,
+    said: std::sync::Mutex<Said>,
     pub(super) web: Option<Tabs>,
     terms: Vec<Open>,
     pub(super) shown: Shown,
@@ -116,156 +121,6 @@ impl Deck {
         self.strip.is_some()
     }
 
-    /// The window for the browser, on its first tab.
-    pub(super) fn for_web(
-        (target, main): (&EventLoopWindowTarget<Cmd>, bool),
-        window: &Window,
-        shared: &Arc<Shared>,
-        proxy: &EventLoopProxy<Cmd>,
-    ) -> Result<Self, String> {
-        let mut deck = Self::build(
-            (target, main),
-            &window.title,
-            &window.viewport,
-            window.headless,
-            (shared, proxy),
-        )?;
-        deck.open_web(window, shared, proxy)?;
-        Ok(deck)
-    }
-
-    /// A window with nothing in it yet, not the main one: a tab carried out of a list comes into
-    /// it (docs/windows.md).
-    pub(super) fn empty(
-        target: &EventLoopWindowTarget<Cmd>,
-        shared: &Shared,
-        proxy: &EventLoopProxy<Cmd>,
-    ) -> Result<Self, String> {
-        Self::build(
-            (target, false),
-            "llx-desk",
-            &Viewport::DESKTOP,
-            false,
-            (shared, proxy),
-        )
-    }
-
-    /// The window for a terminal session's screen, before the browser opened.
-    pub(super) fn for_term(
-        (target, main): (&EventLoopWindowTarget<Cmd>, bool),
-        opening: Opening,
-        shared: &Shared,
-        proxy: &EventLoopProxy<Cmd>,
-    ) -> Result<Self, String> {
-        let mut deck = Self::build(
-            (target, main),
-            "llx-desk",
-            &Viewport::DESKTOP,
-            false,
-            (shared, proxy),
-        )?;
-        deck.add_term(opening, true, proxy)?;
-        Ok(deck)
-    }
-
-    /// The window with nothing in it yet but its strip (when shown), its content `viewport`.
-    /// Not the `main` window, it opens cascaded from where the main one is kept.
-    fn build(
-        (target, main): (&EventLoopWindowTarget<Cmd>, bool),
-        title: &str,
-        viewport: &Viewport,
-        headless: bool,
-        (shared, proxy): (&Shared, &EventLoopProxy<Cmd>),
-    ) -> Result<Self, String> {
-        let look = frame::look(headless, frame::transparency());
-        let top = if headless { 0.0 } else { HEIGHT };
-        // A shown window opens on the right of the person's screen, or where they left it; a
-        // hidden one keeps the page's own size.
-        let placed = match headless {
-            true => None,
-            false => platform::work_area(target).map(|area| {
-                let deck = placement::deck(area, crate::lock(&shared.kept).deck);
-                if main {
-                    deck
-                } else {
-                    placement::cascade(area, deck)
-                }
-            }),
-        };
-        let (size, at) = match placed {
-            Some(at) => (
-                LogicalSize::new(at.width, at.height),
-                Some(LogicalPosition::new(at.x, at.y)),
-            ),
-            None => (
-                LogicalSize::new(viewport.width, viewport.height + top),
-                None,
-            ),
-        };
-        // Coated in the person's theme: the titlebar and the strip are not the bare material's
-        // grey. The browser's pages paint their own ground over it, opaque.
-        let mut frame = Frame::build(target, (title, size, at), look)?;
-        let strip = match headless {
-            true => None,
-            false => {
-                let strip = strip_view(&frame.native, look, proxy.clone())?;
-                platform::collapse_button(&frame.native, proxy);
-                // Shows the window too, without making it the key window.
-                frame.show(&strip);
-                Some(strip)
-            }
-        };
-        // The tabs' column, where the pages lie side by side with it (not in GTK's column).
-        let side = match (&strip, cfg!(target_os = "linux")) {
-            (Some(_), false) => Some(side_view(&frame.native, look, proxy.clone())?),
-            _ => None,
-        };
-        let nav = match &strip {
-            Some(_) => Some(strip_page(&frame.native, look, proxy.clone(), Part::Nav)?),
-            None => None,
-        };
-        // Split only where the pages lie side by side with the side (not in GTK's column).
-        let line = match &side {
-            Some(_) => Some(strip_page(&frame.native, look, proxy.clone(), Part::Line)?),
-            None => None,
-        };
-        let (side_open, side_width) = {
-            let kept = crate::lock(&shared.kept);
-            (
-                kept.side.unwrap_or(true),
-                (kept.side_width).map_or(strip::SIDE, |width| {
-                    width.clamp(strip::SIDE_MIN, strip::SIDE_MAX)
-                }),
-            )
-        };
-        let pane = strip.as_ref().and_then(platform::Pane::under);
-        Ok(Self {
-            frame,
-            look,
-            strip,
-            side,
-            nav,
-            line,
-            split: super::split::Split::default(),
-            drop: None,
-            landing: None,
-            side_open,
-            side_width,
-            side_now: if side_open { side_width } else { strip::RAIL },
-            pane,
-            said: std::sync::Mutex::default(),
-            web: None,
-            terms: vec![],
-            shown: Shown::Web,
-            menu: None,
-            typing: false,
-            offer: std::sync::Mutex::default(),
-            commenting: false,
-            sent: 0,
-            proxy: proxy.clone(),
-        })
-    }
-
     /// Open the browser in the window, and show it.
     pub(super) fn open_web(
         &mut self,
@@ -286,8 +141,7 @@ impl Deck {
         Ok(())
     }
 
-    /// Add a terminal session's screen as a tab, and show it.
-    /// A terminal's (or a board's) tab added; `shown` when it is of the project shown.
+    /// A terminal's (or a board's) tab added, and shown when it is of the project shown.
     pub(super) fn add_term(
         &mut self,
         opening: Opening,
@@ -309,7 +163,7 @@ impl Deck {
     }
 
     /// Terminal `id`'s caller let it go: its last screen is kept, out of the tabs, the oldest
-    /// such one let go past a few. Whether anything is left in the window.
+    /// such one let go past a few.
     pub(super) fn end_term(&mut self, id: u32) {
         if let Some(open) = self.terms.iter_mut().find(|open| open.id == id) {
             open.held = Held::Ended;
@@ -383,8 +237,6 @@ impl Deck {
         }
     }
 
-    /// What is shown is still a tab: else the newest terminal's, else the browser. (An ended
-    /// screen the history menu showed is let go of here too.)
     /// The tab shown, as the strip names it: none while an ended screen shows.
     pub(super) fn shown_key(&self) -> Option<Key> {
         match self.shown {
@@ -398,7 +250,7 @@ impl Deck {
     /// Whether tab `key` is open in the window.
     fn there(&self, key: Key) -> bool {
         match key {
-            Key::Web(id) => (self.web.as_ref()).is_some_and(|web| web.listed().0.contains(&id)),
+            Key::Web(id) => (self.web.as_ref()).is_some_and(|web| web.has(id)),
             Key::Term(id) => self.term(id).is_some_and(|open| open.held == Held::Live),
         }
     }
@@ -416,9 +268,7 @@ impl Deck {
     /// Whether pane `key` (`w1`, `t2`, `b1`) is in this window, open or kept.
     pub(super) fn has(&self, key: &str) -> bool {
         match Key::parse(key) {
-            Some(Key::Web(id)) => {
-                (self.web.as_ref()).is_some_and(|web| web.listed().0.contains(&id))
-            }
+            Some(Key::Web(id)) => (self.web.as_ref()).is_some_and(|web| web.has(id)),
             Some(Key::Term(id)) => self.term(id).is_some(),
             None => false,
         }
@@ -499,6 +349,8 @@ impl Deck {
         false
     }
 
+    /// What is shown is still a tab: else the newest terminal's, else the browser. (An ended
+    /// screen the history menu showed is let go of here too.)
     fn settle(&mut self) {
         let gone = match self.shown {
             Shown::Web => self.web.is_none(),
@@ -521,27 +373,8 @@ impl Drop for Deck {
     }
 }
 
-/// The strip's page, which says what the person clicked and nothing else.
-fn strip_view(
-    native: &tao::window::Window,
-    look: Look,
-    proxy: EventLoopProxy<Cmd>,
-) -> Result<WebView, String> {
-    strip_page(native, look, proxy, Part::Strip)
-}
-
-/// The side: the strip's page again, listing the tabs; what the person clicks there is said as
-/// the strip says it, from the side (its points are the side's).
-fn side_view(
-    native: &tao::window::Window,
-    look: Look,
-    proxy: EventLoopProxy<Cmd>,
-) -> Result<WebView, String> {
-    strip_page(native, look, proxy, Part::Side)
-}
-
 /// Which part of the window the strip's page draws.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Part {
     Strip,
     Side,
@@ -552,59 +385,11 @@ enum Part {
 
 /// What the parts of the strip were last told: the page loads counted then, and each part's
 /// script of each kind, hashed.
-pub(super) type Said = (u32, std::collections::HashMap<(usize, &'static str), u64>);
+type Said = (u32, std::collections::HashMap<(Part, &'static str), u64>);
 
 /// How many times a part of the strip loaded its page: one that loads again has lost what it was
 /// told, so the next refresh tells it all again (`Deck::say`).
 pub(super) static LOADS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-
-fn strip_page(
-    native: &tao::window::Window,
-    look: Look,
-    proxy: EventLoopProxy<Cmd>,
-    part: Part,
-) -> Result<WebView, String> {
-    // Every part draws the agents' marks (the side's tabs, the bar's crumbs and offer).
-    let page = frame::dress(strip::PAGE, look)
-        .replacen("/*MARKS*/{}", &super::agents::marks(), 1)
-        .replacen("/*AGENTS*/[]", &super::agents::installed(), 1);
-    let page = match part {
-        Part::Strip => page,
-        Part::Side => page.replacen("<html", "<html data-part=\"side\"", 1),
-        Part::Nav => page.replacen("<html", "<html data-part=\"nav\"", 1),
-        Part::Line => page.replacen("<html", "<html data-part=\"line\"", 1),
-    };
-    let first = AtomicBool::new(true);
-    let loaded = proxy.clone();
-    let builder = WebViewBuilder::new()
-        // The first click in a window that is not the key one reaches the page: the person
-        // never clicks twice, once to wake the window and once to do what they meant.
-        .with_accept_first_mouse(true)
-        .with_html(page)
-        // The person's fonts, before the page's own scripts (settings.rs).
-        .with_initialization_script(super::settings::look_script(&super::settings::now()))
-        .with_transparent(look == Look::Glass)
-        .with_incognito(true)
-        .with_focused(false)
-        .with_background_throttling(wry::BackgroundThrottlingPolicy::Disabled)
-        .with_navigation_handler(move |_| first.swap(false, Ordering::SeqCst))
-        .with_new_window_req_handler(|_, _| NewWindowResponse::Deny)
-        .with_download_started_handler(|_, _| false)
-        .with_ipc_handler(move |request| {
-            let said = request.body().clone();
-            let _ = proxy.send_event(match part {
-                Part::Strip | Part::Line => Cmd::Clicked(said),
-                Part::Side => Cmd::SideClicked(said),
-                Part::Nav => Cmd::NavClicked(said),
-            });
-        })
-        // Its tabs are drawn once its page can draw them, all it was told told again.
-        .with_on_page_load_handler(move |_, _| {
-            LOADS.fetch_add(1, Ordering::SeqCst);
-            let _ = loaded.send_event(Cmd::Strip);
-        });
-    build(builder, native).map_err(|error| error.to_string())
-}
 
 /// What was beside the shown tab before a tab carried over the pages was laid out where it
 /// lands.

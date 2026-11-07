@@ -7,9 +7,9 @@
 use tao::event_loop::EventLoopWindowTarget;
 
 use super::super::super::chip::Chip;
-use super::super::super::deck::{Carried, Deck};
+use super::super::super::deck::Deck;
 use super::super::super::strip::Key;
-use super::{Cmd, Heard, Looping};
+use super::{Cmd, Looping};
 
 /// How far past the window's edge the pointer carries a tab before it comes out (points).
 const OUT: f64 = 10.0;
@@ -25,18 +25,18 @@ pub(super) struct Held {
 /// A tab out of its window's list, carried by the pointer.
 pub(super) struct Tear {
     /// Its panes (a split's two, or one).
-    keys: Vec<Key>,
+    pub(super) keys: Vec<Key>,
     /// The window it came out of.
-    from: usize,
+    pub(super) from: usize,
     /// The window that follows the pointer: a new one, or `from` itself when it had that tab only.
-    moving: usize,
+    pub(super) moving: usize,
     /// Whether `moving` is a new window, not in the layout yet.
-    loose: bool,
+    pub(super) loose: bool,
     /// The pointer from the moving window's top left.
     grab: (f64, f64),
     /// The window whose list it is over, and the tab of that list's slot (none: its end).
-    over: Option<usize>,
-    before: Option<String>,
+    pub(super) over: Option<usize>,
+    pub(super) before: Option<String>,
 }
 
 /// A point, in points.
@@ -143,7 +143,7 @@ impl Looping {
     }
 
     /// The card seen where the pointer is, or not (a window carries the tab).
-    fn card(&self, shown: bool) {
+    pub(super) fn card(&self, shown: bool) {
         if let Some(held) = &self.held {
             held.chip.show(shown);
         }
@@ -244,13 +244,9 @@ impl Looping {
         let Some(source) = self.windows.deck(from) else {
             return false;
         };
-        let shown: Vec<String> = (source.listing(&self.shared).into_iter())
-            .filter(|tab| tab.group == group)
-            .map(|tab| tab.id)
-            .collect();
-        let alone = shown
-            .iter()
-            .all(|one| keys.iter().any(|key| key.name() == *one));
+        // The window moves itself only when the tab holds every pane it has: its other projects'
+        // tabs, hidden and ended terminals and Settings are panes of it too, and go with it.
+        let alone = source.keys().iter().all(|one| keys.contains(one));
         if alone {
             // The window moves under the pointer, its list with it: its page is told the tab is
             // out of it till it is let go, wherever the pointer is.
@@ -300,102 +296,6 @@ impl Looping {
             over: None,
             before: None,
         });
-        true
-    }
-
-    /// The tab's panes out of window `at`, as they are.
-    fn take(&mut self, at: usize, keys: &[Key]) -> Vec<Carried> {
-        let shared = std::sync::Arc::clone(&self.shared);
-        let Some(deck) = self.windows.deck_mut(at) else {
-            return vec![];
-        };
-        keys.iter()
-            .filter_map(|key| deck.take(*key, &shared))
-            .collect()
-    }
-
-    /// The tab let go: into the list it is over, or, over none, its window stays where it is.
-    fn let_go(&mut self) -> bool {
-        let Some(tear) = self.tear.take() else {
-            return false;
-        };
-        if let Some(deck) = self.windows.deck(tear.moving) {
-            deck.see_through(false);
-        }
-        let Some(name) = tear.keys.first().map(|key| key.name()) else {
-            return true;
-        };
-        let Some(into) = tear.over else {
-            // Over no list: a window a tab came out into stays, a window of its own; the layout
-            // opens it, and the app names it as it is told.
-            if tear.loose {
-                self.windows.keep_loose();
-                self.shared.heard(&name, Heard::Detached);
-            }
-            return true;
-        };
-        if let Some(deck) = self.windows.deck(into) {
-            deck.tell_side("DS()");
-        }
-        let carried = self.take(tear.moving, &tear.keys);
-        let shared = std::sync::Arc::clone(&self.shared);
-        if let Some(deck) = self.windows.deck_mut(into) {
-            for one in carried {
-                deck.take_in(one, &shared);
-            }
-            deck.layout();
-        }
-        let window = self.windows.id_at(into);
-        let moved = Heard::Moved {
-            before: tear.before.as_deref(),
-            window: Some(window),
-        };
-        self.shared.heard(&name, moved);
-        if tear.loose {
-            self.windows.remove(tear.moving, &self.shared);
-        } else if tear.from != 0 {
-            // The window that moved itself had that tab only: it is gone with it.
-            let gone = self.windows.id_at(tear.from);
-            self.windows.remove(tear.from, &self.shared);
-            self.shared.heard("", Heard::WindowClosed(gone));
-        }
-        let into = if tear.loose || tear.from == 0 || into < tear.from {
-            into
-        } else {
-            into - 1
-        };
-        self.windows.use_at(into, &self.shared);
-        self.stale = true;
-        true
-    }
-
-    /// The pointer is back over the source's list: a window the tab came out into gives it back
-    /// and closes; one that moved itself stays where it is.
-    fn take_back(&mut self) -> bool {
-        let Some(tear) = self.tear.take() else {
-            return false;
-        };
-        if let Some(deck) = tear.over.and_then(|at| self.windows.deck(at)) {
-            deck.tell_side("DS()");
-        }
-        if let Some(deck) = self.windows.deck(tear.moving) {
-            deck.see_through(false);
-        }
-        // Back in its list: the card follows the pointer again.
-        self.card(true);
-        if !tear.loose {
-            return true;
-        }
-        let carried = self.take(tear.moving, &tear.keys);
-        let shared = std::sync::Arc::clone(&self.shared);
-        if let Some(deck) = self.windows.deck_mut(tear.from) {
-            for one in carried {
-                deck.take_in(one, &shared);
-            }
-            deck.layout();
-            deck.refresh(&shared);
-        }
-        self.windows.remove(tear.moving, &self.shared);
         true
     }
 }

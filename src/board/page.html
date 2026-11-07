@@ -10,14 +10,13 @@
    radii, the elevations and the easing; what is set here is the board's own: its grounds, its
    column colours and its card shadows. On the glass (macOS, data-glass) the page is clear and its
    troughs and cards are veils over the material; elsewhere, and where the person reduces
-   transparency, it is solid. */
+   transparency (the app says so as data-reduced; WebKit has no media query for it), it is solid. */
 :root{
   --solid:#f5f5f7;--raised:#ffffff;
   --gray:#8e8e93;--purple:#8e5cd9;--orange:#f08c00;--blue:#0a84ff;--green:#28a745;--red:#e5383b;--go:#1f8a3b;
   --lift:0 0 0 .5px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.06);
   --raise:0 0 0 .5px rgba(0,0,0,.1),0 2px 4px -1px rgba(0,0,0,.06),0 10px 22px -8px rgba(0,0,0,.22);
   --shine:rgba(255,255,255,.75);
-  --spring:cubic-bezier(.3,1.35,.5,1);
   --sys:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
   --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
   --ground:var(--solid);
@@ -32,10 +31,10 @@
 html:not([data-glass]){background:var(--solid)!important}
 html[data-glass]{--raised:color-mix(in srgb,#fff 74%,transparent)}
 @media (prefers-color-scheme: dark){html[data-glass]{--raised:color-mix(in srgb,#fff 8%,transparent)}}
-@media (prefers-reduced-transparency:reduce){html[data-glass]{background:var(--solid)!important;--raised:#fff}}
-@media (prefers-reduced-transparency:reduce) and (prefers-color-scheme: dark){html[data-glass]{--raised:#2c2c2f}}
+html[data-reduced]{background:var(--solid)!important;--raised:#fff}
+@media (prefers-color-scheme: dark){html[data-reduced]{--raised:#2c2c2f}}
 *{box-sizing:border-box}
-body{margin:0;height:100vh;display:flex;flex-direction:column;color:var(--fg);font:13px/1.35 var(--sys);
+body{margin:0;height:100vh;display:flex;flex-direction:column;color:var(--fg);font:13px/1.35 var(--ui-font,var(--sys));
   -webkit-font-smoothing:antialiased;cursor:default;user-select:none;-webkit-user-select:none;overflow:hidden}
 button,input,textarea{font:inherit;color:inherit}
 /* What can be pressed shows the hand; what can be typed in, the caret. */
@@ -46,8 +45,8 @@ input,textarea{cursor:text}
 svg{display:block;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
 :focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 45%,transparent)!important}
 
-/* The bar: how far the board is, its name, and a field that adds a card to Todo. */
-.bar{flex:none;display:flex;align-items:center;gap:9px;padding:12px 16px;transition:margin-right .26s var(--ease)}
+/* The bar: how far the board is, its name, and a field that adds a card to Backlog. */
+.bar{flex:none;display:flex;align-items:center;gap:9px;padding:12px 16px;transition:margin-right .26s var(--spring)}
 .bar h1{margin:0;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ring{flex:none}
 .ring circle{fill:none;stroke-width:2.2}
@@ -59,11 +58,11 @@ svg{display:block;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:
 .new:focus-within{background:var(--raised);box-shadow:0 0 0 .5px var(--ov-4),0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent);color:var(--fg)}
 .new input{flex:1;min-width:0;border:0;outline:0;background:transparent;padding:0;box-shadow:none!important}
 .new input::placeholder{color:var(--ink-3)}
-kbd{font:500 10px/1 var(--sys);color:var(--ink-2);padding:3px 5px;border-radius:var(--r-1);background:var(--ov-1)}
+kbd{font:500 10px/1 var(--ui-font,var(--sys));color:var(--ink-2);padding:3px 5px;border-radius:var(--r-1);background:var(--ov-1)}
 .new:focus-within kbd{opacity:0}
 
 /* The columns: troughs side by side, cards lifted on them; a folded one is a slim rail. */
-main{flex:1;min-height:0;display:flex;gap:10px;padding:0 12px 12px;overflow-x:auto;transition:margin-right .26s var(--ease)}
+main{flex:1;min-height:0;display:flex;gap:10px;padding:0 12px 12px;overflow-x:auto;transition:margin-right .26s var(--spring)}
 /* With a card open, the board makes room for it rather than going under it. */
 body.inspecting main,body.inspecting .bar{margin-right:min(348px,calc(100vw - 260px))}
 .lane{flex:1 1 0;min-width:196px;display:flex;flex-direction:column;min-height:0;border-radius:var(--r-4);background:var(--ov-1);
@@ -130,7 +129,7 @@ button.pill:hover{background:var(--ov-2);color:var(--fg);transition:none}
 .card .edge{position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--red);z-index:1}
 .quick{position:absolute;right:6px;bottom:6px;height:22px;padding:0 8px;border:0;border-radius:var(--r-2);display:inline-flex;align-items:center;gap:4px;
   font-size:11px;font-weight:600;color:#fff;background:var(--go);box-shadow:0 1px 3px rgba(0,0,0,.18);opacity:0;transform:translateY(2px);
-  transition:opacity .18s,transform .24s var(--spring)}
+  transition:opacity .18s,transform .24s var(--spring-b)}
 .quick.plain{background:var(--solid);color:var(--fg);box-shadow:0 0 0 .5px var(--ov-4),0 1px 3px rgba(0,0,0,.12)}
 .card:hover .quick,.card:focus-visible .quick,.quick:focus-visible{opacity:1;transform:none}
 .card.quick-on:hover .age,.card.quick-on:focus-visible .age{opacity:0}
@@ -168,7 +167,6 @@ button.pill:hover{background:var(--ov-2);color:var(--fg);transition:none}
 .btn.plain{background:transparent;box-shadow:none;color:var(--ink-2)}
 .btn.plain:hover{background:var(--ov-2);color:var(--fg)}
 .btn.plain:active{background:var(--ov-3)}
-.btn.bad{color:var(--red)}
 .btn.danger{background:var(--red);color:#fff;box-shadow:none;animation:pop .14s var(--ease)}
 /* An icon alone: a square, quiet until pointed at. */
 .btn.ico{width:26px;height:26px;padding:0;justify-content:center}
@@ -212,6 +210,12 @@ aside .title:focus{background:var(--raised)}
 
 @keyframes pop{from{opacity:0;transform:scale(.97)}}
 @keyframes rise{from{opacity:0;transform:translateY(5px) scale(.98)}}
+/* Reduce Motion: what comes in fades, and nothing scales, slides or grows. */
+@media (prefers-reduced-motion:reduce){
+  @keyframes pop{from{opacity:0}}
+  @keyframes rise{from{opacity:0}}
+  @keyframes grow{from{opacity:0}}
+}
 .card.fresh{animation:rise .26s var(--ease)}
 
 #toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,8px);opacity:0;pointer-events:none;z-index:9;max-width:80vw;

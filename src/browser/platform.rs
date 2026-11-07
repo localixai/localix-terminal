@@ -1,5 +1,13 @@
 //! What differs by platform: where a headless window goes, keeping it rendering, the Dock, the user agent.
 
+#[path = "platform_views.rs"]
+mod views;
+
+pub(super) use views::{Follow, follow};
+pub(super) use views::{
+    Pane, clear, keep_rendering, keep_tab_rendering, reparent, see_through, stack, to_front,
+};
+
 use tao::event_loop::EventLoopWindowTarget;
 use tao::window::WindowBuilder;
 
@@ -126,6 +134,17 @@ pub(super) fn watch_spaces(proxy: &tao::event_loop::EventLoopProxy<super::host::
     super::nspanel::watch_spaces(proxy);
 }
 
+/// The person's changes to Accessibility, Display (reduce transparency among them), told to the
+/// loop: the windows are dressed again.
+#[cfg(target_os = "macos")]
+pub(super) fn watch_display(proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>) {
+    super::nspanel::watch_display(proxy);
+}
+
+/// Elsewhere there is no setting to watch.
+#[cfg(not(target_os = "macos"))]
+pub(super) fn watch_display(_proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>) {}
+
 /// The person's presses in the app's windows, told to the loop: a split window's half pressed
 /// is the one in use.
 #[cfg(target_os = "macos")]
@@ -177,181 +196,6 @@ pub(super) fn conceal(builder: WindowBuilder) -> WindowBuilder {
         -size.height * 4.0,
     ))
 }
-
-/// WebKit stops animation frames and timers in a window it considers hidden, and a driven window
-/// usually sits behind the terminal that started it. So occlusion detection, a WKWebView switch,
-/// is off ([`keep_tab_rendering`]). A headless window is fully transparent, passes clicks through,
-/// and goes behind every window, as Bun's and WebKit's own test windows do: on screen, so WebKit
-/// sees it shown and the display it is on stays awake, under whatever the person watches. Only
-/// where the switch is missing does it float, so that nothing covers it. (A shown window is
-/// concealed the same way while it is the mini: nspanel.rs.)
-#[cfg(target_os = "macos")]
-pub(super) fn keep_rendering(webview: &wry::WebView) {
-    use wry::WebViewExtMacOS;
-    let switched = keep_tab_rendering(webview);
-    let window = webview.ns_window();
-    let rendering = if switched {
-        super::nspanel::Rendering::Switched
-    } else {
-        super::nspanel::Rendering::Floating
-    };
-    super::nspanel::conceal_object(window.as_ref(), rendering);
-}
-
-/// A page keeps drawing while covered: WebKit's occlusion detection is off for its WebView.
-/// Whether it is: the switch is private, and a later WebKit may not have it.
-#[cfg(target_os = "macos")]
-pub(super) fn keep_tab_rendering(webview: &wry::WebView) -> bool {
-    use objc2::runtime::Bool;
-    use objc2::{msg_send, sel};
-    use wry::WebViewExtMacOS;
-    let view = webview.webview();
-    let switch = sel!(_setWindowOcclusionDetectionEnabled:);
-    // SAFETY: the WKWebView is a live NSObject; `respondsToSelector:` takes a selector and
-    // answers a BOOL.
-    let available: bool = unsafe { msg_send![&*view, respondsToSelector: switch] };
-    if available {
-        // SAFETY: the view answers this private selector (checked just above); it takes a BOOL.
-        let _: () = unsafe { msg_send![&*view, _setWindowOcclusionDetectionEnabled: Bool::NO] };
-    }
-    // WebKit decides whether the page is shown when the view joins its window, with the switch
-    // still on: a window that opened unseen (the screen asleep, another Space) stayed hidden,
-    // its animation frames stopped. Hidden and shown again, it looks once more.
-    // SAFETY: an NSView takes a BOOL `hidden`.
-    let _: () = unsafe { msg_send![&*view, setHidden: Bool::YES] };
-    // SAFETY: as above.
-    let _: () = unsafe { msg_send![&*view, setHidden: Bool::NO] };
-    available
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(super) fn keep_tab_rendering(_webview: &wry::WebView) -> bool {
-    false
-}
-
-/// Whether `webview` lets its window show through where its page draws nothing: a new tab's
-/// view does until its page drew (tabs::see_through_until_drawn). WebKit's switch for it is
-/// private, as wry's own transparency uses it; a WebKit without it draws white as before.
-#[cfg(target_os = "macos")]
-pub(super) fn see_through(webview: &wry::WebView, through: bool) {
-    use objc2::msg_send;
-    use objc2::runtime::{AnyObject, Bool};
-    use wry::WebViewExtMacOS;
-    let view = webview.webview();
-    let key = super::appkit::text("drawsBackground");
-    // SAFETY: NSNumber's class method takes a BOOL and returns an autoreleased NSNumber.
-    let draws: *mut AnyObject =
-        unsafe { msg_send![objc2::class!(NSNumber), numberWithBool: Bool::new(!through)] };
-    // SAFETY: the WKWebView is a live NSObject; key-value coding takes an object and an NSString
-    // key, and WKWebView answers `drawsBackground` (wry sets it the same way).
-    let _: () = unsafe { msg_send![&*view, setValue: draws, forKey: &*key] };
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(super) fn see_through(_webview: &wry::WebView, _through: bool) {}
-
-/// How a view follows its window while the person drags the window's edge. (A GTK box lays its
-/// views out itself.)
-#[cfg(not(target_os = "linux"))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Follow {
-    /// A page or a terminal: as wide and as tall as the window, under the strip.
-    Fill,
-    /// The strip: as wide as the window, its height kept, held to the window's top.
-    Top,
-    /// A page of a size of its own: that size kept, in the middle of the window.
-    Centre,
-    /// The side: its width kept, as tall as the window under the strip, held to its left.
-    Side,
-}
-
-/// AppKit resizes `webview` with its window in the same pass as the window itself: the window's
-/// own resize event comes after the frame is drawn, and a view laid out only then leaves the
-/// new part of the window empty for a frame. The layout that event brings corrects the rest.
-/// `native` clear, or seen again: the window a carried tab is in, over another window's list.
-#[cfg(target_os = "macos")]
-pub(super) fn clear(native: &tao::window::Window, clear: bool) {
-    use objc2::msg_send;
-    use objc2::runtime::AnyObject;
-    use tao::platform::macos::WindowExtMacOS;
-    let alpha: f64 = if clear { 0.0 } else { 1.0 };
-    // SAFETY: tao's NSWindow is alive while its `Window` is borrowed; it takes a CGFloat.
-    let window = unsafe { &*native.ns_window().cast::<AnyObject>() };
-    // SAFETY: as above.
-    let _: () = unsafe { msg_send![window, setAlphaValue: alpha] };
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(super) fn clear(_native: &tao::window::Window, _clear: bool) {}
-
-/// `native` over the app's other windows, without taking the keys.
-#[cfg(target_os = "macos")]
-pub(super) fn to_front(native: &tao::window::Window) {
-    use objc2::msg_send;
-    use objc2::runtime::AnyObject;
-    use tao::platform::macos::WindowExtMacOS;
-    // SAFETY: tao's NSWindow is alive while its `Window` is borrowed; `orderFront:` takes a sender.
-    let window = unsafe { &*native.ns_window().cast::<AnyObject>() };
-    let none: *const AnyObject = std::ptr::null();
-    // SAFETY: as above; the sender may be nil.
-    let _: () = unsafe { msg_send![window, orderFront: none] };
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(super) fn to_front(native: &tao::window::Window) {
-    native.set_visible(true);
-}
-
-/// Move `webview` into `native`'s content, as it is: a tab's page or panel going to another
-/// window goes on (no reload, its program running), and lays out as that window's children do.
-#[cfg(target_os = "macos")]
-pub(super) fn reparent(webview: &wry::WebView, native: &tao::window::Window) {
-    use tao::platform::macos::WindowExtMacOS;
-    use wry::WebViewExtMacOS;
-    if let Err(why) = webview.reparent(native.ns_window().cast()) {
-        log::warn!("a tab's view could not move to its window: {why}");
-    }
-}
-
-/// Move `webview` into `native`'s box (GTK), as it is.
-#[cfg(target_os = "linux")]
-pub(super) fn reparent(webview: &wry::WebView, native: &tao::window::Window) {
-    use tao::platform::unix::WindowExtUnix;
-    use wry::WebViewExtUnix;
-    if let Some(vbox) = native.default_vbox()
-        && let Err(why) = webview.reparent(vbox)
-    {
-        log::warn!("a tab's view could not move to its window: {why}");
-    }
-}
-
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
-pub(super) fn reparent(_webview: &wry::WebView, _native: &tao::window::Window) {}
-
-#[cfg(target_os = "macos")]
-pub(super) fn follow(webview: &wry::WebView, follow: Follow) {
-    use objc2::msg_send;
-    use wry::WebViewExtMacOS;
-    /// NSAutoresizingMaskOptions.
-    const LEFT: usize = 1;
-    const WIDTH: usize = 2;
-    const RIGHT: usize = 4;
-    const BELOW: usize = 8;
-    const HEIGHT: usize = 16;
-    const ABOVE: usize = 32;
-    let mask = match follow {
-        Follow::Fill => WIDTH | HEIGHT,
-        Follow::Top => WIDTH | BELOW,
-        Follow::Centre => LEFT | RIGHT | BELOW | ABOVE,
-        Follow::Side => HEIGHT,
-    };
-    let view = webview.webview();
-    // SAFETY: an NSView takes an NSAutoresizingMaskOptions (an NSUInteger).
-    let _: () = unsafe { msg_send![&*view, setAutoresizingMask: mask] };
-}
-
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
-pub(super) fn follow(_webview: &wry::WebView, _follow: Follow) {}
 
 /// The person picks one of `items` from the system's menu at `at` of `view`, the one at `marked`
 /// checked: the index picked.
@@ -453,36 +297,6 @@ pub(super) fn copy(text: &str) {
     gtk::Clipboard::get(&gtk::gdk::SELECTION_CLIPBOARD).set_text(text);
 }
 
-/// The glass under the strip's open list, and the strip over every page (pane.rs).
-#[cfg(target_os = "macos")]
-pub(super) use super::pane::{Pane, stack};
-
-/// Elsewhere the strip cannot be put over the pages: they stand aside while a list is open.
-#[cfg(not(target_os = "macos"))]
-pub(super) fn stack(_views: &[&wry::WebView]) -> bool {
-    false
-}
-
-/// Elsewhere the list draws its own ground.
-#[cfg(not(target_os = "macos"))]
-pub(super) struct Pane;
-
-#[cfg(not(target_os = "macos"))]
-#[expect(
-    clippy::unused_self,
-    reason = "the macOS glass's methods, with nothing to keep"
-)]
-impl Pane {
-    pub(super) fn under(_strip: &wry::WebView) -> Option<Self> {
-        None
-    }
-
-    pub(super) fn place(&self, _strip: &wry::WebView, _rect: Option<(u32, u32, u32, u32)>) {}
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(super) fn keep_rendering(_webview: &wry::WebView) {}
-
 /// The installed Safari's user agent. A plain WKWebView omits the `Version/… Safari/…` tokens,
 /// and sites such as Google then serve a legacy page.
 #[cfg(target_os = "macos")]
@@ -491,18 +305,23 @@ pub(super) fn keep_rendering(_webview: &wry::WebView) {}
     reason = "one signature on every system: elsewhere there is none"
 )]
 pub(super) fn user_agent() -> Option<String> {
-    let plist = std::fs::read_to_string("/Applications/Safari.app/Contents/Info.plist").ok();
-    let version = plist
-        .as_deref()
-        .and_then(|plist| plist.split("<key>CFBundleShortVersionString</key>").nth(1))
-        .and_then(|rest| rest.split("<string>").nth(1))
-        .and_then(|rest| rest.split("</string>").next())
-        .filter(|version| !version.is_empty() && version.len() < 16)
-        .unwrap_or("26.0");
-    Some(format!(
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 \
-         (KHTML, like Gecko) Version/{version} Safari/605.1.15"
-    ))
+    /// Read once: Safari's version does not change in a run, and every tab asks.
+    static AGENT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    let agent = AGENT.get_or_init(|| {
+        let plist = std::fs::read_to_string("/Applications/Safari.app/Contents/Info.plist").ok();
+        let version = plist
+            .as_deref()
+            .and_then(|plist| plist.split("<key>CFBundleShortVersionString</key>").nth(1))
+            .and_then(|rest| rest.split("<string>").nth(1))
+            .and_then(|rest| rest.split("</string>").next())
+            .filter(|version| !version.is_empty() && version.len() < 16)
+            .unwrap_or("26.0");
+        format!(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 \
+             (KHTML, like Gecko) Version/{version} Safari/605.1.15"
+        )
+    });
+    Some(agent.clone())
 }
 
 #[cfg(not(target_os = "macos"))]

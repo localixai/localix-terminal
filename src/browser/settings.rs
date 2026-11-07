@@ -1,7 +1,8 @@
 //! The person's settings for the window: its appearance (theme, how much of the desktop shows
 //! through, the fonts) and the shortcuts they changed. Kept in `settings.json` under the
 //! config directory, read once, written whole on each change; a file that does not read is
-//! the defaults (and left as it is until the person changes something).
+//! the defaults (and left as it is until the person changes something, when it is kept beside as
+//! `settings.json.bad`).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -30,19 +31,6 @@ pub(super) enum Transparency {
     #[default]
     Standard,
     High,
-}
-
-impl Transparency {
-    /// The coat's alpha for one that is `standard` at this level: even steps, each about as
-    /// much clearer than the one before.
-    pub(super) fn coat(self, standard: f64) -> f64 {
-        match self {
-            Self::Off => 1.0,
-            Self::Low => standard + (1.0 - standard) * 0.45,
-            Self::Standard => standard,
-            Self::High => standard * 0.55,
-        }
-    }
 }
 
 /// The fonts offered, each a CSS stack that falls back to the system's.
@@ -227,7 +215,7 @@ impl Settings {
             .collect();
         let fonts = |fonts: &[(&str, &str, &str)]| -> Vec<Value> {
             (fonts.iter())
-                .map(|(id, name, stack)| json!({"id": id, "name": name, "stack": stack}))
+                .map(|(id, name, _)| json!({"id": id, "name": name}))
                 .collect()
         };
         json!({
@@ -242,6 +230,8 @@ impl Settings {
             "ui_fonts": fonts(&UI_FONTS),
             "code_fonts": fonts(&CODE_FONTS),
             "sizes": [SIZES.start(), SIZES.end()],
+            // Window transparency is the window's glass, which only macOS has.
+            "glass": cfg!(target_os = "macos"),
             "shortcuts": keys,
         })
     }
@@ -249,10 +239,17 @@ impl Settings {
     /// Read from `file`; the defaults where it is missing or does not read.
     pub(super) fn read(file: &Path) -> Self {
         match std::fs::read_to_string(file) {
-            Ok(text) => serde_json::from_str(&text).unwrap_or_else(|why| {
-                log::warn!("{}: {why}: the defaults are used", file.display());
-                Self::default()
-            }),
+            Ok(text) => serde_json::from_str(&text).map_or_else(
+                |why| {
+                    log::warn!("{}: {why}: the defaults are used", file.display());
+                    Self::default()
+                },
+                |mut read: Self| {
+                    // A size by hand or from another version: held to what Settings offers.
+                    read.font_size = read.font_size.clamp(*SIZES.start(), *SIZES.end());
+                    read
+                },
+            ),
             Err(_) => Self::default(),
         }
     }
@@ -263,6 +260,12 @@ impl Settings {
         let text = serde_json::to_string_pretty(self).map_err(|why| why.to_string())?;
         if let Some(dir) = file.parent() {
             std::fs::create_dir_all(dir).map_err(|why| format!("{}: {why}", dir.display()))?;
+        }
+        // A file that did not read (a typo, another version's) is kept aside, not written over.
+        let unread = std::fs::read_to_string(file)
+            .is_ok_and(|text| serde_json::from_str::<Self>(&text).is_err());
+        if unread {
+            let _ = std::fs::rename(file, file.with_extension("json.bad"));
         }
         let new = file.with_extension("json.new");
         std::fs::write(&new, text + "\n").map_err(|why| format!("{}: {why}", new.display()))?;
@@ -300,14 +303,17 @@ pub(super) fn change(change: &Value) -> Result<Settings, String> {
 }
 
 /// The script that gives one of the window's own pages the fonts (`--ui-font`, `--mono`,
-/// `--mono-size` on its root) and tells it (`desk-look`): at its start and on each change.
+/// `--mono-size` on its root), whether transparency is reduced (`data-reduced`, which WebKit's
+/// own media query does not say) and tells it (`desk-look`): at its start and on each change.
 pub(super) fn look_script(settings: &Settings) -> String {
     format!(
-        "(()=>{{const l={look};window.__deskLook=l;const put=()=>{{const s=document.documentElement.style;\
+        "(()=>{{const l={look};window.__deskLook=l;const put=()=>{{const r=document.documentElement,s=r.style;\
          s.setProperty('--ui-font',l.ui);s.setProperty('--mono',l.mono);s.setProperty('--mono-size',l.size+'px');\
+         r.toggleAttribute('data-reduced',{reduced});\
          dispatchEvent(new CustomEvent('desk-look',{{detail:l}}))}};\
          if(document.documentElement)put();else document.addEventListener('DOMContentLoaded',put,{{once:true}})}})()",
-        look = settings.look()
+        look = settings.look(),
+        reduced = super::frame::reduced()
     )
 }
 

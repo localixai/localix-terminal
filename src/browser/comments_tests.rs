@@ -17,3 +17,16 @@ fn a_batch_is_one_message_per_tab_and_is_gone_once_taken() {
     assert_eq!(comments.count(), 0);
     assert!(comments.take().is_empty());
 }
+
+#[test]
+fn a_comments_picture_is_kept_in_the_homes_directory_for_the_person_alone() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let scratch = crate::testing::Scratch::new();
+    let dir = scratch.path().join("comments");
+    let path = crate::shots::save(&dir, b"jpeg").unwrap();
+    let mode =
+        |path: &std::path::Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode(&dir), 0o700);
+    assert_eq!(mode(&path), 0o600);
+    assert!(super::directory().ends_with("comments"));
+}

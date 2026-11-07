@@ -7,9 +7,23 @@ use super::{FAILED, OK, UNREACHABLE};
 use crate::out::{say, warn};
 use crate::setup::{INTEGRATIONS, State, state, turn};
 
-pub(super) fn run(args: &[String]) -> u8 {
+const USAGE: &str = "llx-desk setup [<id> [--off] | all | mcp]";
+
+/// What `setup` was given: whether `--off`, and the names. `--off` goes with one integration
+/// only (not `all` or `mcp`, which put in or print), and no other option is known.
+fn parse(args: &[String]) -> Option<(bool, Vec<&String>)> {
     let off = args.iter().any(|arg| arg == "--off");
     let named: Vec<&String> = args.iter().filter(|arg| *arg != "--off").collect();
+    let one = matches!(named.as_slice(), [id] if !["all", "mcp"].contains(&id.as_str()));
+    let known = !named.iter().any(|arg| arg.starts_with('-'));
+    (known && (one || !off)).then_some((off, named))
+}
+
+pub(super) fn run(args: &[String]) -> u8 {
+    let Some((off, named)) = parse(args) else {
+        warn(USAGE);
+        return UNREACHABLE;
+    };
     match named.as_slice() {
         [] => {
             for integration in &INTEGRATIONS {
@@ -26,7 +40,9 @@ pub(super) fn run(args: &[String]) -> u8 {
             OK
         }
         [id] if id.as_str() == "all" => {
-            let said = crate::setup::auto();
+            // As the app does when it opens: the command, then every agent's.
+            let mut said = crate::setup::opened();
+            said.extend(crate::setup::auto());
             if said.is_empty() {
                 say("everything is in place");
             }
@@ -56,8 +72,12 @@ pub(super) fn run(args: &[String]) -> u8 {
             }
         },
         _ => {
-            warn("llx-desk setup [<id> [--off] | all | mcp]");
+            warn(USAGE);
             UNREACHABLE
         }
     }
 }
+
+#[cfg(test)]
+#[path = "setup_tests.rs"]
+mod tests;

@@ -4,6 +4,7 @@
 //! Its Integrations are setup.rs's, each read and turned on a thread of its own (they run the
 //! person's programs), the page told when they are done.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 use super::super::{Browser, Cmd, Shared};
@@ -51,11 +52,15 @@ impl On<'_> {
     pub(super) fn restyled(&mut self) {
         #[cfg(target_os = "macos")]
         crate::browser::app_menu::install(self.proxy);
-        let now = settings::now();
+        self.restyle_deck();
+        self.presenter.restyle(&settings::now());
+    }
+
+    /// This window's pages take the settings as they are now.
+    pub(super) fn restyle_deck(&mut self) {
         if let Some(open) = self.deck.as_mut() {
-            open.restyle(&now);
+            open.restyle(&settings::now());
         }
-        self.presenter.restyle(&now);
     }
 }
 
@@ -76,6 +81,25 @@ fn toast(text: &str, error: bool) -> String {
     )
 }
 
+/// Whether a plain read of the integrations is under way (see [`integrations`]).
+static READING: AtomicBool = AtomicBool::new(false);
+
+/// A plain read under way: held by it, and let go when it ends, however it ends.
+struct Reading;
+
+impl Reading {
+    /// The read, when none is under way.
+    fn start() -> Option<Self> {
+        (!READING.swap(true, Ordering::SeqCst)).then_some(Self)
+    }
+}
+
+impl Drop for Reading {
+    fn drop(&mut self) {
+        READING.store(false, Ordering::SeqCst);
+    }
+}
+
 /// The integrations read again, after `turning` one of them (its id, and on or off), on a thread
 /// of its own; the page shows them, and says how the turn went.
 fn integrations(
@@ -83,9 +107,21 @@ fn integrations(
     proxy: tao::event_loop::EventLoopProxy<Cmd>,
     turning: Option<(String, bool)>,
 ) {
+    // A plain read already under way gives the page what it asks for: Settings shown again (a
+    // shortcut pressed twice) never starts another run of the person's programs. A turn always
+    // runs, and reads after it.
+    let reading = if turning.is_none() {
+        match Reading::start() {
+            Some(reading) => Some(reading),
+            None => return,
+        }
+    } else {
+        None
+    };
     let read = std::thread::Builder::new()
         .name("desk-integrations".into())
         .spawn(move || {
+            let _reading = reading;
             let turned = turning.map(|(id, on)| crate::setup::turn(&id, on));
             let states = crate::setup::states();
             let Some(shared) = shared.upgrade() else {

@@ -7,95 +7,26 @@ use std::time::{Duration, Instant};
 use crate::view::{Action, ViewError, ViewResult};
 use serde_json::{Value, json};
 
-use super::super::host::{Cmd, Loads, WINDOW_CLOSED};
+use super::super::host::Cmd;
 use super::super::presence::Event;
 use super::super::script::script_forms;
 use super::super::toolbar;
 use super::super::{Clip, Driver, Observation, PageText, Shot};
-use super::{CALL_TIMEOUT, LOAD_TIMEOUT, PROBE_READY, WebviewDriver, closed};
+use super::{CALL_TIMEOUT, LOAD_TIMEOUT, PROBE_READY, WebviewDriver, closed, fragment_only};
 
-/// A script may await the page (a fetch, a timer); it gets this long.
-const SCRIPT_TIMEOUT: Duration = Duration::from_secs(20);
-/// After a script's page started loading another document, how long its answer may still come:
-/// a script that clicked Next and then awaited would otherwise hold the run for SCRIPT_TIMEOUT.
-const SCRIPT_LEFT: Duration = Duration::from_millis(300);
-/// What a script returns when its document went away before it answered.
-const SCRIPT_LEFT_PAGE: &str = "(no value: the page loaded a new document while the script ran)";
 const SETTLE_TIMEOUT: Duration = Duration::from_millis(2500);
 /// Once its DOM is parsed, how long a document gets to finish loading before it is used anyway.
 const PARSED_GRACE: Duration = Duration::from_secs(1);
-/// After an action, how long a navigation it caused has to show up.
-const NAVIGATION_GRACE: Duration = Duration::from_millis(25);
-/// After an action that requested a navigation the page did not report (a subframe's), how long
-/// its load has to start.
-const NAVIGATION_START: Duration = Duration::from_millis(300);
-/// A settle that got no answer: its document most likely went away; a new load should follow.
-const SETTLE_LOST: Duration = Duration::from_secs(5);
 /// A long page may render off screen before WebKit draws its picture.
 const CAPTURE_TIMEOUT: Duration = Duration::from_secs(12);
 
-impl WebviewDriver {
-    fn run_script(&self, form: &str) -> ViewResult<Value> {
-        self.open_or_closed()?;
-        let before = self.loads();
-        let script = |id: u64| form.replace("__ID__", &id.to_string());
-        // What the page tells is the tab's the call went to, whichever tab is active by its reply.
-        let tab = self.target();
-        let (id, receiver) = self.post(script, "script_not_started")?;
-        let deadline = Instant::now() + SCRIPT_TIMEOUT;
-        let mut left: Option<Instant> = None;
-        let reply = loop {
-            let now = Instant::now();
-            let until = left.map_or(deadline, |at| (at + SCRIPT_LEFT).min(deadline));
-            if now >= until {
-                break Err(mpsc::RecvTimeoutError::Timeout);
-            }
-            match receiver.recv_timeout((until - now).min(Duration::from_millis(50))) {
-                Err(mpsc::RecvTimeoutError::Timeout) => {}
-                other => break other,
-            }
-            if left.is_none() && self.loads().started != before.started {
-                left = Some(Instant::now());
-            }
-        };
-        crate::lock(&self.shared.pending).remove(&id);
-        self.shared.notices.file(id, tab);
-        match reply {
-            Ok(Ok(value)) => Ok(value),
-            Err(_) if left.is_some() => Ok(json!({"result": SCRIPT_LEFT_PAGE})),
-            Ok(Err(error)) if error.starts_with("script_not_started") => {
-                Err(ViewError::Unavailable(error))
-            }
-            Ok(Err(error)) if error == WINDOW_CLOSED => Err(closed()),
-            Ok(Err(error)) => Err(ViewError::Refused(error)),
-            Err(_) => Err(ViewError::Unavailable(
-                "the script did not finish in time".into(),
-            )),
+/// A script that did not start says why: it does not parse, or the page has no probe.
+fn no_probe(error: ViewError) -> ViewError {
+    match error {
+        ViewError::Unavailable(e) if e.starts_with("script_not_started") => {
+            ViewError::Refused("the script does not parse, or the page has no probe".into())
         }
-    }
-
-    /// After an action: if it replaced the document, wait for the new one to load. The page knows
-    /// first (`navigating`; a settle that died with its document says the same); a navigation the
-    /// native side saw requested but the page did not (a subframe) gets a short look only.
-    fn follow_navigation(&self, before: Loads, settled: &ViewResult<Value>) {
-        let requested = self.loads().requested != before.requested;
-        let flag = |key| {
-            settled
-                .as_ref()
-                .is_ok_and(|value| value.get(key).and_then(Value::as_bool) == Some(true))
-        };
-        let grace = match settled {
-            _ if flag("navigating") => LOAD_TIMEOUT,
-            Err(_) => SETTLE_LOST,
-            // Frames request navigations all the time (ad syncs); with the Navigation API the page
-            // has reported its own, so theirs are not waited for.
-            _ if requested && !flag("watched") => NAVIGATION_START,
-            _ => NAVIGATION_GRACE,
-        };
-
-        if self.load_started_since(before, grace) {
-            let _ = self.wait_loaded(LOAD_TIMEOUT);
-        }
+        other @ (ViewError::Stale(_) | ViewError::Refused(_) | ViewError::Unavailable(_)) => other,
     }
 }
 
@@ -154,10 +85,19 @@ impl WebviewDriver {
         self.before_acting();
         let before = self.loads();
         let budget = Duration::from_millis(delay_ms * keys.len() as u64) + CALL_TIMEOUT;
-        self.call("keys", &json!({"keys": keys, "delay": delay_ms}), budget)?;
+        let said = self.call("keys", &json!({"keys": keys, "delay": delay_ms}), budget)?;
         let settled = self.call("settle", &json!({}), SETTLE_TIMEOUT);
         self.follow_navigation(before, &settled);
-        Ok(())
+        // The probe presses only so many keys at once, and says how many it did.
+        match said.get("pressed").and_then(Value::as_u64) {
+            Some(pressed) if usize::try_from(pressed).is_ok_and(|n| n < keys.len()) => {
+                Err(ViewError::Refused(format!(
+                    "only the first {pressed} of {} keys were pressed: a call presses that many at most",
+                    keys.len()
+                )))
+            }
+            _ => Ok(()),
+        }
     }
 }
 
@@ -168,8 +108,15 @@ impl Driver for WebviewDriver {
         let url = super::loadable(url)?;
         self.open_or_closed()?;
         let before = self.loads();
+        let here = (crate::lock(&self.shared.tabs).iter())
+            .find(|tab| tab.id == self.target())
+            .map(|tab| tab.url.clone());
+        let same_page = here.is_some_and(|here| fragment_only(&here, &url));
         self.send(Cmd::Navigate(url, self.tab))?;
-        self.load_started_since(before, PROBE_READY);
+        // Another fragment of the same page starts no load: there is nothing to wait to start.
+        if !same_page {
+            self.load_started_since(before, PROBE_READY);
+        }
         self.wait_loaded(LOAD_TIMEOUT)
     }
 
@@ -217,6 +164,14 @@ impl Driver for WebviewDriver {
             .map_err(|error| ViewError::Unavailable(format!("unreadable snapshot: {error}")))
     }
 
+    fn epoch(&self) -> ViewResult<String> {
+        let epoch = self.call_ready("epoch", &Value::Null)?;
+        epoch
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| ViewError::Unavailable(format!("unreadable epoch: {epoch}")))
+    }
+
     fn act(&self, epoch: &str, action: &Action) -> ViewResult<()> {
         match action {
             Action::Press { key } => return self.press(std::slice::from_ref(key), 0),
@@ -260,7 +215,15 @@ impl Driver for WebviewDriver {
         self.send(Cmd::Frame(Some(self.target()), frame.clone()))?;
         // The page reflows on its own resize event; give it the usual settle.
         let _ = self.call("settle", &json!({}), SETTLE_TIMEOUT);
-        let seen = self.evaluate("innerWidth + ' × ' + innerHeight")?;
+        // Read with the script path alone: no second settle, and the mini does not spin for it.
+        let first = script_forms("innerWidth + ' × ' + innerHeight")
+            .into_iter()
+            .next();
+        let seen = first
+            .map(|form| self.run_script(&form))
+            .unwrap_or_else(|| Err(ViewError::Refused("the script does not parse".into())))
+            .map_err(no_probe)?;
+        let seen = seen.get("result").and_then(Value::as_str).unwrap_or("");
         // A size larger than the window is drawn smaller to fit it, and its layout may round by
         // a pixel: the page has the size asked for.
         let near = |frame: &super::super::sizes::Frame| {
@@ -317,14 +280,7 @@ impl Driver for WebviewDriver {
                 break;
             }
         }
-        let value = value.map_err(|error| match error {
-            ViewError::Unavailable(e) if e.starts_with("script_not_started") => {
-                ViewError::Refused("the script does not parse, or the page has no probe".into())
-            }
-            other @ (ViewError::Stale(_) | ViewError::Refused(_) | ViewError::Unavailable(_)) => {
-                other
-            }
-        })?;
+        let value = value.map_err(no_probe)?;
         let settled = self.call("settle", &json!({}), SETTLE_TIMEOUT);
         self.follow_navigation(before, &settled);
         Ok(value

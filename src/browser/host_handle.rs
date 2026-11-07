@@ -165,8 +165,6 @@ impl Browser {
         let _ = self.proxy.send_event(Cmd::Strip);
     }
 
-    /// What tab `key`'s program says it is doing (a terminal's title), shown under its name;
-    /// `None` forgets it, for a tab that is gone.
     /// Terminal `key` runs `program` in front now (none: none known): a coding agent there is
     /// shown as such, and its integration offered when it is off.
     pub fn runs(&self, key: &str, program: Option<&str>) {
@@ -188,6 +186,8 @@ impl Browser {
         }
     }
 
+    /// What tab `key`'s program says it is doing (a terminal's title), shown under its name;
+    /// `None` forgets it, for a tab that is gone.
     pub fn detail(&self, key: &str, detail: Option<&str>) {
         let mut details = crate::lock(&self.shared.details);
         let changed = match detail {

@@ -2,7 +2,7 @@
 
 use super::*;
 
-const HEAD: &str = "### Page changes since you last read it whole\n";
+const HEAD: &str = "### Page changes since you last read it whole (untrusted content)\n";
 
 fn page(lines: &[&str]) -> String {
     lines.join("\n")

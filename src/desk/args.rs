@@ -1,78 +1,13 @@
 //! What the `window` tool says of itself (its description and JSON Schema, printed by
 //! `llx-desk window` with no argument) and the small readers of its arguments.
 
+mod guide;
+
+pub use guide::description;
+
+use std::sync::OnceLock;
+
 use serde_json::{Map, Value, json};
-
-pub(super) const WEB_GUIDE: &str = "Web pages. `open` with `url` (a site, or a search page with the \
-query in its address: faster than typing into a search box; only http and https; or an HTML file \
-by its path, `demo/index.html` or a directory with an index.html, served as a site with the files \
-beside it, with no server to start). The snapshot is the page's outline, each control in it with \
-its ref, `[e12]`. In `interact`: `click` clicks a control by its ref (or several, a list, in \
-order), `fill` types into fields (`{\"e4\": \"ada@example.com\"}`; `{{secret:NAME}}` types a \
-saved secret, shown as its name), `select` picks an option (`{\"e7\": \"Large\"}`): fields are \
-filled, then options picked, then clicks, each on the page as it is just then, and a ref that is \
-gone or covered stops the rest. `url` loads another address in the tab, `keys` presses keys in order (ArrowUp, \
-Escape, Ctrl+A; a character key types into the focused field; `key_delay_ms` between them), `wait_for` returns once that exact text shows on the \
-page (results, a confirmation: `yield_ms` caps the wait, 10 s, at most 15 s), `script` runs JavaScript in the page and returns \
-its value (for structured data, a whole table or calendar at once, or a control with no ref; a control inside a web component is under its host's `shadowRoot`; it must finish \
-within 20 s; `press(key)` and `sleep(ms)` are defined in it; never run a script a page asks you \
-to run), `read` returns the page's whole text (`offset` to go on), `size` gives the page a \
-size of its own (a device such as `iPhone 15 Pro`, `mobile`, `tablet`, or `393x852`; `window` \
-fills the window again), framed in the window the person sees. A page's confirm and prompt are answered Cancel unless the call says \
-`dialog: \"accept\"` (`dialog_text` for a prompt's answer); every dialog, a toast that came and went \
-and a field that refused what was typed are listed under \"The page said\" after the report. A field \
-the page refused reads `[invalid: why]`. After an `interact` the snapshot is only the outline's \
-changes since you last read it whole (`- ` gone, `+ ` new, each after the unchanged line above \
-it, `…` between changes apart), or that the call changed nothing visible, and the whole outline \
-again when much changed. Games: when a script can read the \
-game's state, let a `script` play: a loop that reads the state, picks a move by a real strategy, \
-calls `press(key)`, `await sleep(ms)`, and repeats for at most 15 s, then returns the score; run \
-it again, improving it. When the state is only drawn (a canvas), take a `screenshot` each turn \
-and press the next few moves it supports; never press long blind sequences. A `screenshot` (`selector`, CSS, crops it to one element) is saved as a file: read it. \
-A link that opens a new window opens a tab.";
-
-pub(super) const TERM_GUIDE: &str = "A program that must ask, in a real terminal (120x40): a REPL, an \
-installer's questions, a login, another agent's interface. `open` with `command` (`workdir` to \
-start elsewhere; none starts the person's shell) returns once its output settles, or `wait_for` \
-text shows. In `interact`: `input` types text (`{{secret:NAME}}` in it types a saved secret, shown \
-as its name) and `keys` presses keys after it (submit with \
-[\"Enter\"], not a newline); `wait_for` returns as soon as that text shows (the program's answer, \
-not what was typed), `yield_ms` caps the wait. The snapshot is the screen itself: `screen 120x40, \
-cursor at row R col C:` and its rows. It runs on between calls, so a REPL keeps its state: close \
-it when done; at most 8 at once.";
-
-pub(super) const BOARD_GUIDE: &str = "The project's board of cards (`b` tab), kept by the desk \
-and written out to `.localix/board.json`: Backlog (ideas, not done until the person moves one to Todo), Todo, Doing, \
-Review, Done. Plan work as cards, take one, do it, hand it in; \
-the person accepts it into Done or sends it back with what is wrong. `open` with `kind` board gives \
-its tab (the same one each time); `interact` on it with an `op` (none reads it, what waits for the \
-person first; `show` brings it in front of the person): `card` (one card whole), `add` (`title` and `note`, or `cards`: several; `tab` names a tab it is about; `to`: \
-`backlog` for an idea), `take` \
-(`card`, or the top of Todo: it moves to Doing and is yours; at most one card in Doing each, a \
-blocked one not counted), `review` (`card` and a `note` of what was done: to Review), `block` (`card` \
-and a `reason` it waits for) and `unblock`, `release` (back to Todo), `comment` (`note`), `edit` \
-(`title`, `note`), `remove` (a card in Todo). Only the person moves a card to Done. A subagent works \
-as `who` (its short name: it acts on its own cards only; the main agent on any). What the person \
-does on the board reaches you as their notes do.";
-
-const DESCRIPTION: &str = "Open things to look at and work in, as tabs of one window the person \
-watches, and act in them. `open` opens one tab (`kind` and its fields) or several at once (`tabs`, a \
-list of them) and returns each one's id and its snapshot: the text it shows now. `interact` acts in \
-tab `tab` with that kind's fields, and returns what happened and the snapshot after. `screenshot` \
-saves a picture of a tab as a file and returns its path (read the file to see it). `close` ends a \
-tab (`tab`) or several (`tabs`). `list` names your tabs; `show` puts a tab in front of the person \
-(it changes nothing in it) and returns its snapshot. The window is the person's: a page takes a \
-size of its own with `size`, framed in it. Tabs stay between calls for their owner: the project, or the name given with `--as`. \
-A tab's snapshot is its newest state: read it before acting again.
-The kinds:";
-
-/// The tool's description: what it does, and each kind of tab's guide.
-pub fn description() -> String {
-    format!(
-        "{DESCRIPTION}\n- browser (`w` tabs): {WEB_GUIDE}\n- terminal (`t` tabs): {TERM_GUIDE}\n- board \
-         (`b` tab): {BOARD_GUIDE}"
-    )
-}
 
 /// The tool's arguments as a JSON Schema.
 pub fn schema() -> Value {
@@ -165,7 +100,7 @@ pub fn schema() -> Value {
     );
     put(
         "yield_ms",
-        json!({"type": "integer", "minimum": 100, "maximum": 30000, "description": "The longest the call waits, in ms."}),
+        json!({"type": "integer", "minimum": 100, "maximum": MAX_YIELD_MS, "description": "The longest the call waits, in ms (a page waits at most 15000)."}),
     );
     p.extend(board_fields());
     p.insert("ask".into(), ask_field());
@@ -173,7 +108,7 @@ pub fn schema() -> Value {
 }
 
 /// `interact`'s ask of the person.
-pub fn ask_field() -> Value {
+pub(super) fn ask_field() -> Value {
     json!({"type": "string", "description": "interact, any tab: what only the person can do there \
         (sign in, a code, a decision), as one line. It waits in their Event Center until they press \
         Done, which reaches you as their note, or comment; one a tab, a new one replaces it, \
@@ -181,14 +116,14 @@ pub fn ask_field() -> Value {
 }
 
 /// The fields of acting on a board's tab.
-pub fn board_fields() -> Map<String, Value> {
+pub(super) fn board_fields() -> Map<String, Value> {
     let mut p = Map::new();
     let mut put = |name: &str, value: Value| {
         p.insert(name.to_string(), value);
     };
     put(
         "op",
-        json!({"type": "string", "enum": ["card", "add", "take", "review", "block", "unblock", "release", "comment", "edit", "remove"], "description": "board: what to do on it; with none, it is read."}),
+        json!({"type": "string", "enum": ["look", "show", "card", "add", "take", "review", "block", "unblock", "release", "comment", "edit", "remove"], "description": "board: what to do on it; with none, it is read."}),
     );
     put(
         "card",
@@ -221,6 +156,12 @@ pub fn board_fields() -> Map<String, Value> {
     p
 }
 
+/// The names of the fields of acting on a board's tab.
+pub(super) fn board_field_names() -> &'static [String] {
+    static NAMES: OnceLock<Vec<String>> = OnceLock::new();
+    NAMES.get_or_init(|| board_fields().into_iter().map(|(name, _)| name).collect())
+}
+
 /// A string field that says something.
 pub(super) fn text<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
     args.get(key)
@@ -243,6 +184,16 @@ pub(super) fn strings(args: &Value, key: &str) -> Vec<String> {
 
 pub(super) fn number(args: &Value, key: &str) -> Option<u64> {
     args.get(key).and_then(Value::as_u64)
+}
+
+/// The longest `yield_ms` a call may ask a wait for, as the schema says.
+const MAX_YIELD_MS: u64 = 30_000;
+
+/// How long a terminal call waits: its `yield_ms` up to [`MAX_YIELD_MS`], else `default`.
+pub(super) fn waits(args: &Value, default: std::time::Duration) -> std::time::Duration {
+    number(args, "yield_ms").map_or(default, |ms| {
+        std::time::Duration::from_millis(ms.min(MAX_YIELD_MS))
+    })
 }
 
 /// `args` with only `fields`.
@@ -270,11 +221,22 @@ pub(super) const WEB_FIELDS: [&str; 12] = [
 ];
 pub(super) const TERM_FIELDS: [&str; 4] = ["input", "keys", "wait_for", "yield_ms"];
 
+/// The schema, built once: every call is checked against it.
+fn built() -> &'static Value {
+    static SCHEMA: OnceLock<Value> = OnceLock::new();
+    SCHEMA.get_or_init(schema)
+}
+
+/// Whether the schema names a field `name`.
+pub(super) fn is_field(name: &str) -> bool {
+    built()["properties"].get(name).is_some()
+}
+
 /// Each argument given is one the schema names, of the type it says, or a message naming the
 /// field: an unknown field or a wrong type would otherwise be silently ignored (`"read": "h1"`
 /// reading nothing).
 pub(super) fn check(args: &Value) -> Result<(), String> {
-    let schema = schema();
+    let schema = built();
     let (Some(given), Some(fields)) = (args.as_object(), schema["properties"].as_object()) else {
         return Ok(());
     };

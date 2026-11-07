@@ -4,7 +4,6 @@
 //! `expand` (its button); a press anywhere else is the grip's (mini_grip.rs on macOS: a drag, or
 //! a click that expands). It never takes the keyboard or navigates.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use base64::Engine;
@@ -12,14 +11,14 @@ use serde_json::json;
 use tao::dpi::{LogicalPosition, LogicalSize};
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 use tao::window::{Window, WindowBuilder, WindowId};
-use wry::{NewWindowResponse, WebView, WebViewBuilder};
+use wry::{WebView, WebViewBuilder};
 
 use super::capture::Shot;
 use super::frame;
 use super::host::Cmd;
 use super::placement::MINI;
 use super::platform::{adopt_mini, grip_mini, hide_mini, keep_tab_rendering, show_mini};
-use super::tab_view::build;
+use super::tab_view::{build, own_page};
 
 /// The mini's page.
 const PAGE: &str = include_str!("mini.html");
@@ -62,21 +61,13 @@ impl Mini {
             .map_err(|error| error.to_string())?;
         // A panel before its page is built (see `Frame::build`).
         adopt_mini(&window);
-        let first = AtomicBool::new(true);
         let said = proxy.clone();
-        let builder = WebViewBuilder::new()
+        let builder = own_page(WebViewBuilder::new())
             .with_html(PAGE)
             // The person's fonts, before the page's own scripts (settings.rs).
             .with_initialization_script(super::settings::look_script(&super::settings::now()))
             .with_transparent(true)
-            .with_incognito(true)
-            .with_focused(false)
             .with_bounds(frame::fill(LogicalSize::new(MINI.0, MINI.1), 0.0, 0.0))
-            .with_background_throttling(wry::BackgroundThrottlingPolicy::Disabled)
-            // Its own page only.
-            .with_navigation_handler(move |_| first.swap(false, Ordering::SeqCst))
-            .with_new_window_req_handler(|_, _| NewWindowResponse::Deny)
-            .with_download_started_handler(|_, _| false)
             .with_ipc_handler(move |request| {
                 if let Some(command) = heard(request.body()) {
                     let _ = said.send_event(command);

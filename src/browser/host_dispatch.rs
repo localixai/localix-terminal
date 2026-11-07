@@ -1,0 +1,228 @@
+//! Commands carried out in one native window; every refusal is sent to its caller.
+
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc::SyncSender;
+
+use crate::browser::deck::{Deck, Shown};
+use crate::browser::panel::Opening;
+use crate::browser::presence::Event as Presence;
+use crate::browser::strip::{Click, Key};
+use crate::browser::{frame, platform, strip};
+
+use super::super::web::on_browser;
+use super::super::{Cmd, Window};
+use super::{On, act};
+
+impl On<'_> {
+    pub(super) fn command(&mut self, command: Cmd) {
+        // What may change the tab shown, or a tab's project: after it, the window is kept on the
+        // project shown, and the strip drawn.
+        // What tells of a change (a title, a page loaded, the past kept) is drawn once per turn of
+        // the loop; what the person or an agent did is drawn at once, so the next call sees it.
+        let told = matches!(command, Cmd::Strip | Cmd::Titled(..));
+        let streamed =
+            if let Cmd::Clicked(said) | Cmd::SideClicked(said) | Cmd::NavClicked(said) = &command {
+                Self::streamed(said)
+            } else {
+                false
+            };
+        let settles = matches!(
+            command,
+            Cmd::Go(_)
+                | Cmd::Arranged(..)
+                | Cmd::Panel(_)
+                | Cmd::Unpanel(_)
+                | Cmd::Act(..)
+                | Cmd::Clicked(_)
+                | Cmd::SideClicked(_)
+                | Cmd::NavClicked(_)
+                | Cmd::Close
+                | Cmd::NewTab { .. }
+                | Cmd::Adopt
+                | Cmd::SwitchTab { .. }
+                | Cmd::CloseTab { .. }
+        );
+        self.carry_out(command);
+        if told {
+            *self.stale = true;
+        } else if settles && !streamed {
+            *self.stale = false;
+            self.settled();
+        }
+    }
+
+    /// The window kept on the project shown, its split kept, and what it shows drawn again.
+    pub(super) fn settled(&mut self) {
+        self.settle();
+        self.keep_split();
+        if let Some(open) = self.deck.as_ref() {
+            open.refresh(self.shared);
+        }
+    }
+
+    fn carry_out(&mut self, command: Cmd) {
+        let (shared, proxy) = (self.shared, self.proxy);
+        match command {
+            Cmd::Open { window, reply } => self.open(&window, &reply),
+            Cmd::Panel(opening) => self.panel(opening),
+            Cmd::Paint(id) => self.paint(id),
+            Cmd::PanelMenu(id, at, items) => self.panel_menu(id, at, &items),
+            Cmd::Reveal(id) => {
+                let web = self.deck.as_ref().and_then(|deck| deck.web.as_ref());
+                if let Some(webview) = web.and_then(|tabs| tabs.at(Some(id))) {
+                    platform::see_through(webview, false);
+                }
+                // The tab draws now: the strip says so.
+                let _ = self.proxy.send_event(Cmd::Strip);
+            }
+            Cmd::Unpanel(id) => {
+                if let Some(open) = self.deck.as_mut() {
+                    open.end_term(id);
+                    open.refresh(shared);
+                }
+            }
+            Cmd::Titled(id, title) => {
+                if let Some(open) = self.deck.as_mut() {
+                    open.titled(id, title);
+                }
+            }
+            Cmd::Strip => self.renamed(),
+            Cmd::Offered(id, on) => self.offered(id, on),
+            Cmd::Go(project) => self.go_project(&project),
+            Cmd::Arranged(_, arranged) => self.arranged(arranged),
+            // Opened by the loop before it got here (`Windows::open`).
+            Cmd::NewWindow(_) => {}
+            Cmd::Presence(event) => self.presence(event),
+            Cmd::Opened => self.opened(),
+            Cmd::Pictured(shot) => self.pictured(&shot),
+            Cmd::Presented(reply) => {
+                let _ = reply.send(self.presenter.name());
+            }
+            Cmd::Confirm(question, reply) => {
+                let _ = reply.send(platform::confirm(&question));
+            }
+            Cmd::Clicked(said) => self.clicked(&said),
+            Cmd::Pressed(window, x, y) => self.pressed(window, x, y),
+            // The side's points are the strip's, once moved down by the strip's height: the
+            // menus a click there opens are placed in the strip's view.
+            Cmd::SideClicked(said) => {
+                let top = self.deck.as_ref().map_or(0.0, |open| open.top());
+                self.clicked(&strip::moved(&said, (0.0, top)));
+            }
+            Cmd::NavClicked(said) => {
+                let at = self.deck.as_ref().map_or((0.0, 0.0), |open| open.nav_at());
+                self.clicked(&strip::moved(&said, at));
+            }
+            Cmd::Restyle => self.restyled(),
+            Cmd::Act(said, reply) => self.agent_act(said, &reply),
+            Cmd::Listing(reply) => {
+                let _ = reply.send(self.deck.as_ref().map(|open| open.listing(shared)));
+            }
+            Cmd::Dressed(reply) => {
+                let _ = reply.send(self.deck.as_ref().map(|open| {
+                    open.frame.retint();
+                    frame::dressed(&open.frame.native)
+                }));
+            }
+            Cmd::Eval {
+                id,
+                script,
+                panel: Some(panel),
+                ..
+            } => self.eval_panel(id, &script, panel),
+            Cmd::Close => {
+                // The agent closed the browser: the terminals stay.
+                if let Some(open) = self.deck.as_mut() {
+                    let pages = open.web.as_ref().map(|tabs| tabs.listed().0);
+                    open.end_web(&pages.unwrap_or_default(), shared);
+                    open.refresh(shared);
+                }
+            }
+            command @ (Cmd::Eval { .. }
+            | Cmd::Navigate(..)
+            | Cmd::NewTab { .. }
+            | Cmd::Adopt
+            | Cmd::SwitchTab { .. }
+            | Cmd::CloseTab { .. }
+            | Cmd::Frame(..)
+            | Cmd::Capture { .. }
+            | Cmd::Noted(_)
+            | Cmd::Exit(_)) => on_browser(command, self.deck, shared, proxy),
+        }
+    }
+
+    /// The agent shows or closes a tab. One of a project not shown stays out of sight there,
+    /// and the project is marked; the mini blinks as for any, and never opens.
+    fn agent_act(&mut self, said: Click, reply: &SyncSender<Result<(), String>>) {
+        if let Click::Show(key) = said
+            && self.out_of_sight(&key.name())
+        {
+            // Its project is not the one shown: the window stays where the person is, and a
+            // terminal whose tab they closed is a tab of its project again.
+            if let (Key::Term(id), Some(open)) = (key, self.deck.as_mut()) {
+                open.unhide_term(id);
+                open.refresh(self.shared);
+            }
+            self.presence(Presence::Show);
+            let _ = reply.send(Ok(()));
+            return;
+        }
+        let done = act(self.deck, said, self.shared);
+        if done.is_ok() && matches!(said, Click::Show(_)) {
+            self.presence(Presence::Show);
+        }
+        let _ = reply.send(done);
+    }
+
+    /// Terminal `id`'s newest frame, run in its page. The mini pictures the terminal shown as it
+    /// draws, not only when it is shown: its first picture may come before its first frame.
+    fn paint(&mut self, id: u32) {
+        let open = self.deck.as_ref().and_then(|open| open.term(id));
+        if let Some((open, frame)) = open.and_then(|o| Some((o, o.slot.latest()?))) {
+            let _ = open.webview.evaluate_script(&frame);
+        }
+        if self
+            .deck
+            .as_ref()
+            .is_some_and(|deck| deck.shown == Shown::Term(id))
+        {
+            self.presence(Presence::Changed);
+        }
+    }
+
+    fn open(&mut self, window: &Window, reply: &SyncSender<Result<(), String>>) {
+        let (shared, proxy) = (self.shared, self.proxy);
+        let opened = match self.deck.as_mut() {
+            Some(open) if open.web.is_some() => Err("the window is already open".into()),
+            Some(open) => open.open_web(window, shared, proxy),
+            None => Deck::for_web((self.target, self.steps), window, shared, proxy).map(|open| {
+                *self.deck = Some(open);
+            }),
+        };
+        // Whether the window is open now: a second open refused leaves the first one open.
+        let web = self.deck.as_ref().is_some_and(|open| open.web.is_some());
+        shared.open.store(web, Ordering::SeqCst);
+        let _ = reply.send(opened.clone());
+        if let (Ok(()), Some(open)) = (opened, self.deck.as_ref()) {
+            open.refresh(shared);
+        }
+    }
+
+    fn panel(&mut self, opening: Opening) {
+        let alive = Arc::clone(&opening.3);
+        // A terminal or a board of a project not shown opens out of sight there.
+        let shown = !self.out_of_sight(&Key::Term(opening.0).name());
+        let opened = match self.deck.as_mut() {
+            Some(open) => open.add_term(opening, shown, self.proxy),
+            None => Deck::for_term((self.target, self.steps), opening, self.shared, self.proxy)
+                .map(|open| {
+                    *self.deck = Some(open);
+                }),
+        };
+        match (opened, self.deck.as_ref()) {
+            (Ok(()), Some(open)) => open.refresh(self.shared),
+            _ => alive.alive.store(false, Ordering::SeqCst),
+        }
+    }
+}

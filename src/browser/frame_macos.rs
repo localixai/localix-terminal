@@ -1,11 +1,17 @@
 //! The glass on macOS, through AppKit's own messages (no bindings beyond what the WebView links).
 //! The material sits in the window's frame view, below everything, so it backs the titlebar and
 //! the pages alike; a panel's coat sits just above it.
+//!
+//! The ground is an NSVisualEffectView on purpose, not an NSGlassEffectView: Liquid Glass is the
+//! system's layer for controls floating over content, and this ground lies behind the terminals,
+//! the board and Settings, which are content (and its pages are siblings of the ground, where
+//! glass only treats its own content view). Glass belongs to small floating pieces, never to
+//! this layer, so this is not a free upgrade to make.
 
-use objc2::rc::Retained;
+use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject, Bool};
 use objc2::{class, msg_send};
-use tao::platform::macos::{WindowBuilderExtMacOS, WindowExtMacOS};
+use tao::platform::macos::WindowBuilderExtMacOS;
 use tao::window::{Window, WindowBuilder};
 
 use super::super::capture::{CGRect, CGSize};
@@ -34,12 +40,21 @@ pub(super) fn toolbar(window: &Window) {
     /// NSWindowToolbarStyle: automatic 0, expanded 1, preference 2, unified 3, unified compact 4
     /// (38 points tall, `strip::BAR`, the buttons centred on it).
     const UNIFIED: isize = 4;
-    // SAFETY: tao's NSWindow is alive while its `Window` is borrowed.
-    let object = unsafe { &*window.ns_window().cast::<AnyObject>() };
-    // SAFETY: `new` on NSToolbar answers a retained, empty toolbar.
-    let toolbar: Retained<AnyObject> = unsafe { msg_send![class!(NSToolbar), new] };
+    let object = crate::browser::appkit::native(window);
+    let name = crate::browser::appkit::text("desk.bar");
+    // SAFETY: `alloc` on NSToolbar answers an uninitialised instance.
+    let made: Allocated<AnyObject> = unsafe { msg_send![class!(NSToolbar), alloc] };
+    // SAFETY: a toolbar is initialised with an NSString identifier and answers itself, retained.
+    let toolbar: Retained<AnyObject> = unsafe { msg_send![made, initWithIdentifier: &*name] };
+    // SAFETY: a toolbar takes a BOOL: no configuration is written to the person's defaults.
+    let _: () = unsafe { msg_send![&*toolbar, setAutosavesConfiguration: Bool::NO] };
+    // SAFETY: as above: it is empty, with no Customize Toolbar to offer on the titlebar.
+    let _: () = unsafe { msg_send![&*toolbar, setAllowsUserCustomization: Bool::NO] };
     // SAFETY: a toolbar takes a BOOL: no line under it, the strip is one sheet with the page.
+    // (Older systems read this; since macOS 15 the window's separator style does.)
     let _: () = unsafe { msg_send![&*toolbar, setShowsBaselineSeparator: Bool::NO] };
+    // SAFETY: a window takes an NSTitlebarSeparatorStyle (an NSInteger): none.
+    let _: () = unsafe { msg_send![object, setTitlebarSeparatorStyle: 1isize] };
     // SAFETY: a window takes a toolbar, which it retains.
     let _: () = unsafe { msg_send![object, setToolbar: &*toolbar] };
     // SAFETY: a window takes an NSWindowToolbarStyle (an NSInteger).
@@ -56,6 +71,15 @@ pub(super) fn reduced() -> bool {
     reduced.as_bool()
 }
 
+/// Whether the person asked for more contrast (Accessibility, Display).
+pub(super) fn increased() -> bool {
+    // SAFETY: `sharedWorkspace` is NSWorkspace's class method, returning the shared instance.
+    let workspace: Retained<AnyObject> = unsafe { msg_send![class!(NSWorkspace), sharedWorkspace] };
+    // SAFETY: an NSWorkspace answers this property with a BOOL.
+    let more: Bool = unsafe { msg_send![&*workspace, accessibilityDisplayShouldIncreaseContrast] };
+    more.as_bool()
+}
+
 /// What names our material among the frame view's own (the system puts materials there too).
 fn name() -> Retained<AnyObject> {
     crate::browser::appkit::text("desk.glass")
@@ -68,9 +92,8 @@ fn coat_name() -> Retained<AnyObject> {
 
 /// The view that holds the titlebar and the content.
 fn frame_view(window: &Window) -> Option<Retained<AnyObject>> {
-    let window = window.ns_window() as *mut AnyObject;
-    // SAFETY: `window` is tao's live NSWindow, borrowed for this call; its content view may be
-    // nil, which the `Option` takes.
+    let window = crate::browser::appkit::native(window);
+    // SAFETY: an NSWindow answers its content view, or nil, which the `Option` takes.
     let content: Option<Retained<AnyObject>> = unsafe { msg_send![window, contentView] };
     let content = content?;
     // SAFETY: an NSView answers `superview` with a view or nil.
@@ -94,8 +117,9 @@ impl Glass {
         // SAFETY: an NSVisualEffectView takes an NSInteger blending mode: behind the window,
         // the desktop, blurred.
         let _: () = unsafe { msg_send![&*effect, setBlendingMode: 0isize] };
-        // Active, always: these windows are never key, and an inactive material stops sampling
-        // and paints flat grey.
+        // Active, always: a window the person watches while another app is key (an agent working
+        // in it) stays glass, as it is when it is the key one; an inactive material stops
+        // sampling and paints flat grey.
         // SAFETY: an NSVisualEffectView takes an NSInteger state.
         let _: () = unsafe { msg_send![&*effect, setState: 1isize] };
         let none: Option<&AnyObject> = None;
@@ -118,10 +142,17 @@ impl Glass {
         Some(Self { effect, coat })
     }
 
+    /// The material `material`, under the coat `[red, green, blue]` at `alpha`. A coat too thin
+    /// to see is hidden, and a material under one too thick to see through is: a hidden view
+    /// costs no compositing, and a material nobody sees would still sample the desktop.
     pub(super) fn tint(&self, material: isize, [red, green, blue]: [u8; 3], alpha: f64) {
         let part = |value: u8| f64::from(value) / 255.0;
         // SAFETY: an NSVisualEffectView takes an NSInteger material.
         let _: () = unsafe { msg_send![&*self.effect, setMaterial: material] };
+        // SAFETY: a view takes a BOOL `hidden`.
+        let _: () = unsafe { msg_send![&*self.coat, setHidden: Bool::new(alpha <= 0.02)] };
+        // SAFETY: as above.
+        let _: () = unsafe { msg_send![&*self.effect, setHidden: Bool::new(alpha >= 0.99)] };
         // SAFETY: NSColor's class method takes four CGFloats and returns a colour.
         let colour: Retained<AnyObject> = unsafe {
             msg_send![class!(NSColor),
@@ -148,8 +179,8 @@ fn view(class: &objc2::runtime::AnyClass, bounds: CGRect, name: &AnyObject) -> R
 /// Our materials in `window`'s frame view, the first one's state, whether it is opaque, the
 /// shape its resizing keeps, and whether a coat is over them.
 pub(super) fn dressed(window: &Window) -> (usize, isize, bool, f64, bool) {
-    let native = window.ns_window() as *mut AnyObject;
-    // SAFETY: `native` is tao's live NSWindow; `isOpaque` answers a BOOL.
+    let native = crate::browser::appkit::native(window);
+    // SAFETY: an NSWindow answers `isOpaque` with a BOOL.
     let opaque: Bool = unsafe { msg_send![native, isOpaque] };
     // SAFETY: an NSWindow answers `contentAspectRatio` with an NSSize, which `CGSize` lays out.
     let shape: CGSize = unsafe { msg_send![native, contentAspectRatio] };

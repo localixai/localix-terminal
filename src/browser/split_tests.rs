@@ -2,6 +2,13 @@
 
 use super::*;
 
+fn w(id: u32) -> Key {
+    Key::Web(id)
+}
+fn t(id: u32) -> Key {
+    Key::Term(id)
+}
+
 const A: Key = Key::Web(1);
 const B: Key = Key::Term(2);
 const C: Key = Key::Web(3);
@@ -74,9 +81,55 @@ fn a_dragged_line_leaves_each_half_some_of_the_width() {
     assert!((held(0.05, 1000.0) - 0.19).abs() < 1e-9);
     assert!((held(0.97, 1000.0) - 0.81).abs() < 1e-9);
     assert!((held(0.4, 1000.0) - 0.4).abs() < f64::EPSILON);
-    assert!((held(0.05, 2000.0) - 0.095).abs() < 1e-9);
+    assert!((held(0.05, 2000.0) - crate::layout::LEAST).abs() < 1e-9);
     // Too narrow for both: half each.
     assert!((held(0.1, 300.0) - 0.5).abs() < f64::EPSILON);
+}
+
+#[test]
+fn a_saved_ratio_is_restored_without_an_old_projection_undoing_a_drag() {
+    let mut split = Split::default();
+    split.follow_share(Some((w(1), t(2))), Some(0.65));
+    assert_eq!(split.share, 0.65);
+    split.share = 0.7;
+    split.sizing = Some(([w(1), t(2)], 0.7));
+    split.follow_share(Some((w(1), t(2))), Some(0.65));
+    assert_eq!(split.share, 0.7);
+    assert!(split.sizing.is_some());
+    split.follow_share(Some((w(1), t(2))), Some(0.7));
+    assert!(split.sizing.is_none());
+    split.follow_share(Some((w(1), t(2))), Some(0.6));
+    assert_eq!(split.share, 0.6);
+}
+
+#[test]
+fn changing_the_pair_forgets_a_pending_size_and_bad_saved_shares_are_ignored() {
+    let mut split = Split {
+        sizing: Some(([w(1), t(2)], 0.7)),
+        ..Split::default()
+    };
+    split.follow_share(Some((w(3), t(4))), Some(0.4));
+    assert_eq!(split.share, 0.4);
+    assert!(split.sizing.is_none());
+    for shares in [
+        vec![f64::NAN, 0.5],
+        vec![f64::INFINITY, 0.5],
+        vec![f64::MAX, f64::MAX],
+        vec![0.0, 1.0],
+    ] {
+        let arranged = crate::browser::Arranged {
+            window: 1,
+            group: "a".into(),
+            shown: Some("w1".into()),
+            tabs: vec![crate::browser::Arranging {
+                panes: vec!["w1".into(), "t2".into()],
+                across: true,
+                shares,
+                focused: Some("w1".into()),
+            }],
+        };
+        assert_eq!(share_of(&arranged, (w(1), t(2))), None);
+    }
 }
 
 #[test]

@@ -248,6 +248,11 @@ impl Presenter {
             return;
         }
         let native = &deck.frame.native;
+        // Full screen and zoomed are not a size the person chose: a window opened meanwhile
+        // would be as large as the screen.
+        if native.fullscreen().is_some() || native.is_maximized() {
+            return;
+        }
         let scale = native.scale_factor();
         if let Ok(at) = native.outer_position() {
             let (at, size) = (

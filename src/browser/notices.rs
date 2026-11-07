@@ -118,12 +118,6 @@ impl Notices {
         crate::lock(&self.armed).get(&tab).cloned()
     }
 
-    /// Every tab's, when the window closes: its tabs' ids are places a new window reuses.
-    pub(super) fn forget_all(&self) {
-        crate::lock(&self.kept).clear();
-        crate::lock(&self.armed).clear();
-    }
-
     /// A closed tab's notices and answer, forgotten.
     pub(super) fn forget(&self, tab: u32) {
         crate::lock(&self.kept).remove(&tab);

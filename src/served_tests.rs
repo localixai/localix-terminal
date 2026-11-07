@@ -1,5 +1,8 @@
 //! Tests of `served`.
 
+#[path = "served/http_tests.rs"]
+mod http;
+
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -262,4 +265,65 @@ fn with_one_root_served_a_root_absolute_request_needs_no_referer() {
     let (status, css) = get_from(&shop, "/style.css", None);
     assert_eq!(status, "HTTP/1.1 200 OK");
     assert!(css.contains("red"), "{css}");
+}
+
+#[test]
+fn a_link_inside_the_directory_to_a_dot_file_is_not_followed() {
+    let scratch = site();
+    scratch.file("demo/shop/.git/config", "url = https://token@example.com");
+    let dir = scratch.path().join("demo/shop");
+    std::os::unix::fs::symlink(".git/config", dir.join("leak")).unwrap();
+    std::os::unix::fs::symlink(".env", dir.join("env.txt")).unwrap();
+    std::os::unix::fs::symlink("style.css", dir.join("again.css")).unwrap();
+    let served = Served::default();
+    let address = served
+        .address(scratch.path(), scratch.path(), "demo/shop/index.html")
+        .unwrap()
+        .unwrap();
+    for name in ["leak", "env.txt"] {
+        let (status, answer) = get(&address, &beside(&address, name));
+        assert!(status.contains(" 403 "), "{name}: {status}");
+        assert!(
+            !answer.contains("token") && !answer.contains("secret"),
+            "{name}"
+        );
+    }
+    // A link to an ordinary file in the directory still works.
+    let (status, css) = get(&address, &beside(&address, "again.css"));
+    assert_eq!(status, "HTTP/1.1 200 OK");
+    assert!(css.contains("red"), "{css}");
+}
+
+#[test]
+fn a_file_url_may_spell_spaces_and_a_page_may_carry_a_query_or_a_hash() {
+    let scratch = site();
+    scratch.file("My Site/index.html", "<h1>Spaced</h1>");
+    scratch.file("demo/odd#name.html", "<h1>Odd</h1>");
+    let served = Served::default();
+    let open = |url: &str| {
+        served
+            .address(scratch.path(), scratch.path(), url)
+            .unwrap()
+            .unwrap()
+    };
+    let spaced = open(&format!(
+        "file://{}/My%20Site/index.html",
+        scratch.path().display()
+    ));
+    assert!(spaced.ends_with("/index.html"), "{spaced}");
+    assert!(get(&spaced, &path(&spaced)).1.contains("Spaced"));
+    let hashed = open("demo/shop/index.html#/cart");
+    assert!(hashed.ends_with("/index.html#/cart"), "{hashed}");
+    let queried = open("demo/shop?step=2");
+    assert!(queried.ends_with("/index.html?step=2"), "{queried}");
+    // The page itself is found without them, and a file name that holds a `#` is a file first.
+    let (status, page) = get(&queried, path(&queried).split('?').next().unwrap());
+    assert_eq!(status, "HTTP/1.1 200 OK");
+    assert!(page.contains("<h1>Shop</h1>"), "{page}");
+    assert!(open("demo/odd#name.html").contains("odd%23name.html"));
+    // A tail never makes a file of what is none, nor takes a page out of the project.
+    let Err(why) = served.address(scratch.path(), scratch.path(), "./demo/none.html?x=1") else {
+        panic!("a missing file was opened");
+    };
+    assert!(why.contains("no file"), "{why}");
 }

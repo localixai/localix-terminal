@@ -173,6 +173,8 @@ pub(super) struct Split {
     pub share: f64,
     /// The share when the person took hold of the line: a drag moves from it.
     pub grabbed: Option<f64>,
+    /// A final size awaiting the layout; an older projection cannot snap this pair back.
+    pub sizing: Option<([Key; 2], f64)>,
     /// What the window last told the layout of its project's split, until the layout tells it
     /// back: told twice is told once, and a split the person undid does not come back meanwhile.
     pub told: Told,
@@ -184,6 +186,7 @@ impl Default for Split {
             beside: None,
             share: 0.5,
             grabbed: None,
+            sizing: None,
             told: Told::Nothing,
         }
     }
@@ -192,8 +195,56 @@ impl Default for Split {
 /// A share of `room` points held where both halves keep `LEAST_POINTS` (on a room too narrow
 /// for both, they keep half each).
 pub(super) fn held(share: f64, room: f64) -> f64 {
-    let least = (LEAST_POINTS / room.max(1.0)).min(0.5);
+    let least = (LEAST_POINTS / room.max(1.0)).clamp(crate::layout::LEAST, 0.5);
     share.clamp(least, 1.0 - least)
+}
+
+impl Split {
+    /// Follow saved proportions, except during a drag or before its final size is acknowledged.
+    pub(super) fn follow_share(&mut self, pair: Option<(Key, Key)>, saved: Option<f64>) {
+        let panes = pair.map(|(left, right)| [left, right]);
+        if self
+            .sizing
+            .as_ref()
+            .is_some_and(|(keys, _)| Some(*keys) != panes)
+        {
+            self.sizing = None;
+        }
+        if self.grabbed.is_some() {
+            return;
+        }
+        let Some(saved) = saved.filter(|share| share.is_finite()) else {
+            return;
+        };
+        if let Some((_, pending)) = self.sizing {
+            if (saved - pending).abs() > 0.00011 {
+                return;
+            }
+            self.sizing = None;
+        }
+        self.share = saved;
+    }
+}
+
+/// The normalized left share for this exact pair, not another split in the project.
+pub(super) fn share_of(arranged: &super::Arranged, (left, right): (Key, Key)) -> Option<f64> {
+    let names = [left.name(), right.name()];
+    let tab = arranged
+        .tabs
+        .iter()
+        .find(|tab| tab.across && tab.panes == names)?;
+    let [first, second] = tab.shares.as_slice() else {
+        return None;
+    };
+    if !first.is_finite() || !second.is_finite() || *first <= 0.0 || *second <= 0.0 {
+        return None;
+    }
+    let total = first + second;
+    if !total.is_finite() {
+        return None;
+    }
+    let share = first / total;
+    (share > 0.0 && share < 1.0).then_some(share)
 }
 
 /// The halves of `width` points starting `left`, the first `share` of it: each one's left and

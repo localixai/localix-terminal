@@ -1,10 +1,11 @@
-//! The deck and the mini as panels that never activate the app (macOS), in
-//! AppKit's own messages. tao builds an NSWindow; here it becomes a non-activating NSPanel at
-//! runtime, as tauri-nspanel does it: a registered NSPanel subclass, the object's class swapped,
-//! the non-activating style, and (a private selector, asked for first) activation prevented. A
-//! panel with that style comes over the Space the person is in, a full-screen app's too, and
-//! becomes the key window only when a click needs it (a text field), never making llx-desk the
-//! active app: the person's keys stay where they were. Nothing here calls activate.
+//! The mini as a panel that never activates the app (macOS), in AppKit's own messages. tao
+//! builds an NSWindow; here it becomes a non-activating NSPanel at runtime: a registered NSPanel
+//! subclass, the object's class swapped, the non-activating style, and (a private selector,
+//! asked for first) activation prevented. A panel with that style comes over the Space the
+//! person is in, a full-screen app's too, and becomes the key window only when a click needs it
+//! (a text field), never making llx-desk the active app: the person's keys stay where they
+//! were. The deck stays the window tao made, an ordinary window (`adopt`). Nothing here calls
+//! activate.
 
 use std::sync::{Mutex, OnceLock};
 
@@ -12,9 +13,9 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, Sel};
 use objc2::{class, msg_send, sel};
 use tao::event_loop::EventLoopProxy;
-use tao::platform::macos::WindowExtMacOS;
 use tao::window::Window;
 
+use super::appkit::native;
 use super::capture::CGRect;
 use super::host::Cmd;
 use super::placement::Area;
@@ -28,7 +29,9 @@ const CAN_JOIN_ALL_SPACES: usize = 1 << 0;
 const STATIONARY: usize = 1 << 4;
 const IGNORES_CYCLE: usize = 1 << 6;
 const FULL_SCREEN_AUXILIARY: usize = 1 << 8;
-const FULL_SCREEN_PRIMARY: usize = 1 << 7;
+/// Keep the deck on its desktop: the green button uses native zoom, not a full-screen Space.
+const FULL_SCREEN_NONE: usize = 1 << 9;
+const FULL_SCREEN_DISALLOWS_TILING: usize = 1 << 12;
 /// NSWindowLevel: the ordinary windows', and floating, above them.
 const NORMAL: isize = 0;
 const FLOATING: isize = 3;
@@ -42,11 +45,10 @@ pub(super) enum Role {
 
 impl Role {
     /// The mini floats over every app, on every Space; the deck is an ordinary window among the
-    /// person's (not a panel: it is the app's main window, and enters full screen of its own,
-    /// on a Space of its own, as an app's window does).
+    /// person's, without moving it into a separate full-screen Space.
     const fn spaces(self) -> usize {
         match self {
-            Self::Deck => FULL_SCREEN_PRIMARY,
+            Self::Deck => FULL_SCREEN_NONE | FULL_SCREEN_DISALLOWS_TILING,
             Self::Mini => CAN_JOIN_ALL_SPACES | FULL_SCREEN_AUXILIARY | STATIONARY | IGNORES_CYCLE,
         }
     }
@@ -96,12 +98,11 @@ extern "C" fn remove_observer(
     }
 }
 
-/// Where the window's own minimize button goes: the loop, told to collapse to the mini. One
-/// deck per process.
+/// Where the main window's own minimize button goes: the loop, told to collapse to the mini.
 static COLLAPSE: OnceLock<Mutex<Option<EventLoopProxy<Cmd>>>> = OnceLock::new();
 
-/// The minimize button (and its key) collapses the deck to the mini, as the strip did with a
-/// button of its own: llx-desk has no Dock icon to minimize into.
+/// The minimize button (and its key) collapses the main window to the mini, as the strip did with
+/// a button of its own.
 extern "C" fn collapse(_this: &AnyObject, _sel: Sel, _sender: *mut AnyObject) {
     let proxy = COLLAPSE.get().and_then(|held| crate::lock(held).clone());
     if let Some(proxy) = proxy {
@@ -126,8 +127,8 @@ fn collapser() -> Option<&'static AnyObject> {
     unsafe { (at as *const AnyObject).as_ref() }
 }
 
-/// `window`'s minimize button collapses it to the mini, told to `proxy`. Its green button is the
-/// system's: full screen, on a Space of its own.
+/// The main `window`'s minimize button collapses it to the mini, told to `proxy`. Its green
+/// button keeps the system's native zoom action.
 pub(super) fn collapse_to(window: &Window, proxy: &EventLoopProxy<Cmd>) {
     /// NSWindowButton: the minimize button.
     const MINIATURIZE: usize = 1;
@@ -135,19 +136,17 @@ pub(super) fn collapse_to(window: &Window, proxy: &EventLoopProxy<Cmd>) {
     let Some(target) = collapser() else {
         return;
     };
-    for (kind, action) in [(MINIATURIZE, sel!(collapse:))] {
-        // SAFETY: a window answers its standard button of a kind, or nil.
-        let button: *mut AnyObject =
-            unsafe { msg_send![native(window), standardWindowButton: kind] };
-        // SAFETY: checked for nil; the window keeps its buttons alive.
-        let Some(button) = (unsafe { button.as_ref() }) else {
-            continue;
-        };
-        // SAFETY: an NSControl takes a target and an action.
-        let _: () = unsafe { msg_send![button, setTarget: target] };
-        // SAFETY: as above.
-        let _: () = unsafe { msg_send![button, setAction: action] };
-    }
+    // SAFETY: a window answers its standard button of a kind, or nil.
+    let button: *mut AnyObject =
+        unsafe { msg_send![native(window), standardWindowButton: MINIATURIZE] };
+    // SAFETY: checked for nil; the window keeps its buttons alive.
+    let Some(button) = (unsafe { button.as_ref() }) else {
+        return;
+    };
+    // SAFETY: an NSControl takes a target and an action.
+    let _: () = unsafe { msg_send![button, setTarget: target] };
+    // SAFETY: as above.
+    let _: () = unsafe { msg_send![button, setAction: sel!(collapse:)] };
 }
 
 /// An NSPanel that may become the key window (a text field in its page needs it) and never the
@@ -172,12 +171,6 @@ fn panel_class() -> Option<&'static AnyClass> {
     })
 }
 
-/// `window`'s NSWindow, for as long as the borrow lasts.
-fn native(window: &Window) -> &AnyObject {
-    // SAFETY: tao's NSWindow is alive for as long as its `Window` is, which is borrowed here.
-    unsafe { &*window.ns_window().cast::<AnyObject>() }
-}
-
 /// Whether `object` takes `selector`: private ones are asked for before they are used.
 fn takes(object: &AnyObject, selector: Sel) -> bool {
     // SAFETY: `respondsToSelector:` takes a selector and answers a BOOL.
@@ -191,7 +184,7 @@ fn takes(object: &AnyObject, selector: Sel) -> bool {
 pub(super) fn adopt(window: &Window, role: Role) {
     let object = native(window);
     // The deck stays the window tao made: the app's main window, which a click activates and
-    // the green button takes to full screen. Shown by an agent, it still comes to the front
+    // the green button zooms on its desktop. Shown by an agent, it still comes to the front
     // without taking the keys (`reveal`).
     let swapped = (role == Role::Mini)
         .then(panel_class)
@@ -212,7 +205,7 @@ pub(super) fn adopt(window: &Window, role: Role) {
             let _: () = unsafe { msg_send![object, _setPreventsActivation: Bool::YES] };
         }
         // SAFETY: an NSPanel takes a BOOL.
-        let _: () = unsafe { msg_send![object, setFloatingPanel: Bool::new(role == Role::Mini)] };
+        let _: () = unsafe { msg_send![object, setFloatingPanel: Bool::YES] };
         // SAFETY: as above: a click that needs no keyboard (a button) never makes it key.
         let _: () = unsafe { msg_send![object, setBecomesKeyOnlyIfNeeded: Bool::YES] };
     }
@@ -302,19 +295,37 @@ pub(super) fn conceal_object(object: &AnyObject, rendering: Rendering) {
 /// Tell `proxy` each time the person goes to another Space, for the rest of the process. An
 /// unseen window (a test's) is never watched.
 pub(super) fn watch_spaces(proxy: &EventLoopProxy<Cmd>) {
+    watch_workspace("NSWorkspaceActiveSpaceDidChangeNotification", proxy, || {
+        Cmd::Presence(Event::Respaced)
+    });
+}
+
+/// Tell `proxy` each time the person changes what Accessibility, Display offers (reduce
+/// transparency, increase contrast, reduce motion), for the rest of the process: the windows are
+/// dressed again, as they are when a setting of the app's changes.
+pub(super) fn watch_display(proxy: &EventLoopProxy<Cmd>) {
+    watch_workspace(
+        "NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification",
+        proxy,
+        || Cmd::Restyle,
+    );
+}
+
+/// `tell`'s command sent to `proxy` each time the shared workspace posts notification `name`.
+fn watch_workspace(name: &str, proxy: &EventLoopProxy<Cmd>, tell: fn() -> Cmd) {
     use block2::RcBlock;
     if unseen() {
         return;
     }
     let proxy = proxy.clone();
     let block = RcBlock::new(move |_note: *mut AnyObject| {
-        let _ = proxy.send_event(Cmd::Presence(Event::Respaced));
+        let _ = proxy.send_event(tell());
     });
     // SAFETY: `sharedWorkspace` is NSWorkspace's class method, returning the shared instance.
     let workspace: Retained<AnyObject> = unsafe { msg_send![class!(NSWorkspace), sharedWorkspace] };
     // SAFETY: an NSWorkspace answers its notification center.
     let center: Retained<AnyObject> = unsafe { msg_send![&*workspace, notificationCenter] };
-    let name = super::appkit::text("NSWorkspaceActiveSpaceDidChangeNotification");
+    let name = super::appkit::text(name);
     // SAFETY: `mainQueue` is NSOperationQueue's class method: the block runs on the main thread.
     let queue: Retained<AnyObject> = unsafe { msg_send![class!(NSOperationQueue), mainQueue] };
     // SAFETY: a name, a nil object, a queue and a block of `void (^)(NSNotification *)`, which
@@ -322,7 +333,7 @@ pub(super) fn watch_spaces(proxy: &EventLoopProxy<Cmd>) {
     let observer: Option<Retained<AnyObject>> = unsafe {
         msg_send![&*center, addObserverForName: &*name, object: std::ptr::null::<AnyObject>(), queue: &*queue, usingBlock: &*block]
     };
-    // Kept for the process: removed, the person's Spaces would go unwatched.
+    // Kept for the process: removed, the person's changes would go unwatched.
     if let Some(observer) = observer {
         let _ = Retained::into_raw(observer);
     }
@@ -378,4 +389,19 @@ pub(super) fn work_area() -> Option<Area> {
         width: visible.size.width,
         height: visible.size.height,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deck_zooms_on_its_desktop_without_becoming_a_full_screen_tile() {
+        let behavior = Role::Deck.spaces();
+        assert_ne!(behavior & FULL_SCREEN_NONE, 0);
+        assert_ne!(behavior & FULL_SCREEN_DISALLOWS_TILING, 0);
+        assert_eq!(behavior & FULL_SCREEN_AUXILIARY, 0);
+        assert_eq!(behavior & CAN_JOIN_ALL_SPACES, 0);
+        assert_ne!(Role::Mini.spaces() & FULL_SCREEN_AUXILIARY, 0);
+    }
 }

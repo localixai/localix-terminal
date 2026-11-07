@@ -30,8 +30,13 @@ mod panel;
 mod presence;
 #[path = "support/refs.rs"]
 mod refs;
+#[path = "support/terminal_colors.rs"]
+mod terminal_colors;
 #[path = "support/told.rs"]
 mod told;
+#[cfg(target_os = "macos")]
+#[path = "support/ui.rs"]
+mod ui;
 
 /// Serves `tests/fixtures` on an ephemeral port; returns its origin. Each connection has its own
 /// thread: a browser opens connections ahead of need, and one that never sends a request must not
@@ -600,7 +605,7 @@ fn opened_twice(browser: &browser::Browser, driver: &WebviewDriver, window: &Win
 fn second_page(browser: &browser::Browser, driver: &WebviewDriver, origin: &str) {
     let (before, _) = driver.tabs();
     let page = browser::Page::new(browser.clone(), true);
-    page.open(&format!("{origin}/form.html"), "second", None)
+    page.open(&format!("{origin}/form.html"))
         .expect("a second page opens beside the first");
     let (after, _) = driver.tabs();
     assert_eq!(after.len(), before.len() + 1, "{after:?}");
@@ -622,8 +627,7 @@ fn answers_while_loading(browser: &browser::Browser, driver: &WebviewDriver, ori
     let (before, _) = driver.tabs();
     let page = browser::Page::new(browser.clone(), true);
     std::thread::scope(|scope| {
-        let opening =
-            scope.spawn(|| page.open(&format!("{origin}/slower/form.html"), "slow", None));
+        let opening = scope.spawn(|| page.open(&format!("{origin}/slower/form.html")));
         // Its tab is made at once; its document comes 3 s later.
         let asked = Instant::now();
         while driver.tabs().0.len() == before.len() && asked.elapsed() < Duration::from_secs(2) {
@@ -859,7 +863,8 @@ fn tabs(driver: &WebviewDriver, origin: &str) {
     };
     driver.navigate(&format!("{origin}/tabs.html")).unwrap();
     assert_eq!(driver.tabs().0.len(), 1);
-    let second = driver.new_tab(&format!("{origin}/form.html")).unwrap();
+    let second = driver.add_tab(&format!("{origin}/form.html")).unwrap();
+    driver.on(second).wait_new();
     assert_eq!(
         (second, driver.observe().unwrap().title.as_str()),
         (2, "Book")
@@ -1011,7 +1016,9 @@ fn tabs(driver: &WebviewDriver, origin: &str) {
     }
     assert_eq!(driver.observe().unwrap().title, "Tabs");
     // A new tab reuses a closed one's place.
-    assert_eq!(driver.new_tab(&format!("{origin}/second.html")).unwrap(), 2);
+    let reused = driver.add_tab(&format!("{origin}/second.html")).unwrap();
+    driver.on(reused).wait_new();
+    assert_eq!(reused, 2);
     assert!(driver.close_tab(2).unwrap());
 }
 
@@ -1121,8 +1128,14 @@ fn main() {
     }
     // The panel's and the glass's windows are shown ones: rendered, and never over what the
     // person is watching.
+    // A test build's home is the one it is given (paths.rs): its own, for the pictures of
+    // comments and the like.
+    let home = std::env::temp_dir().join(format!("llx-desk-display-{}", std::process::id()));
+    std::fs::create_dir_all(&home).unwrap();
     // SAFETY: the first thing the process does, before any thread starts.
     unsafe { std::env::set_var("DESK_WINDOWS", "unseen") };
+    // SAFETY: as above.
+    unsafe { std::env::set_var("LLX_DESK_TEST_DIR", &home) };
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|arg| arg == "--list") {
         if !args.iter().any(|arg| arg == "--ignored") {
@@ -1154,6 +1167,10 @@ fn main() {
             Err(_) => false,
         };
         if paneling && !run("panel (first)", &|| panel::first(&browser)) {
+            return 1;
+        }
+        #[cfg(target_os = "macos")]
+        if paneling && !run("UI motion and split", &|| ui::scenario(&browser)) {
             return 1;
         }
         if paneling && !run("board (reopened)", &|| board::reopened(&browser)) {

@@ -31,9 +31,23 @@ pub fn load(db: &Connection, project: ProjectId) -> Result<Option<Board>, String
         .optional()
         .map_err(|why| why.to_string())?;
     text.map(|text| {
-        serde_json::from_str(&text).map_err(|why| format!("the board does not read: {why}"))
+        serde_json::from_str(&text)
+            .map(settled)
+            .map_err(|why| format!("the board of project {project} does not read: {why}"))
     })
     .transpose()
+}
+
+/// `board` with `next` past every `cN` it holds: a file edited by hand, or an old one, must not
+/// give a new card an id another has.
+fn settled(mut board: Board) -> Board {
+    let used = (board.cards.iter())
+        .filter_map(|card| card.id.strip_prefix('c')?.parse::<u32>().ok())
+        .max();
+    if let Some(used) = used {
+        board.next = board.next.max(used.saturating_add(1));
+    }
+    board
 }
 
 /// `board` written as project `project`'s row, in `tx`.
@@ -69,7 +83,10 @@ pub fn projects(db: &Connection) -> Result<Vec<(ProjectId, PathBuf)>, String> {
             Ok((row.get(0)?, PathBuf::from(path)))
         })
         .map_err(|why| why.to_string())?
-        .filter_map(Result::ok)
+        .filter_map(|row| {
+            row.map_err(|why| log::warn!("board: a project's row did not read: {why}"))
+                .ok()
+        })
         .collect();
     Ok(found)
 }
@@ -86,31 +103,62 @@ pub fn written(project: &Path) -> Result<Option<Board>, String> {
         Err(why) if why.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(why) => return Err(format!("{} could not be read: {why}", path.display())),
     };
-    serde_json::from_str(&text).map(Some).map_err(|why| {
-        format!(
-            "{} does not read as a board ({why}): fix it or move it away; it is left as it is",
-            path.display()
-        )
-    })
+    serde_json::from_str(&text)
+        .map(settled)
+        .map(Some)
+        .map_err(|why| {
+            format!(
+                "{} does not read as a board ({why}): fix it or move it away; it is left as it is",
+                path.display()
+            )
+        })
 }
 
 /// `board` written out to the file of the project at `project`, whole beside it and renamed over
-/// it so a reader never finds half a board.
+/// it so a reader never finds half a board. A project whose folder is gone (moved, deleted, on a
+/// volume not mounted) is left as it is: its folder is not made again for a file. Nor is a board
+/// written through a `.localix` that leads out of the project, as a cloned repository may ship.
 ///
 /// # Errors
 /// The file could not be written.
 pub fn export(project: &Path, board: &Board) -> Result<(), String> {
+    use std::io::Write as _;
+
+    if !project.is_dir() {
+        log::warn!(
+            "board: {} is not a folder: its board file is not written",
+            project.display()
+        );
+        return Ok(());
+    }
     let path = place(project);
     let failed = |why: std::io::Error| format!("{} was not written: {why}", path.display());
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(failed)?;
+    let dir = project.join(".localix");
+    // The project is a folder now, so this makes `.localix` alone.
+    std::fs::create_dir_all(&dir).map_err(failed)?;
+    let dir = std::fs::canonicalize(&dir).map_err(failed)?;
+    if !dir.starts_with(std::fs::canonicalize(project).map_err(failed)?) {
+        return Err(format!(
+            "{} leaves the project: its board is not written there",
+            path.display()
+        ));
     }
     let mut text = serde_json::to_string_pretty(board)
         .map_err(|why| format!("the board did not write as JSON: {why}"))?;
     text.push('\n');
-    let beside = path.with_extension(format!("json.{}", std::process::id()));
-    std::fs::write(&beside, text).map_err(failed)?;
-    std::fs::rename(&beside, &path).map_err(|why| {
+    let path = dir.join("board.json");
+    // A file that already says it is not written again: a watcher of the project sees no change.
+    if std::fs::read_to_string(&path).is_ok_and(|now| now == text) {
+        return Ok(());
+    }
+    let beside = dir.join(format!("board.json.{}", crate::token()));
+    let wrote = (std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&beside))
+    .and_then(|mut file| file.write_all(text.as_bytes()))
+    .and_then(|()| std::fs::rename(&beside, &path));
+    wrote.map_err(|why| {
         let _ = std::fs::remove_file(&beside);
         failed(why)
     })

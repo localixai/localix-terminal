@@ -7,18 +7,35 @@ const LIMIT: std::time::Duration = std::time::Duration::from_millis(19_500);
 /// Where the last statement may start, tried at most: each try that does not parse costs a call.
 const MAX_CUTS: usize = 6;
 
+/// What comes before a call's id in a form: only this and `Form::tail` are the desk's own, the
+/// caller's source is inside the tail and never read for a placeholder.
+const CALL: &str = "window.__dloop_call ? window.__dloop_call(";
+
+/// One way to start a caller's script, made once its call's id is known (`at`).
+pub(super) struct Form {
+    /// Everything after the id.
+    tail: String,
+}
+
+impl Form {
+    /// The script that starts the caller's, answering call `id`.
+    pub(super) fn at(&self, id: u64) -> String {
+        format!("{CALL}{id}{}", self.tail)
+    }
+}
+
 /// The ways to start a caller's script, tried in order until one parses (a parse error runs
 /// nothing, so nothing runs twice): an expression; statements whose last line is returned; a
 /// function body with its own `return`. Each hands the probe a function that starts it, so the
 /// probe begins watching (requests, announcements) before the script's first line runs, and answers
 /// over IPC. Run natively, not through `eval`, so a page's CSP cannot refuse it. The helpers come in as
 /// an outer function's parameters, so a script may declare the same names itself.
-pub(super) fn script_forms(source: &str) -> Vec<String> {
+pub(super) fn script_forms(source: &str) -> Vec<Form> {
     let helpers = HELPERS.replace("__SCRIPT_MS__", &LIMIT.as_millis().to_string());
-    let start = |body: &str| {
-        format!(
-            "window.__dloop_call ? window.__dloop_call(__ID__, \"settled\", (({{ press, sleep }}) => () => (async () => {{\n{body}\n}})())({helpers})) : false"
-        )
+    let start = |body: &str| Form {
+        tail: format!(
+            ", \"settled\", (({{ press, sleep }}) => () => (async () => {{\n{body}\n}})())({helpers})) : false"
+        ),
     };
     let source = source.trim().trim_end_matches(';');
     let mut forms = vec![start(&format!("return ({source}\n)"))];

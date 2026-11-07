@@ -51,17 +51,45 @@ fn glass_is_for_a_shown_window_on_macos() {
 
 #[test]
 fn each_appearance_has_its_own_material_and_coat() {
-    // HUD in the dark appearance; under-window background, which reads light, in the light.
+    // HUD in the dark appearance; sidebar, which keeps the desktop's colour, in the light.
     assert_eq!(material(true), 13);
-    assert_eq!(material(false), 21);
-    let (dark_coat, dark_alpha) = coat(true);
-    let (light_coat, light_alpha) = coat(false);
-    assert_eq!((dark_coat, light_coat), (DARK, LIGHT));
-    // Mostly glass, as Safari's bar: at most a quarter coat, lighter where the text is dark.
-    assert!(dark_alpha < light_alpha && dark_alpha >= 0.4 && light_alpha <= 0.7);
+    assert_eq!(material(false), 7);
+    use super::super::settings::Transparency as Level;
+    let levels = [Level::Off, Level::Low, Level::Standard, Level::High];
+    let ladder = |dark| levels.map(|level| coat(dark, level));
+    let (dark, light) = (ladder(true), ladder(false));
+    assert!(dark.iter().all(|(colour, _)| *colour == DARK));
+    assert!(light.iter().all(|(colour, _)| *colour == LIGHT));
+    for steps in [dark, light] {
+        // Off is opaque, and each level clearer than the one before.
+        assert!((steps[0].1 - 1.0).abs() < f64::EPSILON);
+        assert!(
+            steps.windows(2).all(|pair| pair[1].1 < pair[0].1),
+            "{steps:?}"
+        );
+    }
+    // White hides a light blur sooner than black a dark one: never more of it at a level, and
+    // the light standard is nearly the bare material.
+    assert!(
+        dark.iter()
+            .zip(light)
+            .all(|(dark, light)| light.1 <= dark.1)
+    );
+    assert!(light[2].1 <= 0.15 && (0.3..=0.5).contains(&dark[2].1));
     // A neutral coat, near-black or near-white, so the material never reads grey.
     let neutral = |[red, green, blue]: Rgb| red == green && green == blue;
     assert!(neutral(DARK) && DARK[0] < 0x10 && neutral(LIGHT) && LIGHT[0] > 0xf0);
+}
+
+#[test]
+fn the_glass_keeps_the_chosen_level_in_every_window_state() {
+    use super::super::settings::Transparency as Level;
+    for chosen in [Level::Off, Level::Low, Level::Standard, Level::High] {
+        assert_eq!(glass_level(chosen, false, false), chosen);
+        assert_eq!(glass_level(chosen, true, false), Level::Off);
+        assert_eq!(glass_level(chosen, false, true), Level::Off);
+        assert_eq!(glass_level(chosen, true, true), Level::Off);
+    }
 }
 
 #[test]
@@ -85,4 +113,13 @@ fn a_page_is_dressed_in_the_frames_stylesheet() {
     assert!(opaque.contains("<html>") && opaque.contains(CSS));
     assert_eq!(opaque.matches("<style>").count(), 1);
     assert!(CSS.contains("prefers-reduced-transparency"));
+}
+
+#[test]
+fn a_page_is_told_when_the_person_reduces_transparency() {
+    let page = "<!doctype html>\n<html>\n<head>\n<title>t</title></head><body></body></html>";
+    assert!(dressed_as(page, Look::Glass, true).contains("<html data-reduced data-glass>"));
+    assert!(dressed_as(page, Look::Opaque, true).contains("<html data-reduced>"));
+    assert!(!dressed_as(page, Look::Glass, false).contains("<html data-reduced"));
+    assert!(CSS.contains("html[data-reduced]"));
 }

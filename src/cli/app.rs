@@ -18,16 +18,29 @@ use crate::client::{Start, Trouble, ask};
 /// happened goes to `app.log` in the desk's home, where a person who wonders can read it.
 pub(super) fn run() -> u8 {
     crate::server::log_to_home();
-    let mut said = crate::setup::opened();
+    let mut said = vec![];
+    // What is written into the person's tools names this program: not one that is on a disk image
+    // or in a download's temporary place, which is gone at eject or restart.
+    let in_place = crate::bundle::in_place();
+    if !in_place {
+        said.push("not set up: move LLX Desk to Applications, and open it from there".into());
+    }
     let home = std::env::var_os("HOME").map(PathBuf::from);
     match bind_taking_over(&mut said) {
         Ok(crate::server::Binding::Bound(bound)) => {
             said.push("the app serves".into());
             note(&said);
-            // The person's own programs run (`claude`): not before the window.
-            let setting_up = std::thread::Builder::new()
-                .name("desk-setup".into())
-                .spawn(|| note(&crate::setup::auto()));
+            // The person's own programs run (`claude`, their login shell, which may take
+            // seconds): not before the window.
+            let setting_up =
+                std::thread::Builder::new()
+                    .name("desk-setup".into())
+                    .spawn(move || {
+                        if in_place {
+                            note(&crate::setup::opened());
+                            note(&crate::setup::auto());
+                        }
+                    });
             if let Err(why) = setting_up {
                 note(&[format!("the agents were not set up (no thread: {why})")]);
             }
@@ -40,6 +53,11 @@ pub(super) fn run() -> u8 {
         }
         Ok(crate::server::Binding::Running) => {
             let code = present(&mut said, home.as_deref());
+            // After the window: the command may wait for the person's login shell. A server a
+            // client started never set it up.
+            if in_place {
+                said.extend(crate::setup::opened());
+            }
             note(&said);
             code
         }
@@ -71,25 +89,16 @@ pub(super) fn open() -> u8 {
     run()
 }
 
-/// The system asked to open `bundle`, as the Dock does: done once `open` says so, within a few
-/// seconds.
+/// The system asked to open `bundle`, as the Dock does (with this caller's places for the app's
+/// files, as a call that starts it): done once `open` says so, within a few seconds.
 #[cfg(target_os = "macos")]
 fn ask_open(bundle: &Path) -> Result<(), String> {
-    let mut child = std::process::Command::new("/usr/bin/open")
-        .arg(bundle)
-        .spawn()
-        .map_err(|why| why.to_string())?;
-    let (said, heard) = std::sync::mpsc::sync_channel(1);
-    std::thread::Builder::new()
-        .name("open-reaper".into())
-        .spawn(move || {
-            let _ = said.send(child.wait());
-        })
-        .map_err(|why| why.to_string())?;
-    match heard.recv_timeout(std::time::Duration::from_secs(10)) {
-        Ok(Ok(status)) if status.success() => Ok(()),
-        Ok(Ok(status)) => Err(status.to_string()),
-        Ok(Err(why)) => Err(why.to_string()),
+    let mut open = std::process::Command::new("/usr/bin/open");
+    crate::client::keep_places(&mut open);
+    let child = open.arg(bundle).spawn().map_err(|why| why.to_string())?;
+    match crate::client::reap(child)?.recv_timeout(std::time::Duration::from_secs(10)) {
+        Ok(status) if status.success() => Ok(()),
+        Ok(status) => Err(status.to_string()),
         Err(_) => Err("the system did not answer".into()),
     }
 }
@@ -141,17 +150,9 @@ fn freed() -> std::io::Result<Option<crate::server::Bound>> {
         if let crate::server::Binding::Bound(bound) = crate::server::bind()? {
             return Ok(Some(bound));
         }
-        backoff();
+        crate::backoff(std::time::Duration::from_millis(20));
     }
     Ok(None)
-}
-
-#[expect(
-    clippy::disallowed_methods,
-    reason = "a backoff while the other server lets go of its lock: there is no event to wait on"
-)]
-fn backoff() {
-    std::thread::sleep(std::time::Duration::from_millis(20));
 }
 
 /// The window asked of the server that runs already.
@@ -175,11 +176,16 @@ fn present(said: &mut Vec<String>, home: Option<&Path>) -> u8 {
             );
             0
         }
-        Err(Trouble::Refused(why) | Trouble::Lost(why)) => {
+        Err(trouble) => {
+            let why = match trouble {
+                Trouble::Refused(why) | Trouble::Lost(why) => why,
+                Trouble::None => "no server answered".into(),
+            };
+            // Where the person can see it from `llx-desk open`; the log has it for the icon.
+            crate::out::warn(&format!("llx-desk: the window did not open: {why}"));
             said.push(format!("the window did not open: {why}"));
             1
         }
-        Err(Trouble::None) => 1,
     }
 }
 
@@ -221,9 +227,7 @@ fn note(said: &[String]) {
         .append(true)
         .open(file);
     if let Ok(mut file) = opened {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |since| since.as_secs());
+        let stamp = crate::now();
         for line in said {
             let _ = writeln!(file, "{stamp} {line}");
         }

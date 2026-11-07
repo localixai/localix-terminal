@@ -2,7 +2,8 @@
 //! gives a path (`demo/shop/index.html`) and the page loads as from a server, its styles,
 //! scripts, `fetch` and storage working, with no server of anyone's to start. Each directory has
 //! an unguessable prefix of its own; only its files are served, never one whose name starts with
-//! a dot (`.env`, `.git`), or outside it once links are followed.
+//! a dot (`.env`, `.git`), nor one a link leads to that is outside it or under such a name, and
+//! only to a request that names this server's own address.
 
 use std::collections::HashMap;
 use std::net::{TcpListener, TcpStream};
@@ -11,9 +12,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
+mod range;
 mod reply;
 
-use reply::answer;
+use reply::{answer, decoded};
 
 /// The most connections answered at once; one more waits for the oldest to end, within the
 /// time a request may take to arrive.
@@ -67,24 +69,40 @@ impl Served {
     /// when `url` is a web address, for the browser to read. A page outside `root` (the caller's
     /// project) is refused: it would hand its whole directory to the scripts it holds.
     pub fn address(&self, root: &Path, cwd: &Path, url: &str) -> Result<Option<String>, String> {
-        let (path, sure) = match given(url) {
-            Given::File(path) => (path, true),
-            Given::Maybe(path) => (path, false),
+        let (text, sure) = match given(url) {
+            // A `file://` address spells a space `%20`; a plain path is as it is written.
+            Given::File(path) if url.trim().starts_with("file://") => {
+                (decoded(path).unwrap_or_else(|| path.to_string()), true)
+            }
+            Given::File(path) => (path.to_string(), true),
+            Given::Maybe(path) => (path.to_string(), false),
             Given::Address => return Ok(None),
         };
-        let path = path.strip_prefix("~/").map_or_else(
-            || cwd.join(path),
-            |rest| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(rest),
-        );
-        let page = match path.is_dir() {
-            true => path.join("index.html"),
-            false => path,
+        // The text is a path first (a file name may hold `?` or `#`); failing that, what follows
+        // the first of them is the page's own query or hash, kept as it is for the address.
+        let page_at = |text: &str| {
+            let path = text.strip_prefix("~/").map_or_else(
+                || cwd.join(text),
+                |rest| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(rest),
+            );
+            match path.is_dir() {
+                true => path.join("index.html"),
+                false => path,
+            }
+        };
+        let whole = page_at(&text);
+        let (page, tail) = match text.find(['?', '#']) {
+            Some(at) if !whole.is_file() => {
+                let (head, tail) = text.split_at(at);
+                (page_at(head), tail)
+            }
+            _ => (whole.clone(), ""),
         };
         if !page.is_file() {
             return match sure {
                 true => Err(format!(
                     "there is no file {}: give a page's path, or a web address",
-                    page.display()
+                    whole.display()
                 )),
                 false => Ok(None),
             };
@@ -112,7 +130,7 @@ impl Served {
         let prefix = running.prefix(dir);
         let name = encoded(&name.to_string_lossy());
         Ok(Some(format!(
-            "http://127.0.0.1:{}/{prefix}/{name}",
+            "http://127.0.0.1:{}/{prefix}/{name}{tail}",
             running.port
         )))
     }
@@ -162,7 +180,11 @@ fn serve(listener: &TcpListener, roots: &Arc<Mutex<HashMap<String, Root>>>, stop
         if stopped.load(Ordering::SeqCst) {
             break;
         }
-        let Ok(stream) = stream else { continue };
+        let Ok(stream) = stream else {
+            // Out of descriptors, mostly: a pause, not a spin on one core.
+            crate::backoff(crate::BACKOFF);
+            continue;
+        };
         let (done, going): (Vec<_>, Vec<_>) =
             answering.into_iter().partition(JoinHandle::is_finished);
         answering = going;

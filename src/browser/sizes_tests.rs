@@ -1,3 +1,5 @@
+//! Tests of page sizes and their placement inside a window.
+
 use tao::dpi::LogicalSize;
 
 use super::{Frame, PRESETS, Picked, Placed, menu, parse, picked, place, script};

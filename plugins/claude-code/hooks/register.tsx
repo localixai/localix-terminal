@@ -30,7 +30,7 @@ const slug = (text: string) =>
     .slice(0, 24)
 
 /** The worker a board note from the person is about: `returned c4 "Cart" (tests) to Todo: …`. */
-const NOTE = /^The person on the board \S+ (?:returned|commented on|edited|moved|blocked|unblocked) c\d+ ".*" \(([\w.:-]+)\)(?: |:|$)/
+const NOTE = /^The person on the board \S+ (?:returned|commented on|edited|moved|blocked|unblocked) c\d+ "(?:[^"\\]|\\.)*" \(([\w.:-]+)\)(?: |:|\n|$)/
 
 // Which subagent is which worker on the board: its loop's id → the name the board shows.
 const workers = new Map<string, string>()
@@ -50,6 +50,9 @@ async function cards($: Api): Promise<BoardCard[] | undefined> {
   }
 }
 
+/** A card's id as the board makes it: the file may carry anything, and ids go into what the agent is told. */
+const CARD_ID = /^c\d+$/
+
 function summary(list: BoardCard[]): BoardSummary {
   const count = (column: BoardCard['column']) => list.filter(card => card.column === column).length
   return {
@@ -59,14 +62,16 @@ function summary(list: BoardCard[]): BoardSummary {
     review: count('review'),
     done: count('done'),
     blocked: list.filter(card => card.blocked && card.column !== 'done').length,
-    working: list.filter(card => card.column === 'doing').map(card => (card.who ? `${card.id} ${card.who}` : card.id)),
+    working: list.filter(card => card.column === 'doing' && CARD_ID.test(card.id)).map(card => (card.who ? `${card.id} ${card.who}` : card.id)),
   }
 }
 
-/** The cards `worker` (none: the main agent) left in Doing, named: `c3 "Cart"`. */
+/** The cards `worker` (none: the main agent) left in Doing, named by id: `c3, c4`. A blocked card was put down on purpose, so it is not left half done. A title is data a file may carry, so none is put into what the agent is told. */
 async function leftOver($: Api, worker: string | undefined): Promise<string> {
-  const left = ((await cards($)) ?? []).filter(card => card.column === 'doing' && (card.who ?? undefined) === worker)
-  return left.map(card => `${card.id} "${card.title}"`).join(', ')
+  const left = ((await cards($)) ?? []).filter(
+    card => card.column === 'doing' && !card.blocked && CARD_ID.test(card.id) && (card.who ?? undefined) === worker,
+  )
+  return left.map(card => card.id).join(', ')
 }
 
 /** How the session reaches the desk, once it has started: a `llx-desk` call. */
@@ -82,6 +87,10 @@ const LONG_TURN_MS = 30_000
 const WORKER = 'llx-desk:worker'
 /** A worker's name on the board as its task gives it: `your name on the board: cart-button`. */
 const NAMED = /your name on the board:\s*`?([A-Za-z0-9._-]+)/i
+/** How long a follower that ended waits before it is started again. */
+const FOLLOW_RETRY_MS = 5000
+/** The session ended: the comment follower is not started again. */
+let ended = false
 /** The workers sent word once to finish their card. */
 const nudged = new Set<string>()
 /** The main agent's cards it was last asked to finish, named. */
@@ -106,11 +115,16 @@ export const register: Register = (on, options) => {
       `${home ?? ''}/Applications/LLX Desk.app/Contents/MacOS/llx-desk`,
       '/Applications/LLX Desk.app/Contents/MacOS/llx-desk',
     ]
+    // Resolved at each call, from the first: a program that failed once (not installed yet, a
+    // slow moment) is tried again. `found` is the one that last ran.
     let found = 0
     const run = async (argv: string[]) => {
-      for (; found < candidates.length; found++) {
-        const ran = await $.process.run([candidates[found], ...argv], { timeoutMs: 5000 }).catch(() => undefined)
-        if (ran) return ran
+      for (let i = 0; i < candidates.length; i++) {
+        const ran = await $.process.run([candidates[i], ...argv], { timeoutMs: 5000 }).catch(() => undefined)
+        if (ran) {
+          found = i
+          return ran
+        }
       }
       return undefined
     }
@@ -132,12 +146,13 @@ export const register: Register = (on, options) => {
     // What the app holds, every few seconds. `status` never starts the app, and the tabs are
     // listed only while one runs, so the pane never opens a window by itself. The board is read
     // from its file, so it shows with the app not running.
-    const refresh = async () => {
+    const look = async () => {
       const list = await cards($)
       await update($, board, () => (list && list.length ? summary(list) : null))
       const status = await run(['status'])
       if (!status || status.exitCode !== 0) {
         deskUp = false
+        waiting = false
         await update($, desk, d => ({ ...d, app: 'not running', window: '-', terminals: '0', tabs: [] }))
         return
       }
@@ -155,7 +170,18 @@ export const register: Register = (on, options) => {
         tabs,
       }))
     }
-    $.clock.every(3000, () => void refresh())
+    // One look at a time: a slow call does not pile ticks up behind it.
+    let looking = false
+    const refresh = async () => {
+      if (looking) return
+      looking = true
+      try {
+        await look()
+      } finally {
+        looking = false
+      }
+    }
+    $.clock.every(3000, () => void refresh().catch(() => undefined))
 
     // A note the person left for a subagent's card goes to that subagent while it runs; the main
     // agent hears it too, and that it went there.
@@ -177,32 +203,42 @@ export const register: Register = (on, options) => {
     }
 
     // The person's comments and what they do on the board, as they come: kept for the pane, and
-    // each one a turn of its own, so Claude wakes without anyone typing. The first look settles
-    // which program.
+    // each one a turn of its own, so Claude wakes without anyone typing. Each round looks first,
+    // which settles which program; a follower that cannot start or ends is started again a few
+    // seconds later, until the session ends.
+    ended = false
     void (async () => {
-      await refresh()
-      // Each note is one JSON string on a line of its own (`--json`): what the pipe hands over
-      // comes in pieces of any size, so the lines are put together again before one is read, and
-      // a note's own lines (its picture's path last) never come as a turn of their own.
-      const follow = $.process.spawn({ argv: [candidates[Math.min(found, candidates.length - 1)], 'window', ...project, '--said', '--follow', '--json'] })
-      let held = ''
-      for await (const piece of follow) {
-        if (piece.stream !== 'stdout') continue
-        held += piece.text
-        const lines = held.split('\n')
-        held = lines.pop() ?? ''
-        for (const line of lines) {
-          let text: string
-          try {
-            text = String(JSON.parse(line)).trim()
-          } catch {
-            continue
+      while (!ended) {
+        try {
+          await refresh()
+          // Each note is one JSON string on a line of its own (`--json`): what the pipe hands over
+          // comes in pieces of any size, so the lines are put together again before one is read, and
+          // a note's own lines (its picture's path last) never come as a turn of their own.
+          const follow = $.process.spawn({ argv: [candidates[found], 'window', ...project, '--said', '--follow', '--json'] })
+          let held = ''
+          for await (const piece of follow) {
+            if (piece.stream !== 'stdout') continue
+            held += piece.text
+            const lines = held.split('\n')
+            held = lines.pop() ?? ''
+            for (const line of lines) {
+              let text: string
+              try {
+                text = String(JSON.parse(line)).trim()
+              } catch {
+                continue
+              }
+              if (!text) continue
+              await update($, desk, d => ({ ...d, comments: [...d.comments, { at: time(), text: words(text) }].slice(-20) }))
+              $.ui.toast(`llx-desk: ${words(text).slice(0, 80)}`)
+              await tell(text)
+            }
           }
-          if (!text) continue
-          await update($, desk, d => ({ ...d, comments: [...d.comments, { at: time(), text: words(text) }].slice(-20) }))
-          $.ui.toast(`llx-desk: ${words(text).slice(0, 80)}`)
-          await tell(text)
+        } catch {
+          // The follower could not start or broke: the next round starts it again.
         }
+        // A wait that is refused means the module is gone: the loop ends with it.
+        if (!(await $.clock.sleep(FOLLOW_RETRY_MS).then(() => true, () => false))) break
       }
     })()
 
@@ -246,14 +282,14 @@ export const register: Register = (on, options) => {
     const said = (e.answer.split('\n').find(line => line.trim()) ?? '').trim().slice(0, 140)
     const ask = said ? `Claude finished: ${said}` : 'Claude finished and waits for you'
     waiting = true
-    void deskRun(['window', JSON.stringify({ action: 'interact', ask })])
+    void deskRun(['window', ...project, JSON.stringify({ action: 'interact', ask })])
     return done
   })
 
   on('turn.start', async ($, e, next) => {
-    if (!e.agentId && waiting && deskRun) {
+    if (!e.agentId && waiting && deskUp && deskRun) {
       waiting = false
-      void deskRun(['window', JSON.stringify({ action: 'interact', ask: '' })])
+      void deskRun(['window', ...project, JSON.stringify({ action: 'interact', ask: '' })])
     }
     return next(e)
   })
@@ -263,15 +299,24 @@ export const register: Register = (on, options) => {
   // starts. A task that gives none gets one from its description, added to its words.
   on('agent.spawn', async ($, e, next) => {
     if (e.subagentType !== WORKER) return next(e)
-    const given = slug(e.prompt.match(NAMED)?.[1] ?? '')
+    const raw = e.prompt.match(NAMED)?.[1]
+    const given = slug(raw ?? '')
     const taken = [...workers.values()]
     let name = given && !taken.includes(given) && given !== 'agent' && given !== 'person' ? given : ''
-    const told = name !== '' && name === given
     if (!name) {
       name = slug(e.description) || 'worker'
       if (taken.includes(name) || name === 'agent' || name === 'person') name = `${name}-${taken.length + 1}`
     }
-    const started = await next(told ? e : { ...e, prompt: `${e.prompt.trim()}\n\nYour name on the board: ${name}.` })
+    // The name the task gives is kept as written when it is the one taken; else its line says the
+    // chosen one, so the prompt holds one name only.
+    let prompt = e.prompt
+    if (raw !== name) {
+      const tail = raw?.match(/\.+$/)?.[0] ?? ''
+      prompt = raw
+        ? prompt.replace(NAMED, said => `${said.slice(0, said.length - raw.length)}${name}${tail}`)
+        : `${prompt.trim()}\n\nYour name on the board: ${name}.`
+    }
+    const started = await next(prompt === e.prompt ? e : { ...e, prompt })
     if (started.agentId) workers.set(started.agentId, name)
     return started
   }).catch(($, e, next) => next(e))
@@ -292,6 +337,7 @@ export const register: Register = (on, options) => {
   // The session ends: the tabs the project opened close (never a server started for it: only
   // the app's program is run, and `--end` starts nothing).
   on('session.end', async ($, e, next) => {
+    ended = true
     if (deskRun && deskUp) await deskRun(['window', ...project, '--end']).catch(() => undefined)
     return next(e)
   })

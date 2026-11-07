@@ -111,3 +111,53 @@ fn what_another_run_left_open_is_past_once_the_project_has_a_tab_this_run() {
     assert!(past.iter().any(|tab| tab.row == old), "{past:?}");
     again.shutdown();
 }
+
+#[test]
+fn a_screen_is_kept_with_the_secrets_it_shows_masked() {
+    let store = Arc::new(crate::store::Store::memory().unwrap());
+    let scratch = Scratch::new();
+    let dir = scratch.path().join("secrets");
+    crate::secrets::save_in(&dir, "PW", "hunter2-long").unwrap();
+    let desk = desk_on(Arc::clone(&store));
+    let mine = caller(&desk, scratch.path(), None);
+    // A call typed the secret in, and the program echoed it.
+    desk.vault.fill_in(Some(&dir), "{{secret:PW}}").unwrap();
+    let open = json!({"action": "open", "kind": "terminal",
+        "command": "sh -c 'echo pw=hunter2-long; sleep 30'", "wait_for": "pw="});
+    desk.window(&mine.call(), &open).unwrap();
+    desk.shutdown();
+    let left = store
+        .read(|db| ledger::left_open(db, mine.project.id))
+        .unwrap();
+    let kept = store
+        .read(|db| ledger::screen(db, left[0].row))
+        .unwrap()
+        .unwrap();
+    assert!(kept.contains("pw={{secret:PW}}"), "{kept}");
+    assert!(!kept.contains("hunter2-long"), "{kept}");
+}
+
+#[test]
+fn a_title_said_often_is_written_once_in_a_while_and_its_last_word_when_the_row_closes() {
+    let store = Arc::new(crate::store::Store::memory().unwrap());
+    let scratch = Scratch::new();
+    let desk = desk_on(Arc::clone(&store));
+    let mine = caller(&desk, scratch.path(), None);
+    let open = json!({"action": "open", "kind": "terminal", "command": "sleep 30",
+        "yield_ms": 200});
+    desk.window(&mine.call(), &open).unwrap();
+    let title = || {
+        let past = store
+            .read(|db| ledger::past(db, mine.project.id, 10))
+            .unwrap();
+        past[0].title.clone()
+    };
+    desk.retitled("t1", "one");
+    desk.retitled("t1", "two");
+    desk.retitled("t1", "three");
+    assert_eq!(title(), "one");
+    desk.window(&mine.call(), &json!({"action": "close", "tab": "t1"}))
+        .unwrap();
+    assert_eq!(title(), "three");
+    desk.shutdown();
+}

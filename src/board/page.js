@@ -16,7 +16,7 @@ const EMPTY = {
   done: "Nothing accepted yet.",
   discarded: "Nothing given up. Cards dropped from any column land here.",
 };
-const MOTION = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+const motion = matchMedia("(prefers-reduced-motion: reduce)");
 let board = { key: "", project: "", limit: 1, now: 0, cards: [] };
 let paintedAt = Date.now();
 let opened = null;
@@ -24,6 +24,7 @@ let returning = false;
 let removing = false;
 let dragged = null;
 let seen = null;
+let boardSig = null, paintFrame = 0, paintTimer = 0, repaint = false, composing = false;
 // Columns the person folded or opened; an empty Review or Done folds by itself until then.
 const folds = new Map();
 
@@ -54,7 +55,7 @@ function icon(d, size = 12) {
 }
 const GLYPH = {
   close: "m3 3 6 6M9 3 3 9", check: "m2.5 6.3 2.3 2.2L9.5 3.5", back: "M4.5 3 2 5.5 4.5 8M2 5.5h5.5a2.5 2.5 0 0 1 0 5H6",
-  fold: "M7.5 3 4.5 6l3 3", open: "M4.5 3l3 3-3 3", plus: "M6 2v8M2 6h8",
+  fold: "M7.5 3 4.5 6l3 3", open: "M4.5 3l3 3-3 3",
   // For the empty columns, drawn larger: an idea, a list, someone at work, an eye, a seal.
   idea: "M4.4 8.6C3.4 7.9 2.8 6.9 2.8 5.7a3.2 3.2 0 0 1 6.4 0c0 1.2-.6 2.2-1.6 2.9v1H4.4zM4.6 11h2.8",
   list: "M4.5 3.5h5M4.5 6h5M4.5 8.5h5M2.5 3.5h0M2.5 6h0M2.5 8.5h0",
@@ -76,8 +77,13 @@ function age(then) {
   return Math.floor(secs / 86400) + "d";
 }
 const ago = (then) => (age(then) === "now" ? "just now" : age(then) + " ago");
+// The latest step of `card` that moved it, found from the end without copying its history.
+function lastMove(card) {
+  for (let at = card.history.length - 1; at >= 0; at--) if (card.history[at].to) return card.history[at];
+  return null;
+}
 const since = (card) => {
-  const moved = [...card.history].reverse().find((step) => step.to);
+  const moved = lastMove(card);
   return moved ? moved.at : 0;
 };
 const who = (card) => card.who || "agent";
@@ -101,7 +107,7 @@ function owner(card) {
 }
 // What the person said when they last sent the card back, while it waits in Todo.
 function returned(card) {
-  const last = [...card.history].reverse().find((step) => step.to);
+  const last = lastMove(card);
   return card.column === "todo" && last && last.by === "person" && last.to === "todo" ? last.text : null;
 }
 const note = (kind, label, text) => el(`div.note.${kind}`, {}, el("b", { text: label + " " }), text);
@@ -126,7 +132,7 @@ function restore(held) {
   const field = document.querySelector(`[data-keep="${held.keep}"]`);
   if (!field) return;
   field.value = held.value;
-  field.focus();
+  field.focus({ preventScroll: true });
   try { field.setSelectionRange(held.start, held.end); } catch {}
 }
 
@@ -143,6 +149,7 @@ function cardView(card) {
   const back = returned(card);
   const offer = quick(card);
   const hasQuick = !!offer && card.column !== "review";
+  const moved = since(card);
   const node = el(`div.card${opened === card.id ? ".sel" : ""}${seen && !seen.has(card.id) ? ".fresh" : ""}${hasQuick ? ".quick-on" : ""}`, {
     draggable: "true", tabindex: "0", role: "button", "data-id": card.id, "data-col": card.column, "aria-label": `${card.id}: ${card.title}`,
     "aria-keyshortcuts": "Enter Alt+ArrowLeft Alt+ArrowRight",
@@ -160,7 +167,7 @@ function cardView(card) {
       onclick: (e) => { e.stopPropagation(); act({ op: "accept", card: card.id }); } }, icon(GLYPH.check, 13)),
     el("button.act.no", { title: "Send back…", "aria-label": `Send ${card.id} back`,
       onclick: (e) => { e.stopPropagation(); open(card.id, true); } }, icon(GLYPH.back, 13))) : null,
-  el("div.m", {}, el("span.id", { text: card.id }), owner(card), el("span.age", { text: age(since(card)), "data-at": since(card) })),
+  el("div.m", {}, el("span.id", { text: card.id }), owner(card), el("span.age", { text: age(moved), "data-at": moved })),
   offer && card.column !== "review" ? el(`button.quick${offer.plain ? ".plain" : ""}`, {
     tabindex: "-1", onclick: (e) => { e.stopPropagation(); act(offer.action); } }, icon(GLYPH[offer.glyph], 10), offer.label) : null);
   node.addEventListener("dragstart", (e) => {
@@ -171,7 +178,13 @@ function cardView(card) {
     e.dataTransfer.effectAllowed = "move";
     requestAnimationFrame(() => node.classList.add("dragging"));
   });
-  node.addEventListener("dragend", () => { dragged = null; node.classList.remove("dragging"); slot(); slotEl = null; });
+  node.addEventListener("dragend", () => {
+    dragged = null;
+    node.classList.remove("dragging");
+    slot();
+    slotEl = null;
+    if (repaint) queuePaint();
+  });
   return node;
 }
 
@@ -193,6 +206,8 @@ document.getElementById("lanes").addEventListener("pointermove", (e) => {
 
 // Keys on a focused card: Enter opens it, ⌥← and ⌥→ move it a column, the arrows walk the board.
 function keyOnCard(e, card) {
+  // A key on a button inside the card is the button's own.
+  if (e.target !== e.currentTarget) return;
   const step = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
   if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(card.id, false); return; }
   if (e.altKey && step) {
@@ -201,7 +216,6 @@ function keyOnCard(e, card) {
     if (to) { folds.set(to, false); act({ op: "move", card: card.id, to }); }
     return;
   }
-  const cards = [...document.querySelectorAll(".card")];
   const here = e.currentTarget;
   if (e.key === "ArrowDown" || e.key === "ArrowUp") {
     e.preventDefault();
@@ -214,7 +228,7 @@ function keyOnCard(e, card) {
     const lane = lanes[lanes.indexOf(here.closest(".lane")) + step];
     const next = lane && lane.querySelector(".card");
     if (next) next.focus();
-  } else if (e.key === "Backspace" && cards.length) {
+  } else if (e.key === "Backspace") {
     e.preventDefault();
     open(card.id, false);
     arm();
@@ -283,7 +297,9 @@ function laneView([column, title]) {
     droppable(rail, column, null);
     return rail;
   }
-  const shown = column === "done" ? [...cards].sort((a, b) => since(b) - since(a)).slice(0, 40) : cards;
+  const shown = column === "done"
+    ? cards.map((card) => [since(card), card]).sort((a, b) => b[0] - a[0]).slice(0, 40).map(([, card]) => card)
+    : cards;
   let pill = null;
   if (column === "doing") {
     pill = el("button.pill", { text: `${board.limit} each`, title: "The most cards one worker has in Doing. Click to change.",
@@ -435,8 +451,31 @@ function close() {
 }
 
 // The board drawn again, each card gliding from where it was to where it is now.
+// Full snapshots that arrive together show only their newest state. A native drag or IME
+// composition owns its DOM until it finishes: an agent's update must not replace its target.
+function queuePaint() {
+  repaint = true;
+  if (paintFrame || dragged || composing) return;
+  paintFrame = requestAnimationFrame(paint);
+  paintTimer = setTimeout(paint, 150);
+}
+document.addEventListener("compositionstart", () => { composing = true; });
+document.addEventListener("compositionend", () => {
+  composing = false;
+  if (repaint) queuePaint();
+});
 function paint() {
+  cancelAnimationFrame(paintFrame);
+  clearTimeout(paintTimer);
+  paintFrame = paintTimer = 0;
+  if (dragged || composing) { repaint = true; return; }
+  repaint = false;
   const held = kept();
+  // Each column's scroll and the open card's, put back once they are drawn again.
+  const scrolled = new Map([...document.querySelectorAll(".list[data-col]")].map((list) => [list.dataset.col, list.scrollTop]));
+  const inspected = document.querySelector("aside .body");
+  const inspectedAt = inspected && inspected.scrollTop;
+  const inspectedId = document.getElementById("card").dataset.open;
   const before = new Map([...document.querySelectorAll(".card[data-id]")].map((card) => [card.dataset.id, card.getBoundingClientRect()]));
   const count = (column) => board.cards.filter((card) => card.column === column).length;
   // How far the work is: the ideas in Backlog are not work yet, and what was given up is not.
@@ -445,8 +484,9 @@ function paint() {
   document.getElementById("ring").style.strokeDashoffset = String(43.98 * (1 - (all ? done / all : 0)));
   document.getElementById("sub").textContent = all ? `${done} of ${all} done` : "No cards yet";
   document.getElementById("lanes").replaceChildren(...COLUMNS.map(laneView));
+  for (const list of document.querySelectorAll(".list[data-col]")) list.scrollTop = scrolled.get(list.dataset.col) || 0;
   seen = new Set(board.cards.map((card) => card.id));
-  if (MOTION) {
+  if (!motion.matches) {
     for (const card of document.querySelectorAll(".card[data-id]")) {
       const was = before.get(card.dataset.id);
       if (!was) continue;
@@ -464,7 +504,11 @@ function paint() {
   document.body.classList.toggle("inspecting", !!card);
   aside.setAttribute("aria-hidden", card ? "false" : "true");
   aside.replaceChildren(...(card ? inspector(card) : []));
+  aside.dataset.open = card ? card.id : "";
   fitTitle();
+  // The same card still open keeps its place in what it shows; another starts at the top.
+  const body = card && document.querySelector("aside .body");
+  if (body && inspectedId === card.id) body.scrollTop = inspectedAt;
   restore(held);
 }
 
@@ -472,7 +516,10 @@ function paint() {
 function B(state) {
   board = state;
   paintedAt = Date.now();
-  paint();
+  const next = JSON.stringify([state.key, state.project, state.limit, state.cards]);
+  if (next === boardSig) return;
+  boardSig = next;
+  queuePaint();
 }
 // The desk refused what the person did, saying why.
 let toastTimer = 0;
@@ -499,7 +546,7 @@ addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (typing) document.activeElement.blur();
     if (opened) close();
-  } else if (e.key === "n" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+  } else if ((e.code === "KeyN" || e.key.toLowerCase() === "n") && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
     e.preventDefault();
     document.getElementById("add").focus();
   }

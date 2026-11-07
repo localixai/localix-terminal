@@ -22,10 +22,13 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(test)]
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
+use crate::now;
 use crate::store::{Store, Transaction, params};
 
 /// What a notice is about: each kind of thing the desk's owners announce, with its ref (ids and
@@ -193,13 +196,6 @@ impl<'tx> Write<'_, 'tx> {
     }
 }
 
-/// Seconds since the epoch.
-fn now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |since| since.as_secs())
-}
-
 impl Feed {
     /// The feed kept in `store`, whose consumers try a failed notice again after `retry`, doubled
     /// each time.
@@ -263,10 +259,15 @@ impl Feed {
         })?;
         if last > 0 {
             let mut log = self.log();
-            log.next = log.next.max(last.saturating_add(1));
+            let before = log.next;
+            log.next = before.max(last.saturating_add(1));
+            // The seqs given so far are `next - 1` and below.
+            let crossed = log.next.saturating_sub(1) / 1000 > before.saturating_sub(1) / 1000;
             drop(log);
             self.inner.changed.notify_all();
-            if last % 1000 == 0 {
+            // A write of several notices may step over a thousand: that it crossed one is what
+            // counts, not that it ended on it.
+            if crossed {
                 self.prune();
             }
         }
@@ -286,6 +287,7 @@ impl Feed {
     }
 
     /// Every consumer's state.
+    #[cfg(test)]
     pub fn health(&self) -> Vec<Health> {
         let mut all: Vec<Health> = self.log().health.values().cloned().collect();
         all.sort_by_key(|health| health.name);
@@ -293,6 +295,7 @@ impl Feed {
     }
 
     /// Whether every consumer has read every notice recorded so far, waiting up to `most`.
+    #[cfg(test)]
     pub fn settled(&self, most: Duration) -> bool {
         let deadline = Instant::now() + most;
         let mut log = self.log();
@@ -304,10 +307,7 @@ impl Feed {
             let Some(left) = deadline.checked_duration_since(Instant::now()) else {
                 return false;
             };
-            log = match self.inner.changed.wait_timeout(log, left) {
-                Ok((log, _)) => log,
-                Err(poisoned) => poisoned.into_inner().0,
-            };
+            log = crate::wait_timeout(&self.inner.changed, log, left);
         }
     }
 
@@ -318,6 +318,7 @@ impl Feed {
     }
 
     /// Whether every consumer's thread has ended after [`Feed::stop`], waiting up to `most`.
+    #[cfg(test)]
     pub fn ended(&self, most: Duration) -> bool {
         let deadline = Instant::now() + most;
         let mut log = self.log();
@@ -325,16 +326,13 @@ impl Feed {
             let Some(left) = deadline.checked_duration_since(Instant::now()) else {
                 return false;
             };
-            log = match self.inner.changed.wait_timeout(log, left) {
-                Ok((log, _)) => log,
-                Err(poisoned) => poisoned.into_inner().0,
-            };
+            log = crate::wait_timeout(&self.inner.changed, log, left);
         }
         true
     }
 
     /// What the feed keeps no longer: the notices every running consumer read a day ago or
-    /// more, past [`KEPT`] the oldest anyway, and the cursors nobody moved in a month.
+    /// more, past `KEPT` the oldest anyway, and the cursors nobody moved in a month.
     pub fn prune(&self) {
         let (slowest, next) = {
             let log = self.log();

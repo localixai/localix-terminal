@@ -9,7 +9,6 @@ use super::super::frame;
 use super::presence::Presenter;
 use super::{Heard, Shared};
 
-/// The person did something to the window itself.
 /// Window `window_id`'s `event`, for its deck (the main window's when `main`): whether the
 /// person closed a window that is not the main one (the loop closes it, and its tabs).
 pub(super) fn on_window(
@@ -35,8 +34,8 @@ pub(super) fn on_window(
     )]
     match event {
         // The window is the app's own: closing it is quitting the app, which the desk asks the
-        // person about when programs run. (On macOS its close button collapses it to the mini
-        // instead, nspanel.rs: the Dock and the menu bar quit it.)
+        // person about when programs run, as ⌘Q does. (Its minimize button collapses it to the
+        // mini instead, nspanel.rs.)
         WindowEvent::CloseRequested if main => shared.heard("", Heard::Quit),
         // Another window closed: it goes, and its tabs with it.
         WindowEvent::CloseRequested => return true,

@@ -1,3 +1,5 @@
+//! Tests of the turn shared by page actions and the person's comments.
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};

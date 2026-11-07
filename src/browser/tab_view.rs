@@ -42,6 +42,10 @@ pub(super) fn builder<'a>(
         // The first click in a window that is not the key one reaches the page: the person
         // never clicks twice, once to wake the window and once to do what they meant.
         .with_accept_first_mouse(true)
+        // A page asks for the camera or the microphone as in any browser: WebKit asks the person,
+        // for that page's address (without a handler it would say yes to every page once the
+        // app itself was allowed).
+        .with_permission_handler(|_| wry::PermissionResponse::Default)
         .with_incognito(forget)
         .with_initialization_script_for_main_only(
             PROBE.replace("__TOKEN__", &shared.token).replace(
@@ -188,6 +192,21 @@ pub(super) fn remember(_first: &WebView) {}
 
 #[cfg(not(target_os = "macos"))]
 pub(super) fn forget() {}
+
+/// `builder` for one of the app's own pages (the strip's parts, the mini, a panel): remembering
+/// nothing, never taking the keyboard, drawing while the person works elsewhere, its own
+/// document only (it goes nowhere else, opens no window, and downloads nothing).
+pub(super) fn own_page(builder: WebViewBuilder) -> WebViewBuilder {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let first = AtomicBool::new(true);
+    builder
+        .with_incognito(true)
+        .with_focused(false)
+        .with_background_throttling(wry::BackgroundThrottlingPolicy::Disabled)
+        .with_navigation_handler(move |_| first.swap(false, Ordering::SeqCst))
+        .with_new_window_req_handler(|_, _| NewWindowResponse::Deny)
+        .with_download_started_handler(|_, _| false)
+}
 
 #[cfg(not(target_os = "linux"))]
 pub(super) fn build(builder: WebViewBuilder, window: &tao::window::Window) -> wry::Result<WebView> {

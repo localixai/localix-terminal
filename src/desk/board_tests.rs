@@ -237,3 +237,52 @@ fn the_agent_writes_an_idea_down_in_backlog_and_takes_none_from_there() {
         .unwrap_err();
     assert!(matches!(taken, crate::desk::Failure::Failed(why) if why.contains("Todo is empty")));
 }
+
+#[test]
+fn a_batch_add_that_fails_midway_leaves_the_board_as_it_was() {
+    let (desk, scratch) = (desk(), Scratch::new());
+    let mine = caller(&desk, scratch.path(), None);
+    let me = mine.call();
+    desk.window(&me, &json!({"action": "open", "kind": "board"}))
+        .unwrap();
+    let refused = desk
+        .window(
+            &me,
+            &json!({"action": "interact", "tab": "b1", "op": "add", "cards": [
+            {"title": "One"}, {"title": "Two"}, {"note": "no title"}]}),
+        )
+        .unwrap_err();
+    assert!(refused.message().contains("has a `title`"), "{refused:?}");
+    // Sent again whole, the cards are not twice on it.
+    let added = desk
+        .window(
+            &me,
+            &json!({"action": "interact", "tab": "b1", "op": "add", "cards": [
+            {"title": "One"}, {"title": "Two"}, {"title": "Three"}]}),
+        )
+        .unwrap();
+    assert!(added.contains("added c1, c2, c3"), "{added}");
+}
+
+#[test]
+fn a_second_agent_acts_on_the_projects_board_tab_it_was_given() {
+    let (desk, scratch) = (desk(), Scratch::new());
+    let cart = caller(&desk, scratch.path(), Some("cart"));
+    let header = caller(&desk, scratch.path(), Some("header"));
+    desk.window(&cart.call(), &json!({"action": "open", "kind": "board"}))
+        .unwrap();
+    let opened = desk
+        .window(&header.call(), &json!({"action": "open", "kind": "board"}))
+        .unwrap();
+    assert!(opened.contains("b1"), "{opened}");
+    let added = json!({"action": "interact", "tab": "b1", "op": "add", "title": "Header"});
+    assert!(
+        desk.window(&header.call(), &added)
+            .unwrap()
+            .contains("added c1")
+    );
+    // Another project's board is none of theirs.
+    let other = Scratch::new();
+    let stranger = caller(&desk, other.path(), Some("cart"));
+    assert!(desk.window(&stranger.call(), &added).is_err());
+}

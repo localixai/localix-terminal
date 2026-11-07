@@ -1,4 +1,4 @@
-//! The app: one per user, holding the window and every owner's tabs, serving protocol v2 over
+//! The app: one per user, holding the window and every owner's tabs, serving the protocol over
 //! a unix socket. `bind` takes the lock and the socket (so a second app ends before it starts
 //! anything); `run` answers connections until a `app/quit`, a thread each (`conn`), a request's
 //! panic being that request's error and never the app's end.
@@ -51,6 +51,7 @@ pub fn holder() -> Option<libc::pid_t> {
 
 /// Take the lock (writing the pid into it) and the socket.
 pub fn bind() -> io::Result<Binding> {
+    crate::fds::raise();
     crate::paths::ensure_runtime()?;
     crate::paths::ensure_home()?;
     let lock = File::options()
@@ -136,42 +137,6 @@ pub fn build() -> String {
     format!("{}+{stamp}", env!("CARGO_PKG_VERSION"))
 }
 
-/// The user id of the process at the other end of `stream`, when the system says.
-#[cfg(any(target_os = "macos", target_os = "freebsd"))]
-fn peer_uid(stream: &UnixStream) -> Option<u32> {
-    let (mut uid, mut gid) = (0, 0);
-    // SAFETY: getpeereid writes the peer's ids into the two variables, which outlive the call.
-    let got = unsafe { libc::getpeereid(stream.as_raw_fd(), &raw mut uid, &raw mut gid) };
-    (got == 0).then_some(uid)
-}
-
-/// The user id of the process at the other end of `stream`, when the system says.
-#[cfg(target_os = "linux")]
-fn peer_uid(stream: &UnixStream) -> Option<u32> {
-    let mut cred = libc::ucred {
-        pid: 0,
-        uid: 0,
-        gid: 0,
-    };
-    let mut size = libc::socklen_t::try_from(std::mem::size_of::<libc::ucred>()).ok()?;
-    // SAFETY: getsockopt writes at most `size` bytes of the peer's credentials into `cred`.
-    let got = unsafe {
-        libc::getsockopt(
-            stream.as_raw_fd(),
-            libc::SOL_SOCKET,
-            libc::SO_PEERCRED,
-            (&raw mut cred).cast(),
-            &raw mut size,
-        )
-    };
-    (got == 0).then_some(cred.uid)
-}
-
-fn own_uid() -> u32 {
-    // SAFETY: geteuid takes nothing and cannot fail.
-    unsafe { libc::geteuid() }
-}
-
 /// How the server begins.
 #[derive(Debug, Clone, Copy)]
 pub struct Begin {
@@ -181,6 +146,9 @@ pub struct Begin {
     /// has no tab.
     pub opened: bool,
 }
+
+/// The size of `app.log` past which the next start moves it aside.
+const LOG_MOST: u64 = 1 << 20;
 
 /// The server's output (its log, a panic's words) into `app.log` in the home when no terminal
 /// shows it: started by LaunchServices or by a client, it has nowhere else to go.
@@ -192,10 +160,14 @@ pub fn log_to_home() {
     if crate::paths::ensure_home().is_err() {
         return;
     }
-    let opened = File::options()
-        .create(true)
-        .append(true)
-        .open(crate::paths::log());
+    // One process owns the log: past a size it moves to `app.log.1`, the one before it gone.
+    let log_path = crate::paths::log();
+    if std::fs::metadata(&log_path).is_ok_and(|meta| meta.len() > LOG_MOST) {
+        let mut old = log_path.clone().into_os_string();
+        old.push(".1");
+        let _ = std::fs::rename(&log_path, old);
+    }
+    let opened = File::options().create(true).append(true).open(&log_path);
     let Ok(log) = opened else { return };
     // SAFETY: dup2 points stdout at the log, which is open through the call.
     unsafe { libc::dup2(log.as_raw_fd(), 1) };
@@ -211,9 +183,11 @@ pub fn run(bound: &Bound, browser: Option<Browser>, begin: Begin) -> i32 {
     // What the desk keeps across restarts; without its database it still works, keeping nothing.
     let store = crate::store::Store::open(&crate::paths::database()).or_else(|why| {
         log::warn!(
-            "desk: its database could not be opened, nothing is kept across restarts: {why}"
+            "desk: its database could not be opened, nothing is kept across restarts (move the \
+             file aside, or update llx-desk): {why}"
         );
-        crate::store::Store::memory()
+        // Kept in the store itself, so `app/status` can tell the person and the agents.
+        crate::store::Store::memory_instead(&why)
     });
     let store = match store {
         Ok(store) => store,
@@ -249,14 +223,34 @@ pub fn run(bound: &Bound, browser: Option<Browser>, begin: Begin) -> i32 {
     if begin.opened {
         shared.desk.reopened();
     }
+    let mut failing = false;
     for stream in bound.listener.incoming() {
         if shared.stopping.load(Ordering::SeqCst) {
             break;
         }
-        let Ok(stream) = stream else { continue };
+        let stream = match stream {
+            Ok(stream) => {
+                failing = false;
+                stream
+            }
+            Err(why) => {
+                // Out of descriptors, mostly: said once, then a pause, not a spin on one core.
+                if !matches!(
+                    why.kind(),
+                    io::ErrorKind::ConnectionAborted | io::ErrorKind::Interrupted
+                ) {
+                    if !failing {
+                        log::warn!("accept failed: {why}");
+                    }
+                    failing = true;
+                    crate::backoff(crate::BACKOFF);
+                }
+                continue;
+            }
+        };
         // The socket's directory is the user's alone; a process of another user that reached it
-        // anyway is still refused.
-        if peer_uid(&stream).is_some_and(|uid| uid != own_uid()) {
+        // anyway, or one the system cannot name, is still refused.
+        if !crate::wire::peer::is_own(&stream) {
             conn::refuse(&stream, "this server is another user's");
             continue;
         }

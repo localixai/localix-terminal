@@ -1,3 +1,5 @@
+//! Tests of argument validation against the window tool's schema.
+
 use super::check;
 use serde_json::json;
 
@@ -35,4 +37,18 @@ fn a_null_field_is_left_alone_and_an_unknown_one_refused() {
         why.starts_with("no field `goal`: nothing was done"),
         "{why}"
     );
+}
+
+#[test]
+fn the_schema_lists_every_op_a_board_takes() {
+    let schema = super::schema();
+    let ops: Vec<&str> = schema["properties"]["op"]["enum"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|op| op.as_str())
+        .collect();
+    for op in ["look", "show", "card", "add", "remove"] {
+        assert!(ops.contains(&op), "{op} is not in {ops:?}");
+    }
 }

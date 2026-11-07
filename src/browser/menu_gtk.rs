@@ -65,7 +65,7 @@ pub(super) fn show(strip: &WebView, entries: &[Entry]) -> Option<usize> {
     }
     waiting.run();
     let at = picked.load(Ordering::SeqCst);
-    (at < items.len()).then_some(at)
+    (at < super::choice::flat(entries).len()).then_some(at)
 }
 
 /// `entries` added to `menu`, their items numbered from `next` on.

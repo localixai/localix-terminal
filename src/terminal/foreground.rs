@@ -9,7 +9,9 @@ use std::os::fd::RawFd;
 /// Runtimes a program may be a script of: the script names it.
 const RUNTIMES: [&str; 6] = ["node", "bun", "deno", "python", "python3", "ruby"];
 
-/// The program in front in the terminal behind `master`, if any.
+/// The program in front in the terminal behind `master`, if any (the app asks for the group and
+/// the name apart: `fronted` reads the name only when the group changed).
+#[cfg(test)]
 pub(super) fn of(master: RawFd) -> Option<String> {
     name(group(master)?)
 }

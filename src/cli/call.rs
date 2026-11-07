@@ -1,5 +1,5 @@
 //! The commands that call the app: `window` (one call, `--end`, `--said`, `--said --follow
-//! [--json]`) and `status`/`quit`. The CLI is a client of protocol v2 like any other: its call carries an
+//! [--json]`) and `status`/`quit`. The CLI is a client of the protocol like any other: its call carries an
 //! idempotency key, so one asked again after a broken connection is not done twice, and a
 //! picture comes as bytes that it saves where the calling agent can read them.
 
@@ -20,7 +20,9 @@ struct Window {
     /// `--project DIR`: the project, when the caller knows it better than its directory does.
     project: Option<std::path::PathBuf>,
     mode: Mode,
-    follow: Follow,
+    /// `--said --follow`: keep waiting for notes; `--json` prints each as a JSON string.
+    follow: bool,
+    json_lines: bool,
     /// `--peek`: a look for a pane; the person's notes stay for the agent's own call.
     peek: bool,
 }
@@ -39,17 +41,6 @@ enum Mode {
     Board,
 }
 
-/// Whether `--said` keeps waiting, and how it prints each note.
-#[derive(Default, Clone, Copy, PartialEq)]
-enum Follow {
-    #[default]
-    No,
-    /// `--follow`: each note as a block of text.
-    Blocks,
-    /// `--follow --json`: each note one JSON string on a line of its own (for a program).
-    Json,
-}
-
 fn parse(args: &[String]) -> Result<Window, String> {
     let mut parsed = Window::default();
     let mut args = args.iter();
@@ -61,16 +52,19 @@ fn parse(args: &[String]) -> Result<Window, String> {
             "--end" => parsed.mode = Mode::End,
             "--said" => parsed.mode = Mode::Said,
             "--board" => parsed.mode = Mode::Board,
-            "--follow" if parsed.follow == Follow::No => parsed.follow = Follow::Blocks,
-            "--follow" => {}
-            "--json" => parsed.follow = Follow::Json,
+            "--follow" => parsed.follow = true,
+            // As before, `--said --json` follows: `--json` is a way of following.
+            "--json" => {
+                parsed.json_lines = true;
+                parsed.follow = true;
+            }
             "--peek" => parsed.peek = true,
             "--as" => {
-                let name = args.next().ok_or("--as needs a name")?;
+                let name = value(args.next()).ok_or("--as needs a name")?;
                 parsed.agent = Some(name.clone());
             }
             "--project" => {
-                let dir = args.next().ok_or("--project needs a folder")?;
+                let dir = value(args.next()).ok_or("--project needs a folder")?;
                 parsed.project = Some(std::path::PathBuf::from(dir));
             }
             flag if flag.starts_with("--") => return Err(format!("no option `{flag}`")),
@@ -78,7 +72,19 @@ fn parse(args: &[String]) -> Result<Window, String> {
             json => parsed.json = Some(json.to_string()),
         }
     }
+    // What applies to nothing is refused, not dropped: `--end '{...}'` would close every tab.
+    if (parsed.follow || parsed.json_lines) && parsed.mode != Mode::Said {
+        return Err("--follow and --json go with --said".into());
+    }
+    if parsed.mode != Mode::Call && parsed.json.is_some() {
+        return Err("--end, --said and --board take no JSON".into());
+    }
     Ok(parsed)
+}
+
+/// What follows `--as` or `--project`: the value, not the next option.
+fn value(next: Option<&String>) -> Option<&String> {
+    next.filter(|value| !value.starts_with("--"))
 }
 
 /// `--board`: `project`'s board in brief, read from its file, so it needs no app running and starts none.
@@ -113,9 +119,7 @@ pub(super) fn window(args: &[String]) -> u8 {
     let method = match parsed.mode {
         Mode::Call => None,
         Mode::Board => return board(&caller.project),
-        Mode::Said if parsed.follow != Follow::No => {
-            return crate::follow::follow(&caller, parsed.follow == Follow::Json);
-        }
+        Mode::Said if parsed.follow => return crate::follow::follow(&caller, parsed.json_lines),
         Mode::Said => Some("window/said"),
         Mode::End => Some("window/end"),
     };
@@ -143,21 +147,37 @@ pub(super) fn window(args: &[String]) -> u8 {
 }
 
 fn object(text: &str) -> Result<Value, String> {
+    const WHAT: &str = "the call is the window's arguments as one JSON object, such as '{\"action\": \"list\"}'; \
+                        `llx-desk window` alone says what they are";
     match serde_json::from_str(text) {
         Ok(args @ Value::Object(_)) => Ok(args),
-        _ => Err("the call is the window's arguments as one JSON object, such as '{\"action\": \"list\"}'; \
-                  `llx-desk window` alone says what they are"
-            .into()),
+        Ok(_) => Err(WHAT.into()),
+        Err(why) => Err(format!("{WHAT} ({why})")),
     }
 }
 
+/// The most the call may be, read from stdin.
+const MOST_STDIN: u64 = 1 << 20;
+
 fn read_stdin() -> Result<String, String> {
+    read_up_to(std::io::stdin(), MOST_STDIN)
+}
+
+/// All of `input` as text when it is at most `most` bytes; more is refused, not cut (a cut call
+/// would fail as bad JSON, and say nothing of why).
+fn read_up_to(input: impl Read, most: u64) -> Result<String, String> {
     let mut text = String::new();
-    std::io::stdin()
-        .take(1 << 20)
+    input
+        .take(most + 1)
         .read_to_string(&mut text)
         .map_err(|e| format!("stdin could not be read ({e})"))?;
-    Ok(text)
+    match u64::try_from(text.len()).is_ok_and(|read| read > most) {
+        true => Err(format!(
+            "stdin is more than {} MiB: the call is too large",
+            most >> 20
+        )),
+        false => Ok(text),
+    }
 }
 
 /// `method` asked of the running app, never starting it (`status`, `quit`); with none running,

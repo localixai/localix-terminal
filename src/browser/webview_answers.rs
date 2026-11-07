@@ -6,7 +6,7 @@ use serde_json::json;
 use crate::browser::{Armed, Notice};
 use crate::view::ViewResult;
 
-use super::{CALL_TIMEOUT, WebviewDriver};
+use super::WebviewDriver;
 
 impl WebviewDriver {
     /// Where the notices are now: a call reads what its tab was told after this.
@@ -43,6 +43,8 @@ impl WebviewDriver {
             Some(armed) => json!({"accept": true, "text": armed.text}),
             None => json!({"accept": false}),
         };
-        self.call("answer", &args, CALL_TIMEOUT).map(|_| ())
+        // Waits for a probe between two documents: with no answer the new document starts at
+        // Cancel, though the call asked for OK. Only an armed tab (or one just disarmed) gets here.
+        self.call_ready("answer", &args).map(|_| ())
     }
 }

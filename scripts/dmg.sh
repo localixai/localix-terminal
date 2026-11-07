@@ -3,8 +3,8 @@
 # link to /Applications in it) and LLX-Desk-macos.zip (the app, which install.sh fetches), in dist.
 # CI and a person at this Mac run the same script.
 #   scripts/dmg.sh [--universal] [--notarize] [--out dist]
-# --universal builds both Macs' programs and joins them with lipo, as a release does; without it the
-# program is the one of this Mac. The signature is LLX_DESK_SIGN, or else the first Developer ID
+# --universal builds both Macs' programs and joins them with lipo (releases are Apple silicon only
+# and do not use it); without it the program is the one of this Mac. The signature is LLX_DESK_SIGN, or else the first Developer ID
 # Application identity of the keychain, or else ad hoc: an ad hoc build is bundled, verified and
 # zipped, and Gatekeeper will refuse it on another Mac. --notarize needs a Developer ID identity
 # and the notary's credentials, either a keychain profile in LLX_NOTARY_PROFILE (made once with
@@ -14,7 +14,9 @@
 # never touched here, and no secret is printed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-export MACOSX_DEPLOYMENT_TARGET=12.0
+# The oldest macOS the app runs on is Info.plist's: the program is built for it and checked against it.
+min=$(plutil -extract LSMinimumSystemVersion raw packaging/macos/Info.plist)
+export MACOSX_DEPLOYMENT_TARGET=$min
 
 universal=0
 notarize=0
@@ -80,7 +82,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Apple's servers fail now and then: a step that talks to them is tried four times, 30 seconds apart.
+# Apple's servers fail now and then: a step that talks to them is tried four times, 30 seconds apart
+# (the notary's answers are asked again and again by notarize_file itself).
 retry() {
   local attempt
   for attempt in 1 2 3 4; do
@@ -105,7 +108,7 @@ codesign_image() {
 # resumes where it was and does not upload again.
 notarize_file() {
   local id status end fails=0
-  id=$(xcrun notarytool submit "$1" "${AUTH[@]}" --no-wait --output-format json |
+  id=$(retry xcrun notarytool submit "$1" "${AUTH[@]}" --no-wait --output-format json |
     plutil -extract id raw -o - -) || return 1
   echo "submitted $(basename "$1") to the notary as $id"
   end=$((SECONDS + 1800))
@@ -147,18 +150,21 @@ if [ "$universal" = 1 ]; then
     target/aarch64-apple-darwin/release/llx-desk target/x86_64-apple-darwin/release/llx-desk
   binary=target/universal/llx-desk
   archs=$(lipo -archs "$binary")
-  case " $archs " in
-    *" arm64 "*" x86_64 "* | *" x86_64 "*" arm64 "*) ;;
-    *) echo "the program has $archs, not arm64 and x86_64" >&2; exit 1 ;;
-  esac
+  # Each on its own: lipo names them in either order, one space apart.
+  for arch in arm64 x86_64; do
+    case " $archs " in
+      *" $arch "*) ;;
+      *) echo "the program has $archs, not arm64 and x86_64" >&2; exit 1 ;;
+    esac
+  done
 else
   cargo build --release --locked
   binary=target/release/llx-desk
 fi
 # No program may ask for a newer macOS than Info.plist's LSMinimumSystemVersion.
 for minos in $(otool -l "$binary" | awk '/^ +minos /{ print $2 }'); do
-  newest=$(printf '%s\n' "$minos" 12.0 | sort -V | tail -n 1)
-  [ "$newest" = 12.0 ] || { echo "the program needs macOS $minos, Info.plist says 12.0" >&2; exit 1; }
+  newest=$(printf '%s\n' "$minos" "$min" | sort -V | tail -n 1)
+  [ "$newest" = "$min" ] || { echo "the program needs macOS $minos, Info.plist says $min" >&2; exit 1; }
 done
 
 # The app, signed by the script that makes it.

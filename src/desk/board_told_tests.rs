@@ -106,3 +106,82 @@ fn a_panes_look_leaves_the_persons_notes_for_the_agents_own_call() {
         mine.said
     );
 }
+
+#[test]
+fn a_card_dropped_where_it_was_is_no_news_to_the_agent() {
+    let (desk, scratch) = (desk(), Scratch::new());
+    let mine = caller(&desk, scratch.path(), None);
+    let me = mine.call();
+    desk.window(&me, &json!({"action": "open", "kind": "board"}))
+        .unwrap();
+    let added = json!({"action": "interact", "tab": "b1", "op": "add",
+        "cards": [{"title": "Cart"}, {"title": "Header"}]});
+    desk.window(&me, &added).unwrap();
+    // The last card of Todo dropped at the bottom of Todo again.
+    desk.person_on_board(
+        mine.project.id,
+        r#"{"op": "move", "card": "c2", "to": "todo"}"#,
+    );
+    desk.tell_board(mine.project.id);
+    let read = desk
+        .window(&me, &json!({"action": "interact", "tab": "b1"}))
+        .unwrap();
+    assert!(!read.contains("The person on the board"), "{read}");
+}
+
+/// The plugin routes a note to the worker whose card it is by this pattern (`NOTE` in its hooks
+/// module, read from there so there is one copy): every note the formatter makes about a worker's
+/// card has to match it, or the note reaches the main agent alone.
+#[test]
+fn the_notes_about_a_workers_card_are_what_the_plugin_routes_on() {
+    use crate::board::{Board, Worker};
+
+    let plugin = include_str!("../../plugins/claude-code/hooks/register.tsx");
+    let pattern = plugin
+        .lines()
+        .find_map(|line| line.strip_prefix("const NOTE = /"))
+        .and_then(|line| line.strip_suffix('/'))
+        .unwrap();
+    assert!(
+        pattern.starts_with(r"^The person on the board \S+ (?:"),
+        "{pattern}"
+    );
+    assert!(
+        pattern.contains(r#" c\d+ "(?:[^"\\]|\\.)*" \(([\w.:-]+)\)(?: |:|\n|$)"#),
+        "{pattern}"
+    );
+    let verbs: Vec<&str> = pattern
+        .split_once("(?:")
+        .and_then(|(_, rest)| rest.split_once(')'))
+        .map(|(verbs, _)| verbs.split('|').collect())
+        .unwrap();
+    for action in [
+        json!({"op": "return", "card": "c1", "text": "again"}),
+        json!({"op": "comment", "card": "c1", "text": "why"}),
+        json!({"op": "edit", "card": "c1", "title": "uno"}),
+        json!({"op": "move", "card": "c1", "to": "review"}),
+        json!({"op": "unblock", "card": "c1"}),
+    ] {
+        let mut board = Board::default();
+        board.add("one", "", None, "agent").unwrap();
+        board.take(Some("c1"), Worker(Some("tests"))).unwrap();
+        let did = board.person(&action).unwrap();
+        let (words, _) = note("b1", vec![did]).unwrap();
+        let said = words.strip_prefix("The person on the board b1 ").unwrap();
+        let verb = verbs
+            .iter()
+            .find(|verb| said.starts_with(&format!("{verb} c1 \"")))
+            .unwrap_or_else(|| panic!("the plugin does not know the verb of {words:?}"));
+        let rest = said
+            .strip_prefix(*verb)
+            .unwrap()
+            .split_once(" (tests)")
+            .unwrap_or_else(|| {
+                panic!("no owner in {words:?}");
+            });
+        assert!(
+            rest.1.is_empty() || rest.1.starts_with([' ', ':', '\n']),
+            "the owner is followed by something the pattern does not take: {words:?}"
+        );
+    }
+}

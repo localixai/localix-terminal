@@ -35,7 +35,7 @@ impl Deck {
         if self.side.is_none() || !self.frame.native.is_visible() {
             return false;
         }
-        let list = (left, top + self.top(), self.side_now, tall - self.top());
+        let list = (left, top + self.top(), self.side_wide(), tall - self.top());
         x >= list.0 - LIST_SLACK
             && x <= list.0 + list.2 + LIST_SLACK
             && y >= list.1 - LIST_SLACK

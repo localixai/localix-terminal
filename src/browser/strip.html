@@ -9,6 +9,9 @@
 :root{--card:rgba(252,252,253,.97)}
 @media (prefers-color-scheme: dark){:root{--ground:#070707}}
 @media (prefers-color-scheme: dark){:root{--card:rgba(44,44,47,.97)}}
+/* Reduced transparency (data-reduced, said by the app): the card is the ground, solid. */
+html[data-reduced]{--card:#fcfcfd}
+@media (prefers-color-scheme: dark){html[data-reduced]{--card:#2c2c2f}}
 body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
 /* The bar is the window's own, in its theme, over whatever tab: never in a page's colours. */
 #head{position:relative;z-index:2}
@@ -25,6 +28,10 @@ body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
 #offer.failed .says{opacity:1;color:#d70015}
 @keyframes offer-in{from{opacity:0}to{opacity:1}}
 #offer.on .card{animation:offer-in .16s ease-out}
+/* Increase Contrast: the hairlines a full point, firm. */
+@media (prefers-contrast:more){
+#offer .card{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--fg) 45%,transparent)}
+}
 @media (prefers-color-scheme: dark){#offer.failed .says{color:#ff6961}}
 #offer button{flex:none;border:0;color:inherit;cursor:pointer;font:500 11px/22px var(--ui-font,var(--ui-sys));transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 #offer button:hover,#offer button:active{transition:none}
@@ -51,11 +58,11 @@ body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
 #cr .sep{flex:none;padding:0 1px;font-size:12px;color:var(--ink-3)}
 #cr .b{width:24px;min-width:24px;height:24px;border-radius:6px;margin-left:2px}
 #cr .b svg{width:14px;height:14px}
-/* Three columns, as Safari's toolbar: the address field stays in the middle whatever comes and goes beside it. */
+/* The bar: the crumbs, then the window's own buttons at the end. The crumbs give way when the
+   window is narrow, and with less room still the buttons go into "»" (fit). */
 #bar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;height:38px;padding:0 8px 0 10px;box-sizing:border-box}
 #lead{display:flex;align-items:center;gap:4px;min-width:0}
-/* The buttons keep their room, and the address field gives way when the window is narrow; with
-   less room still, the buttons go into "»" (fit). */
+/* A button fit() puts into "»" is hidden. */
 [hidden]{display:none!important}
 /* Back, forward and reload, bare as in Safari's toolbar. */
 #nav{flex:none;display:flex;align-items:center;gap:2px}
@@ -73,30 +80,28 @@ body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
 /* The row as the card it becomes, the moment its picture is taken. */
 #sl .t.shot{background:var(--card)!important;box-shadow:inset 0 0 0 .5px var(--ov-3)!important;color:var(--fg)!important;opacity:1;transition:none!important}
 #sl .t.held>*{visibility:hidden}
-.t.lift{position:fixed;z-index:9;margin:0;pointer-events:none;border-radius:10px;opacity:1;background:var(--card);box-shadow:inset 0 0 0 .5px var(--ov-3);scale:1;will-change:transform;transition:scale .18s cubic-bezier(.2,.8,.2,1),box-shadow .18s,opacity .12s}
+.t.lift{position:fixed;z-index:9;margin:0;pointer-events:none;border-radius:10px;opacity:1;background:var(--card);box-shadow:inset 0 0 0 .5px var(--ov-3);scale:1;will-change:transform;transition:scale var(--t-move) var(--ease),box-shadow var(--t-move),opacity .12s}
 .t.lift.up{scale:1.025;box-shadow:var(--sh-lift)}
 .t.lift.out{scale:.98}
-.t.lift.away{opacity:0;transition:opacity .1s}
-.t.lift.home{transition:transform .2s cubic-bezier(.2,.8,.2,1),scale .2s cubic-bezier(.2,.8,.2,1),box-shadow .2s,opacity .12s}
-/* Carried over the pages: a card of the tab under the pointer, in the half it would go into. */
-/* What a click acts on shows the hand: the tabs, the buttons, the crumbs, what the menus and
-   the Event Center list; the side's edge and the halves' line keep their resize cursor. */
-/* What a click acts on shows the hand. A new clickable joins this one rule. */
+.t.lift.home{transition:transform var(--t-move) var(--ease),scale var(--t-move) var(--ease),box-shadow var(--t-move),opacity .12s}
+/* What a click acts on shows the hand: the tabs, the buttons, the crumbs, what the menus and the
+   Event Center list; the side's edge and the halves' line keep their resize cursor. A new
+   clickable joins this one rule. */
 :where(button,[role=button],a[href],select,summary,.t,.t *,.half,.half *,#cr .c,#cr .c *,.q,.q *,.v,.v *,.ev.go,.ev.go *,.s,.x,.b,.b *,.ic,.empty button){cursor:pointer}
 :where(button:disabled,[aria-disabled=true],.gone){cursor:default}
 :where(#url,#sq,#sk,textarea){cursor:text}
 html.dragging,html.dragging *{cursor:grabbing!important;user-select:none}
-@keyframes landing{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:none}}
 #line{display:none}
 html[data-part=line] body>*:not(#line){display:none!important}
 html[data-part=line],html[data-part=line] body{background:transparent!important}
-html[data-part=line] #line{display:block;position:fixed;inset:0;cursor:col-resize}
+html[data-part=line] #line{display:block;position:fixed;inset:0;cursor:col-resize;touch-action:none;outline:none}
 /* The line between the halves: one point, a quiet fill; hot (under the pointer, held) the
    accent, its width never changing. */
 html[data-part=line] #line::after{content:"";position:absolute;top:0;bottom:0;left:calc(50% - .5px);width:1px;background:var(--ov-3);transition:background-color .1s}
-html[data-part=line] #line:hover::after,html[data-part=line] #line.held::after{background:var(--acc-4)}
+html[data-part=line] #line:hover::after,html[data-part=line] #line.held::after,html[data-part=line] #line:focus-visible::after{background:var(--accent)}
 html[data-part=line].held,html[data-part=line].held *{cursor:col-resize!important;user-select:none}
 html[data-part=nav] #bar,html[data-part=nav] #tabs,html[data-part=nav] #offer,html[data-part=nav] #menu,html[data-part=nav] #back{display:none!important}
+/* Three columns, as Safari's toolbar: the address field stays in the middle whatever comes and goes beside it. */
 html[data-part=nav] #browse{display:grid;grid-template-columns:1fr minmax(120px,720px) 1fr;align-items:center;gap:10px;height:40px;padding:0 10px;box-sizing:border-box;box-shadow:inset 0 -1px 0 var(--ov-2)}
 html[data-part=nav]:not([data-glass]) #browse{background:var(--ground)}
 #browse #addr{width:100%}
@@ -109,7 +114,6 @@ html[data-part=nav]:not([data-glass]) #browse{background:var(--ground)}
 .empty .g svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
 .empty .w{font-size:13px;color:var(--ink-2)}
 .empty .row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:440px}
-.empty .row:first-of-type{margin-top:4px}
 .empty button{font:inherit;font-size:12px;color:var(--ink);border:0;border-radius:8px;height:28px;padding:0 11px;background:color-mix(in srgb,currentColor 6%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 11%,transparent);display:flex;gap:7px;align-items:center;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 .empty button:hover{background:color-mix(in srgb,currentColor 11%,transparent);transition:none}
 .empty button .mk{display:grid;place-items:center}
@@ -226,9 +230,9 @@ html:not([data-glass]) #sug,html:not([data-glass]) #menu{background:var(--ground
 .s:hover{background:color-mix(in srgb,currentColor 15%,transparent);transition:none}
 .s:active{background:var(--ov-3);transition:none}
 /* Whose turn, in quiet words at the end of the address field: nothing while the agent is idle. */
-#tn{display:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:11px;white-space:nowrap;opacity:.5;pointer-events:none}
+#tn{display:none;flex:none;margin-right:9px;font-size:11px;white-space:nowrap;opacity:.5;pointer-events:none}
 #tn.on{display:block}
-/* Glass (macOS): the strip is the titlebar, its toolbar row clear of the window's buttons (a unified toolbar's: 18 to 80 points); the projects and the tabs under it run from the edge. */
+/* Glass (macOS): the strip is the titlebar, its toolbar row clear of the window's buttons (a unified toolbar's: 18 to 80 points). */
 html[data-glass] #bar{padding-left:78px}
 /* The side (data-part=side): the same page in a view of its own down the window's left, listing
    the shown project's tabs; the strip then has no row of them (data-side). */
@@ -238,6 +242,7 @@ html[data-part=side] #head,html[data-part=side] #back{display:none}
 html[data-part=side],html[data-part=side] body{height:100%;overflow:hidden}
 html[data-part=side]:not([data-glass]) body{background:var(--ground)}
 html[data-part=side] #side{display:flex;flex-direction:column;gap:8px;height:100%;padding:4px 8px 8px;box-sizing:border-box;box-shadow:inset -1px 0 0 var(--ov-2)}
+@media (prefers-contrast:more){html[data-part=side] #side{box-shadow:inset -1px 0 0 color-mix(in srgb,var(--fg) 45%,transparent)}}
 /* The side's head: the search as a line of the column, no field drawn around it, and its two
    buttons beside it. */
 #sh{flex:none;display:flex;align-items:center;gap:2px;height:28px;padding-left:4px}
@@ -287,12 +292,11 @@ html.dragging #sl .x{opacity:0!important}
 #gh .t.lift{opacity:1;color:var(--fg);background:var(--card)}
 #gh .t.lift.up{box-shadow:var(--sh-lift)}
 /* The side's edge: dragged, the side is wider or narrower; a double click sets it back. */
-#grip{display:none;position:fixed;top:0;right:0;bottom:0;width:7px;cursor:col-resize;z-index:4}
+#grip{display:none;position:fixed;top:0;right:0;bottom:0;width:7px;cursor:col-resize;z-index:4;touch-action:none;outline:none}
 html[data-part=side] #grip{display:block}
 #grip::after{content:"";position:absolute;top:0;bottom:0;right:0;width:2px;background:transparent;transition:background-color .15s}
-#grip:hover::after,html.resizing #grip::after{background:var(--acc-4)}
+#grip:hover::after,html.resizing #grip::after,#grip:focus-visible::after{background:var(--accent)}
 html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
-html[data-part=side] #side{transition:none}
 /* Shut, the side is a rail: its button where it was, and each tab's picture, the one shown lit,
    its name as the pointer rests on it. */
 @media (max-width:120px){
@@ -363,11 +367,12 @@ html[data-part=side] #side{transition:none}
   <div id="sh"><label id="sk"><span id="si"></span><input id="sq" spellcheck="false" autocomplete="off" placeholder="Search tabs…"></label><span class="b" id="sg" title="Settings"><svg viewBox="0 0 16 16"><path d="M6.71 3.17 7.02 1.47h1.96l.31 1.7 1.21.5 1.43-.98 1.38 1.38-.98 1.43.5 1.21 1.7.31v1.96l-1.7.31-.5 1.21.98 1.43-1.38 1.38-1.43-.98-1.21.5-.31 1.7H7.02l-.31-1.7-1.21-.5-1.43.98-1.38-1.38.98-1.43-.5-1.21-1.7-.31V7.02l1.7-.31.5-1.21-.98-1.43 1.38-1.38 1.43.98z"/><circle cx="8" cy="8" r="2.1"/></svg></span><span class="b" id="sn" title="New tab"><svg viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9"/></svg></span><span class="b" id="sc" title="Hide the tabs"><svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.6"/><path d="M6.3 3v10"/></svg></span></div>
   <div id="sl"></div>
 </div>
-<div id="grip" title="Drag to resize; double-click for the usual width"></div>
+<div id="grip" role="separator" aria-orientation="vertical" aria-label="Sidebar width" tabindex="0" title="Drag or use arrow keys to resize; Home resets"></div>
 <div id="gh"></div>
-<div id="line" title="Drag to resize the halves; double-click to even them"></div>
+<div id="line" role="separator" aria-orientation="vertical" aria-label="Split width" tabindex="0" title="Drag or use arrow keys to resize; Home evens the halves"></div>
 <script>
 "use strict";
+/*RESIZE_HANDLES*/
 // The strip's small pictures, drawn as the buttons are; never text characters. Built element by
 // element, as everything on the strip is: no markup is ever parsed.
 const GLYPHS = {
@@ -400,6 +405,7 @@ function glyph(name) {
 // Draw what this part of the window shows: the side its list, the browser's toolbar the page's
 // address, the bar the projects open, where the shown tab is, and (with no side) the tabs' row.
 // Every name is set as text.
+let barSig = null;
 function S(data) {
   const part = document.documentElement.dataset.part;
   if (part === "side") return side(data);
@@ -409,9 +415,15 @@ function S(data) {
   document.documentElement.toggleAttribute("data-side", sided);
   const project = data.project;
   const places = data.places || [];
-  crumbs(shown, places, project);
   // With a side, the tabs are listed there, not in a row here.
   const tabs = sided ? [] : data.tabs.filter((tab) => ours(tab, project));
+  // The same again draws nothing, as the side does not: a press that began on a crumb or a tab is
+  // not lost to a title another tab changed.
+  const now = JSON.stringify([sided, project, data.shown, shown && [shown.key, shown.kind, shown.agent, shown.name, shown.title],
+    places.map((one) => [one.key, one.name, one.folder, one.marked]), tabs.map((tab) => [tab.key, tab.title, tab.kind])]);
+  if (now === barSig) return;
+  barSig = now;
+  crumbs(shown, places, project);
   document.getElementById("tabs").replaceChildren(...tabs.map((tab) => {
     const item = document.createElement("div");
     item.className = tab.key === data.shown ? "t on" : "t";
@@ -480,8 +492,9 @@ function crumbs(shown, places, project) {
   });
   parts.push(add);
   trail.replaceChildren(...parts);
-  // The project's crumb is what the projects key (⌃⌘P) opens.
+  // The project's crumb is what the projects key (⌃⌘P) opens: its hint is told with its title.
   parts[0].id = "pj";
+  titled(parts[0], place ? place.folder : "Projects");
 }
 // A tab's row, in the strip or the side: a click shows it, its × closes it, and its menu is the
 // system's (host_tab_menu.rs), where the person clicked.
@@ -506,7 +519,7 @@ function wire(item, close, key) {
 // button's hint says its key.
 let HINTS = {};
 const HINTED = { bk: "back", fw: "forward", rl: "reload", fs: "page-size", cm: "comment", nt: "new-page",
-  sp: "split", hs: "history", ev: "events", mn: "collapse", sb: "sidebar", sc: "sidebar", sd: "send", sn: "new-page", sg: "settings", url: "address", sq: "find-tab",
+  hs: "history", ev: "events", mn: "collapse", sc: "sidebar", sd: "send", sn: "new-page", sg: "settings", url: "address", sq: "find-tab",
   pj: "projects" };
 function titled(node, base) {
   node.dataset.base = base;
@@ -543,11 +556,49 @@ function K(what) {
 // page's address, a terminal's command), filtered by what is typed in its search.
 let listed = [], listedShown = "";
 // The split's two tabs, left and right (none while the window is whole); a tab being dragged in the
-// side, and whether the list waits to be drawn again until it is let go of.
-let splitPair = null, lifting = false, redraw = false;
+// side, a press on a row that may become a drag, and whether the list waits to be drawn again until
+// the tab is let go of.
+let splitPair = null, lifting = false, pressed = false, redraw = false;
 // What the list was last drawn from: the same again draws nothing, so a hover or a click is not
 // lost to a list that did not change. A tab let go of always draws it afresh.
 let sig = null;
+// The side's rows, each kept by what it is for (a tab's key, or a split's two), so a title that
+// changes is set in the row that shows it and the row, its hover and a press on it stay.
+const rowOf = new Map();
+const listRows = () => [...document.getElementById("sl").querySelectorAll(".t")];
+const motionPreference = matchMedia("(prefers-reduced-motion: reduce)");
+const calm = () => motionPreference.matches;
+// The rows with a slide still running: only these are looked at when the next one begins.
+const sliding = new Map();
+// Rows move to their new places from where they were: each one slides, none jumps; one that comes
+// in fades up into its place. A row still sliding goes on from where it is seen. With Reduce Motion
+// a row that moved fades in its new place instead. The time and the curve are the page's tokens.
+const flip = (change) => {
+  const before = new Map(listRows().map((row) => [row, row.getBoundingClientRect()]));
+  for (const run of sliding.values()) run.cancel();
+  sliding.clear();
+  change();
+  const moved = [];
+  for (const row of listRows()) {
+    const was = before.get(row);
+    const dy = was ? was.top - row.getBoundingClientRect().top : null;
+    if (dy === null || Math.abs(dy) >= .5) moved.push([row, dy]);
+  }
+  const css = getComputedStyle(document.documentElement);
+  const time = css.getPropertyValue("--t-move").trim();
+  const duration = (time.endsWith("ms") ? parseFloat(time) : parseFloat(time) * 1000) || 200;
+  const easing = css.getPropertyValue("--ease").trim() || "ease";
+  for (const [row, dy] of moved) {
+    const frames = calm() ? [{ opacity: 0 }, { opacity: 1 }]
+      : dy === null ? [{ opacity: 0, transform: "translateY(-4px)" }, { opacity: 1, transform: "none" }]
+      : [{ transform: `translateY(${dy}px)` }, { transform: "none" }];
+    const run = row.animate(frames, { duration: calm() ? 120 : duration, easing });
+    sliding.set(row, run);
+    run.onfinish = run.oncancel = () => {
+      if (sliding.get(row) === run) sliding.delete(row);
+    };
+  }
+};
 function side(data) {
   titled(document.getElementById("sc"), data.side ? "Hide the tabs" : "Show the tabs");
   listed = data.tabs.filter((tab) => ours(tab, data.project));
@@ -617,9 +668,24 @@ function placeKey(at) {
     : at < 8 && row ? row.replace("1\u20268", String(at + 1)) : "";
   return key ? "  " + key : "";
 }
+// The list is drawn at most once a frame, after what asked for it: calls that come together (a
+// title set, then another) are one.
+let drawing = 0, drawingTimeout = 0;
 function drawSide() {
-  // A tab held is not drawn over: the list is drawn again once it is let go.
-  if (lifting) return void (redraw = true);
+  if (drawing) return;
+  drawing = requestAnimationFrame(paintSide);
+  // WebKit can suspend animation frames while a window is concealed. Still keep its list
+  // current, so it is ready when the window comes back.
+  drawingTimeout = setTimeout(paintSide, 150);
+}
+function paintSide() {
+  cancelAnimationFrame(drawing);
+  clearTimeout(drawingTimeout);
+  drawing = 0;
+  drawingTimeout = 0;
+  // A tab held, or pressed on (it may be about to be held), is not drawn under: the list is drawn
+  // again once it is let go.
+  if (lifting || pressed) return void (redraw = true);
   const typed = document.getElementById("sq").value.trim().toLowerCase();
   const rows = listed.filter((tab) => !typed || (tab.title + " " + (tab.name || "") + " " + holds(tab)).toLowerCase().includes(typed));
   const list = document.getElementById("sl");
@@ -627,56 +693,96 @@ function drawSide() {
   const now = JSON.stringify([typed, rows.map((tab) => [tab.key, tab.title, tab.name, tab.agent, tab.kind, holds(tab), placeKey(listed.indexOf(tab))]), listedShown, pair]);
   if (now === sig) return;
   sig = now;
-  if (!rows.length) return void list.replaceChildren(emptied("sc", typed ? "No tab matches" : "No tabs"));
+  if (!rows.length) {
+    rowOf.clear();
+    return void list.replaceChildren(emptied("sc", typed ? "No tab matches" : "No tabs"));
+  }
   const drawn = [];
   for (const tab of rows) {
-    if (!pair || !pair.includes(tab.key)) drawn.push(sideRow(tab));
+    if (!pair || !pair.includes(tab.key)) drawn.push(kept(tab.key, () => sideRow(tab), (row) => patchRow(row, tab)));
     else if (!drawn.some((row) => row.classList.contains("pair"))) {
       const [left, right] = pair.map((key) => rows.find((tab) => tab.key === key));
-      drawn.push(pairRow(left, right));
+      drawn.push(kept("pair " + pair.join(" "), () => pairRow(left, right), (row) => patchPair(row, left, right)));
     }
   }
-  list.replaceChildren(...drawn);
+  // Forget the rows no longer drawn, then put the rows in their places, in the one way rows move.
+  const wanted = new Set(drawn);
+  for (const [key, row] of rowOf) if (!wanted.has(row)) rowOf.delete(key);
+  const current = [...list.children].filter((row) => !row.classList.contains("slot"));
+  // Titles, selection and agent marks are patched in place. Only a structural change needs
+  // geometry reads and FLIP; a busy terminal must not measure every other tab on every title.
+  if (current.length === drawn.length && current.every((row, at) => row === drawn[at])) return;
+  flip(() => {
+    for (const child of [...list.children]) if (!wanted.has(child) && !child.classList.contains("slot")) child.remove();
+    let at = list.firstElementChild;
+    for (const row of drawn) {
+      if (row === at) at = at.nextElementSibling;
+      else list.insertBefore(row, at);
+    }
+  });
+}
+// The row kept under `key`, set from what it shows now, or made.
+function kept(key, make, patch) {
+  const had = rowOf.get(key);
+  if (had) return patch(had), had;
+  const row = make();
+  rowOf.set(key, row);
+  return row;
+}
+// One tab's row in the side (`half`: one of a split's two), set in place: only what differs is
+// written, so nothing under the pointer is replaced.
+function patchRow(item, tab, half) {
+  const set = (node, text) => { if (node.textContent !== text) node.textContent = text; };
+  const on = tab.key === listedShown ? " on" : "";
+  const classes = (half ? "half" : "t") + on;
+  if (item.className !== classes) item.className = classes;
+  const title = (tab.agent ? tab.name + " — " + tab.title : tab.title) + placeKey(listed.indexOf(tab));
+  if (item.title !== title) item.title = title;
+  const icon = item.querySelector(".ic");
+  const look = tab.agent ? "agent " + tab.agent : GLYPHS[tab.kind] ? tab.kind : "web";
+  if (icon.dataset.look !== look) {
+    icon.dataset.look = look;
+    icon.replaceChildren(tab.agent ? agentMark(tab.agent) : glyph(GLYPHS[tab.kind] ? tab.kind : "web"));
+  }
+  set(item.querySelector(".n"), tab.name || tab.title);
+  set(item.querySelector(".u"), holds(tab));
 }
 // One tab's row in the side.
-function sideRow(tab) {
+function sideRow(tab, half) {
   const item = document.createElement("div");
-  item.className = tab.key === listedShown ? "t on" : "t";
   item.dataset.key = tab.key;
-  item.title = (tab.agent ? tab.name + " — " + tab.title : tab.title) + placeKey(listed.indexOf(tab));
   const icon = document.createElement("span");
   icon.className = "i ic";
-  icon.append(tab.agent ? agentMark(tab.agent) : glyph(GLYPHS[tab.kind] ? tab.kind : "web"));
   const text = document.createElement("span");
   text.className = "tx";
   const name = document.createElement("span");
   name.className = "n";
-  name.textContent = tab.name || tab.title;
   const sub = document.createElement("span");
   sub.className = "u";
-  sub.textContent = holds(tab);
   text.append(name, sub);
   const close = document.createElement("span");
   close.className = "x";
   close.append(glyph("close"));
   wire(item, close, tab.key);
   item.append(icon, text, close);
+  patchRow(item, tab, half);
   return item;
 }
 // A split window's two tabs as one row, left and right as they lie: each half its own tab (a click
 // shows it, its menu is its own), the one in use lit.
 function pairRow(left, right) {
   const item = document.createElement("div");
-  item.className = [left, right].some((tab) => tab.key === listedShown) ? "t pair on" : "t pair";
   const cut = document.createElement("span");
   cut.className = "cut";
-  const [first, second] = [left, right].map((tab) => {
-    const half = sideRow(tab);
-    half.className = tab.key === listedShown ? "half on" : "half";
-    return half;
-  });
+  const [first, second] = [left, right].map((tab) => sideRow(tab, true));
   item.append(first, cut, second);
+  patchPair(item, left, right);
   return item;
+}
+function patchPair(item, left, right) {
+  const classes = [left, right].some((tab) => tab.key === listedShown) ? "t pair on" : "t pair";
+  if (item.className !== classes) item.className = classes;
+  for (const tab of [left, right]) patchRow(item.querySelector(`[data-key="${tab.key}"]`), tab, true);
 }
 if (document.documentElement.dataset.part === "side") {
   const search = document.getElementById("sq");
@@ -688,45 +794,47 @@ if (document.documentElement.dataset.part === "side") {
       drawSide();
       search.blur();
     } else if (event.key === "Enter") {
+      // A split's row has no key of its own: its first half does.
       const first = document.querySelector("#sl .t");
-      if (first) window.ipc.postMessage("show " + first.dataset.key);
+      const key = first?.dataset.key ?? first?.querySelector("[data-key]")?.dataset.key;
+      if (key) window.ipc.postMessage("show " + key);
     }
   });
   // The edge: the width follows the hand, said once a frame; let go, it is kept. Let go far
   // enough left, the side slides shut, and opens again at the width it had.
   const grip = document.getElementById("grip");
   const SHUT_AT = 110;
-  let dragging = null, pending = null;
-  const say = () => {
-    if (pending !== null) window.ipc.postMessage("side-width " + pending);
-    pending = null;
-    if (dragging) requestAnimationFrame(say);
-  };
-  grip.addEventListener("mousedown", (event) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    dragging = { from: window.innerWidth, grab: window.innerWidth - event.clientX };
-    document.documentElement.classList.add("resizing");
-    requestAnimationFrame(say);
-  });
-  addEventListener("mousemove", (event) => {
-    if (!dragging) return;
-    pending = Math.max(0, Math.round(event.clientX + dragging.grab));
-  });
-  addEventListener("mouseup", (event) => {
-    if (!dragging) return;
-    const at = Math.round(event.clientX + dragging.grab), from = dragging.from;
-    dragging = null;
-    pending = null;
-    document.documentElement.classList.remove("resizing");
-    if (event.clientX < SHUT_AT) {
-      window.ipc.postMessage("side-width " + from + " done");
-      window.ipc.postMessage("side");
-    } else {
-      window.ipc.postMessage("side-width " + at + " done");
-    }
+  let dragging = null, lastWidth = null;
+  resizeHandle(grip, {
+    start(event) {
+      dragging = { from: innerWidth, grab: innerWidth - event.clientX };
+      lastWidth = innerWidth;
+      document.documentElement.classList.add("resizing");
+    },
+    move(event) {
+      const width = Math.max(0, Math.round(event.clientX + dragging.grab));
+      if (width === lastWidth) return;
+      lastWidth = width;
+      window.ipc.postMessage("side-width " + width);
+    },
+    end(event, cancelled) {
+      const at = Math.max(0, Math.round(event.clientX + dragging.grab)), from = dragging.from;
+      dragging = null;
+      document.documentElement.classList.remove("resizing");
+      const shut = !cancelled && event.clientX < SHUT_AT;
+      window.ipc.postMessage("side-width " + (cancelled || shut ? from : at) + " done");
+      if (shut) window.ipc.postMessage("side");
+    },
   });
   grip.addEventListener("dblclick", () => window.ipc.postMessage("side-width usual done"));
+  grip.addEventListener("keydown", (event) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const step = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+    if (!step && event.key !== "Home") return;
+    event.preventDefault();
+    const width = event.key === "Home" ? "usual" : Math.max(0, innerWidth + step * (event.shiftKey ? 64 : 16));
+    window.ipc.postMessage("side-width " + width + " done");
+  });
   document.getElementById("sn").addEventListener("click", () => {
     const box = document.getElementById("sn").getBoundingClientRect();
     window.ipc.postMessage("new " + Math.round(box.left) + " " + Math.round(box.bottom + 4));
@@ -740,24 +848,8 @@ if (document.documentElement.dataset.part === "side") {
 if (document.documentElement.dataset.part === "side") {
   const list = document.getElementById("sl");
   let drag = null, swallow = false, queued = false, scrolling = false, aborted = false;
-  const rows = () => [...list.querySelectorAll(".t")];
-  const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   // A row's first tab: a split's row is its two tabs.
   const keyOf = (row) => row?.dataset.key ?? row?.querySelector("[data-key]")?.dataset.key ?? "end";
-  // Rows move to their new places from where they were: each one slides, none jumps. A row still
-  // sliding goes on from where it is seen.
-  const flip = (change) => {
-    const before = new Map(rows().map((row) => [row, row.getBoundingClientRect()]));
-    rows().forEach((row) => row.getAnimations().forEach((one) => one.cancel()));
-    change();
-    for (const row of rows()) {
-      const was = before.get(row), now = row.getBoundingClientRect();
-      if (!was) continue;
-      const dy = was.top - now.top;
-      if (Math.abs(dy) < .5 || calm()) continue;
-      row.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 180, easing: "cubic-bezier(.2,.8,.2,1)" });
-    }
-  };
   // A tab carried out of another window, over this list: the list opens an empty place `tall`
   // points high where it would go (the card itself the app draws where the pointer is), and the
   // window is told which tab it would go before. `DS()` closes it.
@@ -769,7 +861,7 @@ if (document.documentElement.dataset.part === "side") {
       return;
     }
     // `y` is a point of this page, as the rows' boxes are.
-    const next = rows().find((row) => {
+    const next = listRows().find((row) => {
       const box = row.getBoundingClientRect();
       return y < box.top + box.height / 2;
     }) ?? null;
@@ -823,6 +915,7 @@ if (document.documentElement.dataset.part === "side") {
     setTimeout(() => shot(false), 400);
     document.documentElement.classList.add("dragging");
     lifting = true;
+    pressed = false;
     sig = null;
     drag.next = keyOf(drag.row.nextElementSibling);
     drag.nextEl = drag.row.nextElementSibling;
@@ -830,19 +923,20 @@ if (document.documentElement.dataset.part === "side") {
   // Where the card's middle is among the rows' places: a row's place is its layout's, which a slide
   // in flight does not move, so a swap does not flip back and forth.
   const layoutMid = (row, room) => room.top + list.clientTop - list.scrollTop + row.offsetTop + row.offsetHeight / 2;
+  // Worked out at most once a frame, from the latest pointer (the move handler stages it): the card
+  // moves at once, and its place in the list, the app and the pages follow after the events.
   const over = (event) => {
     // Out over the pages, or out of the window: the window says which (past its edge the tab
     // comes out into a window of its own, docs/windows.md).
     const out = drag.torn || event.clientX > drag.w - 2 || event.clientX < -10 || event.clientY < -10 || event.clientY > innerHeight + 10;
-    drag.last = { clientX: event.clientX, clientY: event.clientY };
+    drag.last = { clientX: event.clientX, clientY: event.clientY, screenX: event.screenX, screenY: event.screenY };
     // The app's card follows the pointer on the screen, wherever it is.
     window.ipc.postMessage("drag-at " + Math.round(event.screenX) + " " + Math.round(event.screenY));
     // Along the list it moves up and down only, kept within the list.
     const room = list.getBoundingClientRect();
     const dy = Math.min(Math.max(event.clientY - drag.y, room.top - drag.box.top), room.bottom - drag.box.bottom);
-    // The card goes where the pointer goes, in the list, over the pages, to the window's edge;
-    // its place in the list is found from where it is along the list.
-    drag.ghost.style.transform = `translate(${event.clientX - drag.x}px, ${event.clientY - drag.y}px)`;
+    // The card goes where the pointer goes (the move handler sets that); its place in the list is
+    // found from where it is along the list.
     drag.ghost.classList.toggle("out", out);
     if (out !== drag.out) {
       drag.out = out;
@@ -936,21 +1030,46 @@ if (document.documentElement.dataset.part === "side") {
     setTimeout(settle, 260);
   };
   list.addEventListener("mousedown", (event) => {
-    // The tab pressed (a split's half), and the row it is in, which moves along the list.
+    // The tab pressed (a split's half), and the row it is in, which moves along the list. Ctrl and
+    // click is the system's menu, whose end this page may never hear.
     const tab = event.target.closest("[data-key]");
-    if (!tab || event.button !== 0 || event.target.closest(".x")) return;
+    if (!tab || event.button !== 0 || event.ctrlKey || event.target.closest(".x")) return;
     const row = tab.closest(".t") ?? tab;
     const keys = row === tab ? [tab.dataset.key] : [...row.querySelectorAll("[data-key]")].map((half) => half.dataset.key);
     drag = { row, key: tab.dataset.key, keys, x: event.clientX, y: event.clientY, moving: false, out: false };
+    pressed = true;
   });
+  // A drag the system ended without a mouse-up (a menu, another app, a gesture): no button is down,
+  // so the tab goes back, and the card the app drew is taken away.
+  const abandon = () => {
+    if (!drag) return;
+    if (drag.moving) land(null, true);
+    drag = null;
+    pressed = false;
+    if (redraw && !lifting) {
+      redraw = false;
+      drawSide();
+    }
+  };
   addEventListener("mousemove", (event) => {
     if (!drag) return;
+    if (event.buttons === 0) return abandon();
     if (!drag.moving) {
       if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 5) return;
       drag.moving = true;
       lift(event);
     }
-    over(event);
+    // The card follows the pointer at once (a move the compositor makes alone); the rest once a frame.
+    drag.ghost.style.transform = `translate(${event.clientX - drag.x}px, ${event.clientY - drag.y}px)`;
+    drag.latest = { clientX: event.clientX, clientY: event.clientY, screenX: event.screenX, screenY: event.screenY };
+    if (!drag.staged) {
+      drag.staged = true;
+      const mine = drag;
+      requestAnimationFrame(() => {
+        mine.staged = false;
+        if (drag === mine) over(mine.latest);
+      });
+    }
     if (!scrolling && !drag.out) {
       scrolling = true;
       requestAnimationFrame(scroll);
@@ -964,18 +1083,26 @@ if (document.documentElement.dataset.part === "side") {
     drag = null;
     aborted = true;
   });
+  addEventListener("pointercancel", abandon);
   addEventListener("mouseup", (event) => {
     const was = drag;
     drag = null;
+    pressed = false;
     if (!was?.moving) {
       if (aborted) {
         aborted = false;
         swallow = true;
         setTimeout(() => { swallow = false; }, 0);
       }
+      // A list that waited for a press to end is drawn now, after the click it may be.
+      if (redraw && !lifting) {
+        redraw = false;
+        drawSide();
+      }
       return;
     }
     drag = was;
+    over(event);
     land(event);
     drag = null;
     swallow = true;
@@ -993,33 +1120,36 @@ if (document.documentElement.dataset.part === "side") {
 // it moves (by how far since it was taken hold of); double-clicked, they are even again.
 if (document.documentElement.dataset.part === "line") {
   const line = document.getElementById("line");
-  let from = null, moved = 0, queued = false;
-  line.addEventListener("mousedown", (event) => {
-    if (event.button !== 0) return;
+  let from = 0, moved = 0;
+  resizeHandle(line, {
+    start(event) {
+      if (event.detail === 2) {
+        window.ipc.postMessage("split-even");
+        return false;
+      }
+      from = event.screenX;
+      moved = 0;
+      line.classList.add("held");
+      document.documentElement.classList.add("held");
+    },
+    move(event) {
+      const next = Math.round(event.screenX - from);
+      if (next === moved) return;
+      moved = next;
+      window.ipc.postMessage("split-move " + moved);
+    },
+    end(event, cancelled) {
+      line.classList.remove("held");
+      document.documentElement.classList.remove("held");
+      window.ipc.postMessage("split-move " + (cancelled ? 0 : Math.round(event.screenX - from)) + " done");
+    },
+  });
+  line.addEventListener("keydown", (event) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const step = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+    if (!step && event.key !== "Home") return;
     event.preventDefault();
-    // A second press evens the halves, decided as it goes down.
-    if (event.detail === 2) return void window.ipc.postMessage("split-even");
-    from = event.screenX;
-    moved = 0;
-    line.classList.add("held");
-    document.documentElement.classList.add("held");
-  });
-  addEventListener("mousemove", (event) => {
-    if (from === null) return;
-    moved = Math.round(event.screenX - from);
-    if (queued) return;
-    queued = true;
-    requestAnimationFrame(() => {
-      queued = false;
-      if (from !== null) window.ipc.postMessage("split-move " + moved);
-    });
-  });
-  addEventListener("mouseup", () => {
-    if (from === null) return;
-    from = null;
-    line.classList.remove("held");
-    document.documentElement.classList.remove("held");
-    window.ipc.postMessage("split-move " + moved + " done");
+    window.ipc.postMessage(event.key === "Home" ? "split-even" : "split-move " + step * (event.shiftKey ? 64 : 16) + " done");
   });
 }
 looked(window.__deskLook);
@@ -1319,7 +1449,7 @@ function V(events, open) {
   count.className = unseen > 0 ? "on" : "";
   count.textContent = unseen > 9 ? "9+" : String(unseen);
   const bell = document.getElementById("ev");
-  bell.title = events.length ? "Events: " + events.length + (unseen ? ", " + unseen + " new" : "") : "Events";
+  titled(bell, events.length ? "Events: " + events.length + (unseen ? ", " + unseen + " new" : "") : "Events");
   bell.classList.toggle("on", open);
   if (!open) {
     if (menuSig?.[0] === "e") menuSig = null;
@@ -1419,13 +1549,14 @@ function row(event, several) {
   item.append(dot, text, side);
   return item;
 }
-// The comment button, on while the person comments on the pages, and Send while some are held.
-// The window split (its two tabs, left and right), or whole (null): the split button is lit while
-// it is, and the side lists the two as one.
-// The project's split (its two tabs, left and right): the side lists the two as one.
+// The window's split (its two tabs, left and right), or whole (null): the side lists the two as
+// one row.
 function SP(pair) {
+  if (JSON.stringify(pair) === JSON.stringify(splitPair)) return;
   splitPair = pair;
+  if (document.documentElement.dataset.part === "side") drawSide();
 }
+// The comment button, on while the person comments on the pages, and Send while some are held.
 function C(on, held) {
   document.getElementById("cm").className = on ? "b on" : "b";
   const send = document.getElementById("sd");
@@ -1467,8 +1598,12 @@ document.getElementById("fs").addEventListener("click", () => {
 // toolbar keeps its few, and its address field gives way.
 const TOOLS = ["hs", "mn", "ev"];
 const ROOM = 160;
+let fitting = 0;
 function fit() {
-  if (document.documentElement.dataset.part) return;
+  if (document.documentElement.dataset.part || fitting) return;
+  fitting = requestAnimationFrame(() => { fitting = 0; fitBar(); });
+}
+function fitBar() {
   const lead = document.getElementById("lead");
   const bar = document.getElementById("bar");
   const more = document.getElementById("mo");
@@ -1501,10 +1636,18 @@ for (const [id, what] of [["mn", "collapse"], ["sd", "send"], ["cm", "comment"],
   document.getElementById(id).addEventListener("click", () => window.ipc.postMessage(what));
 }
 // No tab left: the kinds of tab, and the agents installed, each one click.
-document.getElementById("blank").replaceChildren(emptied("sn", "No tabs open", [
-  [doing("New Page", "key new page"), doing("New Terminal", "key new terminal"), doing("Board", "key new board")],
-  AGENTS.map((agent) => doing(agent.name, "agent " + agent.at, agentMark(agent.id))),
-]));
+function blank() {
+  document.getElementById("blank").replaceChildren(emptied("sn", "No tabs open", [
+    [doing("New Page", "key new page"), doing("New Terminal", "key new terminal"), doing("Board", "key new board")],
+    AGENTS.map((agent) => doing(agent.name, "agent " + agent.at, agentMark(agent.id))),
+  ]));
+}
+blank();
+// The agents installed, once the person's own PATH is known (the app may start with the system's).
+function agentsInstalled(list) {
+  AGENTS.splice(0, AGENTS.length, ...list);
+  blank();
+}
 </script>
 </body>
 </html>

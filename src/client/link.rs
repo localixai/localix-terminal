@@ -8,7 +8,7 @@ use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{SyncSender, sync_channel};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::Value;
@@ -33,7 +33,7 @@ pub enum Error {
     Broken(String),
     /// No answer within the time given; the connection is still there.
     Timeout,
-    /// The other end sent what is no protocol-2 message: an app of an older protocol.
+    /// The other end sent what is no message of the protocol: an app of an older one.
     Foreign(String),
 }
 
@@ -57,6 +57,8 @@ type Waiting = BTreeMap<u64, SyncSender<Result<Answer, Error>>>;
 enum Ended {
     Gone(String),
     Foreign(String),
+    /// The app answered with an error that is no request's: it takes no more.
+    Refused(RpcError),
 }
 
 impl Ended {
@@ -64,6 +66,7 @@ impl Ended {
         match self {
             Self::Gone(why) => Error::Broken(why.clone()),
             Self::Foreign(why) => Error::Foreign(why.clone()),
+            Self::Refused(error) => Error::Rpc(error.clone()),
         }
     }
 }
@@ -79,8 +82,6 @@ struct Pending {
 #[derive(Default)]
 struct Shared {
     pending: Mutex<Pending>,
-    /// Rung when the connection ends.
-    ended: Condvar,
 }
 
 pub struct Link {
@@ -114,22 +115,6 @@ impl Link {
     /// Whether the connection still stands.
     pub fn is_open(&self) -> bool {
         crate::lock(&self.shared.pending).closed.is_none()
-    }
-
-    /// Wait up to `limit` for the connection to end; whether it has.
-    pub fn wait_closed(&self, limit: Duration) -> bool {
-        let pending = crate::lock(&self.shared.pending);
-        let pending = if pending.closed.is_some() {
-            pending
-        } else {
-            crate::wait_timeout(&self.shared.ended, pending, limit)
-        };
-        pending.closed.is_some()
-    }
-
-    /// End the connection now: calls waiting for an answer are told it broke.
-    pub fn shutdown(&self) {
-        let _ = self.stream.shutdown(Shutdown::Both);
     }
 
     /// `method` asked, waiting `limit` for the answer (for ever without one).
@@ -180,6 +165,11 @@ fn read_all(mut input: BufReader<UnixStream>, shared: &Shared, notes: &Notes) ->
         match read_frame(&mut input) {
             Ok(Next::Got(frame)) => match frame.message {
                 Message::Response { id, outcome } => {
+                    // An error that names no request (a refused connection, a line the app could
+                    // not read) ends the link: every call, waiting now or asked later, gets it.
+                    if let (true, Err(error)) = (id.is_null(), &outcome) {
+                        return Ended::Refused(error.clone());
+                    }
                     let waiter = id
                         .as_u64()
                         .and_then(|id| crate::lock(&shared.pending).waiting.remove(&id));
@@ -210,11 +200,16 @@ fn read_all(mut input: BufReader<UnixStream>, shared: &Shared, notes: &Notes) ->
 
 /// The connection is over: every call waiting is told.
 fn end(shared: &Shared, ended: &Ended) {
-    let mut pending = crate::lock(&shared.pending);
-    pending.closed = Some(ended.clone());
-    for waiter in std::mem::take(&mut pending.waiting).into_values() {
+    let waiting = {
+        let mut pending = crate::lock(&shared.pending);
+        pending.closed = Some(ended.clone());
+        std::mem::take(&mut pending.waiting)
+    };
+    for waiter in waiting.into_values() {
         let _ = waiter.send(Err(ended.error()));
     }
-    drop(pending);
-    shared.ended.notify_all();
 }
+
+#[cfg(test)]
+#[path = "link_tests.rs"]
+mod tests;

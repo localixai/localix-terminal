@@ -30,7 +30,7 @@ chmod 0755 "$stage/Contents/MacOS/llx-desk"
 cp packaging/macos/llx-desk.icns "$stage/Contents/Resources/llx-desk.icns"
 market="$stage/Contents/Resources/claude-code"
 mkdir -p "$market/.claude-plugin"
-rsync -a --exclude '.claude-plugin/types' --exclude node_modules plugins/claude-code/ "$market/plugin/"
+rsync -a --exclude .DS_Store --exclude node_modules plugins/claude-code/ "$market/plugin/"
 sed 's#"\./plugins/claude-code"#"./plugin"#' .claude-plugin/marketplace.json > "$market/.claude-plugin/marketplace.json"
 grep -q '"./plugin"' "$market/.claude-plugin/marketplace.json" || { echo "the marketplace does not point at its plugin" >&2; exit 1; }
 printf 'APPL????' > "$stage/Contents/PkgInfo"
@@ -43,9 +43,9 @@ fi
 sign=${LLX_DESK_SIGN:--}
 sign_once() {
   if [ "$sign" = - ]; then
-    codesign --force --sign - --options runtime "$stage"
+    codesign --force --sign - --options runtime --entitlements packaging/macos/llx-desk.entitlements "$stage"
   else
-    codesign --force --sign "$sign" --options runtime --timestamp "$stage"
+    codesign --force --sign "$sign" --options runtime --entitlements packaging/macos/llx-desk.entitlements --timestamp "$stage"
   fi
 }
 # Apple's timestamp server fails now and then: four tries, the wait doubling between them.

@@ -53,6 +53,17 @@ fn told(driver: &WebviewDriver, mark: u64) -> Vec<String> {
 pub(crate) fn scenario(driver: &WebviewDriver, origin: &str) {
     driver.navigate(&format!("{origin}/told.html")).unwrap();
 
+    // A control in a frame that is part of the page's flow is read in the outline with its ref,
+    // as the page's own are: the agent reads nothing else.
+    let page = driver.observe().unwrap();
+    let inner = reference(&page, "button", "Frame confirm");
+    assert!(
+        page.outline
+            .contains(&format!("button \"Frame confirm\" [ref={inner}]")),
+        "{}",
+        page.outline
+    );
+
     // A same-origin frame's confirm is answered Cancel and told, before any call armed an answer.
     let mark = driver.told_mark();
     driver

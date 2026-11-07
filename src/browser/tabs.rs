@@ -7,18 +7,25 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
 
-use tao::dpi::LogicalSize;
 use tao::event_loop::EventLoopProxy;
 use wry::WebView;
 
 use super::host::{Cmd, Shared, Window};
 use super::platform::keep_tab_rendering;
 use super::popup::{self, Parent};
-use super::sizes::{self, Frame};
+use super::sizes::Frame;
 use super::strip::Key;
 use super::tab_view::{build, builder, share};
+
+#[path = "tabs_transfer.rs"]
+mod transfer;
+pub(super) use transfer::Carried;
+
+#[path = "tabs_layout.rs"]
+mod layout;
+pub(super) use layout::{Pane, pin, place};
 
 pub use super::told::MAX_TABS;
 pub(super) const BLANK: &str = "about:blank";
@@ -42,32 +49,6 @@ impl Slot {
             open: true,
             zoom: AtomicU64::new(1.0_f64.to_bits()),
         }
-    }
-
-    /// Draw the page at `zoom`, when it is not at it already.
-    fn zoom(&self, zoom: f64) {
-        if (self.zoomed() - zoom).abs() > f64::EPSILON && self.webview.zoom(zoom).is_ok() {
-            self.zoom.store(zoom.to_bits(), Ordering::Relaxed);
-        }
-    }
-
-    fn zoomed(&self) -> f64 {
-        f64::from_bits(self.zoom.load(Ordering::Relaxed))
-    }
-}
-
-/// A page on its way to another window: its view as it is, moved and not loaded again
-/// (docs/windows.md), with what its window kept of it.
-pub(super) struct Carried {
-    slot: Slot,
-    frame: Option<Frame>,
-    window: Window,
-}
-
-impl Carried {
-    /// How its window opened its pages: one with none of its own yet opens them the same.
-    pub(super) fn window(&self) -> &Window {
-        &self.window
     }
 }
 
@@ -200,17 +181,25 @@ impl Tabs {
         let id = match reused {
             Some(at) => {
                 let slot = &mut self.slots[at];
-                slot.open = true;
                 // A tab used again starts its loads over: the last page's are not this one's.
                 crate::lock(&shared.loads).remove(&slot.id);
-                slot.webview
-                    .load_url(url)
-                    .map_err(|error| error.to_string())?;
+                if let Err(error) = slot.webview.load_url(url) {
+                    // Not opened: the place it claimed goes back, and the view stays blank.
+                    popup::free(slot.id);
+                    return Err(error.to_string());
+                }
+                slot.open = true;
                 slot.id
             }
             None => {
                 let id = popup::reserve().ok_or_else(full)?;
-                let webview = self.build(native, id, url, shared, proxy)?;
+                let webview = match self.build(native, id, url, shared, proxy) {
+                    Ok(webview) => webview,
+                    Err(error) => {
+                        popup::release(id);
+                        return Err(error);
+                    }
+                };
                 keep_tab_rendering(&webview);
                 self.slots.push(Slot::new(id, webview));
                 id
@@ -286,6 +275,8 @@ impl Tabs {
             return Err(format!("there is no tab {id}"));
         };
         slot.open = false;
+        // Its notices and its armed answer are the page's: the next page of this id has none.
+        shared.notices.forget(id);
         self.frames.remove(&id);
         popup::free(id);
         let _ = slot.webview.load_url(BLANK);
@@ -306,57 +297,6 @@ impl Tabs {
         Ok(true)
     }
 
-    /// No page yet, in `native`: its pages come from other windows.
-    pub(super) fn empty(native: &tao::window::Window, window: &Window) -> Self {
-        // Joined, the pages end with `tabs` (its drop), as an opened one's do; the places stay.
-        popup::join();
-        Self {
-            slots: vec![],
-            active: 1,
-            window: window.clone(),
-            frames: HashMap::new(),
-            native: native.id(),
-        }
-    }
-
-    /// Page `id` leaves for another window, its view as it is: the page acted on here is the one
-    /// before it, as when it closes.
-    pub(super) fn take(&mut self, id: u32, shared: &Shared) -> Option<Carried> {
-        let at = (self.slots.iter()).position(|slot| slot.id == id && slot.open)?;
-        let slot = self.slots.remove(at);
-        let frame = self.frames.remove(&id);
-        let ids = self.ids();
-        if self.active == id
-            && let Some(last) = ids.last()
-        {
-            self.active = (ids.iter().rev().find(|other| **other < id)).map_or(*last, |one| *one);
-        }
-        shared.set_tabs(self.native, self.active, &ids);
-        Some(Carried {
-            slot,
-            frame,
-            window: self.window.clone(),
-        })
-    }
-
-    /// A page come from another window: its view is put in `native`, this window, as it was,
-    /// and it is the page acted on.
-    pub(super) fn take_in(
-        &mut self,
-        carried: Carried,
-        native: &tao::window::Window,
-        shared: &Shared,
-    ) {
-        super::platform::reparent(&carried.slot.webview, native);
-        let id = carried.slot.id;
-        if let Some(frame) = carried.frame {
-            self.frames.insert(id, frame);
-        }
-        self.slots.push(carried.slot);
-        self.active = id;
-        shared.set_tabs(self.native, self.active, &self.ids());
-    }
-
     fn check(&self, id: u32) -> Result<(), String> {
         match self.slot(id) {
             Some(_) => Ok(()),
@@ -364,69 +304,14 @@ impl Tabs {
         }
     }
 
+    /// Whether tab `id` is open.
+    pub(super) fn has(&self, id: u32) -> bool {
+        self.slot(id).is_some()
+    }
+
     /// The tabs open now, and the one acted on.
     pub(super) fn listed(&self) -> (Vec<u32>, u32) {
         (self.ids(), self.active)
-    }
-
-    /// Tab `id`'s zoom (the one acted on with none): points per CSS pixel, 1 unless its size is
-    /// drawn smaller to fit the window. A picture's clip, in CSS pixels, is in points times it.
-    pub(super) fn zoom(&self, id: Option<u32>) -> f64 {
-        let id = id.unwrap_or(self.active);
-        self.slot(id).map_or(1.0, Slot::zoomed)
-    }
-
-    /// Tab `id`'s size (the one acted on with none), while one is set.
-    pub(super) fn frame(&self, id: Option<u32>) -> Option<&Frame> {
-        self.frames.get(&id.unwrap_or(self.active))
-    }
-
-    /// Set tab `id`'s size (the one acted on with none), or let it fill the window again.
-    pub(super) fn set_frame(&mut self, id: Option<u32>, frame: Option<Frame>) {
-        let id = id.unwrap_or(self.active);
-        match frame {
-            Some(frame) => self.frames.insert(id, frame),
-            None => self.frames.remove(&id),
-        };
-    }
-
-    /// The tabs `shown` (one, or two side by side), each its id and its part of the window: its
-    /// size, and `left` and `top` points from the window's corner. The others stand beside,
-    /// out of sight.
-    pub(super) fn layout(&self, shown: &[Pane]) {
-        for slot in &self.slots {
-            let pane = shown.iter().find(|pane| pane.0 == slot.id);
-            let here = pane.is_some();
-            let (_, size, left, top) =
-                pane.copied()
-                    .unwrap_or((0, LogicalSize::new(0.0, 0.0), 0.0, 0.0));
-            fit(&slot.webview, None);
-            let away = |x: f64| {
-                if here {
-                    left + x
-                } else {
-                    -(size.width + left + 10_000.0)
-                }
-            };
-            if let Some(frame) = self.frames.get(&slot.id) {
-                // A size of its own: in the middle, below the strip, nothing of it under it.
-                // Larger than the window, drawn smaller: the page lays out at its size still.
-                let placed = sizes::place(size, top, Some(frame));
-                place(
-                    &slot.webview,
-                    away(placed.across),
-                    placed.down,
-                    placed.size,
-                    here,
-                );
-                fit(&slot.webview, Some(placed.size));
-                slot.zoom(placed.scale);
-                continue;
-            }
-            slot.zoom(1.0);
-            // Below the strip, never under it: the strip is the window's glass over every tab.
-            place(&slot.webview, away(0.0), top, size, here);
-        }
     }
 
     fn build(
@@ -452,7 +337,9 @@ impl Tabs {
 }
 
 fn full() -> String {
-    format!("{MAX_TABS} tabs are open already: close one first")
+    format!(
+        "{MAX_TABS} pages are open in the whole app (all projects, and the person's own): close one of yours, or ask the person to"
+    )
 }
 
 /// `ids` as the agent reads them.
@@ -474,66 +361,6 @@ pub(super) fn see_through_until_drawn(webview: &WebView, id: u32, shared: &Share
 pub(super) fn drawn(shared: &Shared, id: u32, proxy: &EventLoopProxy<Cmd>) {
     if crate::lock(&shared.undrawn).remove(&id) {
         let _ = proxy.send_event(Cmd::Reveal(id));
-    }
-}
-
-/// Where a tab stands. A WebView in a GTK box has no bounds of its own, so there the tabs not
-/// shown are hidden instead (WebKitGTK keeps running a hidden view's timers).
-/// A page shown: its tab's id, its size, and where it starts.
-pub(super) type Pane = (u32, LogicalSize<f64>, f64, f64);
-
-#[cfg(not(target_os = "linux"))]
-pub(super) fn place(webview: &WebView, x: f64, top: f64, size: LogicalSize<f64>, _shown: bool) {
-    let _ = webview.set_bounds(super::frame::fill(size, x, top));
-    super::platform::follow(webview, super::platform::Follow::Fill);
-}
-
-#[cfg(target_os = "linux")]
-pub(super) fn place(webview: &WebView, _x: f64, _top: f64, _size: LogicalSize<f64>, shown: bool) {
-    let _ = webview.set_visible(shown);
-}
-
-/// A page of a size of its own keeps it while the window is resized (the layout the resize
-/// brings moves it to the middle again); with none it fills the window. In a GTK box: that size
-/// asked for, in the middle of the page's share.
-#[cfg(not(target_os = "linux"))]
-fn fit(webview: &WebView, framed: Option<LogicalSize<f64>>) {
-    if framed.is_some() {
-        super::platform::follow(webview, super::platform::Follow::Centre);
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn fit(webview: &WebView, framed: Option<LogicalSize<f64>>) {
-    use gtk::prelude::WidgetExt;
-    use wry::WebViewExtUnix;
-    let view = webview.webview();
-    let (size, align) = match framed {
-        Some(size) => (size.cast::<i32>(), gtk::Align::Center),
-        None => (LogicalSize::new(-1, -1), gtk::Align::Fill),
-    };
-    view.set_size_request(size.width, size.height);
-    view.set_halign(align);
-    view.set_valign(align);
-}
-
-/// The strip along the top, `size` tall. In a GTK box every page takes an equal share unless
-/// told otherwise: the strip is held to its height there, and the pages under it fill the rest.
-#[cfg(not(target_os = "linux"))]
-pub(super) fn pin(strip: &WebView, size: LogicalSize<f64>) {
-    let _ = strip.set_bounds(super::frame::fill(size, 0.0, 0.0));
-    super::platform::follow(strip, super::platform::Follow::Top);
-}
-
-#[cfg(target_os = "linux")]
-pub(super) fn pin(strip: &WebView, size: LogicalSize<f64>) {
-    use gtk::prelude::{BoxExt, Cast, WidgetExt};
-    use wry::WebViewExtUnix;
-    let view = strip.webview();
-    let tall = size.cast::<i32>().height;
-    view.set_size_request(-1, tall);
-    if let Some(parent) = view.parent().and_then(|p| p.downcast::<gtk::Box>().ok()) {
-        parent.set_child_packing(&view, false, false, 0, gtk::PackType::Start);
     }
 }
 

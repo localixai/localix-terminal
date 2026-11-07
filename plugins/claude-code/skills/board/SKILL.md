@@ -2,7 +2,7 @@
 name: board
 description: "Plan and track work on a kanban board the person watches in the llx-desk window (Backlog, Todo, Doing, Review, Done, Discarded), and hand cards to subagents: for a task of several parts, work the person wants to follow or accept piece by piece, or parallel subagents that must not do the same thing twice."
 user-invocable: false
-allowed-tools: Bash(llx-desk:*)
+allowed-tools: Bash(llx-desk window:*)
 ---
 
 # llx-desk: the board

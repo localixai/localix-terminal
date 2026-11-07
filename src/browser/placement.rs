@@ -67,17 +67,23 @@ pub(super) fn deck(area: Area, kept: Option<Rect>) -> Rect {
     }
 }
 
-/// Another window's place: `deck` moved down and right by a step, as the system cascades new
-/// windows, kept inside `area`.
-pub(super) fn cascade(area: Area, deck: Rect) -> Rect {
+/// The place of the window `steps` steps after the main one (the first other window is 1):
+/// `deck` moved down and right by a step each, as the system cascades new windows, so two never
+/// lie on one another. Where the next step would leave `area`, it starts again from the area's
+/// top left.
+pub(super) fn cascade(area: Area, deck: Rect, steps: usize) -> Rect {
     const STEP: f64 = 28.0;
-    let x = (deck.x + STEP)
-        .min(area.x + area.width - deck.width)
-        .max(area.x);
-    let y = (deck.y + STEP)
-        .min(area.y + area.height - deck.height)
-        .max(area.y);
-    Rect { x, y, ..deck }
+    let steps = f64::from(u32::try_from(steps).unwrap_or(u32::MAX));
+    let along = |from: f64, start: f64, room: f64| {
+        let room = room.max(0.0);
+        let moved = from - start + STEP * steps;
+        start + moved.rem_euclid(room + STEP).min(room)
+    };
+    Rect {
+        x: along(deck.x, area.x, area.width - deck.width),
+        y: along(deck.y, area.y, area.height - deck.height),
+        ..deck
+    }
 }
 
 /// The mini's top left: `kept` while it is on the screen, else the bottom right corner.

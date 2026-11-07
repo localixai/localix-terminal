@@ -78,7 +78,8 @@ const term = new Terminal({
 addEventListener("desk-look", (event) => {
   term.options.fontFamily = event.detail.mono;
   term.options.fontSize = event.detail.size;
-  refit();
+  queueFit();
+  document.fonts.ready.then(queueFit);
 });
 term.open(document.getElementById("t"));
 // What this page posts (panel.rs): the keys and pastes as a terminal sends them (k), its size
@@ -90,26 +91,69 @@ function openTab(event, uri) {
   if (event.metaKey) post("o " + uri);
 }
 // Addresses in the text of a line: http and https, without the punctuation that ends a sentence.
-// Columns are taken as characters, as ASCII has them.
 const ADDRESS = /https?:\/\/[^\s<>"'`]+[^\s<>"'`.,;:!?)\]}]/g;
+// The rows of the line that row `y` (from 1) is part of, as a program printed it: from its first
+// row to the last that wraps on from it.
+function lineAt(y) {
+  const buffer = term.buffer.active;
+  let first = y - 1;
+  while (first > 0 && buffer.getLine(first) && buffer.getLine(first).isWrapped) first--;
+  const rows = [];
+  for (let n = first; buffer.getLine(n); n++) {
+    rows.push({ y: n + 1, line: buffer.getLine(n) });
+    const next = buffer.getLine(n + 1);
+    if (!next || !next.isWrapped) break;
+  }
+  return rows;
+}
+// The rows' text, and for each of its characters the cell it starts in (x and y from 1, and
+// the cells it takes: a wide one takes two), so a match is placed by its cells, not its offset.
+function cellsOf(rows) {
+  let text = "";
+  const at = [];
+  for (const { y, line } of rows) {
+    for (let x = 0; x < term.cols; x++) {
+      const cell = line.getCell(x);
+      if (!cell || cell.getWidth() === 0) continue;
+      const chars = cell.getChars() || " ";
+      text += chars;
+      for (let i = 0; i < chars.length; i++) at.push({ x: x + 1, y, width: cell.getWidth() });
+    }
+  }
+  return { text, at };
+}
 term.registerLinkProvider({
   provideLinks(y, found) {
-    const line = term.buffer.active.getLine(y - 1);
-    const text = line ? line.translateToString(true) : "";
-    const links = [...text.matchAll(ADDRESS)].map((match) => ({
-      text: match[0],
-      range: { start: { x: match.index + 1, y }, end: { x: match.index + match[0].length, y } },
-      decorations: { pointerCursor: true, underline: true },
-      activate: openTab,
-    }));
+    const { text, at } = cellsOf(lineAt(y));
+    const links = [];
+    for (const match of text.matchAll(ADDRESS)) {
+      const start = at[match.index], end = at[match.index + match[0].length - 1];
+      if (start.y > y || end.y < y) continue;
+      links.push({
+        text: match[0],
+        range: { start: { x: start.x, y: start.y }, end: { x: end.x + end.width - 1, y: end.y } },
+        decorations: { pointerCursor: true, underline: true },
+        activate: openTab,
+      });
+    }
     found(links.length ? links : undefined);
   },
 });
+// The program's cursor-position query (CSI 6 n) is answered by the session, which has the cursor
+// whether or not a page is there; the page answering too would type a second reply into the
+// program's input. A private query (CSI ? 6 n) is not this one and goes on.
+term.parser.registerCsiHandler({ final: "n" }, (params) => params[0] === 6);
 term.onData((data) => post("k" + data));
 // The keys a Mac terminal has: ⌘K clears, ⌘←/⌘→ go to the line's start and end, ⌥←/⌥→ by
 // words, ⌘⌫/⌥⌫ delete to the start and the word before, ⌘↑/⌘↓ scroll to the top and bottom, ⌘A
 // selects all. Sent as the readline keys every shell and REPL reads; the window's own shortcuts
 // (⌘T, ⌘W…) go on to its menu.
+// The scrollback and the screen go; a shell draws its prompt again at the top. A full-screen
+// program is sent nothing: a form feed would be typed into it.
+function clearScreen() {
+  term.clear();
+  if (term.buffer.active.type === "normal") post("k\f");
+}
 const SENT = {
   "meta+ArrowLeft": "\x01", "meta+ArrowRight": "\x05", "alt+ArrowLeft": "\x1bb", "alt+ArrowRight": "\x1bf",
   "meta+Backspace": "\x15", "alt+Backspace": "\x17", "meta+Delete": "\x0b", "alt+Delete": "\x1bd",
@@ -125,12 +169,7 @@ term.attachCustomKeyEventHandler((event) => {
   if (SENT[name]) return done(() => post("k" + SENT[name]));
   if (!event.metaKey || event.altKey) return true;
   switch (event.key.toLowerCase()) {
-    case "k":
-      // The scrollback and the screen go; a shell draws its prompt again at the top.
-      return done(() => {
-        term.clear();
-        if (term.buffer.active.type === "normal") post("k\f");
-      });
+    case "k": return done(clearScreen);
     case "arrowup": return done(() => term.scrollToTop());
     case "arrowdown": return done(() => term.scrollToBottom());
     case "a": return done(() => term.selectAll());
@@ -149,7 +188,7 @@ const MENU = [
   ],
   [
     { label: "Select All", run: () => term.selectAll() },
-    { label: "Clear", run: () => post("k\f") },
+    { label: "Clear", run: clearScreen },
   ],
 ];
 let offered = [];
@@ -171,8 +210,20 @@ window.chosen = (place, text) => {
   return typeof answer === "string" ? answer : null;
 };
 // The grid follows the pane; the session is told (term.onResize) and its pty resized. The
-// fit is the page's own, and at once: the first size is posted before the page says it is
-// ready, and a webview out of sight may run no frames. The scrollbar takes no width.
+// first fit is immediate, before the page says it is ready. Live resize and font changes
+// coalesce to one measurement per frame, with a timeout for WebViews running out of sight.
+let fitFrame = 0, fitTimer = 0;
+function queueFit() {
+  if (fitFrame) return;
+  fitFrame = requestAnimationFrame(fitNow);
+  fitTimer = setTimeout(fitNow, 150);
+}
+function fitNow() {
+  cancelAnimationFrame(fitFrame);
+  clearTimeout(fitTimer);
+  fitFrame = fitTimer = 0;
+  refit();
+}
 function refit() {
   if (!innerWidth || !innerHeight || !term.element) return;
   const cell = term._core._renderService.dimensions.css.cell;
@@ -189,8 +240,8 @@ term.buffer.onBufferChange((buffer) => {
   refit();
 });
 refit();
-addEventListener("resize", refit);
-document.fonts.ready.then(refit);
+addEventListener("resize", queueFit);
+document.fonts.ready.then(queueFit);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   term.options.theme = theme();
 });
@@ -199,7 +250,12 @@ addEventListener("focus", () => term.focus());
 // A click anywhere in the page, the scrollbar's track too, is a click in the terminal.
 document.addEventListener("mousedown", () => term.focus());
 // The session's output, base64: raw bytes as the program wrote them.
-const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+function bytes(b64) {
+  const text = atob(b64);
+  const out = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) out[i] = text.charCodeAt(i);
+  return out;
+}
 function W(b64) {
   term.write(bytes(b64));
 }

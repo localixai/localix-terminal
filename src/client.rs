@@ -81,12 +81,17 @@ impl Client {
                     crate::paths::log().display()
                 ));
             }
-            backoff();
+            crate::backoff(crate::BACKOFF);
         }
     }
 
     /// The handshake over `stream`.
     pub fn over(stream: UnixStream, notes: &Notes) -> Result<Self, String> {
+        // Before anything is sent (the caller's environment goes with a call): whatever
+        // listens at the socket's path must be this user's own app.
+        if !crate::wire::peer::is_own(&stream) {
+            return Err("the socket is another user's: this is not your LLX Desk".into());
+        }
         let link = Link::open(stream, Notes::clone(notes))
             .map_err(|e| format!("the server's socket: {e}"))?;
         let hello = json!({
@@ -119,16 +124,6 @@ impl Client {
     pub fn request(&self, method: &str, params: Value) -> Result<Answer, Error> {
         self.link.request(method, params, None)
     }
-
-    /// `method` asked, waiting up to `limit` for the answer.
-    pub fn request_within(
-        &self,
-        method: &str,
-        params: Value,
-        limit: Duration,
-    ) -> Result<Answer, Error> {
-        self.link.request(method, params, Some(limit))
-    }
 }
 
 /// Why a call has no answer.
@@ -153,9 +148,15 @@ pub fn ask(start: Start, method: &str, params: &Value) -> Result<Answer, Trouble
             .or_insert_with(|| json!(crate::token()));
     }
     let mut last = Trouble::None;
+    let (mut start, mut asked) = (start, false);
     for _ in 0..2 {
         let client = match Client::connect(start, &notes) {
             Ok(Some(client)) => client,
+            Ok(None) if asked => {
+                return Err(Trouble::Lost(
+                    "LLX Desk went away while this call ran".into(),
+                ));
+            }
             Ok(None) => return Err(Trouble::None),
             Err(why) => return Err(Trouble::Lost(why)),
         };
@@ -163,7 +164,11 @@ pub fn ask(start: Start, method: &str, params: &Value) -> Result<Answer, Trouble
             Ok(answer) => return Ok(answer),
             Err(Error::Rpc(error)) => return Err(Trouble::Refused(error.message)),
             Err(other @ (Error::Broken(_) | Error::Timeout | Error::Foreign(_))) => {
-                last = Trouble::Lost(other.to_string())
+                last = Trouble::Lost(other.to_string());
+                // The app took the call, then the connection broke: an app still there answers
+                // the retry from what it kept, and one that is gone was quit, not to be started
+                // again for a call it may have run.
+                (start, asked) = (Start::Never, true);
             }
         }
     }
@@ -202,6 +207,15 @@ fn start_server() -> Result<Child, String> {
 fn launch(app: &std::path::Path) -> Command {
     let mut open = Command::new("/usr/bin/open");
     open.arg("-g").arg("-a").arg(app);
+    keep_places(&mut open);
+    open.arg("--args").arg("serve");
+    open
+}
+
+/// `open` told this caller's places for the app's files (`paths::MOVED_BY`), which LaunchServices
+/// does not pass on by itself: the app it starts keeps its files where the caller's other
+/// commands do.
+pub(crate) fn keep_places(open: &mut Command) {
     for name in crate::paths::MOVED_BY {
         if let Some(value) = std::env::var_os(name) {
             let mut pair = std::ffi::OsString::from(name);
@@ -210,14 +224,12 @@ fn launch(app: &std::path::Path) -> Command {
             open.arg("--env").arg(pair);
         }
     }
-    open.arg("--args").arg("serve");
-    open
 }
 
 /// What started the server (`open`, or the server itself) waited for on a thread of its own, so
 /// that it is reaped when it ends however long this process lives; its exit status comes on the
 /// channel.
-fn reap(mut child: Child) -> Result<Receiver<ExitStatus>, String> {
+pub(crate) fn reap(mut child: Child) -> Result<Receiver<ExitStatus>, String> {
     let (status, exited) = sync_channel(1);
     std::thread::Builder::new()
         .name("server-reaper".into())
@@ -230,21 +242,19 @@ fn reap(mut child: Child) -> Result<Receiver<ExitStatus>, String> {
     Ok(exited)
 }
 
-/// The last line of the app's log: why it did not start.
+/// The last line of the app's log: why it did not start. Only its end is read.
 fn log_tail() -> String {
-    let log = std::fs::read_to_string(crate::paths::log()).unwrap_or_default();
-    log.lines()
-        .last()
+    use std::io::{Read as _, Seek as _, SeekFrom};
+    let mut tail = Vec::new();
+    if let Ok(mut log) = std::fs::File::open(crate::paths::log()) {
+        let _ = log.seek(SeekFrom::End(-4096));
+        let _ = log.take(4096).read_to_end(&mut tail);
+    }
+    String::from_utf8_lossy(&tail)
+        .lines()
+        .rfind(|line| !line.trim().is_empty())
         .unwrap_or("no word in app.log")
         .to_string()
-}
-
-#[expect(
-    clippy::disallowed_methods,
-    reason = "a backoff while the app starts: there is no event to wait on"
-)]
-fn backoff() {
-    std::thread::sleep(Duration::from_millis(50));
 }
 
 /// Between fork and exec: a session of its own.
@@ -255,3 +265,7 @@ fn detach() -> std::io::Result<()> {
         _ => Ok(()),
     }
 }
+
+#[cfg(test)]
+#[path = "client_tests.rs"]
+mod tests;

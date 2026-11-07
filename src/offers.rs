@@ -87,7 +87,7 @@ pub struct Kept(pub Arc<Store>);
 impl crate::browser::Answers for Kept {
     fn due(&self, id: &str) -> bool {
         let answer = self.0.read(|db| read(db, id));
-        answer.is_ok_and(|answer| answer.due(crate::board::now()))
+        answer.is_ok_and(|answer| answer.due(crate::now()))
     }
 
     fn answered(&self, id: &str, taken: bool) {
@@ -98,7 +98,7 @@ impl crate::browser::Answers for Kept {
                     taken: true,
                     ..answer
                 },
-                false => answer.later(crate::board::now()),
+                false => answer.later(crate::now()),
             };
             write(tx, id, answer)
         });

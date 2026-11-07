@@ -72,3 +72,30 @@ fn where_the_person_put_the_mini_is_kept_while_it_is_on_the_screen() {
         (LAPTOP.width - MINI.0, LAPTOP.y)
     );
 }
+
+#[test]
+fn each_window_after_the_main_one_has_a_place_of_its_own_inside_the_screen() {
+    let main = Rect {
+        x: 100.0,
+        y: 80.0,
+        width: 800.0,
+        height: 500.0,
+    };
+    let places: Vec<Rect> = (1..=3).map(|steps| cascade(LAPTOP, main, steps)).collect();
+    assert_eq!((places[0].x, places[0].y), (128.0, 108.0));
+    assert_eq!((places[1].x, places[1].y), (156.0, 136.0));
+    assert_ne!((places[1].x, places[1].y), (places[2].x, places[2].y));
+    // A window that fills the screen's height still moves, and stays on the screen.
+    let tall = Rect {
+        x: 12.0,
+        y: 50.0,
+        width: 1400.0,
+        height: 846.0,
+    };
+    let (one, two) = (cascade(LAPTOP, tall, 1), cascade(LAPTOP, tall, 2));
+    assert_ne!((one.x, one.y), (two.x, two.y));
+    for at in [one, two] {
+        assert!(at.x >= LAPTOP.x && at.x + at.width <= LAPTOP.x + LAPTOP.width);
+        assert!(at.y >= LAPTOP.y && at.y + at.height <= LAPTOP.y + LAPTOP.height);
+    }
+}

@@ -5,7 +5,7 @@
 
 use std::io::Write;
 use std::sync::Arc;
-use std::sync::mpsc::{RecvTimeoutError, sync_channel};
+use std::sync::mpsc::{RecvTimeoutError, channel};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -26,10 +26,17 @@ const RETRY: Duration = Duration::from_millis(500);
 pub fn follow(caller: &Caller, lines: bool) -> u8 {
     let parent = parent();
     loop {
-        let (notes, arrived) = sync_channel::<Value>(64);
+        // Unbounded, so a note is never dropped: the callback runs on the connection's reader
+        // thread, which must not wait on a full queue (it reads the replies too). It cannot grow
+        // past what the app holds pending, a few small notes.
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "a send that never waits, on the reader thread; bounded by the notes pending in the app"
+        )]
+        let (notes, arrived) = channel::<Value>();
         let hear: Notes = Arc::new(move |method, params| {
             if method == "comment/added" {
-                let _ = notes.try_send(params.clone());
+                let _ = notes.send(params.clone());
             }
         });
         // Never starts the app: a follower waits for one.

@@ -17,6 +17,17 @@ pub(in super::super) enum Revisit {
 }
 
 impl Deck {
+    /// The tabs of `listed` the person sees listed under project `group`: its own, and the
+    /// window's own (of none, as Settings): the ones the keys and the tabs' menu go among.
+    pub(in super::super) fn project_tabs<'a>(
+        listed: &'a [crate::WindowTab],
+        group: &'a str,
+    ) -> impl Iterator<Item = &'a crate::WindowTab> {
+        listed
+            .iter()
+            .filter(move |tab| tab.group == group || tab.group.is_empty())
+    }
+
     /// The project shown (scope.rs): else the one of the tab shown, else the first the window
     /// knows.
     pub(in super::super) fn shown_project(&self, shared: &Shared) -> String {
@@ -75,7 +86,7 @@ impl Deck {
     fn state(&self, key: Key) -> Option<State> {
         match key {
             Key::Web(id) => {
-                let open = self.web.as_ref().filter(|web| web.listed().0.contains(&id));
+                let open = self.web.as_ref().filter(|web| web.has(id));
                 open.map(|_| State::Open)
             }
             Key::Term(id) => self.term(id).map(|open| match open.held {

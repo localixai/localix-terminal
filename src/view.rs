@@ -9,6 +9,11 @@ use serde::{Deserialize, Serialize};
 /// Something an agent can see and act on by refs: a document, a screen.
 pub trait View {
     fn observe(&self) -> ViewResult<Observation>;
+    /// The epoch of what the view shows now, as `observe` would say it: a view that can tell it
+    /// without the whole observation says so by overriding this.
+    fn epoch(&self) -> ViewResult<String> {
+        Ok(self.observe()?.epoch)
+    }
     /// Perform `action` against the observation with `epoch`, then let the view settle.
     fn act(&self, epoch: &str, action: &Action) -> ViewResult<()>;
 }
@@ -58,10 +63,6 @@ pub struct Observation {
     /// changed something.
     #[serde(default)]
     pub revision: u64,
-    /// What the view told since the last action, besides what it shows: a dialog and how it was
-    /// answered, words announced and gone, a field that did not keep what was typed.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub notices: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]

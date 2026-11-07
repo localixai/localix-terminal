@@ -1,6 +1,7 @@
 //! The methods of the protocol: what each request asks of the desk, and the shape of its answer.
 //! Every result is an object; a failed call is an error with the code that says whether trying
-//! again could help. Methods run on a connection's worker, one request at a time each.
+//! again could help. The methods that act run each on a thread of its own, the rest on the
+//! connection's reader (`conn`).
 
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
@@ -202,22 +203,19 @@ pub(super) fn window_call(shared: &Shared, conn: &Conn, params: &Value) -> Outco
             person: false,
             window: None,
         };
-        let answered = shared
+        let mut answered = shared
             .desk
             .call(&call, args)
-            .map_err(|failure| match failure {
-                Failure::Failed(why) => RpcError::new(code::FAILED, why),
-                Failure::Fatal(why) => RpcError::new(code::FATAL, why),
-            })?;
-        let Some(shot) = answered.shot.as_ref() else {
+            .map_err(|Failure::Failed(why)| RpcError::new(code::FAILED, why))?;
+        let Some(shot) = answered.shot.take() else {
             return Ok((json!({"text": answered.text_with(None)}), None));
         };
         if conn.carries_bytes() {
+            let result = json!({"text": answered.text_with(None), "shot": {"width": shot.width, "height": shot.height}});
             let blob = Blob {
                 mime: "image/jpeg".into(),
-                bytes: shot.jpeg.clone(),
+                bytes: shot.jpeg,
             };
-            let result = json!({"text": answered.text_with(None), "shot": {"width": shot.width, "height": shot.height}});
             return Ok((result, Some(blob)));
         }
         let saved = crate::shots::save(&crate::paths::shots(), &shot.jpeg)

@@ -2,6 +2,7 @@
 //! terminal shows it. A tab's page is xterm.js (vendored, run by its SHA-384): the session paints
 //! its raw output into it (`W(...)`), the page sends back the keys, pastes and its size.
 
+mod environment;
 mod foreground;
 mod keys;
 mod pty;
@@ -23,7 +24,7 @@ const XTERM_CSS: &str = include_str!("terminal/vendor/xterm.css");
 /// The emulator page's own script, and its SHA-384: the page's policy runs it by that hash.
 pub(crate) const GLUE: &str = include_str!("terminal/emulator.js");
 pub(crate) const GLUE_SHA384: &str =
-    "LfStb/O1IQ1l/kjKABHLKJo4GnbKwT7sjXFdNvjA3xWfH1oZKwtYJwW31N/uPYYK";
+    "LY+3uMsk7NrB+39p+3qusBivSpoyudr17kOMb6JKV7PCSzl9MKy88eUSyRSIoLE8";
 
 /// The page that shows a session in xterm.js, titled `title`, in the window's light or dark.
 /// Its policy runs its own scripts only, by their hashes.

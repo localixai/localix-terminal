@@ -42,16 +42,16 @@ A new schema; the old tables (`boards` by owner string) are not carried over.
 ```sql
 projects (id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
           created INTEGER NOT NULL, opened INTEGER NOT NULL)
-tabs     (id INTEGER PRIMARY KEY, project INTEGER NOT NULL REFERENCES projects ON DELETE CASCADE,
+panes    (id INTEGER PRIMARY KEY, project INTEGER NOT NULL REFERENCES projects ON DELETE CASCADE,
           kind TEXT NOT NULL,          -- web | terminal | board
           agent TEXT,                  -- who opened it; NULL: the person
           title TEXT NOT NULL, url TEXT, cwd TEXT, command TEXT,
           place INTEGER NOT NULL,      -- its order in the project's list
           opened INTEGER NOT NULL, shown INTEGER, closed INTEGER)   -- closed NULL: open
 visits   (id INTEGER PRIMARY KEY, project INTEGER NOT NULL REFERENCES projects ON DELETE CASCADE,
-          tab INTEGER REFERENCES tabs ON DELETE SET NULL, url TEXT NOT NULL, title TEXT NOT NULL,
+          pane INTEGER REFERENCES panes ON DELETE SET NULL, url TEXT NOT NULL, title TEXT NOT NULL,
           at INTEGER NOT NULL)
-screens  (tab INTEGER PRIMARY KEY REFERENCES tabs ON DELETE CASCADE, text TEXT NOT NULL,
+screens  (pane INTEGER PRIMARY KEY REFERENCES panes ON DELETE CASCADE, text TEXT NOT NULL,
           at INTEGER NOT NULL)          -- a terminal's last lines, as text
 boards   (project INTEGER PRIMARY KEY REFERENCES projects ON DELETE CASCADE, board TEXT NOT NULL,
           updated INTEGER NOT NULL)
@@ -61,10 +61,13 @@ state    (key TEXT PRIMARY KEY, value TEXT NOT NULL)   -- a few named values of 
 change_events, change_cursors                          -- the feed, as now
 ```
 
-- A tab's row is written as it opens, changes (title, page, place) and closes; a closed tab stays
+`tabs` is the layout's table, not the ledger's: a workspace's tabs, each holding a tree of panes
+(`pane_nodes`; docs/windows.md). The ledger's rows are `panes`.
+
+- A pane's row is written as it opens, changes (title, page, place) and closes; a closed pane stays
   as history, pruned after a while (a project keeps its last 200).
-- A tab's key in the window and the protocol (`w3`, `t2`, `b1`) stays a handle of the run; the row
-  id is the tab's identity across runs. A restored tab gets a new key.
+- A pane's key in the window and the protocol (`w3`, `t2`, `b1`) stays a handle of the run; the row
+  id is the pane's identity across runs. A restored pane gets a new key.
 - `settings.json` stays a file (the person may edit it); `offers.json` moves into `answers`.
 
 ## Protocol
@@ -99,7 +102,9 @@ As a terminal that restores its sessions: the windows, tabs and recent output co
 do not.
 
 - On launch the project used last (the one the window showed last) opens with the tabs it had
-  open; another project's come back the first time the person goes to it (the switcher,
+  open; the tabs other windows had gather into the first window, each in its project's workspace
+  there (windows are not opened again across a restart); another project's come back the first
+  time the person goes to it (the switcher,
   `llx-desk open DIR`).
 - A page reopens at its address.
 - A terminal opens a new shell in its last folder, with its last screen shown above the new
@@ -109,10 +114,10 @@ do not.
 ## Layers
 
 - `projects.rs` (core): `root_of`, the `Project` row, find-or-make, opened, recent, labels.
-- `ledger.rs` (core): a project's tabs, visits and screens in the store; `desk/ledger.rs` keeps it
-  as tabs open, change and close, and tells the window each project's past.
+- `ledger.rs` (core): a project's panes, visits and screens in the store; `desk/ledger.rs` keeps it
+  as panes open, change and close, and tells the window each project's past.
 - `desk/`: every call resolved to a project first; the registry keyed by project and agent; the
-  feed's entities carry the project id (`Tab`, `Terminal`, `Board`, `Said`, `Ask`).
+  feed's entities carry the project id or the owner (`Pane`, `Terminal`, `Board`, `Said`, `Ask`).
 - `browser/`: the window knows the shown project (`scope.rs`) and each tab's project; the strip and
   the side draw the shown one's tabs; history and suggestions are told by the desk (the store), not
   kept in the window; the switcher is `host_project.rs`.

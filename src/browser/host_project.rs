@@ -6,6 +6,7 @@
 use super::On;
 use super::clicks::act;
 use crate::browser::choice::Entry;
+use crate::browser::deck::Deck;
 use crate::browser::strip::{Click, Key};
 use crate::browser::{Asked, Heard, agents, icons, platform};
 
@@ -74,8 +75,8 @@ impl On<'_> {
             return;
         };
         let shown = crate::lock(&self.shared.scope).shown().to_string();
-        let tabs: Vec<_> = (open.listing(self.shared).into_iter())
-            .filter(|tab| tab.group == shown || tab.group.is_empty())
+        let listed = open.listing(self.shared);
+        let tabs: Vec<_> = Deck::project_tabs(&listed, &shown)
             .filter_map(|tab| Some((Key::parse(&tab.id)?, tab)))
             .collect();
         let entries: Vec<Entry> = (tabs.iter())
@@ -158,9 +159,7 @@ impl On<'_> {
             .filter(|tab| tab.group == project)
             .filter_map(|tab| Key::parse(&tab.id))
             .collect();
-        for key in own {
-            self.close(key);
-        }
+        self.close_all(own, true);
         if !shown {
             if let Some(open) = self.deck.as_ref() {
                 open.refresh(self.shared);

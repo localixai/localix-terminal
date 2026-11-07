@@ -61,6 +61,31 @@ fn a_replay_carries_the_screen_as_a_terminal_draws_it() {
 }
 
 #[test]
+fn a_replay_preserves_palette_and_truecolor_foregrounds() {
+    let mut screen = Screen::new(40, 120);
+    screen.feed(b"\x1b[31mR\x1b[38;5;202mI\x1b[38;2;12;180;240mT\x1b[0m");
+    let mut again = vt100::Parser::new(40, 120, 0);
+    again.process(&screen.replay());
+    for (column, expected) in [
+        vt100::Color::Idx(1),
+        vt100::Color::Idx(202),
+        vt100::Color::Rgb(12, 180, 240),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_eq!(
+            again
+                .screen()
+                .cell(0, u16::try_from(column).unwrap())
+                .unwrap()
+                .fgcolor(),
+            expected,
+        );
+    }
+}
+
+#[test]
 fn a_resized_screen_keeps_its_text_and_reports_its_size() {
     let mut screen = Screen::new(40, 120);
     screen.feed(b"hello");
@@ -84,4 +109,53 @@ fn a_title_is_kept_aside_as_words() {
     screen.feed(b"\x1b]52;c;aGk=\x07\x1b]0;half\x1b[m\x1b]2;\xe2\x9c\xb3 \x07");
     assert_eq!(screen.title(), Some("Fix the cart button"));
     assert_eq!(screen.text().0, "a");
+}
+
+#[test]
+fn a_replay_keeps_the_alternate_screen_and_the_input_modes_the_program_asked_for() {
+    let mut screen = Screen::new(40, 120);
+    screen.feed(b"shell\x1b[?2004h\x1b[?1049h\x1b[?1000h\x1b[?1h\x1b[Hvim");
+    let drawn = String::from_utf8(screen.replay()).unwrap();
+    for sequence in ["\x1b[?1049h", "\x1b[?2004h", "\x1b[?1000h", "\x1b[?1h"] {
+        assert!(drawn.contains(sequence), "{sequence:?} in {drawn:?}");
+    }
+    assert!(
+        drawn.starts_with("\x1b[?1049h"),
+        "the switch comes before the drawing"
+    );
+    // On the normal screen there is no switch.
+    let mut normal = Screen::new(40, 120);
+    normal.feed(b"hi\x1b[?2004h");
+    let drawn = String::from_utf8(normal.replay()).unwrap();
+    assert!(
+        drawn.contains("\x1b[?2004h") && !drawn.contains("1049"),
+        "{drawn:?}"
+    );
+}
+
+#[test]
+fn a_string_left_open_ends_at_the_next_escape_and_the_screen_goes_on() {
+    // A title never ended, then a prompt: the escape that follows begins a sequence of its own.
+    let mut screen = Screen::new(40, 120);
+    screen.feed(b"a\x1b]0;half a title\x1b[31mb\x1b[mc");
+    assert_eq!(screen.text().0, "abc");
+    // A cancelled string, then text.
+    screen.feed(b"\x1b]0;lost\x18d\x1b]0;lost\x1ae");
+    assert_eq!(screen.text().0, "abcde");
+    assert_eq!(screen.title(), None);
+}
+
+#[test]
+fn a_text_that_wraps_at_the_panes_edge_is_found_whole() {
+    let mut screen = Screen::new(5, 10);
+    screen.feed(b"abcdefghijklmno\r\nxy   z");
+    // The snapshot keeps the screen's own rows.
+    assert_eq!(screen.text().0, "abcdefghij\nklmno\nxy   z");
+    let found = screen.search_text();
+    assert_eq!(found, "abcdefghijklmno\nxy   z");
+    assert!(found.contains("hijkl") && found.contains("y   z"));
+    // A row that ends on its own ends the line, its trailing spaces gone.
+    let mut plain = Screen::new(5, 10);
+    plain.feed(b"ab   \r\ncd");
+    assert_eq!(plain.search_text(), "ab\ncd");
 }

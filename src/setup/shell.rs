@@ -2,9 +2,11 @@
 //! app started from the Finder has only the system's), each within a deadline and stopped past
 //! it.
 
+use std::io::{Read as _, Seek as _, SeekFrom, Write as _};
+use std::os::unix::fs::OpenOptionsExt as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// What a program said and how it ended.
 pub(super) struct Ran {
@@ -12,22 +14,102 @@ pub(super) struct Ran {
     pub out: String,
 }
 
+/// How long a PATH read is kept: the person installs a version manager or edits their profile
+/// while the app runs. A read that failed is not tried again for a shorter while.
+const KEPT: Duration = Duration::from_secs(300);
+const KEPT_FAILED: Duration = Duration::from_secs(60);
+
+/// What the PATH is printed between, so what an rc file or the shell itself prints is not taken for it.
+const MARK: &str = "__LLX_PATH__";
+
+/// How long the login shell has to say its PATH.
+const ASK_WITHIN: Duration = Duration::from_secs(10);
+
+/// How long a caller waits for another's question while it has a PATH read before to go on with.
+const STALE_WAIT: Duration = Duration::from_secs(1);
+
+/// What the PATH reads have come to.
+struct Known {
+    /// The last read: when it was made, and what it said (none when the shell did not).
+    read: Option<(Instant, Option<String>)>,
+    /// A caller is asking the shell now.
+    asking: bool,
+}
+
+impl Known {
+    fn fresh(&self) -> bool {
+        (self.read.as_ref()).is_some_and(|(at, path)| {
+            at.elapsed() < if path.is_some() { KEPT } else { KEPT_FAILED }
+        })
+    }
+
+    fn path(&self) -> Option<String> {
+        self.read.as_ref().and_then(|(_, path)| path.clone())
+    }
+}
+
 /// The PATH a new terminal of the person's has: their login shell's. None when the shell does
 /// not answer within a few seconds.
 pub(super) fn login_path() -> Option<String> {
-    // Asked once a process: a login shell may take seconds to start (a version manager's setup),
-    // and every integration's state asks for it, several at once. One that did not answer is
-    // asked again next time.
-    static KNOWN: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+    // A login shell may take seconds to start (a version manager's setup), and every
+    // integration's state asks for it, several at once: one asks, the others wait for its answer
+    // (the PATH read before, when there is one, once they have waited a moment). The lock is held
+    // for the bookkeeping only, never while the shell runs.
+    static KNOWN: std::sync::Mutex<Known> = std::sync::Mutex::new(Known {
+        read: None,
+        asking: false,
+    });
+    static ANSWERED: std::sync::Condvar = std::sync::Condvar::new();
     let mut known = crate::lock(&KNOWN);
-    if known.is_none() {
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
-        let mut asked = Command::new(&shell);
-        asked.args(["-l", "-i", "-c", "printf %s \"$PATH\""]);
-        let ran = within(asked, Duration::from_secs(30))?;
-        *known = ran.ok.then_some(ran.out).filter(|path| !path.is_empty());
+    let began = Instant::now();
+    loop {
+        if known.fresh() {
+            return known.path();
+        }
+        if !known.asking {
+            known.asking = true;
+            break;
+        }
+        let most = if known.path().is_some() {
+            STALE_WAIT
+        } else {
+            ASK_WITHIN
+        };
+        let left = most.saturating_sub(began.elapsed());
+        if left.is_zero() {
+            return known.path();
+        }
+        known = crate::wait_timeout(&ANSWERED, known, left);
     }
-    known.clone()
+    drop(known);
+    let asked = ask_login_shell();
+    let mut known = crate::lock(&KNOWN);
+    // A read that fails keeps the PATH read before.
+    let before = known.path();
+    known.read = Some((Instant::now(), asked.or(before)));
+    known.asking = false;
+    ANSWERED.notify_all();
+    known.path()
+}
+
+fn ask_login_shell() -> Option<String> {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+    let mut asked = Command::new(&shell);
+    asked.args([
+        "-l",
+        "-i",
+        "-c",
+        &format!("printf '\\n{MARK}%s{MARK}\\n' \"$PATH\""),
+    ]);
+    let ran = within(asked, ASK_WITHIN).ok()?;
+    ran.ok.then(|| path_in(&ran.out)).flatten()
+}
+
+/// The text between the last pair of marks in what a shell said.
+fn path_in(said: &str) -> Option<String> {
+    let (before, _) = said.rsplit_once(MARK)?;
+    let (_, path) = before.rsplit_once(MARK)?;
+    Some(path.to_string()).filter(|path| !path.is_empty())
 }
 
 /// Whether `dir` is on `path`.
@@ -40,6 +122,22 @@ pub(super) fn which(name: &str, path: &str) -> Option<PathBuf> {
     std::env::split_paths(path)
         .map(|dir| dir.join(name))
         .find(|program| program.is_file())
+}
+
+/// The program `name` on the login shell's PATH, and that PATH to run it with.
+pub(super) fn find(name: &str) -> Result<(PathBuf, String), String> {
+    let path = login_path().ok_or("the login shell did not say its PATH")?;
+    let program =
+        which(name, &path).ok_or_else(|| format!("not installed (no `{name}` on the PATH)"))?;
+    Ok((program, path))
+}
+
+/// Why a program that failed did: what it said, or when it said nothing, `what` it means.
+pub(super) fn failure(ran: &Ran, what: &str) -> String {
+    match ran.out.trim() {
+        "" => what.to_string(),
+        said => said.to_string(),
+    }
 }
 
 /// `program` with `args`, its PATH `path`, within `most`: what it said (stdout, then stderr).
@@ -62,69 +160,103 @@ pub(super) fn run_with(
 ) -> Result<Ran, String> {
     let mut command = Command::new(program);
     command.args(args).env("PATH", path);
-    within_given(command, most, input).ok_or_else(|| {
-        format!(
-            "{} {} did not end within {}s",
-            program.display(),
-            args.join(" "),
-            most.as_secs()
-        )
-    })
+    within_given(command, most, input)
+        .map_err(|why| format!("{} {} {why}", program.display(), args.join(" ")))
 }
 
 /// What `command` says, when it ends within `most`; one that does not is stopped. Its output
 /// goes to a file, not a pipe: an interactive shell leaves helpers behind (a prompt's git
 /// watcher) that would hold a pipe open long after the shell ended.
-pub(super) fn within(command: Command, most: Duration) -> Option<Ran> {
+pub(super) fn within(command: Command, most: Duration) -> Result<Ran, String> {
     within_given(command, most, None)
 }
 
+/// A file of this run's own, made new (it never follows a link or takes over one that was there)
+/// and for its owner only, under a name no other user can guess: the shared temporary directory
+/// is another user's to write in too.
+fn private_file(tag: &str) -> Result<(PathBuf, std::fs::File), String> {
+    let path = std::env::temp_dir().join(format!("llx-desk-setup-{}-{tag}", crate::token()));
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&path)
+        .map_err(|why| format!("could not make its temporary file ({why})"))?;
+    Ok((path, file))
+}
+
 /// As [`within`], `input` given as the program's standard input (a file too, never a pipe).
-fn within_given(mut command: Command, most: Duration, input: Option<&str>) -> Option<Ran> {
-    static ASKED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-    let n = ASKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let file = std::env::temp_dir().join(format!("llx-desk-setup-{}-{n}", std::process::id()));
-    let given = std::env::temp_dir().join(format!("llx-desk-setup-{}-{n}.in", std::process::id()));
+fn within_given(mut command: Command, most: Duration, input: Option<&str>) -> Result<Ran, String> {
+    let mut made = vec![];
+    let ran = within_files(&mut command, most, input, &mut made);
+    for file in made {
+        let _ = std::fs::remove_file(file);
+    }
+    ran
+}
+
+fn within_files(
+    command: &mut Command,
+    most: Duration,
+    input: Option<&str>,
+    made: &mut Vec<PathBuf>,
+) -> Result<Ran, String> {
     let stdin = match input {
         Some(input) => {
-            std::fs::write(&given, input).ok()?;
-            Stdio::from(std::fs::File::open(&given).ok()?)
+            let (path, mut file) = private_file("in")?;
+            made.push(path);
+            let given = file
+                .write_all(input.as_bytes())
+                .and_then(|()| file.seek(SeekFrom::Start(0)));
+            given.map_err(|why| format!("could not make its temporary file ({why})"))?;
+            Stdio::from(file)
         }
         None => Stdio::null(),
     };
-    let out = std::fs::File::create(&file).ok()?;
-    let err = out.try_clone().ok()?;
-    let spawned = (command.stdin(stdin)).stdout(out).stderr(err).spawn();
-    let ran = spawned.ok().and_then(|mut child| {
-        let pid = child.id();
-        let (done, ended) = std::sync::mpsc::sync_channel(1);
-        let waiting = std::thread::Builder::new()
-            .name("desk-setup-run".into())
-            .spawn(move || {
-                let status = child.wait();
-                let _ = done.send(status.is_ok_and(|status| status.success()));
-            });
-        let ended = match waiting {
-            Ok(_) => ended.recv_timeout(most).ok(),
-            Err(_) => None,
-        };
-        if ended.is_none() {
-            // Not reaped yet (its waiter still waits), so the id is still the child's.
-            // SAFETY: kill only sends a signal.
-            unsafe { libc::kill(pid.cast_signed(), libc::SIGKILL) };
+    let (path, out) = private_file("out")?;
+    made.push(path);
+    let err = out
+        .try_clone()
+        .map_err(|why| format!("could not make its temporary file ({why})"))?;
+    let mut said = out
+        .try_clone()
+        .map_err(|why| format!("could not read its output ({why})"))?;
+    crate::fds::as_started(command);
+    let mut child = (command.stdin(stdin))
+        .stdout(out)
+        .stderr(err)
+        .spawn()
+        .map_err(|why| format!("could not be started ({why})"))?;
+    // The child is waited for here, by the one that holds it: stopped through the same handle when
+    // it is late, so the process is reaped and its id is never signalled once it is free.
+    let deadline = Instant::now() + most;
+    let ok = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status.success(),
+            Ok(None) if Instant::now() < deadline => crate::backoff(Duration::from_millis(5)),
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("did not end within {}s", most.as_secs()));
+            }
+            Err(_) => break false,
         }
-        let ok = ended?;
-        let out = String::from_utf8_lossy(&std::fs::read(&file).ok()?).into_owned();
-        Some(Ran { ok, out })
-    });
-    let _ = std::fs::remove_file(&file);
-    let _ = std::fs::remove_file(&given);
-    ran
+    };
+    // The output is read through the handle it was written by: not by a path again.
+    let mut out = vec![];
+    said.seek(SeekFrom::Start(0))
+        .and_then(|_| std::io::BufReader::new(said).read_to_end(&mut out))
+        .map_err(|why| format!("left no output to read ({why})"))?;
+    Ok(Ran {
+        ok,
+        out: String::from_utf8_lossy(&out).into_owned(),
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{on_path, within};
+    use super::{MARK, Ran, failure, on_path, path_in, private_file, within, within_given};
     use std::path::Path;
     use std::time::Duration;
 
@@ -144,11 +276,57 @@ mod tests {
         // One that does not end in time is stopped, and says nothing.
         let mut slow = std::process::Command::new("/bin/sh");
         slow.args(["-c", "sleep 30"]);
-        assert!(within(slow, Duration::from_millis(200)).is_none());
+        assert!(within(slow, Duration::from_millis(200)).is_err());
         // One that fails says so.
         let mut failing = std::process::Command::new("/bin/sh");
         failing.args(["-c", "echo no; exit 3"]);
         assert!(!within(failing, Duration::from_secs(5)).unwrap().ok);
+    }
+
+    #[test]
+    fn the_path_is_what_is_between_the_marks_and_never_what_else_the_shell_said() {
+        let said = format!(
+            "bash: cannot set terminal process group\nwelcome back\n\n{MARK}/usr/bin:/bin{MARK}\n"
+        );
+        assert_eq!(path_in(&said).as_deref(), Some("/usr/bin:/bin"));
+        // No marks, an empty PATH: none.
+        assert_eq!(path_in("/usr/bin:/bin"), None);
+        assert_eq!(path_in(&format!("{MARK}{MARK}")), None);
+    }
+
+    #[test]
+    fn a_program_that_cannot_run_says_so_and_a_failure_with_no_word_says_what_it_means() {
+        let missing = std::process::Command::new("/nonexistent/llx-desk-program");
+        let why = within(missing, Duration::from_secs(1)).err().unwrap();
+        assert!(why.contains("could not be started"), "{why}");
+        let mut slow = std::process::Command::new("/bin/sh");
+        slow.args(["-c", "sleep 30"]);
+        let why = within(slow, Duration::from_millis(100)).err().unwrap();
+        assert!(why.contains("did not end within"), "{why}");
+        let quiet = Ran {
+            ok: false,
+            out: " \n".into(),
+        };
+        assert_eq!(failure(&quiet, "it failed"), "it failed");
+        let said = Ran {
+            ok: false,
+            out: "no plugin\n".into(),
+        };
+        assert_eq!(failure(&said, "it failed"), "no plugin");
+    }
+
+    #[test]
+    fn what_a_program_is_given_is_read_back_from_a_file_of_its_own() {
+        let mut cat = std::process::Command::new("/bin/cat");
+        cat.arg("-");
+        let ran = within_given(cat, Duration::from_secs(5), Some("an answer")).unwrap();
+        assert_eq!(ran.out, "an answer");
+        // Two files of one run never share a name, and none is left behind.
+        let (one, _) = private_file("x").unwrap();
+        let (other, _) = private_file("x").unwrap();
+        assert_ne!(one, other);
+        let _ = std::fs::remove_file(one);
+        let _ = std::fs::remove_file(other);
     }
 
     #[test]

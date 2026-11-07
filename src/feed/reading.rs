@@ -1,6 +1,7 @@
 //! The consumers' side of the feed: each started on a thread of its own, reading pages past its
 //! cursor, handling each notice with retries, and moving its cursor in the store.
 
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::{Duration, Instant};
 
 use super::{Consumer, Entity, Feed, Health, Notice, Op, now};
@@ -11,6 +12,35 @@ const ATTEMPTS: u32 = 5;
 
 /// Notices a consumer reads at once.
 const PAGE: u32 = 100;
+
+/// How long a consumer waits before it asks the store again, when the store gave nothing though
+/// notices are there (a read that failed).
+const READ_RETRY: Duration = Duration::from_secs(1);
+
+/// `work` run, a panic in it being an error: a consumer's thread goes on.
+fn guarded<T>(work: impl FnOnce() -> T) -> Result<T, String> {
+    match catch_unwind(AssertUnwindSafe(work)) {
+        Ok(done) => Ok(done),
+        Err(_) => Err("panicked".to_string()),
+    }
+}
+
+/// `consumer` reconciled; a panic in it is logged, and the consumer goes on.
+fn reconcile(consumer: &mut dyn Consumer) {
+    if let Err(why) = guarded(|| consumer.reconcile()) {
+        log::warn!("feed consumer {} {why} reconciling", consumer.name());
+    }
+}
+
+/// A consumer's thread, counted while it runs: counted out however the thread ends.
+struct Running(Feed);
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        self.0.log().running -= 1;
+        self.0.inner.changed.notify_all();
+    }
+}
 
 /// A row of the feed as a consumer's page has it.
 enum Item {
@@ -58,18 +88,16 @@ impl Feed {
             log.running += 1;
         }
         let feed = self.clone();
-        let started = std::thread::Builder::new()
+        // Dropped with the closure when no thread is given, as when the thread ends.
+        let running = Running(self.clone());
+        std::thread::Builder::new()
             .name(format!("desk-feed-{name}"))
             .spawn(move || {
-                consumer.reconcile();
+                let _running = running;
+                reconcile(consumer.as_mut());
                 feed.run(consumer.as_mut());
-                feed.log().running -= 1;
-                feed.inner.changed.notify_all();
-            });
-        if started.is_err() {
-            self.log().running -= 1;
-        }
-        started.map(drop)
+            })
+            .map(drop)
     }
 
     /// The consumer's loop: a page past its cursor, each notice handled, then the cursor kept,
@@ -123,7 +151,7 @@ impl Feed {
             if cursor < oldest {
                 self.moved(name, oldest.saturating_sub(1));
                 log::warn!("feed consumer {name} fell behind what the feed keeps: it reconciles");
-                consumer.reconcile();
+                reconcile(consumer);
                 continue;
             }
             let page = self.read_page(cursor);
@@ -134,7 +162,9 @@ impl Feed {
             if log.stopped {
                 return None;
             }
+            // Notices are there but the store gave none (a read failed): a pause, not a spin.
             if log.next > cursor {
+                drop(crate::wait_timeout(&self.inner.changed, log, READ_RETRY));
                 continue;
             }
             drop(match self.inner.changed.wait(log) {
@@ -203,7 +233,7 @@ impl Feed {
     fn deliver(&self, name: &'static str, consumer: &mut dyn Consumer, notice: &Notice) {
         let mut pause = self.inner.retry;
         loop {
-            match consumer.handle(notice) {
+            match guarded(|| consumer.handle(notice)).and_then(|handled| handled) {
                 Ok(()) => break,
                 Err(why) => {
                     let attempts = self.failed(name, &why);
@@ -213,7 +243,7 @@ impl Feed {
                             notice.seq
                         );
                         self.set_aside(name);
-                        consumer.reconcile();
+                        reconcile(consumer);
                         break;
                     }
                     if self.wait(pause) {
@@ -284,10 +314,7 @@ impl Feed {
             let Some(left) = deadline.checked_duration_since(Instant::now()) else {
                 return false;
             };
-            log = match self.inner.changed.wait_timeout(log, left) {
-                Ok((log, _)) => log,
-                Err(poisoned) => poisoned.into_inner().0,
-            };
+            log = crate::wait_timeout(&self.inner.changed, log, left);
         }
         true
     }

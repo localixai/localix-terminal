@@ -93,7 +93,10 @@ pub(super) fn on_browser(
                 return;
             }
         },
-        Cmd::Noted(noted) => {
+        // The comment is of the tab shown in the window it was made in (this one: it is routed to
+        // the window in use), not of whichever tab the app acted on last.
+        Cmd::Noted(mut noted) => {
+            noted.tab = tabs.active_id();
             let (reply, shot) = std::sync::mpsc::sync_channel(1);
             if let (Some(_), Some(webview)) = (noted.clip, tabs.at(Some(noted.tab))) {
                 let clip = zoomed(noted.clip, tabs.zoom(Some(noted.tab)));
@@ -126,12 +129,10 @@ pub(super) fn on_browser(
         }
         Cmd::CloseTab { id, reply } => {
             let closed = tabs.close(id, shared);
-            shared.notices.forget(id);
             let emptied = closed == Ok(false);
             let _ = reply.send(closed);
             if emptied {
-                shared.closed();
-                open.remove_web();
+                open.end_web(&[id], shared);
             }
         }
         Cmd::Open { .. }

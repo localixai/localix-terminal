@@ -14,6 +14,33 @@ fn steps(store: &Store) -> usize {
 }
 
 #[test]
+fn existing_migrations_are_unchanged_and_new_ones_are_appended() {
+    use std::fmt::Write as _;
+
+    use sha2::{Digest, Sha256};
+    let kept = [
+        "c5d5af310c49a3035aebef536c126ba7379674cb6384dd0ec371bb31353165ff",
+        "a88f7fa952d7f8a33517e83f27a06d4669784f2abf9938d8a2439324155d565e",
+    ];
+    assert!(
+        STEPS.len() >= kept.len(),
+        "existing migrations cannot be removed"
+    );
+    for (at, expected) in kept.iter().enumerate() {
+        let mut actual = String::new();
+        for byte in Sha256::digest(STEPS[at].as_bytes()) {
+            write!(&mut actual, "{byte:02x}").unwrap();
+        }
+        assert_eq!(
+            actual,
+            *expected,
+            "migration {} changed: append a new migration instead",
+            at + 1
+        );
+    }
+}
+
+#[test]
 fn a_database_is_made_with_every_step_and_opened_again_as_it_was() {
     let scratch = Scratch::new();
     let path = scratch.path().join("deep").join("desk.db");
@@ -132,4 +159,30 @@ fn the_tabs_of_a_database_before_windows_become_panes_each_a_tab_and_a_split_one
     assert_eq!(tree.tree.panes(), [11, 14]);
     assert_eq!(tree.focused, Some(11));
     assert!(read("SELECT key FROM state").is_empty());
+}
+
+#[test]
+fn a_database_and_the_directory_made_for_it_are_the_owners_alone() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let scratch = Scratch::new();
+    let dir = scratch.path().join("data");
+    let path = dir.join("desk.db");
+    drop(Store::open(&path).unwrap());
+    let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode(&dir), 0o700);
+    assert_eq!(mode(&path), 0o600);
+    // A directory that was there is not the app's to change.
+    let shared = scratch.path().join("shared");
+    std::fs::create_dir_all(&shared).unwrap();
+    std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o755)).unwrap();
+    drop(Store::open(&shared.join("desk.db")).unwrap());
+    assert_eq!(mode(&shared), 0o755);
+    assert_eq!(mode(&shared.join("desk.db")), 0o600);
+}
+
+#[test]
+fn a_store_in_memory_in_place_of_the_database_says_why() {
+    assert_eq!(Store::memory().unwrap().kept_in_memory(), None);
+    let instead = Store::memory_instead("read-only").unwrap();
+    assert_eq!(instead.kept_in_memory(), Some("read-only"));
 }

@@ -13,13 +13,37 @@ pub fn app() -> Option<PathBuf> {
     of(&exe).map(Path::to_path_buf)
 }
 
+/// Whether this app is where it stays: not run from a mounted disk image or from the place the
+/// system moves a downloaded one to (App Translocation), both gone at eject or restart. What is
+/// written into the person's tools names this program, so it waits for a bundle that is in
+/// place. A program outside a bundle is always in place.
+pub fn in_place() -> bool {
+    app().is_none_or(|app| !temporary(&app))
+}
+
+/// Whether `app` is in a place that does not last.
+fn temporary(app: &Path) -> bool {
+    app.starts_with("/Volumes")
+        || app
+            .components()
+            .any(|part| part.as_os_str() == "AppTranslocation")
+}
+
 /// Whether this run is the app opened (the Finder, the Dock, LaunchServices): the program run
 /// by its own path in the bundle, not through the `llx-desk` link, given nothing but what the
-/// system adds (`-psn_…`, from older macOS). Run through the link with nothing, it is the
-/// command, and says how to use it.
+/// system adds (`-psn_…` from older macOS, `-ApplePersistenceIgnoreState YES` when it comes
+/// back). Run through the link with nothing, it is the command, and says how to use it.
 pub fn opened(args: &[String]) -> bool {
     let bundled = std::env::current_exe().is_ok_and(|exe| of(&exe).is_some());
-    bundled && args.iter().all(|arg| arg.starts_with("-psn_"))
+    bundled && adds_only_options(args)
+}
+
+/// Whether `args` are what the system adds: none, or options (no command starts with `-`),
+/// but the ones that ask for help or the version.
+fn adds_only_options(args: &[String]) -> bool {
+    args.first().is_none_or(|first| {
+        first.starts_with('-') && !["-h", "--help", "-V", "--version"].contains(&first.as_str())
+    })
 }
 
 /// The bundle `exe` is the program of: `<x>.app/Contents/MacOS/<exe>`.
@@ -35,7 +59,7 @@ fn of(exe: &Path) -> Option<&Path> {
 
 #[cfg(test)]
 mod tests {
-    use super::of;
+    use super::{adds_only_options, of, temporary};
     use std::path::Path;
 
     #[test]
@@ -45,5 +69,29 @@ mod tests {
         assert_eq!(of(Path::new("/usr/local/bin/llx-desk")), None);
         assert_eq!(of(Path::new("/x/Contents/MacOS/llx-desk")), None);
         assert_eq!(of(Path::new("llx-desk")), None);
+    }
+
+    #[test]
+    fn a_run_is_the_app_for_what_the_system_adds_and_the_command_for_the_rest() {
+        let args = |words: &[&str]| words.iter().map(|w| (*w).to_string()).collect::<Vec<_>>();
+        assert!(adds_only_options(&args(&[])));
+        assert!(adds_only_options(&args(&["-psn_0_12345"])));
+        assert!(adds_only_options(&args(&[
+            "-ApplePersistenceIgnoreState",
+            "YES"
+        ])));
+        assert!(!adds_only_options(&args(&["--help"])));
+        assert!(!adds_only_options(&args(&["-V"])));
+        assert!(!adds_only_options(&args(&["window", "{}"])));
+    }
+
+    #[test]
+    fn an_app_on_a_disk_image_or_translocated_is_not_in_place() {
+        assert!(temporary(Path::new("/Volumes/LLX Desk/LLX Desk.app")));
+        assert!(temporary(Path::new(
+            "/private/var/folders/x/AppTranslocation/ABC/d/LLX Desk.app"
+        )));
+        assert!(!temporary(Path::new("/Applications/LLX Desk.app")));
+        assert!(!temporary(Path::new("/Users/me/Applications/LLX Desk.app")));
     }
 }

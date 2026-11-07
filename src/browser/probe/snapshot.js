@@ -1,7 +1,9 @@
 // The page side of the browser tool (files concatenated into one script by host.rs): an atomic snapshot of what a person can see and use, and the execution
 // of one action on an element that snapshot observed. Installed before any page script runs, so the
-// token and the IPC post captured here cannot be replaced by the page. No caller reaches this file
-// with a selector or code: an action names an observed element by its ref.
+// IPC post and `JSON.stringify` captured here are the originals, and the token only ever goes out
+// through them (`send`): those are what the page cannot replace. What a caller hands in does reach
+// this file: a screenshot's CSS `selector` (`locate`) and the caller's script (`settled`); an
+// action otherwise names an observed element by its ref.
 ;(() => {
   if (window.top !== window || window.__dloop_call) return
   const TOKEN = '__TOKEN__'
@@ -16,7 +18,22 @@
       }, { capture: true })
     }
   }
-  const post = window.ipc.postMessage.bind(window.ipc)
+  // The native handler itself where there is one: `window.ipc.postMessage` looks it up again on
+  // each call, so a page could put its own in between and read what is sent.
+  const handler = window.webkit?.messageHandlers?.ipc
+  const post = handler
+    ? Function.prototype.call.bind(handler.postMessage, handler)
+    : window.ipc.postMessage.bind(window.ipc)
+  const stringify = JSON.stringify
+  // A string cut in the middle of an emoji ends in half a surrogate pair, which JSON.stringify
+  // writes as an escape the native side cannot parse: the whole reply would be dropped.
+  const wellFormed = (s) => (typeof s.toWellFormed === 'function'
+    ? s.toWellFormed()
+    : s.replace(/[\ud800-\udbff][\udc00-\udfff]|[\ud800-\udfff]/g, (m) => (m.length === 2 ? m : '\ufffd')))
+  // Every message to the native side: the token in front as plain text (an object holding it
+  // could be read by a page's `toJSON`), then the JSON.
+  const send = (message) =>
+    post(`${TOKEN}\n${stringify(message, (_key, v) => (typeof v === 'string' ? wellFormed(v) : v))}`)
   // Characters with no width (zero-width spaces and joiners, soft hyphens) that sites put inside
   // words: a name read with them never matches the word as typed.
   const UNSEEN = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g
@@ -67,14 +84,21 @@
     if (!event.defaultPrevented) leaving = true
   })
 
-  // A transparent checkbox or radio is a styled control (its picture is a sibling), not a hidden one.
+  // `checkVisibility` is Safari 17.4 and later: an older system WebKit gets the same test by hand.
+  const rendered = (e, opacity) => {
+    if (typeof e.checkVisibility === 'function') return e.checkVisibility({ checkOpacity: opacity, checkVisibilityCSS: true })
+    const view = e.ownerDocument.defaultView
+    if (!e.getClientRects().length || view.getComputedStyle(e).visibility !== 'visible') return false
+    for (let n = opacity ? e : null; n; n = n.parentElement) if (view.getComputedStyle(n).opacity === '0') return false
+    return true
+  }
   // An element with `display: contents` (a framework's mount point) has no box, so
   // checkVisibility() calls it hidden and its whole subtree with it: only its children can be.
   const boxless = (e) => e.ownerDocument.defaultView.getComputedStyle(e).display === 'contents'
+  // A transparent checkbox or radio is a styled control (its picture is a sibling), not a hidden one.
   const visible = (e) =>
     !e.closest('[aria-hidden="true"],[inert]') &&
-    (boxless(e) ||
-      e.checkVisibility({ checkOpacity: !/^(checkbox|radio)$/.test(e.type), checkVisibilityCSS: true }))
+    (boxless(e) || rendered(e, !/^(checkbox|radio)$/.test(e.type)))
   // A password field is offered for typing, but its value is never read back.
   const secret = (e) => ['file', 'hidden'].includes(e.type)
 
@@ -239,14 +263,15 @@
   function* offered(frames) {
     const docs = [...frames.filter((f) => f.overlay), { doc: document, frame: null }, ...frames.filter((f) => !f.overlay)]
     for (const { doc, frame, ...at } of docs) for (const e of deep(doc.body)) {
-      if (!isControl(e)) continue
-      if (secret(e) || !visible(e)) continue
-      const role = roleOf(e)
+      // The cheap test first: most elements are far from the screen, and the others cost style reads.
       const own = e.getBoundingClientRect()
-      const box = shifted(own, frame && at)
       // Inside a frame, only what its own viewport shows.
       if (frame && (own.bottom <= 0 || own.right <= 0 || own.top >= frame.clientHeight || own.left >= frame.clientWidth)) continue
-      if (!role || !(inViewport(box) || justBelow(box))) continue
+      const box = shifted(own, frame && at)
+      if (!(inViewport(box) || justBelow(box))) continue
+      if (!isControl(e) || secret(e) || !visible(e)) continue
+      const role = roleOf(e)
+      if (!role) continue
       if (role === 'gridcell' && e.querySelector('button,[role="button"]')) continue
       yield { e, role, box, at }
     }
@@ -269,7 +294,6 @@
     const frames = subframes()
     for (const { frame } of frames) quiet(frame.contentWindow)
     for (const { e, role, box, at } of offered(frames)) {
-      if (elements.length >= MAX_ELEMENTS) continue
       const element = { ref: refOf(e), role, name: dayOf(e, labelOf(e)) }
       const value = valueOf(e, role)
       if (value) element.value = value.slice(0, 200)
@@ -285,32 +309,35 @@
           .map((o) => ({ value: o.value, label: o.label }))
       }
       elements.push(element)
+      if (elements.length >= MAX_ELEMENTS) break
     }
     mark(elements)
+    const text = [...frames.filter((f) => f.overlay).map((f) => visibleText(f.doc, f)), visibleText()].join('\n').slice(0, MAX_TEXT)
     return {
       epoch: epoch(),
-      url: location.href,
-      title: document.title,
-      text: [...frames.filter((f) => f.overlay).map((f) => visibleText(f.doc, f)), visibleText()].join('\n').slice(0, MAX_TEXT),
-      outline: [...frames.filter((f) => f.overlay).map((f) => outline(f.doc, f)), outline()].filter(Boolean).join('\n'),
+      url: location.href.slice(0, 2000),
+      title: document.title.slice(0, 200),
+      text,
+      // Overlay frames first (they cover the page), then the page, then the frames in its flow.
+      outline: [...frames.filter((f) => f.overlay).map((f) => outline(f.doc, f)), outline(), ...frames.filter((f) => !f.overlay).map((f) => outline(f.doc, f))].filter(Boolean).join('\n'),
       viewport: { w: innerWidth, h: innerHeight },
       scroll: { y: Math.round(scrollY), height: document.documentElement.scrollHeight },
       elements,
-      busy: busy(),
+      busy: busy(text),
       revision,
     }
   }
 
   // Whether the page says it is still working: a document still parsing or fetching its own
   // data (network.js), a busy region, a progress bar, or words such as "Loading…" on screen.
-  function busy() {
+  function busy(text) {
     // Still parsing, or fetching its own data. Images, videos and ad frames still loading into a
     // parsed page are not content a call waits for.
     if (document.readyState === 'loading' || fetching()) return true
     const shown = (selector) => [...document.querySelectorAll(selector)]
       .some((e) => visible(e) && inViewport(e.getBoundingClientRect()))
     return shown('[aria-busy="true"],[role="progressbar"],progress') ||
-      /\b(loading|please wait|searching)\b/i.test(visibleText().slice(0, 2000))
+      /\b(loading|please wait|searching)\b/i.test(text.slice(0, 2000))
   }
 
   // The words a person can read in the viewport; off-screen bodies and footers stay out.

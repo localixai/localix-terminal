@@ -31,7 +31,7 @@
     const e = was?.isConnected && was.ownerDocument?.defaultView && visible(was) ? was : again(args.ref)
     const view = e?.ownerDocument?.defaultView
     if (!e || !view || !e.isConnected || !visible(e)) throw new Error('stale: the element is gone')
-    if (e.matches(':disabled') || e.closest('[aria-disabled="true"]')) throw new Error('disabled')
+    if (e.matches(':disabled') || e.closest('[aria-disabled="true"]')) throw new Error('disabled (the page turned the control off)')
     e.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' })
     const r = e.getBoundingClientRect()
     const x = Math.max(1, Math.min(r.left + r.width / 2, view.innerWidth - 1))
@@ -118,9 +118,17 @@
         return { ok: true }
       case 'select': {
         const { e } = await usable(args)
-        if (e.tagName !== 'SELECT') throw new Error('not a dropdown')
-        const option = [...e.options].find((o) => o.value === args.value && !o.disabled)
-        if (!option) throw new Error('no such option')
+        if (e.tagName !== 'SELECT') throw new Error('not a dropdown: select works on a native <select> only')
+        // The option's value first; else its label, as the outline shows it (`Large` for `L`).
+        const wanted = String(args.value ?? '')
+        const choices = [...e.options].filter((o) => !o.disabled)
+        const label = (o) => (o.label || o.text).trim()
+        const option = choices.find((o) => o.value === wanted) ||
+          choices.find((o) => label(o).toLowerCase() === wanted.trim().toLowerCase())
+        if (!option) {
+          const names = choices.slice(0, 20).map((o) => (label(o) === o.value ? o.value : `${o.value} (${label(o)})`))
+          throw new Error(`no option "${wanted.slice(0, 80)}" in this dropdown; its options are: ${names.join(', ') || 'none'}`)
+        }
         // Picking the option already chosen fires nothing in a browser; pages rely on that.
         if (option.selected) return { ok: true, unchanged: true }
         e.focus?.({ preventScroll: true })
@@ -160,6 +168,7 @@
         if (done) return
         done = true
         observer.disconnect()
+        removeEventListener('pagehide', finish)
         // With the Navigation API every navigation of this document is seen here (`leaving`): the
         // native side need not wait for one the page did not report (ad frames request many).
         resolve({ ok: true, navigating: leaving, watched: !!window.navigation, ms: Math.round(performance.now() - start) })
@@ -186,7 +195,11 @@
   function read(args) {
     const text = (document.body?.innerText || '').replace(UNSEEN, '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n')
     const offset = Math.max(0, args?.offset || 0)
-    return { text: text.slice(offset, offset + (args?.limit || 6000)), total: text.length, offset }
+    let end = offset + (args?.limit || 6000)
+    // A window never ends inside an emoji: the next one starts where this one ended.
+    const high = text.charCodeAt(end - 1)
+    if (end < text.length && end - 1 > offset && high >= 0xd800 && high <= 0xdbff) end--
+    return { text: text.slice(offset, end), total: text.length, offset }
   }
 
 

@@ -91,3 +91,34 @@ fn an_agent_starting_reads_its_integration_again_and_settings_tell_what_they_rea
     assert_eq!(on.get("hermes"), Some(&Some(true)));
     assert!(!on.contains_key("copilot"));
 }
+
+/// Answers that count how often the store is asked.
+struct Counted(std::sync::atomic::AtomicUsize);
+
+impl super::super::Answers for Counted {
+    fn due(&self, _: &str) -> bool {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        true
+    }
+
+    fn answered(&self, _: &str, _: bool) {}
+}
+
+#[test]
+fn the_store_is_asked_once_for_the_refreshes_of_a_moment_and_an_answer_ends_the_offer_at_once() {
+    let offers = Offers::default();
+    assert!(
+        !offers.due("x"),
+        "nothing is offered before the answers are known"
+    );
+    let counted = Arc::new(Counted(std::sync::atomic::AtomicUsize::new(0)));
+    let answers: Arc<dyn super::super::Answers> = Arc::clone(&counted) as _;
+    offers.keep(answers);
+    assert!(offers.due("x") && offers.due("x") && offers.due("x"));
+    assert_eq!(counted.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+    offers.answered("x", false);
+    assert!(
+        !offers.due("x"),
+        "put off, it is not due, before the store is written"
+    );
+}

@@ -3,12 +3,12 @@ name = "llx-desk"
 version = "0.1.5"
 edition = "2024"
 rust-version = "1.88"
-description = "A native window of browser pages and terminals that agents work in and a person watches"
+description = "A project-first development environment, built for working with agents: terminals, browser tabs and a task board per project"
 license = "MIT"
 publish = false
 repository = "https://github.com/rsaryev/llx-desk"
 readme = "README.md"
-keywords = ["agents", "browser", "terminal", "webview"]
+keywords = ["terminal", "browser", "kanban", "agents", "developer-tools"]
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
@@ -47,7 +47,6 @@ test-server = []
 
 [dev-dependencies]
 llx-desk = { path = ".", features = ["test-server"] }
-base64 = "0.23.1"
 sha2 = "0.11.1"
 
 # Opens a real window: run with LLX_DESK_DISPLAY_TESTS=1.

@@ -15,17 +15,19 @@ use serde_json::Value;
 use tao::event_loop::EventLoopProxy;
 use wry::PageLoadEvent;
 
-use crate::WindowTab;
-
 use super::capture::{Clip, Shot};
 use super::comments::Comments;
 use super::panel;
-use super::strip::{Click, Key};
+use super::strip::Key;
 pub use super::told::{
     Answers, Arranged, Arranging, Asked, CenterDid, Confirm, Halves, Heard, Ledger, Past, Place,
     Tab, TabKind, Visited, Went,
 };
 use super::viewport::Viewport;
+
+#[path = "host_commands.rs"]
+mod commands;
+pub(super) use commands::Cmd;
 
 #[path = "host_events.rs"]
 mod events;
@@ -65,121 +67,6 @@ pub struct Window {
     pub headless: bool,
     /// The page's size.
     pub viewport: Viewport,
-}
-
-pub(super) enum Cmd {
-    /// Open the window (once); the reply says whether it opened.
-    Open {
-        window: Window,
-        reply: SyncSender<Result<(), String>>,
-    },
-    /// A script built by the driver that hands a probe call or its promise to the probe; `false`
-    /// or a parse error answers the call at once with `failed` (`probe_not_ready`,
-    /// `script_not_started`).
-    Eval {
-        id: u64,
-        script: String,
-        failed: &'static str,
-        /// In this panel's page instead, answered with the script's value (for checks).
-        panel: Option<u32>,
-        /// In this browser tab instead of the one acted on.
-        tab: Option<u32>,
-    },
-    /// Load an address: in this tab, else the one acted on.
-    Navigate(String, Option<u32>),
-    /// Open a tab on `url` and show it. A page's own new window (`target=_blank`, `window.open`)
-    /// comes here with no reply.
-    NewTab {
-        url: String,
-        reply: Option<SyncSender<Result<u32, String>>>,
-        /// The tab whose page asked for it, whose project it is of.
-        opener: Option<u32>,
-    },
-    /// A new tab's page has drawn: the tab draws its own ground again (until then the window's
-    /// showed through it, so a blank view never flashes white over a dark window).
-    Reveal(u32),
-    SwitchTab {
-        id: u32,
-        reply: SyncSender<Result<(), String>>,
-    },
-    /// Close a tab; the reply says whether tabs are left (with none, the window closed).
-    CloseTab {
-        id: u32,
-        reply: SyncSender<Result<bool, String>>,
-    },
-    /// Close the window, as the person would but without stopping the task: it opens again,
-    /// shown or hidden, on its next use.
-    Close,
-    /// Give a tab (the one acted on with none) a size of its own (sizes.rs), or the whole window.
-    Frame(Option<u32>, Option<super::sizes::Frame>),
-    /// A screenshot of the page, or of a part of it; the reply comes once WebKit has drawn it.
-    Capture {
-        clip: Option<Clip>,
-        reply: SyncSender<Result<Shot, String>>,
-        tab: Option<u32>,
-    },
-    /// Open a panel as a tab: its id, title and page, and what it shares with its caller.
-    Panel(panel::Opening),
-    /// Run a panel's newest frame.
-    Paint(u32),
-    /// Close a panel.
-    Unpanel(u32),
-    /// A panel's menu, where the person right-clicked in it (`m` of its page).
-    PanelMenu(u32, (u32, u32), Vec<super::choice::Entry>),
-    /// A panel's page took a title.
-    Titled(u32, String),
-    /// What the person clicked on the strip.
-    Clicked(String),
-    /// What the person clicked in the side: as the strip says it, its points the side's.
-    SideClicked(String),
-    /// The person clicked in the browser's toolbar: said as the strip says it, its points the
-    /// toolbar's.
-    NavClicked(String),
-    /// The person's settings changed: the window takes them.
-    Restyle,
-    /// A comment the person made on a page: pictured, then held.
-    Noted(Noted),
-    /// Tell the strip what the window holds (a tab's title changed, its page loaded).
-    Strip,
-    /// Integration `.0` was read: on (`.1`) or off. The offer bar is drawn again.
-    Offered(&'static str, bool),
-    /// The window goes to the project of this key (one the app just made, the person's pick).
-    Go(String),
-    /// The layout of the windows' projects (`Browser::arranged`), and the windows open, the main
-    /// one first: drawn as it is.
-    Arranged(Vec<i64>, Vec<Arranged>),
-    /// The app opened window `i64` (`Browser::new_window`): the window in use from now on, its
-    /// deck made with the first tab it is given.
-    NewWindow(i64),
-    /// Take in the popups pages opened (popup.rs), and show the last.
-    #[cfg_attr(
-        not(target_os = "macos"),
-        expect(
-            dead_code,
-            reason = "elsewhere a page's window opens as a tab of its own"
-        )
-    )]
-    Adopt,
-    /// For checks: how the window is dressed, once tinted again.
-    Dressed(SyncSender<Option<Dressing>>),
-    /// The window's tabs; `None` while it is closed.
-    Listing(SyncSender<Option<Vec<WindowTab>>>),
-    /// Show or close a tab by its key, for the agent: the task goes on whatever closes.
-    Act(Click, SyncSender<Result<(), String>>),
-    /// What the agent or the person did to the window's presence (presence.rs).
-    Presence(super::presence::Event),
-    /// The person pressed in one of the app's windows (an NSWindow's address), at `x`, `y`
-    /// points from its top left (presses.rs).
-    Pressed(usize, f64, f64),
-    /// The person clicked the mini open: expanded, and the app they use from then on.
-    Opened,
-    /// The mini's picture, taken or not.
-    Pictured(Result<Shot, String>),
-    /// For checks: the window's state, `hidden`, `mini` or `expanded`.
-    Presented(SyncSender<&'static str>),
-    /// Ask the person; the reply is whether they went on.
-    Confirm(Confirm, SyncSender<bool>),
-    Exit(i32),
 }
 
 pub(super) type Reply = Result<Value, String>;
@@ -248,8 +135,10 @@ pub(super) struct Shared {
 /// Told what the person did to a tab (its key; `window` for the whole window), in words.
 type Listener = Arc<dyn Fn(&str, Heard<'_>) + Send + Sync>;
 
-/// A comment the person made on browser tab `tab`, in words, and the part of the view it is about.
+/// A comment the person made on a browser tab, in words, and the part of the view it is about.
 pub(super) struct Noted {
+    /// The tab it is on: 0 as the page says it (it is no one's word); the window the person
+    /// comments in puts its own shown tab here (host_web.rs), never the app's last one.
     pub tab: u32,
     pub said: String,
     pub clip: Option<Clip>,
@@ -261,6 +150,15 @@ pub(super) enum Said {
     Noted(Noted),
     /// A popup closed itself: its tab's id.
     Close(u32),
+}
+
+/// The most characters of a page's title kept: what a page sets is the strip's, the side's and the
+/// ledger's text, so a page cannot make them any larger.
+const TITLE: usize = 300;
+
+/// `title` cut to [`TITLE`] characters.
+fn clipped(title: &str) -> String {
+    title.chars().take(TITLE).collect()
 }
 
 /// The loads of tab `active`.
@@ -295,20 +193,36 @@ impl Shared {
         }
     }
 
-    /// The window was closed: every call waiting on it fails now, rather than at its timeout, and
-    /// the load counts start over, so a window opened again waits for its own first document.
-    pub(super) fn closed(&self) {
-        self.open.store(false, Ordering::SeqCst);
-        let waiting = std::mem::take(&mut *crate::lock(&self.pending));
-        for sender in waiting.into_values() {
-            let _ = sender.send(Err(WINDOW_CLOSED.into()));
+    /// Window `window`'s browser closed, its pages `ids` with it: what is kept of them goes, and
+    /// no other window's pages, loads or notices do. With no page left in any window, every call
+    /// waiting fails now, rather than at its timeout, and no one is commenting; a window opened
+    /// again then waits for its own first document. (A call waiting on a page of this window while
+    /// others remain ends at its timeout, as when a tab closes.)
+    pub(super) fn closed(&self, window: tao::window::WindowId, ids: &[u32]) {
+        let left: Vec<u32> = {
+            let mut pages = crate::lock(&self.pages);
+            pages.remove(&window);
+            pages.values().flatten().copied().collect()
+        };
+        crate::lock(&self.tabs).retain(|tab| left.contains(&tab.id));
+        {
+            let mut loads = crate::lock(&self.loads);
+            for id in ids {
+                loads.remove(id);
+            }
         }
-        crate::lock(&self.loads).clear();
-        crate::lock(&self.tabs).clear();
-        crate::lock(&self.pages).clear();
-        self.notices.forget_all();
-        // No window, no one commenting: actions waiting for the person go (and find it closed).
-        self.turn.commenting(false);
+        for id in ids {
+            self.notices.forget(*id);
+        }
+        self.open.store(!left.is_empty(), Ordering::SeqCst);
+        if left.is_empty() {
+            let waiting = std::mem::take(&mut *crate::lock(&self.pending));
+            for sender in waiting.into_values() {
+                let _ = sender.send(Err(WINDOW_CLOSED.into()));
+            }
+            // No page, no one commenting: actions waiting for the person go (and find it closed).
+            self.turn.commenting(false);
+        }
         self.loaded.notify_all();
     }
 
@@ -338,13 +252,19 @@ impl Shared {
         self.loaded.notify_all();
     }
 
+    /// Tab `tab`'s page took `title`, clipped (a page sets it as often and as long as it likes):
+    /// the app hears of it when it is not the title the tab had.
     pub(super) fn titled(&self, tab: u32, title: &str) {
-        let url = (crate::lock(&self.tabs).iter_mut().find(|t| t.id == tab)).map(|entry| {
-            title.clone_into(&mut entry.title);
-            entry.url.clone()
+        let title = clipped(title);
+        let url = (crate::lock(&self.tabs).iter_mut().find(|t| t.id == tab)).and_then(|entry| {
+            if entry.title == title {
+                return None;
+            }
+            entry.title.clone_from(&title);
+            Some(entry.url.clone())
         });
         if let Some(url) = url.filter(|url| !url.is_empty()) {
-            self.went(tab, &url, title);
+            self.went(tab, &url, &title);
         }
     }
 
@@ -407,13 +327,11 @@ impl Shared {
         self.loaded.notify_all();
     }
 
-    /// A message from the page: `{t, id, ok}` or `{t, id, err}`, or `{t, fb}`, a comment of the
-    /// person's on the tab shown, given back to be pictured and held. Anything else is ignored.
+    /// A message from the page: `{id, ok}` or `{id, err}`, or `{fb}`, a comment of the person's,
+    /// given back to be pictured and held (the tab it is on is the shown one of the window they
+    /// comment in). Anything else is ignored.
     pub(super) fn ipc(&self, body: &str) -> Option<Said> {
-        let message = serde_json::from_str::<Value>(body).ok()?;
-        if message.get("t").and_then(Value::as_str) != Some(self.token.as_str()) {
-            return None;
-        }
+        let message = unsealed(&self.token, body)?;
         if let Some(url) = message.get("close").and_then(Value::as_str) {
             // The newest tab at that address: the popup, not its opener (never the first tab).
             let tabs = crate::lock(&self.tabs);
@@ -421,10 +339,9 @@ impl Shared {
             return tab.map(|tab| Said::Close(tab.id));
         }
         if let Some(fb) = message.get("fb") {
-            let tab = self.active.load(Ordering::SeqCst);
             return super::feedback::said(fb).map(|said| {
                 Said::Noted(Noted {
-                    tab,
+                    tab: 0,
                     said,
                     clip: super::feedback::framed(fb),
                 })
@@ -449,6 +366,18 @@ impl Shared {
     }
 }
 
+/// What the probe sent: the run's token, a line break, then the message as JSON. The token is
+/// plain text in front of the JSON, never a member of it, so no `toJSON` of the page's can read
+/// it from the object that is stringified. None for anything else, or for JSON that does not parse.
+fn unsealed(token: &str, body: &str) -> Option<Value> {
+    let rest = body.strip_prefix(token)?.strip_prefix('\n')?;
+    let parsed = serde_json::from_str(rest);
+    if let Err(error) = &parsed {
+        super::debug(|| format!("a page message did not parse: {error}"));
+    }
+    parsed.ok()
+}
+
 /// The browser host as the work thread holds it: it opens the one window on demand.
 #[derive(Clone)]
 pub struct Browser {
@@ -470,3 +399,7 @@ pub(super) const NAV_PAGE: u32 = u32::MAX - 3;
 
 /// The answer to every call while the window is closed.
 pub(super) const WINDOW_CLOSED: &str = "window_closed";
+
+#[cfg(test)]
+#[path = "host_tests.rs"]
+mod tests;

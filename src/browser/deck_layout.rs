@@ -12,21 +12,14 @@ use super::super::tabs::Tabs;
 
 use super::super::host::Shared;
 
-use super::super::strip::{self, BAR, HEIGHT, Item, Key, NAV, RAIL, SIDE_MAX, SIDE_MIN};
+use super::super::strip::{BAR, HEIGHT, Key, NAV, RAIL, SIDE_MAX, SIDE_MIN};
 use super::super::tabs::{pin, place};
-use super::{Deck, Landing, Menu, Over, Shown};
-
-/// The middle of a whole window, as a share of its width either side of the centre, where a
-/// tab dragged over the pages goes into no half.
-const DEAD_MIDDLE: f64 = 0.18;
+use super::{Deck, Shown};
 
 impl Deck {
     /// What the mini shows: the tab shown, and which of the browser's tabs it is.
     pub(in super::super) fn signature(&self) -> (Shown, u32) {
-        (
-            self.shown,
-            self.web.as_ref().map_or(0, |web| web.listed().1),
-        )
+        (self.shown, self.web.as_ref().map_or(0, Tabs::active_id))
     }
 
     /// The tab shown, as the mini names it: its key and its project.
@@ -96,20 +89,38 @@ impl Deck {
         crate::lock(&self.offer).clone()
     }
 
+    /// Whether a page is what the window shows (not a terminal, a board or Settings): what the
+    /// app menu's page-only items are valid for.
+    pub(in super::super) fn page_shown(&self) -> bool {
+        self.shown == Shown::Web && self.web.is_some()
+    }
+
     /// The side at its width, its rail when shut, `tall` points high from `top`.
     fn place_side(&self, tall: f64, top: f64) {
         let Some(side) = &self.side else {
             return;
         };
-        let column = LogicalSize::new(self.side_now, tall);
+        let column = LogicalSize::new(self.side_wide(), tall);
         let _ = side.set_bounds(super::super::frame::fill(column, 0.0, top));
         super::super::platform::follow(side, super::super::platform::Follow::Side);
+    }
+
+    /// How wide the side is in this window: the width it keeps, held to half the window (never
+    /// under `SIDE_MIN`), so a window narrower than the one the width was set in still has room
+    /// for its pages. Its rail is as narrow as it is.
+    pub(in super::super) fn side_wide(&self) -> f64 {
+        let native = &self.frame.native;
+        let window = native
+            .inner_size()
+            .to_logical::<f64>(native.scale_factor())
+            .width;
+        self.side_now.min((window / 2.0).max(SIDE_MIN))
     }
 
     /// How much of the window's left the side keeps now: the tabs lie beside it.
     fn left(&self) -> f64 {
         if self.side.is_some() {
-            self.side_now
+            self.side_wide()
         } else {
             0.0
         }
@@ -135,7 +146,7 @@ impl Deck {
 
     /// A split window's halves across `width` points from `left`: each one's tab, left and
     /// width.
-    fn halves(&self, width: f64, left: f64) -> Option<[(Key, f64, f64); 2]> {
+    pub(super) fn halves(&self, width: f64, left: f64) -> Option<[(Key, f64, f64); 2]> {
         let (first, second) = self.pair()?;
         // A share kept from a wider window, or the side opening, never leaves a half too narrow.
         let room = (width - super::super::split::GAP).max(1.0);
@@ -144,113 +155,9 @@ impl Deck {
         Some([(first, x, w), (second, x2, w2)])
     }
 
-    /// The tab in the half at `x`, `y` of the window (points from its top left), when the window
-    /// is split and the press is on a page.
-    pub(in super::super) fn half_at(&self, x: f64, y: f64) -> Option<Key> {
-        let (size, left, top) = self.area(false);
-        if y < top {
-            return None;
-        }
-        let halves = self.halves(size.width, left)?;
-        // A press on the line takes hold of it: the half beside it stays as it is.
-        let seam = halves[1].1 - super::super::split::GAP / 2.0;
-        if (x - seam).abs() <= super::super::split::LINE / 2.0 {
-            return None;
-        }
-        (halves.into_iter())
-            .find(|&(_, from, width)| x >= from && x < from + width)
-            .map(|half| half.0)
-    }
-
-    /// Where `x`, `y` of the window is for a tab carried there: a split window's own half, a
-    /// whole one's even halves (its middle none), or off the pages.
-    pub(in super::super) fn over(&self, x: f64, y: f64) -> Over {
-        let (size, left, top) = self.area(false);
-        // Off the pages, past the window's edges too, it goes nowhere.
-        if x < left || y < top || x > left + size.width || y > top + size.height {
-            return Over::Off;
-        }
-        let Some([_, second]) = self.halves(size.width, left) else {
-            // A whole window splits only for a tab taken well to one side: its middle is no half.
-            let off = (x - (left + size.width / 2.0)) / size.width.max(1.0);
-            return if off.abs() < DEAD_MIDDLE {
-                Over::Middle
-            } else {
-                Over::Half(off > 0.0)
-            };
-        };
-        Over::Half(x >= second.1)
-    }
-
-    /// Tab `key` carried over the pages at `at` (a point of the window), or off them (none):
-    /// the window is laid out as it will be where the tab lands, the halves as they will be, and
-    /// back as it was off the pages. Over a whole window's middle it stays as it is.
-    pub(in super::super) fn drop_over(&mut self, key: Key, at: Option<(f64, f64)>) {
-        let over = at.map_or(Over::Off, |(x, y)| self.over(x, y));
-        let side = match over {
-            Over::Middle => return,
-            Over::Off => None,
-            Over::Half(right) => Some(right),
-        };
-        if side == self.drop {
-            return;
-        }
-        self.drop = side;
-        // Where it lands is worked out from the window as it was before the tab came over it.
-        let was = self
-            .landing
-            .map_or(self.split.beside, |landing| landing.was);
-        let landed = side.and_then(|right| {
-            super::super::split::landed(was, self.shown_key(), self.pair_with(was), key, right)
-        });
-        match landed {
-            Some(beside) => {
-                self.landing.get_or_insert(Landing { was });
-                self.split.beside = Some(beside);
-                self.split.grabbed = None;
-            }
-            None => {
-                if let Some(landing) = self.landing.take() {
-                    self.split.beside = landing.was;
-                }
-            }
-        }
-        self.layout();
-    }
-
-    /// The tab carried over the pages taken off them: the window as it was before.
-    pub(in super::super) fn drop_off(&mut self) {
-        let was = self.landing.take();
-        self.drop = None;
-        if let Some(landing) = was {
-            self.split.beside = landing.was;
-            self.layout();
-        }
-    }
-
-    /// The tab carried over the pages let go of: laid out where it landed, it stays so (true);
-    /// else nothing was laid out (false).
-    pub(in super::super) fn land(&mut self) -> bool {
-        self.drop = None;
-        self.landing.take().is_some()
-    }
-
-    /// The line between the halves dragged `moved` points since the person took hold of it; let
-    /// go of when `done`.
-    pub(in super::super) fn drag_split(&mut self, moved: i32, done: bool) {
-        let (size, ..) = self.area(false);
-        let room = (size.width - super::super::split::GAP).max(1.0);
-        let from = *self.split.grabbed.get_or_insert(self.split.share);
-        self.split.share = super::super::split::held(from + f64::from(moved) / room, room);
-        if done {
-            self.split.grabbed = None;
-        }
-        self.layout();
-    }
-
     /// The tabs' part of the window: a page's under its toolbar (`nav`), a terminal's under the
     /// strip.
-    fn area(&self, nav: bool) -> (LogicalSize<f64>, f64, f64) {
+    pub(super) fn area(&self, nav: bool) -> (LogicalSize<f64>, f64, f64) {
         let native = &self.frame.native;
         let size = native.inner_size().to_logical::<f64>(native.scale_factor());
         let left = self.left();
@@ -444,110 +351,6 @@ impl Deck {
         if done {
             crate::lock(&shared.kept).side_width = Some(width);
             self.refresh(shared);
-        }
-    }
-
-    /// Lay the window out again and tell the strip what it holds now.
-    pub(in super::super) fn refresh(&self, shared: &Shared) {
-        let listed = self.listing(shared);
-        super::super::platform::page_shown(self.shown == Shown::Web && self.web.is_some());
-        let shown_key = (listed.iter().find(|tab| tab.shown)).and_then(|tab| Key::parse(&tab.id));
-        let bar = shown_key.and_then(|key| shared.offers.bar(key, &self.proxy));
-        crate::lock(&self.offer).clone_from(&bar);
-        self.layout();
-        // Again on every refresh: a tab switched to, or a page loaded, comments as the strip says.
-        if let Some(web) = &self.web {
-            let script = strip::comment(self.commenting, self.sent);
-            let _ = web.active().evaluate_script(&script);
-        }
-        let Some(strip) = &self.strip else {
-            return;
-        };
-        self.say(strip, "offer", &super::super::offer::script(bar.as_ref()));
-        let shown = listed
-            .iter()
-            .find(|tab| tab.shown)
-            .map(|tab| tab.id.clone());
-        let items: Vec<Item> = listed
-            .into_iter()
-            .filter_map(|tab| {
-                Some(Item {
-                    key: Key::parse(&tab.id)?,
-                    title: tab.title,
-                    detail: tab.detail,
-                    agent: shared.offers.agent(&tab.id),
-                    group: tab.group,
-                })
-            })
-            .collect();
-        let shown = shown.and_then(|id| Key::parse(&id)).unwrap_or(Key::Web(0));
-        let side = self.side.as_ref().map(|_| self.side_open);
-        let places = crate::lock(&shared.places).clone();
-        let scope = crate::lock(&shared.scope).clone();
-        let project = self.shown_project(shared);
-        let projects = strip::Projects {
-            shown: &project,
-            places: (places.iter())
-                .map(|place| (place, scope.marked(&place.key)))
-                .collect(),
-        };
-        let drawn = strip::script(&items, shown, &self.visited(shared), side, &projects);
-        // The split's two tabs, left and right: the side lists them as one; another tab shown,
-        // the project's split still listed so.
-        let on = self.pair().map(|(left, right)| [left.name(), right.name()]);
-        let kept = (shared.arranged_of(&project).as_ref())
-            .and_then(super::super::split::kept_of)
-            .as_ref()
-            .map(super::super::split::sides);
-        let split = format!("SP({})", serde_json::json!(on.or(kept)));
-        for view in [Some(strip), self.side.as_ref(), self.nav.as_ref()]
-            .into_iter()
-            .flatten()
-        {
-            self.say(view, "split", &split);
-            self.say(view, "drawn", &drawn);
-        }
-        let rows = (self.menu == Some(Menu::History)).then(|| self.rows(shared));
-        if self.menu != Some(Menu::Events) {
-            let _ = strip.evaluate_script(&strip::menu(rows.as_deref()));
-        }
-        let events = crate::lock(&shared.center).clone();
-        let center = strip::center(&events, self.menu == Some(Menu::Events));
-        // The history and the Event Center draw into one list: each says what it shows, always.
-        let _ = strip.evaluate_script(&center);
-        let framed = (self.web.as_ref())
-            .filter(|_| self.shown == Shown::Web)
-            .and_then(|web| web.frame(None));
-        // The page's size, comments and whose turn it is: the browser's toolbar's.
-        let Some(nav) = &self.nav else {
-            return;
-        };
-        let (size, _, top) = self.content();
-        let scale = super::super::sizes::place(size, top, framed).scale;
-        self.say(nav, "sizes", &super::super::sizes::script(framed, scale));
-        let held = shared.comments.count();
-        self.say(nav, "commenting", &strip::commenting(self.commenting, held));
-        let (acting, waiting) = shared.turn.now();
-        let turn = strip::Turn::of(acting, self.commenting, waiting);
-        self.say(nav, "turn", &strip::turn(turn));
-    }
-
-    /// `script`, of `kind`, run in `view`, a part of the strip, unless it is what that part was
-    /// last told of that kind (and no part has loaded its page again since): a refresh with
-    /// nothing new wakes no page.
-    fn say(&self, view: &wry::WebView, kind: &'static str, script: &str) {
-        use std::hash::{Hash as _, Hasher as _};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        script.hash(&mut hasher);
-        let hash = hasher.finish();
-        let loads = super::LOADS.load(std::sync::atomic::Ordering::SeqCst);
-        let mut said = crate::lock(&self.said);
-        if said.0 != loads {
-            *said = (loads, std::collections::HashMap::new());
-        }
-        let at = (std::ptr::from_ref(view) as usize, kind);
-        if said.1.insert(at, hash) != Some(hash) {
-            let _ = view.evaluate_script(script);
         }
     }
 }

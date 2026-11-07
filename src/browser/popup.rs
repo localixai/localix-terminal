@@ -83,9 +83,15 @@ pub(super) fn end() {
     });
 }
 
-/// The id of a new place for a tab: a new one, if there is room.
+/// The id of a place for a tab or a popup: the first a closed tab left, else a new one, if there
+/// is room. A closed window's places are left here too, so the app's cap is on pages open, not
+/// on places ever handed out.
 pub(super) fn reserve() -> Option<u32> {
     with(|places| {
+        if let Some(first) = places.free.iter().copied().min() {
+            places.free.retain(|id| *id != first);
+            return Some(first);
+        }
         let room = usize::try_from(places.taken).is_ok_and(|taken| taken < MAX_TABS);
         room.then(|| {
             places.taken += 1;
@@ -94,24 +100,19 @@ pub(super) fn reserve() -> Option<u32> {
     })
 }
 
-/// The id of a place for a popup: the first a closed tab left, else a new one.
-#[cfg_attr(
-    not(target_os = "macos"),
-    expect(
-        dead_code,
-        reason = "elsewhere a page's window opens as a tab of its own"
-    )
-)]
-fn reserve_for_popup() -> Option<u32> {
-    let left = with(|places| {
-        let first = places.free.iter().copied().min()?;
-        places.free.retain(|id| *id != first);
-        Some(first)
+/// A place [`reserve`]d and never used (its page did not build): given back, so it never counts
+/// against the tabs the app may open.
+pub(super) fn release(id: u32) {
+    with(|places| {
+        if places.taken == id {
+            places.taken -= 1;
+        } else {
+            places.free.push(id);
+        }
     });
-    left.or_else(reserve)
 }
 
-/// Tab `id` closed: a popup may take its place.
+/// Tab `id` closed: a tab or a popup may take its place.
 pub(super) fn free(id: u32) {
     if id != 1 {
         with(|places| places.free.push(id));
@@ -160,7 +161,7 @@ pub(super) fn open(
     proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>,
 ) -> Option<wry::NewWindowResponse> {
     use wry::{WebViewBuilderExtMacos, WebViewExtMacOS};
-    let id = reserve_for_popup()?;
+    let id = reserve()?;
     let builder = super::tab_view::builder(id, None, window, shared, proxy, None)
         .with_webview_configuration(features.opener.target_configuration);
     let Ok(webview) = builder.build_as_child(&parent) else {
@@ -186,3 +187,7 @@ pub(super) fn open(
 ) -> Option<wry::NewWindowResponse> {
     None
 }
+
+#[cfg(test)]
+#[path = "popup_tests.rs"]
+mod tests;

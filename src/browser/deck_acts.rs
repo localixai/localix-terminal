@@ -4,10 +4,8 @@
 use wry::WebView;
 
 use super::super::host::{CenterDid, Heard, NAV_PAGE, STRIP, Shared, TABS};
-use super::super::panel::Held;
-use super::super::strip::{self, Click, Key};
+use super::super::strip::{Click, Key};
 use super::{Deck, Menu, Shown};
-use crate::WindowTab;
 
 impl Deck {
     /// Show or close the tab `click` names; why not, when it is not there.
@@ -85,8 +83,8 @@ impl Deck {
         if let (false, Key::Term(id)) = (closing, key) {
             self.unhide_term(id);
         }
-        let ids: Vec<String> = self.listing(shared).into_iter().map(|tab| tab.id).collect();
-        if !ids.contains(&key.name()) {
+        if !self.there(key) {
+            let ids: Vec<String> = self.listing(shared).into_iter().map(|tab| tab.id).collect();
             return Err(format!(
                 "there is no tab {}: the tabs are {}",
                 key.name(),
@@ -109,10 +107,7 @@ impl Deck {
             (true, Key::Web(id)) => {
                 let left = self.web.as_mut().map(|web| web.close(id, shared));
                 match left {
-                    Some(Ok(false)) => {
-                        shared.closed();
-                        self.remove_web();
-                    }
+                    Some(Ok(false)) => self.end_web(&[id], shared),
                     Some(Err(why)) => return Err(why),
                     _ => {}
                 }
@@ -180,7 +175,10 @@ impl Deck {
     /// The person's settings, taken by the window and its own pages (never the browser's).
     pub(crate) fn restyle(&mut self, settings: &super::super::settings::Settings) {
         let script = super::super::settings::look_script(settings);
-        for page in [&self.strip, &self.side].into_iter().flatten() {
+        for page in [&self.strip, &self.side, &self.nav, &self.line]
+            .into_iter()
+            .flatten()
+        {
             let _ = page.evaluate_script(&script);
         }
         for open in &self.terms {
@@ -253,6 +251,14 @@ impl Deck {
         shared.turn.commenting(self.commenting);
     }
 
+    /// This window's browser is gone, its pages `ids` with it: what the app keeps of them goes
+    /// (no other window's does), and the person is no longer commenting on a page of it.
+    pub(crate) fn end_web(&mut self, ids: &[u32], shared: &Shared) {
+        shared.closed(self.frame.native.id(), ids);
+        self.remove_web();
+        self.stop_commenting(shared);
+    }
+
     /// The window went out of the person's sight: commenting ends, the pages and the strip say so.
     pub(crate) fn stop_commenting(&mut self, shared: &Shared) {
         if self.commenting {
@@ -272,8 +278,6 @@ impl Deck {
         }
     }
 
-    /// Every tab as the strip shows them: a project's together, the browser's first in each; its
-    /// key, its kind, its title, what it holds and its group.
     /// The glass under the strip's open list at `rect` of the strip, or none.
     pub(crate) fn glass(&self, rect: Option<(u32, u32, u32, u32)>) {
         // Under the list that is open: the address field's suggestions are the browser's
@@ -284,14 +288,12 @@ impl Deck {
         }
     }
 
-    /// The person picks one of `items` from the system's menu at `at` (the strip's points).
-    /// The item `marked`, if any, is shown as the one chosen now.
     /// The page shown opened in the person's own browser, when it is at an address one opens.
     fn outside(&self, shared: &Shared) {
         let (Some(web), Shown::Web) = (&self.web, self.shown) else {
             return;
         };
-        let active = web.listed().1;
+        let active = web.active_id();
         let tabs = crate::lock(&shared.tabs);
         let url = tabs.iter().find(|tab| tab.id == active).map(|tab| &tab.url);
         if let Some(url) = url.filter(|url| super::super::guard::outside(url)) {
@@ -299,6 +301,8 @@ impl Deck {
         }
     }
 
+    /// The person picks one of `items` from the system's menu at `at` (the strip's points).
+    /// The item `marked`, if any, is shown as the one chosen now.
     pub(crate) fn choose(
         &self,
         at: (f64, f64),
@@ -318,61 +322,6 @@ impl Deck {
     ) -> Option<usize> {
         let strip = self.strip.as_ref()?;
         super::super::platform::show(strip, at, entries)
-    }
-
-    pub(crate) fn listing(&self, shared: &Shared) -> Vec<WindowTab> {
-        let groups = crate::lock(&shared.groups).clone();
-        let group = |key: Key| groups.get(&key.name()).cloned().unwrap_or_default();
-        let details = crate::lock(&shared.details).clone();
-        let mut out = vec![];
-        if let Some(web) = &self.web {
-            let (ids, active) = web.listed();
-            let known = crate::lock(&shared.tabs).clone();
-            for id in ids {
-                let tab = known.iter().find(|tab| tab.id == id);
-                let (title, url) = tab.map_or((String::new(), String::new()), |tab| {
-                    (tab.title.trim().to_string(), tab.url.clone())
-                });
-                out.push(WindowTab {
-                    id: Key::Web(id).name(),
-                    kind: "browser".into(),
-                    title: if title.is_empty() { url.clone() } else { title },
-                    detail: url,
-                    shown: self.shown == Shown::Web && id == active,
-                    acted_on: id == active,
-                    group: group(Key::Web(id)),
-                });
-            }
-        }
-        for open in self.terms.iter().filter(|open| open.held == Held::Live) {
-            let title = open.title.strip_prefix("desk · ").unwrap_or(&open.title);
-            let key = Key::Term(open.id);
-            out.push(WindowTab {
-                id: key.name(),
-                kind: if key.kind() == "board" {
-                    "board"
-                } else {
-                    "terminal"
-                }
-                .into(),
-                title: title.to_string(),
-                detail: details.get(&key.name()).cloned().unwrap_or_default(),
-                shown: self.shown == Shown::Term(open.id),
-                acted_on: false,
-                group: group(Key::Term(open.id)),
-            });
-        }
-        // In the layout's order (each tab's panes left to right), the rest as they came; each
-        // project's together.
-        let arranged = shared.arranged_here();
-        let place = |tab: &WindowTab| {
-            (arranged.get(&tab.group).into_iter())
-                .flat_map(|arranged| arranged.tabs.iter().flat_map(|tab| tab.panes.iter()))
-                .position(|key| *key == tab.id)
-                .unwrap_or(usize::MAX)
-        };
-        out.sort_by_key(place);
-        strip::by_group(out, |tab| tab.group.as_str())
     }
 
     /// Split, the tab picked (`key`) takes the half in use, or changes places with the one beside.

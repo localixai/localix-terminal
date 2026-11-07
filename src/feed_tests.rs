@@ -201,3 +201,60 @@ fn after_a_restart_each_consumer_goes_on_from_where_it_was() {
     assert_eq!(*handled.lock().unwrap(), [2, 3], "the missed one, then on");
     feed.stop();
 }
+
+#[test]
+fn a_consumer_that_panics_on_a_notice_sets_it_aside_and_goes_on() {
+    let feed = Feed::new(Arc::new(Store::memory().unwrap()), Duration::from_millis(1));
+    let (mut brittle, handled, _) = Seen::new("brittle");
+    brittle.fails = Box::new(|notice| {
+        assert_ne!(notice.seq, 1, "a bug in the handler");
+        false
+    });
+    feed.consume(Box::new(brittle)).unwrap();
+    feed.record(&card("c1"), Op::Upserted);
+    feed.record(&card("c2"), Op::Upserted);
+    assert!(feed.settled(SOON));
+    assert_eq!(
+        *handled.lock().unwrap(),
+        [2],
+        "the thread outlived the panic"
+    );
+    assert_eq!(feed.health()[0].dead_letters, 1);
+    feed.stop();
+    assert!(feed.ended(SOON));
+}
+
+#[test]
+fn a_write_that_steps_over_a_thousand_prunes() {
+    let feed = Feed::new(Arc::new(Store::memory().unwrap()), Duration::from_millis(1));
+    feed.write(|write| {
+        (0..999).try_for_each(|n| write.record(&card(&format!("c{n}")), Op::Upserted))
+    })
+    .unwrap();
+    // Every notice so far was read long ago.
+    feed.store()
+        .write(|tx| {
+            tx.execute("UPDATE change_events SET at = 0", [])
+                .map(drop)
+                .map_err(|why| why.to_string())
+        })
+        .unwrap();
+    // Seqs 1000 and 1001: the write ends on neither a multiple of a thousand nor on the one before.
+    feed.write(|write| {
+        write.record(&card("c1"), Op::Upserted)?;
+        write.record(&card("c2"), Op::Upserted)
+    })
+    .unwrap();
+    let old: u64 = feed
+        .store()
+        .read(|db| {
+            db.query_row(
+                "SELECT COUNT(*) FROM change_events WHERE at = 0",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|why| why.to_string())
+        })
+        .unwrap();
+    assert_eq!(old, 0);
+}

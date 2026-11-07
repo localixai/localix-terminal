@@ -5,7 +5,8 @@
 
 use serde_json::Value;
 
-use super::{Board, Column, MAX_NOTE, Spot, Worker, now, said, words};
+use super::text::quote;
+use super::{Board, Column, MAX_NOTE, Spot, Step, Worker, now, one_line, said, step, words};
 
 /// What a person's action came to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,9 +101,9 @@ impl Board {
                     }
                 };
                 let words = format!(
-                    "removed {} \"{}\"{}",
+                    "removed {} {}{}",
                     card.id,
-                    card.title,
+                    quote(&card.title),
                     owner(card.who.as_deref())
                 );
                 Ok(Did { words, urgent })
@@ -130,12 +131,15 @@ impl Board {
         let mut card = self.cards.remove(at);
         if from != to {
             card.column = to;
-            card.history.push(super::Step {
-                at: now(),
-                by: PERSON.into(),
-                to: Some(to),
-                text: None,
-            });
+            step(
+                &mut card,
+                Step {
+                    at: now(),
+                    by: PERSON.into(),
+                    to: Some(to),
+                    text: None,
+                },
+            );
             if to != Column::Doing {
                 card.blocked = None;
             }
@@ -172,12 +176,15 @@ impl Board {
         card.column = Column::Todo;
         card.blocked = None;
         card.result = None;
-        card.history.push(super::Step {
-            at: now(),
-            by: PERSON.into(),
-            to: Some(Column::Todo),
-            text: Some(text.clone()),
-        });
+        step(
+            &mut card,
+            Step {
+                at: now(),
+                by: PERSON.into(),
+                to: Some(Column::Todo),
+                text: Some(text.clone()),
+            },
+        );
         let id = card.id.clone();
         self.put(card, Spot::Top);
         Ok(self.did(
@@ -204,9 +211,9 @@ impl Board {
     fn did(&self, id: &str, verb: &str, rest: &str, urgent: Urgency) -> Did {
         let words = match self.card(id) {
             Ok(card) => format!(
-                "{verb} {} \"{}\"{}{rest}",
+                "{verb} {} {}{}{rest}",
                 card.id,
-                card.title,
+                quote(&card.title),
                 owner(card.who.as_deref())
             ),
             Err(_) => format!("{verb} {id}{rest}"),
@@ -217,7 +224,7 @@ impl Board {
 
 /// ` (tests)` for a worker's card, nothing for the main agent's.
 fn owner(who: Option<&str>) -> String {
-    who.map_or_else(String::new, |who| format!(" ({who})"))
+    who.map_or_else(String::new, |who| format!(" ({})", one_line(who)))
 }
 
 #[cfg(test)]

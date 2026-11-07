@@ -1,4 +1,4 @@
-//! The desk's side of the ledger (ledger.rs): a tab owned is a row of its project's, a tab gone
+//! The desk's side of the ledger (ledger.rs): a pane owned is a row of its project's, a pane gone
 //! is closed, what a page showed and a terminal's title are kept; and the window is told each
 //! project's past as it changes, for its history menu and its address field.
 
@@ -9,11 +9,22 @@ use crate::browser::{Ledger, Past, TabKind, Visited, Went};
 use crate::ledger::{self, Kind, Opened, Row};
 use crate::projects::{self, ProjectId};
 
-/// How many of a project's tabs the history menu lists, and of its pages the address field
+/// How many of a project's panes the history menu lists, and of its pages the address field
 /// suggests.
 const LISTED: usize = 50;
 
-/// What is known of a tab as it opens.
+/// How often a terminal's title is written to the ledger at most: a program that animates its
+/// title says it many times a second.
+const TITLE_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// What a terminal's title writes have come to: when the last was done, and the latest title
+/// since, kept for the next write or for when the row closes.
+pub(super) struct Titled {
+    at: std::time::Instant,
+    pending: Option<String>,
+}
+
+/// What is known of a pane as it opens.
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct Facts<'a> {
     pub(super) title: &'a str,
@@ -23,7 +34,7 @@ pub(super) struct Facts<'a> {
 }
 
 impl Desk {
-    /// Tab `key` is `call`'s now, a `kind` with `facts`: owned, and a row of its project's
+    /// Pane `key` is `call`'s now, a `kind` with `facts`: owned, and a row of its project's
     /// ledger.
     pub(super) fn own(&self, key: &str, call: &Call, kind: Kind, facts: Facts<'_>) {
         crate::lock(&self.registry).own(key, call.owner, call.person);
@@ -58,7 +69,7 @@ impl Desk {
         self.keep(key, &opened, (call.again, window));
     }
 
-    /// A row for tab `key`, `opened`: a new one, or the row `again` names (a pane the run
+    /// A row for pane `key`, `opened`: a new one, or the row `again` names (a pane the run
     /// before left open). Placed in a tab in the same change: a tab of its own when it is new.
     fn keep(
         &self,
@@ -96,7 +107,7 @@ impl Desk {
         }
     }
 
-    /// The first tab of `project` this run: what the last run left open there (and was not
+    /// The first pane of `project` this run: what the last run left open there (and was not
     /// opened again) closes, into its history. It never comes back after the person closes all
     /// of this run's: a restore reads what it had left before it opens the first one.
     fn begin(&self, project: ProjectId) {
@@ -116,9 +127,10 @@ impl Desk {
         }
     }
 
-    /// Tab `key` closed: its row closed (a terminal's screen kept), its project's past told
+    /// Pane `key` closed: its row closed (a terminal's screen kept), its project's past told
     /// again.
     pub(super) fn unkeep(&self, key: &str) {
+        self.flush_title(key);
         self.keep_screen(key);
         let Some((row, project)) = crate::lock(&self.ledger).remove(key) else {
             return;
@@ -141,7 +153,11 @@ impl Desk {
         let (row, project) = match known {
             Some(known) => known,
             None => {
-                let Some(project) = self.project_of_group(went.group) else {
+                // What this was told is late when its tab has closed since (it was queued while
+                // the tab closed): no row is made for a page that is gone.
+                let gone = (self.browser.as_ref())
+                    .is_some_and(|browser| !browser.pages().contains(&key.to_string()));
+                let Some(project) = self.project_of_group(went.group).filter(|_| !gone) else {
                     return;
                 };
                 let opened = Opened {
@@ -181,7 +197,8 @@ impl Desk {
         let (Some(row), Some(session)) = (row, session) else {
             return;
         };
-        let (text, now) = (session.text(), crate::board::now());
+        // Masked: a secret a call typed in is on the screen as typed, and no value outlives the run.
+        let (text, now) = (self.vault.mask(&session.text()), crate::board::now());
         if let Err(why) = (self.feed.store()).write(|tx| ledger::keep_screen(tx, row, &text, now)) {
             log::warn!("terminal {key}'s screen was not kept: {why}");
         }
@@ -191,12 +208,45 @@ impl Desk {
     pub(super) fn keep_screens(&self) {
         let keys: Vec<String> = crate::lock(&self.ledger).keys().cloned().collect();
         for key in keys {
+            self.flush_title(&key);
             self.keep_screen(&key);
         }
     }
 
-    /// Terminal `key` is titled `title` (its program says what it does): kept.
+    /// Terminal `key` is titled `title` (its program says what it does): kept in the ledger, at
+    /// most once a [`TITLE_EVERY`]; the latest title waits for the next write, or for its row to
+    /// close. The window is told the past again when a write is news: its history menu lists the
+    /// title of an open terminal from there.
     pub(super) fn retitled(&self, key: &str, title: &str) {
+        let now = std::time::Instant::now();
+        {
+            let mut titled = crate::lock(&self.titled);
+            if let Some(last) = titled.get_mut(key)
+                && now.duration_since(last.at) < TITLE_EVERY
+            {
+                last.pending = Some(title.to_string());
+                return;
+            }
+            titled.insert(
+                key.to_string(),
+                Titled {
+                    at: now,
+                    pending: None,
+                },
+            );
+        }
+        self.write_title(key, title);
+    }
+
+    /// The latest title of terminal `key` still waiting is written.
+    fn flush_title(&self, key: &str) {
+        let pending = (crate::lock(&self.titled).remove(key)).and_then(|titled| titled.pending);
+        if let Some(title) = pending {
+            self.write_title(key, &title);
+        }
+    }
+
+    fn write_title(&self, key: &str, title: &str) {
         let Some((row, project)) = crate::lock(&self.ledger).get(key).copied() else {
             return;
         };
@@ -207,87 +257,6 @@ impl Desk {
         }
     }
 
-    /// Tab `row` of the history opened again for the person, as `call` (of the project the
-    /// window keys `group`).
-    pub(super) fn again(&self, call: &Call, group: &str, row: Row) -> Result<(), String> {
-        let tab = (self.feed.store().read(|db| ledger::get(db, row)))?
-            .ok_or("that tab is no longer in the history")?;
-        self.again_tab(call, group, &tab)
-    }
-
-    /// The person went to `call`'s project, which has no tab open: what it had open when the
-    /// app last quit opens again, the same panes in the same tabs, places and splits; else their
-    /// shell in its folder.
-    pub(super) fn reopen_project(&self, call: &Call, group: &str) -> Result<(), String> {
-        let open: std::collections::HashSet<Row> = (crate::lock(&self.ledger).values())
-            .map(|(row, _)| *row)
-            .collect();
-        let project = call.project.id;
-        let (left, order) = (self.feed.store()).read(|db| {
-            let left = ledger::left_open(db, project)?;
-            Ok((left, Self::panes_in_order(db, project)?))
-        })?;
-        let mut left: Vec<ledger::Tab> = (left.into_iter())
-            .filter(|tab| !open.contains(&tab.row))
-            .collect();
-        if left.is_empty() {
-            return self.person_terminal(call, group, "");
-        }
-        left.sort_by_key(|tab| order.iter().position(|row| *row == tab.row));
-        // They are this run's now: nothing of the project's closes as the first of them opens.
-        crate::lock(&self.begun).insert(project);
-        for tab in &left {
-            if let Err(why) = self.again_tab(call, group, tab) {
-                log::warn!("a tab of {} did not open again: {why}", call.project.name);
-                let now = crate::board::now();
-                let closed = self.feed.write(|write| {
-                    ledger::close(write.tx(), tab.row, now)?;
-                    Self::unplace_pane(write, tab.row, now)
-                });
-                if let Err(why) = closed {
-                    log::warn!("it stays open in the ledger: {why}");
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// `tab` opened again for the person: a page at its address, their shell in a terminal's
-    /// folder (its program is not run again), the board. It is the same pane as before: its row,
-    /// its history, its place in its tab.
-    fn again_tab(&self, call: &Call, group: &str, tab: &ledger::Tab) -> Result<(), String> {
-        let call = &Call {
-            again: Some(tab.row),
-            ..*call
-        };
-        let opened = match tab.kind {
-            Kind::Page => {
-                let url = (tab.url.as_deref())
-                    .filter(|url| !url.is_empty())
-                    .unwrap_or(crate::browser::HOME);
-                (self.open(call, &serde_json::json!({"kind": "browser", "url": url})))
-                    .map(|_| ())
-                    .map_err(|failure| failure.message().to_string())
-            }
-            Kind::Terminal => {
-                let cwd = (tab.cwd.clone())
-                    .filter(|cwd| cwd.is_dir())
-                    .unwrap_or_else(|| call.cwd.to_path_buf());
-                let before = (self.feed.store().read(|db| ledger::screen(db, tab.row)))
-                    .ok()
-                    .flatten()
-                    .unwrap_or_default();
-                self.person_terminal_after(&Call { cwd: &cwd, ..*call }, group, "", &before)
-            }
-            Kind::Board => (self.board(call, &serde_json::json!({"op": "show"})))
-                .map(|_| ())
-                .map_err(|failure| failure.message().to_string()),
-        };
-        opened?;
-        self.tell_ledger(tab.project);
-        Ok(())
-    }
-
     /// The project the window keys `group`, else Home.
     fn project_of_group(&self, group: &str) -> Option<ProjectId> {
         let known = projects::of_key(group).and_then(|id| self.project_by_id(id));
@@ -296,7 +265,7 @@ impl Desk {
             .map(|project| project.id)
     }
 
-    /// The window told project `project`'s past: its tabs, the latest first, each open one with
+    /// The window told project `project`'s past: its panes, the latest first, each open one with
     /// its key; and its pages.
     pub(super) fn tell_ledger(&self, project: ProjectId) {
         let Some(browser) = self.browser.as_ref() else {

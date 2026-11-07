@@ -8,6 +8,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tao::event_loop::EventLoopProxy;
@@ -17,6 +18,11 @@ use super::strip::Key;
 
 /// The ids of the offers of an integration: this, then the integration's.
 const OF_INTEGRATION: &str = "integration:";
+
+/// How long what the store said of an offer is believed: the bar is drawn on every refresh, and
+/// the store is the one the app's writers share, so it is not asked each time. Only the person's
+/// own answer changes it, and that is taken at once.
+const DUE_FOR: Duration = Duration::from_secs(5);
 
 /// The bar's height, in points, while it shows.
 pub(super) const ROW: f64 = 36.0;
@@ -51,25 +57,48 @@ pub(super) struct Offers {
     held: Mutex<Option<Bar>>,
     /// Where the person's answers are kept, once the app says: till then nothing is offered.
     answers: Mutex<Option<Arc<dyn super::Answers>>>,
+    /// What the store last said of whether each offer is due, and when.
+    dues: Mutex<HashMap<String, (Instant, bool)>>,
 }
 
 impl Offers {
     /// The person's answers are kept by `answers`.
     pub(super) fn keep(&self, answers: Arc<dyn super::Answers>) {
         *crate::lock(&self.answers) = Some(answers);
+        crate::lock(&self.dues).clear();
     }
 
     /// Whether offer `id` may be shown now: never before the answers are known.
     fn due(&self, id: &str) -> bool {
         let answers = crate::lock(&self.answers).clone();
-        answers.is_some_and(|answers| answers.due(id))
+        let Some(answers) = answers else {
+            return false;
+        };
+        let known = crate::lock(&self.dues).get(id).copied();
+        if let Some((at, due)) = known
+            && at.elapsed() < DUE_FOR
+        {
+            return due;
+        }
+        let due = answers.due(id);
+        crate::lock(&self.dues).insert(id.to_string(), (Instant::now(), due));
+        due
     }
 
-    /// The person answered offer `id`: kept.
+    /// The person answered offer `id`: kept, on a thread (the store may be busy with another
+    /// writer's work). Answered, it is not due: that is known at once.
     fn answered(&self, id: &str, taken: bool) {
         let answers = crate::lock(&self.answers).clone();
-        if let Some(answers) = answers {
-            answers.answered(id, taken);
+        let Some(answers) = answers else {
+            return;
+        };
+        crate::lock(&self.dues).insert(id.to_string(), (Instant::now(), false));
+        let id = id.to_string();
+        let kept = std::thread::Builder::new()
+            .name("desk-offer-answer".into())
+            .spawn(move || answers.answered(&id, taken));
+        if let Err(why) = kept {
+            log::warn!("offers: an answer was not kept (no thread: {why})");
         }
     }
 

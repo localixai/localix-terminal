@@ -60,6 +60,19 @@ fn an_error_response_has_a_code_and_a_message() {
 }
 
 #[test]
+fn an_invalid_request_id_is_not_treated_as_a_notification() {
+    for id in [json!(true), json!([]), json!({})] {
+        let request = json!({"jsonrpc": "2.0", "id": id, "method": "window/call"});
+        let mut bytes = serde_json::to_vec(&request).unwrap();
+        bytes.push(b'\n');
+        let Next::Bad(error) = read(&bytes) else {
+            panic!("an invalid id was accepted: {request}");
+        };
+        assert_eq!(error.code, code::INVALID);
+    }
+}
+
+#[test]
 fn a_line_that_is_no_message_is_answered_and_the_next_still_reads() {
     let mut bytes = b"nope\n{\"jsonrpc\":\"2.0\"}\n{\"id\":1,\"method\":\"x\"}\n".to_vec();
     bytes.extend(Message::request(2, "ping", json!({})).encode(None));
@@ -115,4 +128,67 @@ fn a_flushed_outbox_has_written_everything_queued_before_it() {
     let mut got = [0u8; 8];
     far.read_exact(&mut got).unwrap();
     assert_eq!(&got, b"one\ntwo\n");
+}
+
+#[test]
+fn an_error_without_a_request_to_name_keeps_its_null_id() {
+    let sent = Message::failed(Value::Null, RpcError::new(code::UNAVAILABLE, "try again"));
+    let Next::Got(frame) = read(&sent.encode(None)) else {
+        panic!("not a frame");
+    };
+    assert_eq!(frame.message, sent);
+    // A request or a result with no id is still no response.
+    assert!(matches!(
+        read(b"{\"jsonrpc\":\"2.0\",\"id\":null,\"result\":{}}\n"),
+        Next::Bad(_)
+    ));
+    let Next::Got(frame) = read(b"{\"jsonrpc\":\"2.0\",\"id\":null,\"method\":\"tab/closed\"}\n")
+    else {
+        panic!("not a frame");
+    };
+    assert!(matches!(frame.message, Message::Notification { .. }));
+}
+
+#[test]
+fn a_line_over_the_limit_is_answered_and_the_next_still_reads() {
+    let mut bytes = vec![b'x'; usize::try_from(MAX_LINE).unwrap() + 100];
+    bytes.push(b'\n');
+    bytes.extend(Message::request(2, "ping", json!({})).encode(None));
+    let mut input = &bytes[..];
+    let Next::Bad(error) = read_frame(&mut input).unwrap() else {
+        panic!("not refused");
+    };
+    assert_eq!(error.code, code::INVALID);
+    assert!(matches!(read_frame(&mut input).unwrap(), Next::Got(_)));
+    assert!(matches!(read_frame(&mut input).unwrap(), Next::End));
+}
+
+#[test]
+fn a_result_with_bytes_gets_its_binary_field_and_keeps_the_rest() {
+    let blob = Blob {
+        mime: "image/png".into(),
+        bytes: vec![1, 2, 3],
+    };
+    let bytes =
+        Message::done(json!(1), json!({"text": "ok", "binary": "stale"})).encode(Some(&blob));
+    let Next::Got(frame) = read(&bytes) else {
+        panic!("not a frame");
+    };
+    assert_eq!(frame.blob, Some(blob));
+    let Message::Response {
+        outcome: Ok(result),
+        ..
+    } = frame.message
+    else {
+        panic!("not a response");
+    };
+    assert_eq!(result["text"], "ok");
+    assert_eq!(result["binary"]["length"], 3);
+}
+
+#[test]
+fn the_peer_of_a_socket_pair_is_this_user() {
+    let (near, far) = std::os::unix::net::UnixStream::pair().unwrap();
+    assert_eq!(peer::peer_uid(&near), Some(peer::own_uid()));
+    assert!(peer::is_own(&far));
 }

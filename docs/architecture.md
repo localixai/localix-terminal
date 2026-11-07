@@ -12,7 +12,7 @@ idempotent consumers that reconcile from the owner, and clients that are poked a
 
 | Term        | Meaning                                                                                  |
 | ----------- | ---------------------------------------------------------------------------------------- |
-| Owner       | The one part that writes a kind of thing (a board, a tab, a terminal) and announces its changes. |
+| Owner       | The one part that writes a kind of thing (a board, the layout, a pane, a terminal) and announces its changes. |
 | Kept owner  | An owner whose state is in the store and outlives the app: the projects, their ledgers, the layout (windows, workspaces, tabs, their panes), the boards, the Event Center's journal. |
 | Live owner  | An owner whose state is in memory and goes with the app: panes' keys, terminals, notes on their way, asks. |
 | Notice      | A past-tense fact `{entity, op}` about a change: what changed, never what it now holds.   |
@@ -22,7 +22,7 @@ idempotent consumers that reconcile from the owner, and clients that are poked a
 | Projector   | A consumer that keeps derived data: the Event Center, a board's file. It can be deleted and rebuilt. |
 | Reactor     | A consumer that does something about a change: the relay that tells subscribers.          |
 | Source      | A part with events for the person: a type in `desk/center/sources.rs`.                    |
-| Tool surface| The one set of calls every agent uses: `open`, `act`/`interact`, `look`, `tabs`, `screenshot`, `comments`. |
+| Tool surface| The one set of calls every agent uses, the `action`s of the `window` tool: `open`, `interact`, `screenshot`, `close`, `show`, `list`. |
 
 ## Principles
 
@@ -35,7 +35,7 @@ idempotent consumers that reconcile from the owner, and clients that are poked a
 | P5 | Repeats are harmless              | A consumer gives the same result for a notice twice, late, or after a newer one.    |
 | P6 | Derived data is rebuildable       | A projector's output can be deleted and is made again from the owners (`reconcile`). |
 | P7 | One mechanism, many kinds         | A new kind is a variant of an enum the compiler holds every part to, not a new path or tool. |
-| P8 | One tool surface                  | A new kind of tab is a `kind` of `open` and an `op` of `act`, never a tool of its own. |
+| P8 | One tool surface                  | A new kind of tab is a `kind` of `open` and an `op` of `interact`, never a tool of its own. |
 | P9 | Poke, then pull                   | The window and the plugin are told that something changed and read it; no frame is trusted for state. |
 | P10| The window knows no domain        | A page draws what it is sent (a section, a tone, a button's role); it holds no table of kinds. |
 
@@ -45,8 +45,8 @@ idempotent consumers that reconcile from the owner, and clients that are poked a
  owner                          one transaction (kept) or one lock (live)        consumers, each at its cursor
  ┌──────────────┐  its rows    ┌────────────────────────────────────┐   read    ┌───────────────────────────┐
  │ board        │ ───────────▶ │ boards                             │  ◀──────  │ center   (projector)      │
- │ tab, terminal│  its notice  │ change_events {seq, entity, op,    │  pages    │ board-file (projector)    │
- │ ask          │ ───────────▶ │                run}                │  of 100   │ relay    (reactor)        │
+ │ layout, pane │  its notice  │ change_events {seq, entity, op,    │  pages    │ board-file (projector)    │
+ │ terminal, ask│ ───────────▶ │                run}                │  of 100   │ relay    (reactor)        │
  └──────────────┘              │ change_cursors {name, seq}         │  ──────▶  └───────────────────────────┘
                                └────────────────────────────────────┘  cursor moved after each notice
 ```
@@ -61,8 +61,9 @@ idempotent consumers that reconcile from the owner, and clients that are poked a
   consumer behind what the feed keeps jumps to the oldest kept notice and reconciles.
 - **Restarts.** The cursors are in the store, so each consumer goes on from where it was. Every
   notice carries the run of the app that wrote it, and each entity says whether it outlives a
-  run (`Entity::outlives_the_run`): a notice of a tab or a terminal of an earlier run names an id
-  given again since, and is passed over. A notice of a board is read.
+  run (`Entity::outlives_the_run`): a notice of a pane or a terminal of an earlier run names a key
+  given again since, and is passed over. A notice of a board or of the layout (a window, a
+  workspace, a tab) is read.
 - **Retention.** Notices every running consumer read a day ago go, and past 10 000 the oldest go
   anyway; a cursor nobody moved in a month goes. The feed is not an archive: the owners' tables are
   the truth, and the Event Center's journal is the history.
@@ -74,7 +75,8 @@ idempotent consumers that reconcile from the owner, and clients that are poked a
 
 One SQLite database (`store.rs`), `~/.local/share/llx-desk/llx-desk.sqlite` (`LLX_DESK_DATA` moves it; a
 test build keeps it in its own directory; checks use one in memory). One connection, one writer:
-every write is a transaction under the store's lock. The schema is the list `STEPS`, applied in
+every write is a transaction under the store's lock. The schema is the list `STEPS` in
+`src/store/schema.rs`, applied in
 order and counted in `user_version`: a new table is a step at the end, never an edit of a step
 already shipped. A database a newer build wrote is left as it is, and the desk runs on one in
 memory, keeping nothing.
@@ -87,7 +89,7 @@ memory, keeping nothing.
 | `panes`          | the ledger           | A project's panes: kind, agent, title, address or folder and program, opened, shown, closed. Closed: the history; open when the app quit: what opens again, the same row. |
 | `visits`         | the ledger           | The pages a project's panes showed: what the address field suggests. |
 | `screens`        | the ledger           | A terminal's last screen, shown dimmed above the shell that takes its place. |
-| `windows`        | the layout           | Each window: the workspace it shows, its frame, its side open or shut and its width. |
+| `windows`        | the layout           | Each window and the workspace it shows. Legacy geometry columns remain for migration compatibility; the browser keeps frame and side settings. |
 | `workspaces`     | the layout           | A window × a project: the tab it shows. |
 | `tabs`           | the layout           | A workspace's tabs, in their places; closed, they go. |
 | `pane_nodes`     | the layout           | Each tab's tree: branches (side by side or one above the other) and leaves (a pane, in focus or not), each with its share. |
@@ -113,7 +115,7 @@ line an ask, a tab or a session, replaced rather than added to, keeps it from be
 and its line in `Entity::outlives_the_run`. The build then names every consumer that must say what
 it does with it. Its owner records its notices (P3).
 
-**A kept owner.** A step in `store::STEPS` for its table, its rows written in `feed.write` with its
+**A kept owner.** A step appended to `src/store/schema.rs` for its table, its rows written in `feed.write` with its
 notice, and a reader for consumers. Its state is the truth; nothing else writes its table.
 
 **A source of events for the person.** A type in `desk/center/sources.rs` implementing `Source`

@@ -8,7 +8,7 @@ use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 
-use super::{COLUMNS, ROWS};
+use super::{COLUMNS, ROWS, environment};
 
 /// The program started and the master end of its terminal.
 pub(super) struct Pty {
@@ -18,7 +18,8 @@ pub(super) struct Pty {
 
 /// Start `command` (the user's shell when empty, as a login shell, as a terminal app starts it:
 /// it reads the person's profile, so an app started from the Finder still gives them their
-/// PATH) in `dir`. With `vars` the program sees exactly those variables, else this process's.
+/// PATH) in `dir`. The environment comes from `vars`, else this process, with the terminal's own
+/// identity and color capabilities applied before the shell reads the person's profile.
 pub(super) fn spawn(
     command: &str,
     dir: &Path,
@@ -45,25 +46,26 @@ pub(super) fn spawn(
             sh
         }
     };
-    if let Some(vars) = vars {
-        program.env_clear().envs(vars.iter().map(|(k, v)| (k, v)));
-    }
+    environment::apply(&mut program, vars);
     program
         .current_dir(dir)
-        .env("TERM", "xterm-256color")
-        .env("COLORTERM", "truecolor")
         .stdin(Stdio::from(slave.try_clone()?))
         .stdout(Stdio::from(slave.try_clone()?))
         .stderr(Stdio::from(slave));
     // SAFETY: between fork and exec the closure calls only async-signal-safe functions and
     // allocates nothing.
     unsafe { program.pre_exec(take_terminal) };
+    crate::fds::as_started(&mut program);
     let child = program.spawn();
     // Every copy of the slave end is dropped here: while one is open in this process, the
     // reader would never see the end of the output.
     drop(program);
-    let child = child?;
-    set_nonblocking(master.as_raw_fd())?;
+    let mut child = child?;
+    if let Err(why) = set_nonblocking(master.as_raw_fd()) {
+        // Started, but unusable: not left running with no tab.
+        kill(&mut child);
+        return Err(why);
+    }
     Ok(Pty {
         child,
         master: File::from(master),
@@ -168,3 +170,7 @@ pub(super) fn readable(fd: RawFd, ms: i32) -> bool {
     // SAFETY: poll reads and writes the one pollfd it is given.
     unsafe { libc::poll(&mut poll, 1, ms) > 0 }
 }
+
+#[cfg(test)]
+#[path = "environment_tests.rs"]
+mod tests;

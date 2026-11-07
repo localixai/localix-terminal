@@ -8,6 +8,68 @@ use super::args::text;
 use super::ledger::Facts;
 use super::{Call, Desk, Failure, Output};
 
+/// The most tabs one `open` makes: a call may open every page, every terminal and the board.
+const MOST_AT_ONCE: usize = 32;
+
+/// The fields `open` reads for a tab of `kind`: the address of a page; a terminal's program, where
+/// it starts and how long to wait for its output; none for the board.
+fn open_fields(kind: Kind) -> &'static [&'static str] {
+    match kind {
+        Kind::Web => &["url"],
+        Kind::Term => &["command", "workdir", "wait_for", "yield_ms"],
+        Kind::Board => &[],
+    }
+}
+
+/// The kind of tab `spec` asks for.
+fn kind_of(spec: &Value) -> Result<Kind, String> {
+    Ok(match text(spec, "kind") {
+        Some("browser") => Kind::Web,
+        Some("terminal") => Kind::Term,
+        Some("board") => Kind::Board,
+        Some(other) => {
+            return Err(format!(
+                "no kind of tab `{other}`: browser, terminal or board"
+            ));
+        }
+        None if text(spec, "command").is_some() => Kind::Term,
+        None => Kind::Web,
+    })
+}
+
+/// `spec` is a tab `open` can make: an object, naming a kind of tab. A field no call has (a typo
+/// in a terminal's `command` inside `tabs`) is refused, never dropped: it opened the search page,
+/// and read as a page that would not do as told. A field of the tool that `open` does not read
+/// (`size`, `ask`) is let be, as it always was.
+fn opened_as_asked(spec: &Value) -> Result<(), String> {
+    let given = spec
+        .as_object()
+        .ok_or("each of `tabs` is an object: `kind` and its fields")?;
+    let kind = kind_of(spec)?;
+    let takes = open_fields(kind);
+    let stray: Vec<String> = (given.iter())
+        .filter(|(_, value)| !value.is_null())
+        .map(|(field, _)| field.as_str())
+        .filter(|field| !super::args::is_field(field))
+        .map(|field| format!("`{field}`"))
+        .collect();
+    if stray.is_empty() {
+        return Ok(());
+    }
+    let listed = match takes {
+        [] => "no field".to_string(),
+        _ => (takes.iter())
+            .map(|field| format!("`{field}`"))
+            .collect::<Vec<_>>()
+            .join(", "),
+    };
+    Err(format!(
+        "a {} tab is opened with no {}: nothing was opened. It takes {listed}.",
+        kind.name(),
+        stray.join(", ")
+    ))
+}
+
 impl Desk {
     /// Open each tab asked for; one that fails says why, and the others still open.
     #[expect(
@@ -19,6 +81,12 @@ impl Desk {
             Some(tabs) => tabs.iter().collect(),
             None => vec![args],
         };
+        if asked.len() > MOST_AT_ONCE {
+            return Err(format!("open at most {MOST_AT_ONCE} tabs at once").into());
+        }
+        for spec in &asked {
+            opened_as_asked(spec)?;
+        }
         let opened: Vec<Result<(String, Output), Failure>> = std::thread::scope(|scope| {
             let opening: Vec<_> = asked
                 .iter()
@@ -45,7 +113,6 @@ impl Desk {
                     }
                     shot = out.shot.or(shot);
                 }
-                Err(Failure::Fatal(why)) if reports.is_empty() => return Err(Failure::Fatal(why)),
                 Err(why) => reports.push(format!("not opened: {}", why.message())),
             }
         }
@@ -58,16 +125,7 @@ impl Desk {
 
     /// One tab of an `open`, owned from the moment it exists.
     fn open_one(&self, call: &Call, spec: &Value) -> Result<(String, Output), Failure> {
-        let kind = match text(spec, "kind") {
-            Some("browser") => Kind::Web,
-            Some("terminal") => Kind::Term,
-            Some("board") => Kind::Board,
-            Some(other) => {
-                return Err(format!("no kind of tab `{other}`: browser, terminal or board").into());
-            }
-            None if text(spec, "command").is_some() => Kind::Term,
-            None => Kind::Web,
-        };
+        let kind = kind_of(spec)?;
         let mark = self.told_mark();
         let (key, mut out) = match kind {
             Kind::Web => {

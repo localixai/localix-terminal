@@ -1,10 +1,10 @@
 /* The app's own pages' tokens, one set for all of them: the accent, ink and fill ladders (a fill
    mixes the page's text colour, so it suits light and dark), radii, motion and elevation. */
 :root{
---accent:#0a84ff;--accent:-apple-system-control-accent;
+--accent:#0a84ff;
 --fg:#1d1d1f;
 --ink:color-mix(in srgb,var(--fg) 90%,transparent);
---ink-2:color-mix(in srgb,var(--fg) 60%,transparent);
+--ink-2:color-mix(in srgb,var(--fg) 68%,transparent);
 --ink-3:color-mix(in srgb,var(--fg) 40%,transparent);
 --ov-1:color-mix(in srgb,currentColor 5%,transparent);
 --ov-2:color-mix(in srgb,currentColor 10%,transparent);
@@ -16,23 +16,47 @@
 --acc-4:color-mix(in srgb,var(--accent) 60%,transparent);
 --acc-sel:color-mix(in srgb,var(--accent) 90%,transparent);
 --r-1:4px;--r-2:6px;--r-3:8px;--r-4:10px;--r-pill:999px;
---ease:cubic-bezier(.2,.8,.2,1);--t-out:.12s;
+--ease:cubic-bezier(.2,.8,.2,1);--t-out:.12s;--t-move:.2s;
+--spring:var(--ease);--spring-b:var(--ease);
 --sh-hair:0 0 0 .5px var(--ov-3);
 --sh-pop:var(--sh-hair),0 10px 28px rgba(0,0,0,.19);
 --sh-lift:var(--sh-hair),0 12px 30px rgba(0,0,0,.24),0 2px 6px rgba(0,0,0,.10);
 --ui-sys:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
 }
+/* The system's accent, where the engine knows it: a custom property takes no fallback, so the
+   keyword is set only when it is supported. */
+@supports (color:-apple-system-control-accent){:root{--accent:-apple-system-control-accent}}
+/* Springs for what moves (a critically damped one, and one with a little bounce), each played
+   over the duration of its use (about a quarter of a second); an
+   engine without linear() keeps the ease. */
+@supports (transition-timing-function:linear(0,1)){:root{
+--spring:linear(0,.162,.421,.634,.781,.873,.929,.96,.978,.988,.994,.997,.998,.999,1);
+--spring-b:linear(0,.172,.459,.698,.855,.943,.985,1.002,1.006,1.006,1.004,1.002,1.001,1,1)}}
 @media (prefers-color-scheme: dark){:root{
 --fg:#e6e6e6;
+--ink-2:color-mix(in srgb,var(--fg) 60%,transparent);
 --sh-hair:0 0 0 .5px rgba(255,255,255,.12);
 --sh-pop:var(--sh-hair),0 10px 28px rgba(0,0,0,.40);
 --sh-lift:var(--sh-hair),0 12px 30px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.20);
 }}
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+/* Increase Contrast: the secondary inks and the fills one step firmer, the hairlines a full point. */
+@media (prefers-contrast:more){:root{
+--ink-2:color-mix(in srgb,var(--fg) 82%,transparent);
+--ink-3:color-mix(in srgb,var(--fg) 62%,transparent);
+--ov-1:color-mix(in srgb,currentColor 10%,transparent);
+--ov-2:color-mix(in srgb,currentColor 20%,transparent);
+--ov-3:color-mix(in srgb,currentColor 30%,transparent);
+--ov-4:color-mix(in srgb,currentColor 40%,transparent);
+--sh-hair:0 0 0 1px color-mix(in srgb,var(--fg) 45%,transparent);
+}}
+/* Reduce Motion: nothing travels, scales or grows; colour, outline and opacity still change, which
+   is what tells the person a thing answered. A page's own keyframes say the same in opacity. */
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-iteration-count:1!important;transition-property:color,background-color,border-color,opacity,box-shadow,stroke-dashoffset!important}}
 /* The window's ground, painted once. The page names it (--ground). Glass (macOS, data-glass): the
    window's own material and coat show through a clear page, so the titlebar and the page are one
    sheet. Elsewhere a backdrop drawn from the ground stands in for the desktop, under a coat of
-   it. Reduced transparency, or forced colours: the ground, solid. */
+   it. Reduced transparency (data-reduced: the app says so, as WebKit has no media query for it),
+   or forced colours: the ground, solid. */
 html{background:var(--ground);color-scheme:light dark;-webkit-font-smoothing:antialiased}
 html,body{margin:0;height:100%;overflow:hidden}
 @supports (background:color-mix(in srgb,red 50%,transparent)) and ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
@@ -44,4 +68,6 @@ html[data-glass],html[data-glass] body{background:transparent}
 html:is([data-glass],:not([data-glass])){background:var(--ground)}
 html:is([data-glass],:not([data-glass])) body{background:transparent}
 }
+html[data-reduced]{background:var(--ground)}
+html[data-reduced] body{background:transparent}
 ::selection{background:color-mix(in srgb,currentColor 28%,transparent)}

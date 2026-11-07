@@ -3,7 +3,8 @@
 //! the window is clear, and a native material behind its titlebar and pages samples the desktop.
 //! A panel's page is clear too, over a coat of its ground, so the titlebar and the page are one
 //! sheet; the browser's pages stay opaque, so what the agent sees in a screenshot never changes.
-//! Elsewhere, and when the person reduces transparency, the windows are ordinary ones.
+//! Elsewhere, and when the person reduces transparency as a window is built, the windows are
+//! ordinary ones; one already glass turns solid while they do (`retint`).
 
 use tao::dpi::{LogicalPosition, LogicalSize};
 use tao::event::WindowEvent;
@@ -73,6 +74,15 @@ pub(super) fn transparency() -> Transparency {
     Transparency::Reduced
 }
 
+/// Whether the person asked for less transparency, as the pages are told (`data-reduced`): the
+/// pages' own `prefers-reduced-transparency` is not implemented by WebKit.
+pub(super) fn reduced() -> bool {
+    #[cfg(target_os = "macos")]
+    return native::reduced();
+    #[cfg(not(target_os = "macos"))]
+    false
+}
+
 /// A page's bounds: `size`, `x` points from the window's left edge and `top` from its top.
 pub(super) fn fill(size: LogicalSize<f64>, x: f64, top: f64) -> wry::Rect {
     use wry::dpi::{LogicalPosition as At, LogicalSize as Size};
@@ -91,7 +101,8 @@ pub(super) fn relayout(event: &WindowEvent) -> bool {
 }
 
 /// The material for an appearance (NSVisualEffectMaterial): HUD, which is dark, in the dark
-/// one; under-window background, which reads light, in the light one.
+/// one; sidebar, as a Finder sidebar's, in the light one: it keeps the desktop's colour where the
+/// milky under-window background washed it out.
 #[cfg_attr(
     not(any(target_os = "macos", test)),
     expect(
@@ -100,11 +111,15 @@ pub(super) fn relayout(event: &WindowEvent) -> bool {
     )
 )]
 pub(super) fn material(dark: bool) -> isize {
-    if dark { 13 } else { 21 }
+    if dark { 13 } else { 7 }
 }
 
-/// The coat over the glass in the dark appearance or the light, and how much of it covers:
-/// neutral near-black or near-white (oklch 0.13 and 0.975), never a page's colour.
+/// The coat over the glass in the dark appearance or the light at the person's transparency
+/// `level`, and how much of it covers: neutral near-black or near-white (oklch 0.13 and 0.975),
+/// never a page's colour. The material makes the text read, as the system means it to; the coat
+/// only takes the desktop back for who wants less of it. White over a light blur hides the
+/// desktop far sooner than black over a dark one, so the light ladder falls faster: its standard
+/// is nearly the bare material.
 #[cfg_attr(
     not(any(target_os = "macos", test)),
     expect(
@@ -112,11 +127,34 @@ pub(super) fn material(dark: bool) -> isize {
         reason = "the glass under a window is macOS's only; its tests use it everywhere"
     )
 )]
-pub(super) fn coat(dark: bool) -> (Rgb, f64) {
+pub(super) fn coat(dark: bool, level: super::settings::Transparency) -> (Rgb, f64) {
+    use super::settings::Transparency as Level;
+    let step = match level {
+        Level::Off => 0,
+        Level::Low => 1,
+        Level::Standard => 2,
+        Level::High => 3,
+    };
     match dark {
-        // Half: the desktop shows through as a system window's does, text reads on any of it.
-        true => (DARK, 0.5),
-        false => (LIGHT, 0.6),
+        true => (DARK, [1.0, 0.7, 0.4, 0.1][step]),
+        false => (LIGHT, [1.0, 0.35, 0.1, 0.0][step]),
+    }
+}
+
+/// Respect accessibility overrides without changing the person's chosen transparency.
+#[cfg_attr(
+    not(any(target_os = "macos", test)),
+    expect(dead_code, reason = "the native glass is macOS's only")
+)]
+fn glass_level(
+    chosen: super::settings::Transparency,
+    reduced: bool,
+    increased: bool,
+) -> super::settings::Transparency {
+    if reduced || increased {
+        super::settings::Transparency::Off
+    } else {
+        chosen
     }
 }
 
@@ -131,12 +169,22 @@ pub(super) fn themed(theme: super::settings::Theme) -> Option<Theme> {
     }
 }
 
-/// `page` in the frame's stylesheet, marked as glass when it is.
+/// `page` in the frame's stylesheet, marked as glass when it is and as reduced when the person
+/// reduces transparency.
 pub(super) fn dress(page: &str, look: Look) -> String {
+    dressed_as(page, look, reduced())
+}
+
+/// `dress`, with whether transparency is reduced given.
+fn dressed_as(page: &str, look: Look, reduced: bool) -> String {
     let page = page.replacen("<head>", &format!("<head><style>{CSS}</style>"), 1);
-    match look {
+    let page = match look {
         Look::Glass => page.replacen("<html", "<html data-glass", 1),
         Look::Opaque | Look::Hidden => page,
+    };
+    match reduced {
+        true => page.replacen("<html", "<html data-reduced", 1),
+        false => page,
     }
 }
 
@@ -262,12 +310,15 @@ impl Frame {
     }
 
     /// Tint the glass for the window's appearance now (the person's theme, or the system's).
+    /// Solid, as the person's Off is, while they reduce transparency or increase contrast: a
+    /// window's background is not to stay semi-transparent then.
     pub(super) fn retint(&self) {
         #[cfg(target_os = "macos")]
         if let Some(glass) = &self.glass {
             let dark = self.native.theme() == Theme::Dark;
-            let (colour, alpha) = coat(dark);
-            let alpha = super::settings::now().transparency.coat(alpha);
+            let chosen = super::settings::now().transparency;
+            let level = glass_level(chosen, native::reduced(), native::increased());
+            let (colour, alpha) = coat(dark, level);
             glass.tint(material(dark), colour, alpha);
         }
     }
@@ -296,7 +347,6 @@ pub(super) fn dressed(window: &Window) -> (usize, isize, bool, f64, bool) {
 #[cfg(target_os = "macos")]
 #[path = "frame_macos.rs"]
 mod native;
-
 #[cfg(not(target_os = "macos"))]
 mod native {
     pub(super) fn clear(builder: tao::window::WindowBuilder) -> tao::window::WindowBuilder {

@@ -49,3 +49,43 @@ fn peek_marks_a_look_that_leaves_the_persons_notes() {
     assert_eq!(parsed.json.as_deref(), Some(r#"{"action":"list"}"#));
     assert!(!parse(&args[1..]).unwrap().peek);
 }
+
+fn parsed(words: &[&str]) -> Result<Window, String> {
+    parse(
+        &words
+            .iter()
+            .map(|word| (*word).to_string())
+            .collect::<Vec<_>>(),
+    )
+}
+
+#[test]
+fn a_flag_that_applies_to_nothing_is_refused_and_the_plugins_calls_still_parse() {
+    // As the Claude Code plugin calls it.
+    assert!(parsed(&["--project", "/x", "--said", "--follow", "--json"]).is_ok());
+    assert!(parsed(&["--project", "/x", "--end"]).is_ok());
+    assert!(parsed(&["--as", "me", "--board"]).is_ok());
+    // `--said --json` follows, as it always did.
+    assert!(parsed(&["--said", "--json"]).is_ok());
+    assert!(parsed(&["--json"]).is_err());
+    assert!(parsed(&["--follow"]).is_err());
+    assert!(parsed(&["--end", "--follow"]).is_err());
+    // A JSON argument is never dropped by a mode that takes none.
+    assert!(parsed(&["--end", r#"{"action":"close"}"#]).is_err());
+    assert!(parsed(&["--said", "{}"]).is_err());
+    assert!(parsed(&["--board", "{}"]).is_err());
+    // A name or a folder is not the next option.
+    assert!(parsed(&["--as", "--end"]).is_err());
+    assert!(parsed(&["--project", "--said"]).is_err());
+}
+
+#[test]
+fn stdin_past_its_limit_is_refused_and_a_bad_object_says_why() {
+    assert_eq!(read_up_to(&b"{}"[..], 2).unwrap(), "{}");
+    let why = read_up_to(&b"{} "[..], 2).unwrap_err();
+    assert!(why.contains("too large"), "{why}");
+    let why = object("{\"action\":").unwrap_err();
+    assert!(why.contains("EOF"), "{why}");
+    assert!(object("[1]").is_err());
+    assert!(object("{}").is_ok());
+}

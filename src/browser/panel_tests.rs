@@ -43,6 +43,21 @@ fn paints_before_the_loop_runs_queue_one_command_and_the_loop_takes_all_in_order
 }
 
 #[test]
+fn frames_dropped_for_size_are_told_to_the_caller_once() {
+    let (panel, _) = recorded(true);
+    let big = "x".repeat(PENDING_MAX / 2 + 1);
+    panel.paint(&big);
+    assert!(!panel.dropped(), "all of it is kept");
+    panel.paint(&big);
+    assert!(panel.dropped(), "the first went to make room");
+    assert!(!panel.dropped(), "told once");
+    assert_eq!(
+        panel.slot.latest().map(|frames| frames.len()),
+        Some(big.len() + 1)
+    );
+}
+
+#[test]
 fn dropping_a_panel_closes_its_window_once() {
     let (panel, sent) = recorded(true);
     drop(panel);

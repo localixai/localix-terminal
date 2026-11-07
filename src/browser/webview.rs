@@ -17,6 +17,8 @@ use super::host::{Cmd, Loads, Reply, Shared, Tab, WINDOW_CLOSED, active_loads};
 mod answers;
 #[path = "webview_driver.rs"]
 mod driver;
+#[path = "webview_scripts.rs"]
+mod scripts;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(10);
 /// How long a page that is replacing itself may take before the probe answers again.
@@ -194,13 +196,6 @@ impl WebviewDriver {
         (tabs, self.target())
     }
 
-    /// Open `url` in a new tab, show it and act on it from now on; then wait for its document.
-    pub fn new_tab(&self, url: &str) -> ViewResult<u32> {
-        let id = self.add_tab(url)?;
-        self.on(id).wait_new();
-        Ok(id)
-    }
-
     /// Open `url` in a new tab, shown, and say its id at once: its document is waited for by a
     /// driver pinned to it (`wait_new`), so several tabs load at the same time.
     pub fn add_tab(&self, url: &str) -> ViewResult<u32> {
@@ -244,13 +239,20 @@ impl WebviewDriver {
     }
 }
 
-/// What the event loop answered a command with.
 /// `url` as the window can load it, else refused before it reaches the window (`guard`).
 pub(super) fn loadable(url: &str) -> ViewResult<String> {
     crate::browser::guard::loadable(url)
         .ok_or_else(|| ViewError::Refused(format!("`{url}` is not an address")))
 }
 
+/// Whether going to `to` from the page at `current` only changes the fragment (`to` has one):
+/// the same document, so WebKit starts no load for it.
+fn fragment_only(current: &str, to: &str) -> bool {
+    to.split_once('#')
+        .is_some_and(|(page, _)| current.split('#').next() == Some(page))
+}
+
+/// What the event loop answered a command with.
 fn answered<T>(answer: &mpsc::Receiver<Result<T, String>>) -> ViewResult<T> {
     match answer.recv_timeout(CALL_TIMEOUT) {
         Ok(Ok(value)) => Ok(value),
@@ -282,3 +284,7 @@ impl WebviewDriver {
         let _ = self.send(Cmd::Close);
     }
 }
+
+#[cfg(test)]
+#[path = "webview_tests.rs"]
+mod tests;

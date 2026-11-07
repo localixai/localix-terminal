@@ -11,7 +11,7 @@ use std::path::Path;
 use serde_json::{Value, json};
 
 use super::State;
-use super::shell::{login_path, run_with, which};
+use super::shell::{failure, find, run_with};
 
 /// The name of the server in an agent's configuration.
 pub(super) const NAME: &str = "llx-desk";
@@ -51,7 +51,7 @@ pub(super) struct Host {
     after: &'static str,
 }
 
-/// Every agent that takes MCP servers, as integrations.rs lists them.
+/// Every agent that takes MCP servers, as setup.rs lists them.
 pub(super) const HOSTS: [Host; 5] = [
     Host {
         id: "codex",
@@ -112,16 +112,8 @@ pub(super) fn host(id: &str) -> Option<&'static Host> {
 }
 
 impl Host {
-    /// Its program and the PATH to run it with, when it is installed.
-    fn installed(&self) -> Result<(std::path::PathBuf, String), String> {
-        let path = login_path().ok_or("the login shell did not say its PATH")?;
-        let program = which(self.program, &path)
-            .ok_or_else(|| format!("not installed (no `{}` on the PATH)", self.program))?;
-        Ok((program, path))
-    }
-
     pub(super) fn state(&self, home: &Path, exe: &Path) -> State {
-        if let Err(why) = self.installed() {
+        if let Err(why) = find(self.program) {
             return State::Unavailable(why);
         }
         let text = std::fs::read_to_string(home.join(self.config)).unwrap_or_default();
@@ -150,7 +142,7 @@ impl Host {
     }
 
     pub(super) fn turn(&self, home: &Path, exe: &Path, on: bool) -> Result<String, String> {
-        let (program, path) = self.installed()?;
+        let (program, path) = find(self.program)?;
         let exe_text = exe.display().to_string();
         let asked = match on {
             true => self.add,
@@ -178,7 +170,10 @@ impl Host {
             .collect();
         let ran = run_with(&program, &args, &path, MOST, self.answer.filter(|_| on))?;
         if !ran.ok {
-            return Err(ran.out.trim().to_string());
+            return Err(failure(
+                &ran,
+                &format!("`{} mcp` failed and said nothing", self.program),
+            ));
         }
         Ok(match on {
             true => format!("added: {}", self.after),
@@ -191,15 +186,47 @@ impl Host {
         let file = home.join(self.config);
         let text = std::fs::read_to_string(&file).unwrap_or_default();
         let written = opencode(&text, exe, on)?;
-        if let Some(dir) = file.parent() {
-            std::fs::create_dir_all(dir).map_err(|why| format!("{}: {why}", dir.display()))?;
+        // Nothing to take out of a configuration that has no server: not even a file is made.
+        if written != text {
+            if let Some(dir) = file.parent() {
+                std::fs::create_dir_all(dir).map_err(|why| format!("{}: {why}", dir.display()))?;
+            }
+            write_over(&file, &written).map_err(|why| format!("{}: {why}", file.display()))?;
         }
-        std::fs::write(&file, written).map_err(|why| format!("{}: {why}", file.display()))?;
         Ok(match on {
             true => format!("added: {}", self.after),
             false => "taken out".into(),
         })
     }
+}
+
+/// `text` in `file` all at once: written beside it and renamed over it, so a failure half way
+/// leaves the person's file as it was. A link (a dotfile manager's) is followed, so it stays one.
+fn write_over(file: &Path, text: &str) -> std::io::Result<()> {
+    use std::io::Write as _;
+    use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
+    let real = std::fs::canonicalize(file).unwrap_or_else(|_| file.to_path_buf());
+    let temp = real.with_extension(format!("llx{}", std::process::id()));
+    // The file's own mode from the first byte (it may hold tokens), the owner's alone when it is
+    // new; the temporary is made new, so a link left at its name is never written through.
+    let meta = std::fs::metadata(&real).ok();
+    let mode = (meta.as_ref()).map_or(0o600, |meta| meta.permissions().mode() & 0o7777);
+    let _ = std::fs::remove_file(&temp);
+    let written = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(mode)
+        .open(&temp)
+        .and_then(|mut made| made.write_all(text.as_bytes()))
+        .and_then(|()| {
+            // The umask took bits off the mode it was made with.
+            std::fs::set_permissions(&temp, std::fs::Permissions::from_mode(mode))?;
+            std::fs::rename(&temp, &real)
+        });
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    written
 }
 
 /// The value at `path` in `config`.
@@ -220,22 +247,24 @@ fn opencode(text: &str, exe: &Path, on: bool) -> Result<String, String> {
         text => serde_json::from_str(text)
             .map_err(|why| format!("the OpenCode configuration is no JSON: {why}"))?,
     };
-    let servers = config
+    let config = config
         .as_object_mut()
-        .ok_or("the OpenCode configuration is no JSON object")?
-        .entry("mcp")
-        .or_insert_with(|| json!({}));
-    let servers = servers.as_object_mut().ok_or("its `mcp` is no object")?;
-    match on {
-        true => {
-            let line = json!([exe.display().to_string(), "mcp"]);
-            servers.insert(
-                NAME.into(),
-                json!({"type": "local", "command": line, "enabled": true}),
-            );
-        }
-        false => {
-            servers.remove(NAME);
+        .ok_or("the OpenCode configuration is no JSON object")?;
+    if on {
+        let servers = config.entry("mcp").or_insert_with(|| json!({}));
+        let servers = servers.as_object_mut().ok_or("its `mcp` is no object")?;
+        let line = json!([exe.display().to_string(), "mcp"]);
+        servers.insert(
+            NAME.into(),
+            json!({"type": "local", "command": line, "enabled": true}),
+        );
+    } else {
+        // Out of a configuration that has no server: as it was, not written again.
+        let removed = (config.get_mut("mcp"))
+            .and_then(Value::as_object_mut)
+            .and_then(|servers| servers.remove(NAME));
+        if removed.is_none() {
+            return Ok(text.to_string());
         }
     }
     serde_json::to_string_pretty(&config)

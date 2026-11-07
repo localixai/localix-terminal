@@ -70,15 +70,28 @@ pub fn save_in(dir: &Path, name: &str, value: &str) -> io::Result<PathBuf> {
         .create(dir)?;
     std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
     let path = dir.join(name);
+    // Written beside it and renamed over it: a reader sees the old value or the new, never an
+    // empty file, and a full disk leaves the old one. The `.` in its name is one a secret's never
+    // has, so `names_in` passes it over.
+    let temp = dir.join(format!(".{name}.{}.new", std::process::id()));
+    let written = write_private(&temp, value).and_then(|()| std::fs::rename(&temp, &path));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    written?;
+    Ok(path)
+}
+
+/// `value` written to a new file at `path`, readable by its owner alone.
+fn write_private(path: &Path, value: &str) -> io::Result<()> {
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .mode(0o600)
-        .open(&path)?;
+        .open(path)?;
     file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
-    io::Write::write_all(&mut file, value.as_bytes())?;
-    Ok(path)
+    io::Write::write_all(&mut file, value.as_bytes())
 }
 
 /// Secret `name` in `dir`, if it is saved.
@@ -121,18 +134,39 @@ pub struct Vault {
 impl Vault {
     /// `text` with each secret it names put in, read from `dir`; the first name not saved, else.
     pub fn fill_in(&self, dir: Option<&Path>, text: &str) -> Result<String, String> {
-        let mut filled = text.to_string();
+        let mut values: Vec<(String, String)> = vec![];
         for name in named(text) {
             let value = dir.and_then(|dir| read_in(dir, &name)).ok_or_else(|| {
                 format!(
                     "no secret {name}: the person saves it once with `llx-desk secret {name} < FILE`"
                 )
             })?;
-            filled = filled.replace(&reference(&name), &value);
             let mut known = crate::lock(&self.known);
             known.retain(|(known, _)| known != &name);
-            known.push((name, value));
+            known.push((name.clone(), value.clone()));
+            values.push((name, value));
         }
+        // One pass over the text as it came: a value put in is never read for references again.
+        let mut filled = String::with_capacity(text.len());
+        let mut rest = text;
+        while let Some((before, after)) = rest.split_once(OPEN) {
+            filled.push_str(before);
+            let named = (after.split_once(CLOSE)).and_then(|(name, tail)| {
+                let (_, value) = values.iter().find(|(known, _)| known == name)?;
+                Some((value, tail))
+            });
+            match named {
+                Some((value, tail)) => {
+                    filled.push_str(value);
+                    rest = tail;
+                }
+                None => {
+                    filled.push_str(OPEN);
+                    rest = after;
+                }
+            }
+        }
+        filled.push_str(rest);
         Ok(filled)
     }
 

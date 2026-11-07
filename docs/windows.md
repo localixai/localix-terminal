@@ -9,14 +9,14 @@ how each layer follows it. It keeps the rules of `docs/architecture.md`; read th
 ```text
 app
 ├─ project                       a folder (docs/projects.md)
-└─ window                        a native window: its frame, its side open or shut and its width
+└─ window                        a native window: the workspace it shows
    └─ workspace                  the window × a project: the tabs of that project in that window
       └─ tab                     one row of the side's list, in its place
          └─ pane tree            the tab's split: branches and leaves
             ├─ branch            side by side or one above the other; each child with its share
             └─ leaf → pane       one pane, in focus or not
-               pane              web | terminal | board | settings: its address or folder and
-                                 program, its title, its agent; the key agents use (w1, t2, b1)
+               pane              web | terminal | board: its address or folder and program, its
+                                 title, its agent; the key agents use (w1, t2, b1)
 ```
 
 - A **window** shows one workspace at a time: the project shown. Switching the project shows
@@ -24,8 +24,9 @@ app
 - Two windows may show one project: each has a workspace of its own, with tabs of its own.
 - A **tab** is what the side lists and what ⌘1…⌘9 count. It holds a tree of panes; a tab of one
   pane is a leaf alone. A split is a tab of several panes, never a pair of tabs.
-- A **pane** is the content: a page, a terminal, the board, the settings. Its key (`w1`, `t2`,
-  `b1`) is how agents name it, across every window. A pane is in exactly one leaf of one tab.
+- A **pane** is the content: a page, a terminal or the board. Its key (`w1`, `t2`, `b1`) is how
+  agents name it, across every window. A pane is in exactly one leaf of one tab. Settings is the
+  window's own tab, outside the layout: it is no pane, has no key and is not kept.
 - **Focus** is a pane of the tab shown: the one the keys go to, the one a split's toolbar serves.
 
 ## Identity
@@ -70,23 +71,46 @@ plugin told) is a consumer of the notice.
 ## Store
 
 ```sql
-windows    (id INTEGER PRIMARY KEY, shown INTEGER REFERENCES workspaces,
-            x REAL, y REAL, width REAL, height REAL, side_open INTEGER NOT NULL,
-            side_width REAL NOT NULL, opened INTEGER NOT NULL, closed INTEGER)
-workspaces (id INTEGER PRIMARY KEY, window INTEGER NOT NULL REFERENCES windows ON DELETE CASCADE,
-            project INTEGER NOT NULL REFERENCES projects ON DELETE CASCADE,
-            shown INTEGER REFERENCES tabs, opened INTEGER NOT NULL,
-            UNIQUE (window, project))
-tabs       (id INTEGER PRIMARY KEY, workspace INTEGER NOT NULL REFERENCES workspaces ON DELETE CASCADE,
-            place INTEGER NOT NULL, opened INTEGER NOT NULL, closed INTEGER)
-pane_nodes (id INTEGER PRIMARY KEY, tab INTEGER NOT NULL REFERENCES tabs ON DELETE CASCADE,
-            parent INTEGER REFERENCES pane_nodes ON DELETE CASCADE, place INTEGER NOT NULL,
-            share REAL NOT NULL,              -- of its parent; 1 for the root
-            across INTEGER,                   -- a branch: 1 side by side, 0 one above the other
-            pane INTEGER REFERENCES panes,    -- a leaf: its pane
-            focused INTEGER NOT NULL DEFAULT 0)
-panes      -- the ledger's rows: what `tabs` held until now (kind, agent, title, url, cwd, command,
-           -- opened, shown, closed); `visits` and `screens` name a pane
+CREATE TABLE windows (
+    id INTEGER PRIMARY KEY,
+    shown INTEGER REFERENCES workspaces ON DELETE SET NULL,
+    x REAL,
+    y REAL,
+    width REAL,
+    height REAL,
+    side_open INTEGER NOT NULL DEFAULT 1,  -- x .. side_width: unused; the frame and side are
+    side_width REAL,                       -- the browser's, kept with the person's settings
+    opened INTEGER NOT NULL,
+    closed INTEGER
+);
+CREATE TABLE workspaces (
+    id INTEGER PRIMARY KEY,
+    window INTEGER NOT NULL REFERENCES windows ON DELETE CASCADE,
+    project INTEGER NOT NULL REFERENCES projects ON DELETE CASCADE,
+    shown INTEGER REFERENCES tabs ON DELETE SET NULL,
+    opened INTEGER NOT NULL,
+    UNIQUE (window, project)
+);
+CREATE TABLE tabs (
+    id INTEGER PRIMARY KEY,
+    workspace INTEGER NOT NULL REFERENCES workspaces ON DELETE CASCADE,
+    place INTEGER NOT NULL,
+    opened INTEGER NOT NULL,
+    closed INTEGER
+);
+CREATE TABLE pane_nodes (
+    id INTEGER PRIMARY KEY,
+    tab INTEGER NOT NULL REFERENCES tabs ON DELETE CASCADE,
+    parent INTEGER REFERENCES pane_nodes ON DELETE CASCADE,
+    place INTEGER NOT NULL,
+    share REAL NOT NULL,                 -- of its parent; 1 for the root
+    across INTEGER,                      -- a branch: 1 side by side, 0 one above the other
+    pane INTEGER REFERENCES panes ON DELETE CASCADE,   -- a leaf: its pane
+    focused INTEGER NOT NULL DEFAULT 0,
+    CHECK ((across IS NULL) <> (pane IS NULL))
+);
+-- panes: the ledger's rows, what `tabs` held until now (kind, agent, title, url, cwd, command,
+-- opened, shown, closed); `visits` and `screens` name a pane
 ```
 
 - A node is a branch (`across` set, no pane) or a leaf (a pane, no `across`). A tab's root is its
@@ -102,7 +126,7 @@ panes      -- the ledger's rows: what `tabs` held until now (kind, agent, title,
 Entity::Window { id }        // kept: outlives the run
 Entity::Workspace { id }     // kept
 Entity::Tab { id }           // kept: its tree
-Entity::Pane { key }         // live: a pane of this run (what `Tab { key }` named until now)
+Entity::Pane { owner, key }  // live: a pane of this run (what `Tab { key }` named until now)
 ```
 
 Consumers read the owner for what changed:
@@ -119,6 +143,23 @@ row shows a tab, a drag between rows moves it, ⇧⌘\ or a tab dragged onto the
 The operation's notice brings the new layout back. While a drag is under way the window moves its
 own views (the line under the pointer, the dragged row, a window following the pointer); only the
 drop is an operation.
+
+The sidebar edge and split divider own one primary pointer while held. Updates are coalesced
+to one per animation frame; release uses its own final coordinates. Escape, pointer cancellation,
+lost capture or a lost window focus cancels cleanly and restores the starting size. Focus a
+separator and use Left/Right to resize (Shift moves farther); Home restores the default width
+or equal halves.
+
+Only the final divider size is written, on the desk's writer queue. Its left share is kept in
+the existing pane tree, then restored when the project or app opens again. A pending local size
+is kept until the matching projection acknowledges it: an older snapshot cannot make the
+divider jump back. Each half keeps at least a tenth of the space and, where there is room,
+190 points.
+
+Title-only sidebar updates patch existing nodes without measuring or animating their positions.
+FLIP is reserved for a structural change. The board coalesces snapshots, ignores clock-only
+redraws and defers replacement while a card is dragged or IME composition is active. The latest
+snapshot is drawn once the gesture finishes, keeping drafts and focus.
 
 ## The window in use
 
@@ -164,6 +205,7 @@ app gives the window it was carried out into.
 
 ## Agents
 
-The `window` tool keeps its calls. A pane's key names it in every window; `tabs` lists each pane
-with its window, its tab and its place in the tab's tree, so an agent sees a split as it is. `show`
+The `window` tool keeps its calls. A pane's key names it in every window; `list` prints one line
+for each pane the agent owns: its key, its kind in parentheses, `[shown]` when it is shown, then its
+title and detail (`w1 (browser) [shown]: Title detail`); it says nothing of windows or tabs. `show`
 of a pane shows its tab in its window and focuses it.

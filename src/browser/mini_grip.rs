@@ -1,9 +1,9 @@
-//! The mini's grip (macOS): a native view over its page that takes the
-//! person's press itself, as openclaw's and DmNote's frameless windows do. A press that moves is
-//! handed, with the press itself, to AppKit's own window drag (smooth, snapping, ended by the
-//! release wherever it happens); one that does not is a click, and expands the window. The page
-//! never sees either: an image there dragged itself out as a file, and a release outside it was
-//! missed. Only the page's expand button, in the corner, is left to the page.
+//! The mini's grip (macOS): a native view over its page that takes the person's press itself, as
+//! a frameless window of an app's own does. A press that moves is handed, with the press itself,
+//! to AppKit's own window drag (smooth, snapping, ended by the release wherever it happens); one
+//! that does not is a click, and expands the window. The page never sees either: an image there
+//! dragged itself out as a file, and a release outside it was missed. Only the page's expand
+//! button, in the corner, is left to the page.
 
 use std::sync::{Mutex, OnceLock};
 
@@ -11,7 +11,6 @@ use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, Sel};
 use objc2::{class, msg_send, sel};
 use tao::event_loop::EventLoopProxy;
-use tao::platform::macos::WindowExtMacOS;
 use tao::window::Window;
 
 use super::capture::{CGPoint, CGRect};
@@ -187,8 +186,7 @@ fn grip_class() -> Option<&'static AnyClass> {
 pub(super) fn grip(window: &Window, proxy: &EventLoopProxy<Cmd>) {
     *crate::lock(PROXY.get_or_init(|| Mutex::new(None))) = Some(proxy.clone());
     let Some(class) = grip_class() else { return };
-    // SAFETY: tao's NSWindow is alive for as long as its `Window` is, which is borrowed here.
-    let native = unsafe { &*window.ns_window().cast::<AnyObject>() };
+    let native = super::appkit::native(window);
     // SAFETY: a window answers its content view.
     let content: *mut AnyObject = unsafe { msg_send![native, contentView] };
     // SAFETY: nil is checked; the view lives as long as the window.

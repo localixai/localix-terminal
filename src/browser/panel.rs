@@ -7,12 +7,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use tao::event_loop::EventLoopProxy;
-use wry::{NewWindowResponse, PageLoadEvent, WebView, WebViewBuilder};
+use wry::{PageLoadEvent, WebView, WebViewBuilder};
 
 use super::choice::Entry;
 use super::frame::{self, Look};
 use super::host::Cmd;
-use super::tab_view::build;
+use super::tab_view::{build, own_page};
 
 /// What a sender does with a command: false once the loop is gone. Shared, as a painter is
 /// (the loop's proxy is).
@@ -74,8 +74,8 @@ pub(super) type Typed = Arc<dyn Fn(&str) + Send + Sync>;
 /// What a page's size is taken by: the pane's change, and its columns and rows.
 pub type Fitted = Arc<dyn Fn(Pane, u16, u16) + Send + Sync>;
 
-/// A panel's unrun frames are kept to this size; past it the oldest go (the page asks for the
-/// screen again when it loads, and a terminal sends it whole when it falls behind).
+/// A panel's unrun frames are kept to this size; past it the oldest go, and the caller is told
+/// (`Panel::dropped`) so it paints the screen whole again, as a terminal does.
 const PENDING_MAX: usize = 8 << 20;
 
 /// What a panel and the loop share: the frames not yet run, whether a paint is queued, whether the
@@ -86,6 +86,8 @@ pub(super) struct Slot {
     typed: Mutex<Option<Typed>>,
     sized: Mutex<Option<Fitted>>,
     queued: AtomicBool,
+    /// Frames were dropped (`PENDING_MAX`) since the caller last asked.
+    dropped: AtomicBool,
     pub(super) alive: AtomicBool,
     /// Out of sight: its page still runs what it is sent, only less often (`HIDDEN_EVERY`).
     hidden: AtomicBool,
@@ -143,6 +145,7 @@ impl Panel {
             let mut frames = crate::lock(&self.slot.frames);
             if frames.len() + frame.len() > PENDING_MAX {
                 frames.clear();
+                self.slot.dropped.store(true, Ordering::SeqCst);
             }
             frames.push_str(frame);
             frames.push(';');
@@ -152,7 +155,7 @@ impl Panel {
         }
         if self.slot.hidden.load(Ordering::SeqCst) {
             // Out of sight: what comes meanwhile runs with it, a while later (or as it shows).
-            let (send, id) = (Arc::clone(&self.send), self.id);
+            let (send, id, slot) = (Arc::clone(&self.send), self.id, Arc::clone(&self.slot));
             let later = std::thread::Builder::new()
                 .name("desk-paint-later".into())
                 .spawn(move || {
@@ -162,7 +165,10 @@ impl Panel {
                                   a few times a second"
                     )]
                     std::thread::sleep(HIDDEN_EVERY);
-                    send(Cmd::Paint(id));
+                    // The loop gone, nothing is left to paint for: the caller is told.
+                    if !send(Cmd::Paint(id)) {
+                        slot.alive.store(false, Ordering::SeqCst);
+                    }
                 });
             if later.is_ok() {
                 return self.slot.alive.load(Ordering::SeqCst);
@@ -172,6 +178,11 @@ impl Panel {
             self.slot.alive.store(false, Ordering::SeqCst);
         }
         self.slot.alive.load(Ordering::SeqCst)
+    }
+
+    /// Whether frames were dropped since this was last asked: the page is behind what was painted.
+    pub fn dropped(&self) -> bool {
+        self.slot.dropped.swap(false, Ordering::SeqCst)
     }
 
     /// Whether its tab is still the window's.
@@ -226,12 +237,11 @@ pub(super) fn open(
     look: Look,
     proxy: EventLoopProxy<Cmd>,
 ) -> Result<Open, String> {
-    let first = AtomicBool::new(true);
     let titles = proxy.clone();
     let keys = Arc::clone(&slot);
     let menus = proxy.clone();
     let opens = proxy.clone();
-    let webview = WebViewBuilder::new()
+    let webview = own_page(WebViewBuilder::new())
         // The first click in a window that is not the key one reaches the page: the person
         // never clicks twice, once to wake the window and once to do what they meant.
         .with_accept_first_mouse(true)
@@ -240,14 +250,6 @@ pub(super) fn open(
         .with_initialization_script(super::settings::look_script(&super::settings::now()))
         // Over glass, the page is clear: the window's material and coat are its ground.
         .with_transparent(look == Look::Glass)
-        .with_incognito(true)
-        .with_focused(false)
-        // It draws while the person works elsewhere: its app is never the active one.
-        .with_background_throttling(wry::BackgroundThrottlingPolicy::Disabled)
-        // Its own page only: whatever the page is told, it goes nowhere else.
-        .with_navigation_handler(move |_| first.swap(false, Ordering::SeqCst))
-        .with_new_window_req_handler(|_, _| NewWindowResponse::Deny)
-        .with_download_started_handler(|_, _| false)
         // Its own page is the only one it shows: what it posts is the person's. The keyboard is
         // copied out first: it writes to a terminal, never under the lock.
         .with_ipc_handler(move |posted| match said(posted.body()) {

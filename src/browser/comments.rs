@@ -86,11 +86,16 @@ pub(super) fn pictured(
     }
 }
 
-/// `shot` in a file of its own under the system's temporary directory, where an agent can read it;
-/// the newest few are kept, as screenshots are.
+/// Where the pictures of comments are kept: in the desk's home, which is the person's alone (a
+/// shared temporary directory would let another user read, or plant, what the person pointed at).
+fn directory() -> PathBuf {
+    crate::paths::home().join("comments")
+}
+
+/// `shot` in a file of its own in [`directory`], where an agent of the person's can read it; the
+/// newest few are kept, as screenshots are.
 fn saved(shot: &Shot) -> Option<PathBuf> {
-    let dir = std::env::temp_dir().join("desk-comments");
-    crate::shots::save(&dir, &shot.jpeg).ok()
+    crate::shots::save(&directory(), &shot.jpeg).ok()
 }
 
 #[cfg(test)]

@@ -2,10 +2,70 @@
 
 ## Unreleased
 
+### Changed
+
+- Sidebar and split-divider resizing use one captured pointer and demand-driven animation frames,
+  with Escape/cancellation cleanup and keyboard resizing. Title-only tab updates preserve their
+  DOM nodes without remeasuring the list; FLIP is reserved for actual row changes.
+- Board snapshots coalesce to one paint per frame and clock-only frames no longer rebuild cards.
+  Card drags and IME composition defer replacement until safe; draft text, focus and scrolling stay.
+  Terminal fitting coalesces resize and font changes, with a fallback for concealed windows.
+- Split the large Rust modules along their responsibilities: board data and allocation, tool
+  calls and events, pane restoration and layout projection, native UI commands and view construction,
+  tab transfer and sizing, page reads and controls, terminal waits and SQLite migrations. Public
+  entry points and the stored schema are unchanged. Removed redundant dispatch wrappers and an
+  unreachable board interaction branch; connection shutdown now releases the pending-call lock
+  before notifying its waiters.
+- Normal tests now enforce documented, named Rust modules under 300 working lines in `src/`,
+  domain-model independence from adapters, and unchanged existing SQL migrations.
+
+### Fixed
+
+- Interactive terminals no longer inherit `NO_COLOR`, `FORCE_COLOR` or `CLICOLOR_FORCE` from
+  automation clients. They advertise their own terminal identity, 256-color/truecolor support
+  and `CLICOLOR=1`, including for macOS tools such as `ls`. Shell profiles and explicit per-command
+  color preferences still take precedence. Color output and screen replay are tested in the real
+  xterm panel for ANSI, 256-color and RGB modes.
+- Split View updates its paired sidebar row even when no other tab data changed, and saves the
+  divider's final proportions in the pane tree. Restored layouts cannot undo a newer local drag
+  while its write is being projected back.
+- Viewport types and the view-layout facade are available on Linux as well as macOS; an
+  accidental macOS-only module gate and missing GTK layout stubs prevented the Linux browser
+  from compiling. GTK retains ownership of its child layout.
+- Malformed UI geometry messages with a fifth non-numeric argument are refused, rather than
+  silently accepted as four coordinates.
+- An exhausted board card counter refuses new cards without changing the board, rather than
+  reusing its last id. Tab ids must contain decimal digits, not a signed number.
+- Invalid JSON-RPC ids (objects, arrays and booleans) are rejected as invalid requests, rather
+  than being treated as notifications.
+- Claude Code's long-turn notification and its removal explicitly name the session's project,
+  like the plugin's other window calls. A mocked-host regression test covers both calls and
+  ensures aborted and short turns send no notification.
+
+### Also in this release
+
 - **A full app.** The window is an ordinary window of the app, not a panel: a click makes LLX Desk
-  the app in front, with its menu, and the green button takes it to full screen. A window an agent
+  the app in front, with its menu, and the green button zooms it on the current desktop. A window an agent
   opens still comes to the front without taking the keys. `llx-desk open` has the system open the
   app and is done, so closing the terminal it ran in leaves the app running.
+- **Apple Silicon only on macOS.** The app is built for Apple Silicon; there is no Intel or
+  universal build.
+- **A signed, notarized disk image.** A release carries `LLX-Desk-macos.dmg` (the app and a link
+  to Applications) beside the zip `install.sh` fetches, both made by `scripts/dmg.sh`, signed with
+  a Developer ID and notarized by Apple, so Gatekeeper opens them on any Mac. A macOS job in CI
+  builds the app and smoke-tests it on every push, and the release builds it on a Mac runner.
+- **Programs in a terminal can ask for the camera, the microphone and the rest.** macOS counts a
+  program run in a terminal as part of LLX Desk: the app now carries what the system asks the
+  person for each (microphone, camera, location, Bluetooth, contacts, calendars, reminders,
+  photos, other apps, the Desktop, Documents and Downloads folders, volumes, administrator
+  rights), and is signed with the matching entitlements, so the system asks instead of refusing.
+- **A Homebrew cask.** `packaging/homebrew/llx-desk.rb` is the cask for a tap, filled in with a
+  release's version and checksum.
+- The terminal's cursor is in the text's colour again (an outline in a pane not in use), and the
+  terminal draws no overview ruler beside its scrollbar.
+- A tab the person opened and then closes is no news to an agent; one an agent opened still is.
+- **Quieter at rest.** The window refreshes less often, a page's title is written to the store
+  off the interface's thread, and a terminal out of sight paints less often.
 - **A tab out into a window of its own.** Drag a tab past the edge of its window and a window opens
   with it at once, following the pointer; the page or terminal moves as it is, nothing reloads.
   Over another window's list of tabs it turns clear and the list opens a slot: let go there and the
@@ -17,9 +77,9 @@
   gathered into the first.
 - **Split View.** Two of a project's tabs side by side, any kind in either half: ⇧⌘\, any tab's
   menu (Open in Split View / Close Split View), or a tab dragged from the side onto the pages
-  (the window splits as it moves). The side lists the two as one row, the half in use lit.
-  Another tab picked shows it whole, the split kept: either of its tabs picked again (still one
-  row in the side), the window splits as it was; so too on coming back to the project, and after
+  (the window splits as it moves). A split is one tab of two panes: the side lists the two as a
+  pair, the half in use lit. Another tab picked shows it whole, the split kept: either of its tabs
+  picked again (still listed as a pair), the window splits as it was; so too on coming back to the project, and after
   the app restarts.
 - **Tabs drag.** A tab dragged along the side goes where it is let go of, the others sliding aside;
   ⌘1–⌘9 follow the order. The rail's button and tabs are one tile size, lit under the pointer.
@@ -87,12 +147,12 @@
   ⌘Q); the first call of an agent starts it through LaunchServices, in the background, and nothing
   an agent does takes your keys. Opened, it links `llx-desk` into `~/.local/bin` and brings the
   window to you, your login shell in it when it has no tab. The Dock icon brings the window back;
-  the close button collapses it to the mini; ⌘Q (or the Dock's Quit, or logging out) asks first
-  while terminals run a program. `install.sh` installs the app (macOS: `~/Applications`; Linux:
-  the program, the command and a desktop entry, `llx-desk open`).
+  the main window's close button quits as ⌘Q does (as does the Dock's Quit, or logging out),
+  asking first while terminals run a program. `install.sh` installs the app (macOS:
+  `~/Applications`; Linux: the program, the command and a desktop entry, `llx-desk open`).
 - **Settings → Integrations** and `llx-desk setup`: the command line, the Claude Code plugin
   (installed from the app's own bundle, of its version, and refreshed when the app updates), and
-  the window tool as an MCP server in Cursor and Codex, each with one click; any other MCP host
+  the window tool as an MCP server in Codex, with one click; any other MCP host
   takes the entry *Copy MCP Entry* gives (`llx-desk setup mcp`).
 - **The API describes itself**: `api/describe` gives every method with its params as JSON Schema,
   the events, and the window tool's description and schema, from one table the dispatch reads
@@ -250,6 +310,18 @@
 - The window's bar and side keep the window's own light or dark look over every tab: a dark page
   no longer paints them its colour. They follow the system's appearance, or the theme Settings
   name, when it changes.
+- **What an agent sees of a page is its own.** The outline of a page no longer lists the window's
+  other tabs (`- tabs: ... (this is wN)`), which were other projects' too: `list` names an agent's
+  tabs. A page is opened in the window as it is (the old `show` override of one call that closed a
+  window open the other way and opened it again is gone).
+- **`reopen` follows the project the person last went to**: a project an agent only called is not
+  marked as used; what the window shows is.
+- **Calls that name what they do not take are refused, with the reason, rather than dropped.** In a
+  `tabs` entry of `open`, a field no call has (a typo in `command`) is refused with nothing opened.
+  On the CLI, `--follow` and `--json` without `--said`, a JSON argument with `--end`, `--said` or
+  `--board`, `status` or `quit` with any argument, `llx-desk secret NAME` typed on a terminal, and
+  `--as` or `--project` followed by another option, exit with code 3 and say why. `--said --json`
+  still follows, as before.
 
 ## 0.1.5
 

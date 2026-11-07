@@ -4,6 +4,17 @@
 use super::*;
 use crate::store::Store;
 
+#[test]
+fn a_non_finite_resize_is_refused_without_changing_the_tree() {
+    let mut tree = Tree::Leaf { pane: 1 };
+    tree.split(1, 2, true, true);
+    let before = tree.clone();
+    for share in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert!(!tree.resize(&[], 1, share));
+        assert_eq!(tree, before);
+    }
+}
+
 fn shares(tree: &Tree) -> Vec<f64> {
     match tree {
         Tree::Leaf { .. } => vec![],
@@ -114,6 +125,13 @@ fn tabs_are_kept_in_their_places_with_their_trees() {
     assert_eq!(tabs[0].tree.panes(), [two, three]);
     assert_eq!(tabs[0].focused, Some(three));
     assert_eq!(tabs[1].focused, Some(one));
+    // Read together or one at a time, a tab is the same.
+    for tab in &tabs {
+        assert_eq!(
+            store.read(|db| super::tab(db, tab.id)).unwrap().as_ref(),
+            Some(tab)
+        );
+    }
     assert_eq!(store.read(|db| tab_of(db, three)).unwrap(), Some(second));
     let kept = store.read(|db| window(db, win)).unwrap().unwrap();
     assert_eq!(kept.shown, Some(space));
@@ -173,4 +191,50 @@ fn a_window_closed_closes_its_tabs() {
             .iter()
             .all(|open| open.id != win)
     );
+}
+
+#[test]
+fn a_tab_or_window_closed_a_day_ago_is_deleted_with_what_hangs_on_it() {
+    let store = store();
+    let (one, two) = (pane(&store), pane(&store));
+    let count = |table: &str| -> u64 {
+        store
+            .read(|db| {
+                db.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
+                .map_err(|why| why.to_string())
+            })
+            .unwrap()
+    };
+    let (window, tab) = store
+        .write(|tx| {
+            let window = open_window(tx, 0)?;
+            let workspace = workspace_of(tx, window, 1, 0)?;
+            let tab = open_tab(tx, workspace, &Tree::leaf(one), None, None, 0)?;
+            let kept = open_tab(tx, workspace, &Tree::leaf(two), None, None, 0)?;
+            close_tab(tx, tab, 10)?;
+            close_window(tx, window, 20)?;
+            Ok((window, kept))
+        })
+        .unwrap();
+    // Closed, but not yet a day.
+    assert_eq!(
+        (count("tabs"), count("windows"), count("workspaces")),
+        (2, 1, 1)
+    );
+    // The next one closed, a day and a bit after.
+    let later = 20 + CLOSED_KEPT + 1;
+    store
+        .write(|tx| {
+            let again = open_window(tx, later)?;
+            close_window(tx, again, later)
+        })
+        .unwrap();
+    assert_eq!(
+        (count("tabs"), count("windows"), count("workspaces")),
+        (0, 1, 0)
+    );
+    assert_eq!(store.read(|db| super::window(db, window)).unwrap(), None);
+    assert_eq!(store.read(|db| super::tab(db, tab)).unwrap(), None);
 }

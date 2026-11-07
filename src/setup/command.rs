@@ -33,8 +33,15 @@ pub(super) fn put_on_path(exe: &Path, home: &Path) -> Result<String, String> {
     let at = link_path(home);
     let linked = link(exe, &at)?;
     let bin = at.parent().unwrap_or(home);
-    if login_path().is_some_and(|path| on_path(&path, bin)) {
-        return Ok(linked);
+    match login_path() {
+        Some(path) if on_path(&path, bin) => return Ok(linked),
+        Some(_) => {}
+        // A profile is not edited for a PATH that could not be read: it may have the directory.
+        None => {
+            return Ok(format!(
+                "{linked}; could not read the PATH of your login shell: profile left alone"
+            ));
+        }
     }
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
     let profile = profile_of(&shell, home);
@@ -47,10 +54,12 @@ pub(super) fn put_on_path(exe: &Path, home: &Path) -> Result<String, String> {
     }
 }
 
-/// The link taken away, when it is this program's.
+/// The link taken away, when it leads to this program (as `state` finds it: through any chain
+/// of links). A file that is no link is never removed.
 pub(super) fn take_off_path(exe: &Path, home: &Path) -> Result<String, String> {
     let at = link_path(home);
-    if std::fs::read_link(&at).is_ok_and(|to| to == exe) {
+    let is_link = std::fs::symlink_metadata(&at).is_ok_and(|meta| meta.file_type().is_symlink());
+    if is_link && std::fs::canonicalize(&at).is_ok_and(|to| to == exe) {
         std::fs::remove_file(&at).map_err(|why| format!("{}: {why}", at.display()))?;
         return Ok(format!("{} is gone", at.display()));
     }
@@ -58,19 +67,23 @@ pub(super) fn take_off_path(exe: &Path, home: &Path) -> Result<String, String> {
 }
 
 /// `link` made a link to `exe`: made, kept when it is one already, or put in place of another
-/// llx-desk (an older app's link, or a copy of the program). Anything else there is left alone.
+/// llx-desk (an older app's link, a dangling one, or a copy of the program). Anything else there
+/// is left alone.
 pub(super) fn link(exe: &Path, link: &Path) -> Result<String, String> {
     let shown = link.display();
     if let Some(dir) = link.parent() {
         std::fs::create_dir_all(dir).map_err(|why| format!("{}: {why}", dir.display()))?;
     }
     match std::fs::symlink_metadata(link) {
-        Ok(meta) if meta.file_type().is_symlink() => {
-            if std::fs::read_link(link).is_ok_and(|to| to == exe) {
-                return Ok(format!("{shown} is linked already"));
-            }
+        Ok(meta)
+            if meta.file_type().is_symlink()
+                && std::fs::read_link(link).is_ok_and(|to| to == exe) =>
+        {
+            return Ok(format!("{shown} is linked already"));
         }
-        Ok(_) if !is_llx_desk(link) => {
+        // A link that leads nowhere is replaced; one that leads to a program is, when it is an
+        // llx-desk.
+        Ok(_) if link.exists() && !is_llx_desk(link) => {
             return Err(format!("{shown} is another program: left as it is"));
         }
         Ok(_) => {}
@@ -78,26 +91,71 @@ pub(super) fn link(exe: &Path, link: &Path) -> Result<String, String> {
         Err(why) => return Err(format!("{shown}: {why}")),
     }
     // A new link moved over the old: there is always an `llx-desk` there.
-    let new = link.with_extension("new");
+    let new = link.with_extension(format!("new{}", std::process::id()));
     let _ = std::fs::remove_file(&new);
     std::os::unix::fs::symlink(exe, &new).map_err(|why| format!("{}: {why}", new.display()))?;
     std::fs::rename(&new, link).map_err(|why| format!("{shown}: {why}"))?;
     Ok(format!("{shown} links to {}", exe.display()))
 }
 
+/// Where the desktop entry goes (Linux).
+#[cfg(target_os = "linux")]
+fn desktop_file(home: &Path) -> PathBuf {
+    home.join(".local/share/applications/llx-desk.desktop")
+}
+
+/// The line of the desktop entry that runs `exe`.
+#[cfg(target_os = "linux")]
+fn desktop_exec(exe: &Path) -> String {
+    format!("Exec=\"{}\" open", exe.display())
+}
+
+/// The app among the person's applications (Linux): a desktop entry that opens the window.
+#[cfg(target_os = "linux")]
+pub(super) fn desktop_entry(exe: &Path, home: &Path) -> Result<String, String> {
+    let file = desktop_file(home);
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir).map_err(|why| format!("{}: {why}", dir.display()))?;
+    }
+    let entry = format!(
+        "[Desktop Entry]\nType=Application\nName=LLX Desk\nComment=Pages and terminals agents work in, and you watch\n{}\nTerminal=false\nCategories=Development;\n",
+        desktop_exec(exe)
+    );
+    std::fs::write(&file, entry).map_err(|why| format!("{}: {why}", file.display()))?;
+    Ok(format!("{} opens the app", file.display()))
+}
+
+/// The desktop entry taken away, when it runs this program (Linux).
+#[cfg(target_os = "linux")]
+pub(super) fn take_off_entry(exe: &Path, home: &Path) -> Result<String, String> {
+    let file = desktop_file(home);
+    let ours = std::fs::read_to_string(&file).is_ok_and(|text| text.contains(&desktop_exec(exe)));
+    if !ours {
+        return Ok(format!("{} was not this app's", file.display()));
+    }
+    std::fs::remove_file(&file).map_err(|why| format!("{}: {why}", file.display()))?;
+    Ok(format!("{} is gone", file.display()))
+}
+
 /// Whether the program at `file` is an llx-desk, by what its `--version` says.
 fn is_llx_desk(file: &Path) -> bool {
     let mut asked = std::process::Command::new(file);
     asked.arg("--version");
-    within(asked, Duration::from_secs(5)).is_some_and(|ran| ran.out.starts_with("llx-desk "))
+    within(asked, Duration::from_secs(5)).is_ok_and(|ran| ran.out.starts_with("llx-desk "))
 }
 
-/// The profile a login shell of `shell` reads: zsh's `.zprofile`, bash's `.bash_profile`, else
-/// `.profile`.
+/// The profile a login shell of `shell` reads: zsh's `.zprofile`; bash's first of `.bash_profile`,
+/// `.bash_login` and `.profile` that is there (a new `.bash_profile` would hide `.profile`, which
+/// bash then no longer reads), `.bash_profile` when none is; else `.profile`.
 pub(super) fn profile_of(shell: &str, home: &Path) -> PathBuf {
     let name = match shell.rsplit('/').next() {
         Some("zsh") => ".zprofile",
-        Some("bash") => ".bash_profile",
+        Some("bash") => {
+            let there = [".bash_profile", ".bash_login", ".profile"]
+                .into_iter()
+                .find(|name| home.join(name).exists());
+            there.unwrap_or(".bash_profile")
+        }
         _ => ".profile",
     };
     home.join(name)

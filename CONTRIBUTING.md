@@ -6,16 +6,26 @@ Issues and pull requests are welcome. Keep a change small and focused.
 cargo build
 cargo clippy --all-targets -- -D warnings
 cargo test                                   # unit tests, and the CLI against a server with no window
+bun test plugins/claude-code/hooks/register.test.ts  # plugin hooks with a mocked host; Bun 1.3+
+bun test src/browser                               # UI gestures, frame cadence and motion lifecycle
 LLX_DESK_DISPLAY_TESTS=1 cargo test --test browser   # real windows: needs a display, and shows some
 ```
 
 - `cargo test` builds a test build (the `test-server` feature, turned on only by the crate's own
   dev-dependency): its server never opens a window and keeps its lock and socket in `LLX_DESK_TEST_DIR`,
   so tests never reach your own server. Do not run a test build's binary by hand without that variable.
-- Read [ARCHITECTURE.md](ARCHITECTURE.md) first; its rules are checked by the lints.
+- Read [ARCHITECTURE.md](ARCHITECTURE.md) first; its rules are checked by the lints and
+  `tests/architecture.rs` in the normal `cargo test` run.
+- Display tests also check split proportions, sidebar row identity and IME input in the real
+  WebView. Resize tests use a deterministic frame clock and do not need a display.
 - Write the test first: a bug gets a test that fails for the right reason, a feature one written from
   what a person or an agent sees.
-- Every file opens with a `//!` line and stays under 300 lines of working code.
+- Every Rust source file under `src/`, including unit tests, opens with a `//!` line and stays
+  under 300 nonblank, non-comment lines. Split by responsibility, not by line count; keep a
+  module's data, its pure rules and its adapters separate. `cargo test --test architecture`
+  checks the limit, headers and domain-to-adapter boundaries.
+- SQL migrations in `src/store/schema.rs` are append-only. A regression test fingerprints the
+  existing steps: append a new step instead of changing an existing step or its fingerprint.
 - Update `README.md` and `CHANGELOG.md` (under `## Unreleased`) with any change of behaviour.
 - English only, in code, comments and docs.
 
@@ -28,11 +38,13 @@ LLX_DESK_DISPLAY_TESTS=1 cargo test --test browser   # real windows: needs a dis
 3. Commit, then `git tag v0.2.0 && git push origin main v0.2.0`. The Release workflow first checks that
    the tag is on main and that CI passed for it. Then it builds Linux on the project's server and the
    Mac app on GitHub's Mac runner, signed and notarized with the project's Developer ID: one disk image
-   (`LLX-Desk-macos.dmg`) and one zip (`LLX-Desk-macos.zip`, which `install.sh` fetches), each for both
-   Macs. It publishes them with the Linux archive and `SHA256SUMS`.
+   (`LLX-Desk-macos.dmg`) and one zip (`LLX-Desk-macos.zip`, which `install.sh` fetches), for Apple
+   Silicon only. It publishes them with the Linux archive and `SHA256SUMS`.
 
 `scripts/dmg.sh [--universal] [--notarize]` makes the same Mac files here (ad hoc signed unless you
 have a Developer ID identity; `--notarize` needs `LLX_NOTARY_PROFILE`, see the script's header).
+`--universal` is optional: it joins an Apple Silicon and an Intel program, but releases are Apple
+Silicon only and do not use it.
 Running Release by hand from the Actions tab is a dry run: it builds, signs and notarizes the same
 files and publishes nothing; they stay on the run as artifacts. The Apple secrets live in the
 `release` environment of the repository, and only the macos job uses them.

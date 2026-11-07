@@ -32,6 +32,42 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>MIT License</string>
+	<string>© 2026 rsaryev. MIT License.</string>
+	<!-- What macOS says when a page in a tab asks for these: without them it would refuse, or end
+	     the app. -->
+	<key>NSCameraUsageDescription</key>
+	<string>A page or a program running in LLX Desk asks to use the camera.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>A page or a program running in LLX Desk asks to use the microphone.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>A program running in LLX Desk asks for your location.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>A program running in LLX Desk asks to use Bluetooth.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>A program running in LLX Desk asks to use your calendars.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>A program running in LLX Desk asks to use your reminders.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>A program running in LLX Desk asks to use your contacts.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>A program running in LLX Desk asks to use your photo library.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>A program running in LLX Desk asks to use speech recognition.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>A program running in LLX Desk asks to control another app.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>A program running in LLX Desk asks to use files on your Desktop.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>A program running in LLX Desk asks to use files in Documents.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>A program running in LLX Desk asks to use files in Downloads.</string>
+	<key>NSNetworkVolumesUsageDescription</key>
+	<string>A program running in LLX Desk asks to use files on a network volume.</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>A program running in LLX Desk asks to use files on a removable volume.</string>
+	<key>NSSystemAdministrationUsageDescription</key>
+	<string>A program running in LLX Desk asks for administrator rights.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>A page or a program running in LLX Desk asks for your location.</string>
 </dict>
 </plist>

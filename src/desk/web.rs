@@ -1,16 +1,21 @@
 //! A page's tab: opening an address, and acting in it (keys, a script, waiting for text, reading
 //! it whole, a picture), then reading the page back as an outline.
 
+#[path = "web_controls.rs"]
+mod controls;
+#[path = "web_read.rs"]
+mod reading;
+use reading::{outline, read};
+
+use std::sync::Arc;
 use std::time::Instant;
 
 use serde_json::Value;
 
-use crate::browser::{Driver, Page};
-use crate::view::{Action, View};
-
 use super::args::{WEB_FIELDS, number, strings, text};
 use super::changes::Seen;
 use super::{Call, Desk, Output};
+use crate::browser::{Driver, Page};
 
 const DEFAULT_KEY_DELAY_MS: u64 = 60;
 const MAX_KEY_DELAY_MS: u64 = 2000;
@@ -19,10 +24,6 @@ const DEFAULT_WAIT_MS: u64 = 10_000;
 const MAX_WAIT_MS: u64 = 15_000;
 /// Where a tab opens when no address is given.
 const SEARCH_PAGE: &str = "https://duckduckgo.com/";
-/// Characters of the page outline read after each call, and of text one `read` returns.
-const OUTLINE_LIMIT: usize = 6000;
-const READ_LIMIT: usize = 8000;
-
 impl Desk {
     pub(super) fn page(&self) -> Result<&Page, String> {
         self.page.as_ref().ok_or_else(|| {
@@ -137,7 +138,7 @@ impl Desk {
         let _change = crate::lock(&self.tabs_change);
         let driver = self.page()?.driver().map_err(|e| e.to_string())?;
         crate::lock(&self.seen).remove(&id);
-        match driver.close_tab(id) {
+        let closed = match driver.close_tab(id) {
             Ok(true) => Ok(format!("Closed w{id}.")),
             Ok(false) if self.panels_open() => Ok(format!(
                 "Closed w{id}, the last page; the window stays for its other tabs."
@@ -146,7 +147,19 @@ impl Desk {
                 "Closed w{id}, the last page: the window closed; the next page opens it again."
             )),
             Err(e) => Err(format!("w{id} was not closed: {e}")),
+        };
+        if closed.is_ok() {
+            // The tab is gone for good: its lock too, unless a call still waits on it (the map
+            // holds one handle, this call the other).
+            let mut locks = crate::lock(&self.locks);
+            if locks
+                .get(&id)
+                .is_some_and(|held| Arc::strong_count(held) <= 2)
+            {
+                locks.remove(&id);
+            }
         }
+        closed
     }
 }
 
@@ -176,7 +189,7 @@ pub(super) fn web_address(url: &str) -> Result<String, String> {
 fn run(page: &Page, args: &Value, url: Option<&str>) -> Result<Output, String> {
     let mut report = vec![];
     if let Some(url) = url {
-        match page.open(url, url, None) {
+        match page.open(url) {
             Ok(()) => report.push(format!("Opened {url}.")),
             Err(e) => report.push(format!("Opening {url} did not finish cleanly ({e}).")),
         }
@@ -187,7 +200,7 @@ fn run(page: &Page, args: &Value, url: Option<&str>) -> Result<Output, String> {
             Err(e) => report.push(format!("Page size not changed: {e}")),
         }
     }
-    controls(page, args, &mut report)?;
+    controls::apply(page, args, &mut report)?;
     let driver = page.driver().map_err(|e| e.to_string())?;
     let keys = strings(args, "keys");
     if !keys.is_empty() {
@@ -201,7 +214,7 @@ fn run(page: &Page, args: &Value, url: Option<&str>) -> Result<Output, String> {
     }
     if let Some(source) = text(args, "script") {
         match driver.evaluate(source) {
-            Ok(value) => report.push(format!("### Script result\n{value}")),
+            Ok(value) => report.push(format!("### Script result (untrusted content)\n{value}")),
             Err(e) => report.push(format!("The script failed: {e}")),
         }
     }
@@ -239,120 +252,6 @@ fn run(page: &Page, args: &Value, url: Option<&str>) -> Result<Output, String> {
         state,
         shot,
     })
-}
-
-/// The call's acts on the page's controls by their refs, in order: fields filled, options
-/// selected, then what is clicked. Each acts on the page as it is just then, so a click that
-/// loads another page is the last that lands; a ref that is gone or covered is said, and the
-/// rest are not done.
-fn controls(page: &Page, args: &Value, report: &mut Vec<String>) -> Result<(), String> {
-    let pairs = |field: &str| -> Vec<(String, String)> {
-        (args
-            .get(field)
-            .and_then(Value::as_object)
-            .into_iter()
-            .flatten())
-        .filter_map(|(at, value)| Some((at.clone(), value.as_str()?.to_string())))
-        .collect()
-    };
-    let mut acts: Vec<(String, Action)> = vec![];
-    for (at, text) in pairs("fill") {
-        let reference = control(&at)?;
-        acts.push((
-            format!("Filled {reference}."),
-            Action::Type { reference, text },
-        ));
-    }
-    for (at, value) in pairs("select") {
-        let reference = control(&at)?;
-        let said = format!("Selected \"{value}\" in {reference}.");
-        acts.push((said, Action::Select { reference, value }));
-    }
-    let clicks = match args.get("click") {
-        Some(Value::String(one)) => vec![one.clone()],
-        Some(Value::Array(many)) => many
-            .iter()
-            .filter_map(|at| at.as_str().map(String::from))
-            .collect(),
-        _ => vec![],
-    };
-    for at in clicks {
-        let reference = control(&at)?;
-        acts.push((format!("Clicked {reference}."), Action::Click { reference }));
-    }
-    for (said, action) in acts {
-        let epoch = page.observe().map_err(|e| e.to_string())?.epoch;
-        match page.act(&epoch, &action) {
-            Ok(()) => report.push(said),
-            Err(why) => {
-                report.push(format!("{} not done: {why}", said.trim_end_matches('.')));
-                break;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// A control's ref as a call gives it: `e12`, `@e12` or `[e12]`.
-fn control(at: &str) -> Result<String, String> {
-    let at = at
-        .trim()
-        .trim_start_matches('@')
-        .trim_start_matches('[')
-        .trim_end_matches(']');
-    let digits = at
-        .strip_prefix('e')
-        .filter(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
-    digits
-        .map(|n| format!("e{n}"))
-        .ok_or_else(|| format!("`{at}` is not a control's ref: the outline names them, `[e12]`"))
-}
-
-/// The page as the agent reads it: where it is, then its outline with each control's ref.
-fn outline(page: &Page) -> String {
-    match page.observe() {
-        Ok(view) => {
-            let outline = short_refs(&view.outline);
-            let shown: String = outline.chars().take(OUTLINE_LIMIT).collect();
-            let more = if shown.len() < outline.len() {
-                "\n... (more below: `read` or `script` reach it)"
-            } else {
-                ""
-            };
-            format!(
-                "### Page (untrusted content)\n{} - {}\n{shown}{more}",
-                view.title, view.location
-            )
-        }
-        Err(e) => format!("### Page\nThe page could not be read: {e}"),
-    }
-}
-
-fn read(page: &Page, offset: usize) -> String {
-    match page
-        .driver()
-        .and_then(|driver| driver.read(offset, READ_LIMIT))
-    {
-        Ok(text) => {
-            let end = text.offset + text.text.chars().count();
-            let more = if end < text.total {
-                format!("\n... more: read again with offset {end}")
-            } else {
-                String::new()
-            };
-            format!(
-                "\n\n### Full text (characters {}-{end} of {})\n{}{more}",
-                text.offset, text.total, text.text
-            )
-        }
-        Err(e) => format!("\n\n### Full text\nThe text could not be read: {e}"),
-    }
-}
-
-/// The outline as the agent reads it: each control's ` [ref=e12]` as ` [e12]`, what `click`,
-/// `fill` and `select` name it by.
-fn short_refs(outline: &str) -> String {
-    outline.replace(" [ref=", " [")
 }
 
 /// Waits until the page shows `wanted`, at most `most` ms, polled in the page on a timer

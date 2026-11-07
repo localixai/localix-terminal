@@ -1,12 +1,8 @@
 //! The browser window and the page it shows, as a `View`: the window opens on the first address
 //! it is sent to, and later addresses load in it. The browser's own toolbar (Back, Reload) is part
-//! of the view, acted on by its refs like any control; with several tabs open, it also says which
-//! tab the view is.
+//! of the view, acted on by its refs like any control.
 
-use std::fmt::Write as _;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
 
 use crate::view::{Action, Observation, View, ViewError, ViewResult};
 
@@ -23,25 +19,21 @@ pub struct Page {
     held: Mutex<Held>,
     /// Rung when an opening ends, for the calls that wait to open the window.
     opened: Condvar,
-    /// Where the notices stood at the last action: an observation tells what came since.
-    acted: AtomicU64,
 }
 
 /// The window as a page holds it.
 struct Held {
     driver: Option<WebviewDriver>,
-    /// Whether the open window is hidden; it is opened again when a call wants the other.
-    hidden: bool,
     /// A call is opening the window: the others wait for it rather than open a second one.
     opening: bool,
 }
 
 /// What a call that wants the window found, once no other call was opening it.
 enum Claim {
-    /// The window, open as the call wants it.
+    /// The window, open.
     Open(WebviewDriver),
-    /// None open as wanted: this call opens it, the one open the other way closed first.
-    Make(Option<WebviewDriver>),
+    /// None open: this call opens it.
+    Make,
 }
 
 impl Page {
@@ -51,23 +43,19 @@ impl Page {
             headless,
             held: Mutex::new(Held {
                 driver: None,
-                hidden: headless,
                 opening: false,
             }),
             opened: Condvar::new(),
-            acted: AtomicU64::new(0),
         }
     }
 
     /// Load `url`, opening the window on it the first time (and again after the person closed
-    /// it); `title` names the window. `show` overrides the run's default for this call: a window
-    /// open the other way is closed and opened again, on `url`.
-    pub fn open(&self, url: &str, title: &str, show: Option<bool>) -> ViewResult<()> {
-        let hidden = show.map_or(self.headless, |show| !show);
-        match self.claim(|now| now == hidden) {
+    /// it).
+    pub fn open(&self, url: &str) -> ViewResult<()> {
+        match self.claim() {
             Claim::Open(open) => open.navigate(url),
-            Claim::Make(stale) => {
-                let (driver, tab) = self.make(url, title, hidden, stale)?;
+            Claim::Make => {
+                let (driver, tab) = self.make(url)?;
                 // A slow page is used as it is: it says it is busy until it settles.
                 driver.on(tab).wait_new();
                 Ok(())
@@ -79,46 +67,36 @@ impl Page {
     /// pinned to the tab waits: `wait_new`): a new tab of the window open, else the window opened
     /// on it.
     pub fn start(&self, url: &str) -> ViewResult<u32> {
-        match self.claim(|_| true) {
+        match self.claim() {
             Claim::Open(open) => open.add_tab(url),
-            Claim::Make(stale) => self.make(url, url, self.headless, stale).map(|made| made.1),
+            Claim::Make => self.make(url).map(|made| made.1),
         }
     }
 
-    /// Once no call is opening the window: the window if it is open as `wanted` says of its
-    /// being hidden, else this call's claim to open it. The look and the claim are one step under
-    /// the lock, so two calls never open two windows; the opening itself is done with the
-    /// lock let go, while the calls that want the window wait on `opened`.
-    fn claim(&self, wanted: impl Fn(bool) -> bool) -> Claim {
+    /// Once no call is opening the window: the window if it is open, else this call's claim to
+    /// open it. The look and the claim are one step under the lock, so two calls never open two
+    /// windows; the opening itself is done with the lock let go, while the calls that want the
+    /// window wait on `opened`.
+    fn claim(&self) -> Claim {
         let held = self.held();
         let mut held = (self.opened)
             .wait_while(held, |held| held.opening)
             .unwrap_or_else(PoisonError::into_inner);
-        let open = held.driver.clone().filter(WebviewDriver::is_open);
-        match open {
-            Some(open) if wanted(held.hidden) => Claim::Open(open),
-            stale => {
+        match held.driver.clone().filter(WebviewDriver::is_open) {
+            Some(open) => Claim::Open(open),
+            None => {
                 held.opening = true;
-                Claim::Make(stale)
+                Claim::Make
             }
         }
     }
 
-    /// The window made for `url` by the call that claimed it (`stale` closed first): a tab of its
-    /// own in the window open for someone else (another client of the app, whose tabs stay as
-    /// they are), else the window opened on it. Its driver is held at once and the claim ends,
-    /// however this does; the tab's document is not waited for. The driver and the tab's id.
-    fn make(
-        &self,
-        url: &str,
-        title: &str,
-        hidden: bool,
-        stale: Option<WebviewDriver>,
-    ) -> ViewResult<(WebviewDriver, u32)> {
+    /// The window made for `url` by the call that claimed it: a tab of its own in the window open
+    /// for someone else (another client of the app, whose tabs stay as they are), else the window
+    /// opened on it. Its driver is held at once and the claim ends, however this does; the tab's
+    /// document is not waited for. The driver and the tab's id.
+    fn make(&self, url: &str) -> ViewResult<(WebviewDriver, u32)> {
         let _claim = Claimed(self);
-        if let Some(stale) = stale {
-            closed(&stale);
-        }
         let attach = |attached: WebviewDriver| {
             let tab = (attached.add_tab(url))
                 .map_err(|error| ViewError::Unavailable(error.to_string()))?;
@@ -128,11 +106,10 @@ impl Page {
         if let Some(attached) = self.browser.attach() {
             return attach(attached);
         }
-        self.held().hidden = hidden;
         let opened = match self.browser.open(Window {
             url: url.to_string(),
-            title: title.to_string(),
-            headless: hidden,
+            title: url.to_string(),
+            headless: self.headless,
             viewport: Viewport::DESKTOP,
         }) {
             Ok(opened) => opened,
@@ -160,21 +137,15 @@ impl Page {
     /// beside the others.
     #[must_use]
     pub fn pinned(&self, id: u32) -> Page {
-        let (driver, hidden) = {
-            let held = self.held();
-            (held.driver.as_ref().map(|d| d.on(id)), held.hidden)
-        };
-        let mark = driver.as_ref().map_or(0, WebviewDriver::told_mark);
+        let driver = self.held().driver.as_ref().map(|d| d.on(id));
         Page {
             browser: self.browser.clone(),
             headless: self.headless,
             held: Mutex::new(Held {
                 driver,
-                hidden,
                 opening: false,
             }),
             opened: Condvar::new(),
-            acted: AtomicU64::new(mark),
         }
     }
 
@@ -221,45 +192,22 @@ impl Drop for Claimed<'_> {
     }
 }
 
-/// Close `open` and wait, briefly, until it is.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "the event loop closes the window on its own thread: its flag is looked at every 10 ms, for at most 2 s"
-)]
-fn closed(open: &WebviewDriver) {
-    open.close();
-    let gone = std::time::Instant::now();
-    while open.is_open() && gone.elapsed() < Duration::from_secs(2) {
-        std::thread::sleep(Duration::from_millis(10));
-    }
-}
-
 impl View for Page {
     fn observe(&self) -> ViewResult<Observation> {
         let driver = self.driver()?;
         let mut view = Observation::from(driver.observe()?);
-        view.notices = (driver.told_since(self.acted.load(Ordering::SeqCst)).iter())
-            .map(ToString::to_string)
-            .collect();
         let controls = toolbar::controls();
-        let mut bar = toolbar::outline(&controls);
-        let (tabs, active) = self.driver()?.tabs();
-        if tabs.len() > 1 {
-            let names: Vec<String> = tabs
-                .iter()
-                .map(|tab| format!("{} \"{}\"", tab.id, tab.title))
-                .collect();
-            let _ = write!(bar, "\n  - tabs: {} (this is {active})", names.join(", "));
-        }
+        let bar = toolbar::outline(&controls);
         view.outline = format!("{bar}\n{}", view.outline);
         view.elements.splice(0..0, controls);
         Ok(view)
     }
 
+    fn epoch(&self) -> ViewResult<String> {
+        self.driver()?.epoch()
+    }
+
     fn act(&self, epoch: &str, action: &Action) -> ViewResult<()> {
-        if let Ok(driver) = self.driver() {
-            self.acted.store(driver.told_mark(), Ordering::SeqCst);
-        }
         let reference = match action {
             Action::Click { reference }
             | Action::Type { reference, .. }
@@ -269,7 +217,7 @@ impl View for Page {
             Action::Press { key } => {
                 return self.driver()?.press(std::slice::from_ref(key), 0);
             }
-            Action::Go { url } => return self.open(url, url, None),
+            Action::Go { url } => return self.open(url),
         };
         match reference {
             Some(reference) if toolbar::owns(reference) => self.toolbar(action),

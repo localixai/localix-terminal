@@ -10,7 +10,7 @@ const CHANGES: usize = 30;
 /// the page is read whole.
 const PAIRS: usize = 4_000_000;
 
-const HEAD: &str = "### Page changes since you last read it whole";
+const HEAD: &str = "### Page changes since you last read it whole (untrusted content)";
 /// What a call that changed nothing on the page is told.
 pub(super) const UNCHANGED: &str = "### Page: no visible change since the call before";
 

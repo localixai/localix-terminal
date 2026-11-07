@@ -126,7 +126,8 @@ impl On<'_> {
         {
             open.split_with(None);
         }
-        let kept = (self.shared.arranged_of(&group).as_ref()).and_then(split::kept_of);
+        let arranged = self.shared.arranged_of(&group);
+        let kept = arranged.as_ref().and_then(split::kept_of);
         let now = (open.pair().and(open.split.beside)).map(|beside| split::Kept {
             shown: id.clone(),
             beside: beside.key.name(),
@@ -153,10 +154,35 @@ impl On<'_> {
                 }
             }
         };
+        let pair = open.pair();
+        let saved = arranged
+            .as_ref()
+            .and_then(|arranged| split::share_of(arranged, pair?));
+        open.split.follow_share(pair, saved);
         if let Some(tell) = tell {
             open.split.told = split::Told::of(tell.as_ref());
             self.tell_split(&group, tell.as_ref());
         }
+    }
+
+    /// Persist only the final size, never a write per pointer frame. Until projected back,
+    /// this pair keeps its new size instead of following an older layout snapshot.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the rounded share is explicitly bounded to 1000..=9000"
+    )]
+    pub(super) fn split_sized(&mut self) {
+        let Some(open) = self.deck.as_mut() else {
+            return;
+        };
+        let Some((left, right)) = open.pair() else {
+            return;
+        };
+        let Some(key) = open.shown_key() else { return };
+        let portion = (open.split.share * 10_000.0).round().clamp(1000.0, 9000.0) as u16;
+        open.split.sizing = Some(([left, right], f64::from(portion) / 10_000.0));
+        self.shared.heard(&key.name(), Heard::SplitResized(portion));
     }
 
     /// The person made the window whole: the layout is told.

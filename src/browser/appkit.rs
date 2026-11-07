@@ -5,6 +5,7 @@ use std::ffi::CStr;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Bool};
 use objc2::{class, msg_send};
+use tao::platform::macos::WindowExtMacOS;
 
 /// `text` as an NSString; none when it holds a NUL.
 pub(super) fn string(text: &str) -> Option<Retained<AnyObject>> {
@@ -26,6 +27,12 @@ pub(super) fn literal(text: &CStr) -> Option<Retained<AnyObject>> {
     unsafe { msg_send![class!(NSString), stringWithUTF8String: text.as_ptr()] }
 }
 
+/// `window`'s NSWindow, for as long as the borrow lasts.
+pub(super) fn native(window: &tao::window::Window) -> &AnyObject {
+    // SAFETY: tao's NSWindow is alive for as long as its `Window` is, which is borrowed here.
+    unsafe { &*window.ns_window().cast::<AnyObject>() }
+}
+
 /// The app (NSApplication).
 pub(super) fn app() -> Retained<AnyObject> {
     // SAFETY: NSApplication's class method answers the app.
@@ -42,6 +49,21 @@ pub(super) fn activate() {
 /// Whether one wait for the app to become active is set, so a second press never stacks another.
 static AWAITING_ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+thread_local! {
+    /// The window the wait makes key once the app is active: the latest asked for, so a wait
+    /// that outlives its press never gives the keys to a window the person has left. The main
+    /// thread's alone, as the windows are.
+    static WANTED: std::sync::Mutex<Option<Retained<AnyObject>>> = const { std::sync::Mutex::new(None) };
+}
+
+/// Make `window` the one the wait makes key (none: the wait has nothing left to do).
+fn want(window: Option<&AnyObject>) {
+    // SAFETY: `window` is a live NSWindow; retaining it keeps it until the wait ends.
+    let window = window
+        .and_then(|window| unsafe { Retained::retain(std::ptr::from_ref(window).cast_mut()) });
+    WANTED.with(|wanted| *crate::lock(wanted) = window);
+}
+
 /// llx-desk the active app and `window` its key window, for the person's press. The app becomes
 /// active only later (the system answers the request on a later turn), so the window is made key
 /// again once it has: done at once, it would be key in an app still behind another.
@@ -50,6 +72,8 @@ pub(super) fn activate_and_key(window: &AnyObject) {
     // SAFETY: NSApplication answers whether it is the active app, a BOOL.
     let active: Bool = unsafe { msg_send![&*app(), isActive] };
     if active.as_bool() {
+        // The wait still pending is for a window the person has left now.
+        want(None);
         // SAFETY: an NSWindow answers whether it is the key window, a BOOL.
         let key: Bool = unsafe { msg_send![window, isKeyWindow] };
         if !key.as_bool() {
@@ -59,36 +83,32 @@ pub(super) fn activate_and_key(window: &AnyObject) {
         }
         return;
     }
+    // The latest press is the window the keys go to; one wait serves them all.
+    want(Some(window));
     if !AWAITING_ACTIVE.swap(true, Ordering::AcqRel) {
-        when_active(window);
+        when_active();
     }
     activate();
     // SAFETY: `makeKeyWindow` takes no argument and returns nothing.
     let _: () = unsafe { msg_send![window, makeKeyWindow] };
 }
 
-/// `window` made key once, when the app next becomes active; the wait then ends.
-fn when_active(window: &AnyObject) {
+/// The window asked for last made key once, when the app next becomes active; the wait then ends.
+fn when_active() {
     use block2::RcBlock;
     use std::sync::atomic::Ordering;
-    let window: Retained<AnyObject> = {
-        // SAFETY: `window` is a live NSWindow; retaining it keeps it for the block.
-        let Some(window) = (unsafe { Retained::retain(std::ptr::from_ref(window).cast_mut()) })
-        else {
-            AWAITING_ACTIVE.store(false, Ordering::Release);
-            return;
-        };
-        window
-    };
     // SAFETY: `defaultCenter` is NSNotificationCenter's class method, answering the shared center.
     let center: Retained<AnyObject> =
         unsafe { msg_send![class!(NSNotificationCenter), defaultCenter] };
     let observer = std::sync::Arc::new(std::sync::atomic::AtomicPtr::new(std::ptr::null_mut()));
     let held = std::sync::Arc::clone(&observer);
     let block = RcBlock::new(move |_note: *mut AnyObject| {
-        // SAFETY: `makeKeyAndOrderFront:` takes a sender, which may be nil, and returns nothing.
-        let _: () =
-            unsafe { msg_send![&*window, makeKeyAndOrderFront: std::ptr::null::<AnyObject>()] };
+        let window = WANTED.with(|wanted| crate::lock(wanted).take());
+        if let Some(window) = window {
+            // SAFETY: `makeKeyAndOrderFront:` takes a sender, which may be nil, and returns nothing.
+            let _: () =
+                unsafe { msg_send![&*window, makeKeyAndOrderFront: std::ptr::null::<AnyObject>()] };
+        }
         let mine = held.swap(std::ptr::null_mut(), Ordering::AcqRel);
         // SAFETY: the observer the center answered below, retained there; removed once, then
         // released.

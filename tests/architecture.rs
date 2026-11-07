@@ -1,0 +1,65 @@
+//! Executable source-layout rules: small documented modules and independent domain models.
+
+use std::path::{Path, PathBuf};
+
+fn rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(directory)? {
+        let path = entry?.path();
+        if path.is_dir() {
+            rust_files(&path, files)?;
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            files.push(path);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn source_modules_are_small_documented_and_named_for_their_responsibility() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = vec![];
+    rust_files(&source, &mut files).unwrap();
+    files.sort();
+    assert!(!files.is_empty());
+    let mut broken = vec![];
+    for path in files {
+        let name = path.strip_prefix(&source).unwrap().display().to_string();
+        let text = std::fs::read_to_string(&path).unwrap();
+        if !text.starts_with("//!") {
+            broken.push(format!("{name}: start with a //! responsibility"));
+        }
+        if path.file_name().is_some_and(|name| name == "mod.rs") {
+            broken.push(format!("{name}: name the module for its responsibility"));
+        }
+        // Blank lines and whole-line comments are not working code. String literals, including
+        // SQL migrations and embedded scripts, count: their size also makes a module harder to read.
+        let working = text
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with("//"))
+            .count();
+        if working > 300 {
+            broken.push(format!("{name}: {working} working lines, at most 300"));
+        }
+    }
+    assert!(broken.is_empty(), "{}", broken.join("\n"));
+}
+
+#[test]
+fn domain_models_do_not_depend_on_application_or_ui_adapters() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    for module in [
+        "board.rs",
+        "board/model.rs",
+        "board/cards.rs",
+        "layout/tree.rs",
+    ] {
+        let text = std::fs::read_to_string(root.join(module)).unwrap();
+        for adapter in ["browser", "desk", "server", "cli", "mcp"] {
+            assert!(
+                !text.contains(&format!("crate::{adapter}::")),
+                "{module} must not depend on the {adapter} adapter"
+            );
+        }
+    }
+}

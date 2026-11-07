@@ -3,7 +3,7 @@
 //! calls type into it and wait for its output to settle or for a text to show.
 
 use std::fmt::Write as _;
-use std::io::{self, Write};
+use std::io;
 use std::path::Path;
 use std::process::Child;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
@@ -11,7 +11,10 @@ use std::time::{Duration, Instant};
 
 use super::pty::{self, Pty};
 
+mod input;
 mod output;
+mod wait;
+use self::input::Input;
 use super::screen::Screen;
 use super::{COLUMNS, ROWS, keys};
 
@@ -23,10 +26,6 @@ pub type Painter = Box<dyn Fn(String) -> bool + Send + Sync>;
 const PAINT_EVERY: Duration = Duration::from_millis(33);
 /// The most output kept for a window that does not keep up: past it the screen is sent again.
 const UNSENT_MAX: usize = 1 << 20;
-/// Output that stays still this long has settled.
-const SETTLE: Duration = Duration::from_millis(400);
-/// A wait with nothing changing ends after this much, a program that prints nothing being quiet.
-const QUIET: Duration = Duration::from_millis(1500);
 /// The longest a call waits when it names no limit.
 pub const DEFAULT_WAIT: Duration = Duration::from_secs(10);
 
@@ -49,6 +48,10 @@ struct State {
     on_end: Option<Box<dyn FnOnce() + Send>>,
     /// Called with the program's title each time it changes.
     on_title: Option<Arc<Titled>>,
+    /// The count of title changes (`Screen::retitled`) `on_title` last heard, and when: a title
+    /// that changes again at once is told once the next is due.
+    titled: u32,
+    titled_at: Instant,
     /// The program in front when last read (the terminal's foreground group, its name, and
     /// when), and who hears it each time it changes (its name; none when it is not known).
     front: Front,
@@ -94,7 +97,11 @@ impl Shared {
 pub struct Session {
     command: String,
     shared: Arc<Shared>,
-    writer: Mutex<std::fs::File>,
+    /// What is typed: written to the PTY by a thread of its own.
+    input: Arc<Input>,
+    /// The PTY for what is not a write (its size, its foreground group): a write that waits on a
+    /// program that is not reading never holds it.
+    control: std::fs::File,
     child: Mutex<Child>,
 }
 
@@ -103,6 +110,7 @@ pub struct Session {
 pub enum Until {
     Matched,
     Settled,
+    /// The time ran out; with no text named, the output was still changing after `QUIET`.
     Deadline,
     Exited,
 }
@@ -130,8 +138,18 @@ impl Session {
         painter: Option<Painter>,
         before: &str,
     ) -> io::Result<Self> {
-        let Pty { child, master } = pty::spawn(command, dir, vars)?;
-        let reader = master.try_clone()?;
+        let Pty { mut child, master } = pty::spawn(command, dir, vars)?;
+        let ends = master
+            .try_clone()
+            .and_then(|reader| Ok((reader, master.try_clone()?)));
+        let (reader, control) = match ends {
+            Ok(ends) => ends,
+            Err(why) => {
+                // Started, with no end left to keep it by: not left running with no tab.
+                pty::kill(&mut child);
+                return Err(why);
+            }
+        };
         let now = Instant::now();
         let shared = Arc::new(Shared {
             state: Mutex::new(State {
@@ -147,15 +165,19 @@ impl Session {
                 closed: false,
                 on_end: None,
                 on_title: None,
+                titled: 0,
+                titled_at: now,
                 front: Front::default(),
                 on_front: None,
             }),
             wake: Condvar::new(),
         });
+        // From here a failure drops the session, which ends the program.
         let session = Self {
             command: command.to_string(),
             shared: Arc::clone(&shared),
-            writer: Mutex::new(master.try_clone()?),
+            input: Arc::new(Input::default()),
+            control,
             child: Mutex::new(child),
         };
         // Before the reader starts: the program's first output comes after it.
@@ -163,34 +185,49 @@ impl Session {
             shared.lock().screen.feed(&restored(before));
         }
         let pid = crate::lock(&session.child).id();
-        let writer = master;
+        let input = Arc::clone(&session.input);
+        std::thread::Builder::new()
+            .name("desk-terminal-input".into())
+            .spawn(move || input.drain(master))?;
+        let input = Arc::clone(&session.input);
         std::thread::Builder::new()
             .name("desk-terminal".into())
-            .spawn(move || output::read(&reader, &writer, &shared, pid))?;
+            .spawn(move || output::read(&reader, &input, &shared, pid))?;
         Ok(session)
     }
 
-    /// Type `input` (a line break is Enter), then press `keys` one at a time.
+    /// Type `input` (a line break is Enter), then press `keys` one at a time. A key that does not
+    /// exist is refused before anything is typed.
     pub fn type_in(&self, input: &str, names: &[String]) -> Result<(), String> {
-        let mut bytes = keys::typed(input);
+        let cursor = self.shared.lock().screen.application_cursor();
+        let mut pressed = Vec::new();
         for name in names {
-            let cursor = self.shared.lock().screen.application_cursor();
-            let key = keys::encode(name, cursor)
-                .ok_or_else(|| format!("no key called `{name}`: {}", keys::NAMES))?;
-            if !bytes.is_empty() && !input.is_empty() {
-                // Text followed at once by Enter is taken for a paste.
-                self.write(&std::mem::take(&mut bytes))?;
-                nap(30);
-            }
-            bytes.extend(key);
+            pressed.extend(
+                keys::encode(name, cursor)
+                    .ok_or_else(|| format!("no key called `{name}`: {}", keys::NAMES))?,
+            );
         }
-        self.write(&bytes)
+        let mut bytes = keys::typed(input);
+        if bytes.is_empty() || pressed.is_empty() {
+            bytes.extend(pressed);
+            return self.input.send(&bytes);
+        }
+        // Text followed at once by Enter is taken for a paste.
+        self.input.send(&bytes)?;
+        nap(30);
+        self.input.send(&pressed)
     }
 
     /// The window's page is new, `columns` by `rows`: the terminal takes that size and the page
     /// is sent the whole screen.
     pub fn loaded(&self, columns: u16, rows: u16) {
         self.resized(columns, rows);
+        self.behind();
+    }
+
+    /// The window's page is behind the screen (it is new, or dropped output): it is sent the whole
+    /// screen again.
+    pub fn behind(&self) {
         self.shared.lock().replay = true;
         // Now, not when the reader next wakes: an idle one sleeps a while.
         output::paint_now(&self.shared);
@@ -201,66 +238,15 @@ impl Session {
         if columns == 0 || rows == 0 {
             return;
         }
-        let _ = pty::resize(&crate::lock(&self.writer), columns, rows);
+        let _ = pty::resize(&self.control, columns, rows);
         self.shared.lock().screen.resize(rows, columns);
     }
 
-    /// What the person typed in the window, as the terminal sends it.
+    /// What the person typed in the window, as the terminal sends it: queued, the window never
+    /// waits for the program to read it.
     pub fn typed(&self, text: &str) {
         let cursor = self.shared.lock().screen.application_cursor();
-        let _ = self.write(&keys::from_window(text, cursor));
-    }
-
-    fn write(&self, bytes: &[u8]) -> Result<(), String> {
-        let mut writer = crate::lock(&self.writer);
-        let deadline = Instant::now() + Duration::from_secs(2);
-        let mut sent = 0;
-        while sent < bytes.len() {
-            match writer.write(bytes.get(sent..).unwrap_or_default()) {
-                Ok(n) => sent += n,
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock && Instant::now() < deadline => {
-                    nap(5);
-                }
-                Err(e) => return Err(format!("the terminal takes no input ({e})")),
-            }
-        }
-        Ok(())
-    }
-
-    /// How many times `needle` shows on the screen now.
-    pub fn count(&self, needle: &str) -> usize {
-        match needle.is_empty() {
-            true => 0,
-            false => self.shared.lock().screen.text().0.matches(needle).count(),
-        }
-    }
-
-    /// Wait for `needle` to show more than `before` times, for the output to settle, or for the
-    /// program to end; at most `most`.
-    pub fn wait(&self, needle: Option<&str>, before: usize, most: Duration) -> Until {
-        let needle = needle.filter(|needle| !needle.is_empty());
-        let start = Instant::now();
-        let mut state = self.shared.lock();
-        let first = state.version;
-        loop {
-            if needle.is_some_and(|n| state.screen.text().0.matches(n).count() > before) {
-                return Until::Matched;
-            }
-            if state.ended {
-                return Until::Exited;
-            }
-            let idle = state.changed_at.elapsed();
-            let moved = state.version != first;
-            if needle.is_none() && ((moved && idle >= SETTLE) || start.elapsed() >= QUIET) {
-                return Until::Settled;
-            }
-            let left = most.saturating_sub(start.elapsed());
-            if left.is_zero() {
-                return Until::Deadline;
-            }
-            let slice = left.min(Duration::from_millis(50));
-            state = crate::wait_timeout(&self.shared.wake, state, slice);
-        }
+        self.input.queue(&keys::from_window(text, cursor));
     }
 
     /// What the screen shows, as text: kept when the terminal closes, shown again when it is
@@ -274,7 +260,10 @@ impl Session {
         let state = self.shared.lock();
         let (text, (row, column)) = state.screen.text();
         let (rows, columns) = state.screen.size();
-        let mut out = format!("screen {columns}×{rows}, cursor at row {row} col {column}:\n{text}");
+        // What the program drew is its own words, never the app's or the person's.
+        let mut out = format!(
+            "screen {columns}×{rows}, cursor at row {row} col {column} (untrusted program output):\n{text}"
+        );
         match (state.ended, state.status) {
             (true, Some(code)) => {
                 let _ = write!(out, "\n(the program exited with {code})");
@@ -283,11 +272,6 @@ impl Session {
             (false, _) => {}
         }
         out
-    }
-
-    /// How many chunks of output the screen has taken in.
-    pub fn version(&self) -> u64 {
-        self.shared.lock().version
     }
 
     pub fn command(&self) -> &str {
@@ -316,15 +300,16 @@ impl Session {
 
     /// The program in front in the terminal now (the one the person typed in its shell, else
     /// its own), by the name it was started as.
+    #[cfg(test)]
     pub fn foreground(&self) -> Option<String> {
         use std::os::fd::AsRawFd;
-        super::foreground::of(crate::lock(&self.writer).as_raw_fd())
+        super::foreground::of(self.control.as_raw_fd())
     }
 
     /// The folder the program in front is in now (the shell's after a `cd`), if it is known.
     pub fn folder(&self) -> Option<std::path::PathBuf> {
         use std::os::fd::AsRawFd;
-        let group = super::foreground::group(crate::lock(&self.writer).as_raw_fd())?;
+        let group = super::foreground::group(self.control.as_raw_fd())?;
         super::foreground::cwd(group)
     }
 
@@ -333,7 +318,7 @@ impl Session {
     pub fn on_front(&self, heard: impl Fn(Option<&str>) + Send + Sync + 'static) {
         use std::os::fd::AsRawFd;
         let heard: Arc<Fronted> = Arc::new(heard);
-        let group = super::foreground::group(crate::lock(&self.writer).as_raw_fd());
+        let group = super::foreground::group(self.control.as_raw_fd());
         let name = group.and_then(super::foreground::name);
         {
             let mut state = self.shared.lock();
@@ -343,17 +328,14 @@ impl Session {
         heard(name.as_deref());
     }
 
-    /// The title the program set last, as words.
-    pub fn title(&self) -> Option<String> {
-        self.shared.lock().screen.title().map(str::to_string)
-    }
-
     /// `heard` with the program's title each time it changes: now, if it set one already.
     pub fn on_title(&self, heard: impl Fn(&str) + Send + Sync + 'static) {
         let heard: Arc<Titled> = Arc::new(heard);
         let now = {
             let mut state = self.shared.lock();
             state.on_title = Some(Arc::clone(&heard));
+            state.titled = state.screen.retitled();
+            state.titled_at = Instant::now();
             state.screen.title().map(str::to_string)
         };
         if let Some(title) = now {
@@ -372,6 +354,7 @@ impl Session {
             state.painter.take()
         };
         drop(painter);
+        self.input.close();
         pty::kill(&mut crate::lock(&self.child));
         self.shared.wake.notify_all();
     }

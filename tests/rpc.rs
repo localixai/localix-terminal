@@ -1,4 +1,4 @@
-//! Protocol v2 against a server of a test build (no window): the handshake, answers by id,
+//! The protocol against a server of a test build (no window): the handshake, answers by id,
 //! calls running at once, notifications by subscription, bytes after a response, a retried call
 //! done once, and a request that panics. Every check goes over the socket, as a client does.
 
@@ -290,6 +290,29 @@ fn a_call_asked_again_with_its_key_is_done_once_also_on_a_new_connection() {
     assert_eq!(said(&second), text);
     let after = asked(&first, "window/said", caller("o", json!({})));
     assert_eq!(after["text"], "");
+}
+
+#[test]
+fn a_key_is_kept_per_caller_and_only_a_short_one_is_taken() {
+    let home = home("keys");
+    home.start(&[]);
+    let (client, _) = home.client();
+    let counted = |agent: &str| {
+        let params = caller(agent, json!({"idempotencyKey": "same"}));
+        asked(&client, "test/count", params)["count"].clone()
+    };
+    // The same text from another agent is another request, not the first one's answer.
+    let one = counted("a");
+    assert_eq!(counted("a"), one);
+    assert_ne!(counted("b"), one);
+    // A key is at most 128 bytes: a longer one is refused, not ignored.
+    let at_most = json!({"idempotencyKey": "k".repeat(128)});
+    assert_eq!(asked(&client, "ping", at_most), json!({}));
+    let too_long = json!({"idempotencyKey": "k".repeat(129)});
+    let Err(Error::Rpc(error)) = client.request("ping", too_long) else {
+        panic!("a key of 129 bytes was taken");
+    };
+    assert_eq!(error.code, code::BAD_PARAMS);
 }
 
 #[test]

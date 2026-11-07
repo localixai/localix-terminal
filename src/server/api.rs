@@ -188,7 +188,7 @@ fn call_params() -> Value {
             "agent": string(AGENT),
             "cwd": string("The caller's directory: relative paths start here."),
             "env": environment(),
-            "args": crate::desk::schema(),
+            "args": {"type": "object", "description": "The window tool's arguments: `window.schema` of this description."},
             "peek": {"type": "boolean", "description": "A look for a pane: the person's notes stay for the agent."},
             "idempotencyKey": string("The same key again is answered once, from the first call."),
         }),

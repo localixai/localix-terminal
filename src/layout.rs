@@ -9,188 +9,22 @@ use serde::Serialize;
 use crate::ledger::Row as PaneId;
 use crate::projects::ProjectId;
 
+mod nodes;
+mod tree;
+
+pub use nodes::{set_tree, tab, tabs};
+pub use tree::{LEAST, Share, Tree};
+
 pub type WindowId = i64;
 pub type WorkspaceId = i64;
 pub type TabId = i64;
 
-/// A tab's panes: one alone, or a branch of trees side by side (`across`) or one above the
-/// other, each with its share of the branch.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(tag = "node", rename_all = "snake_case")]
-pub enum Tree {
-    Leaf { pane: PaneId },
-    Branch { across: bool, children: Vec<Share> },
-}
-
-/// A child of a branch and its share of it (the shares of a branch add up to 1).
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct Share {
-    pub share: f64,
-    pub tree: Tree,
-}
-
-/// The least share a pane keeps of its branch.
-pub const LEAST: f64 = 0.1;
-
-impl Tree {
-    /// Pane `pane`, alone.
-    pub const fn leaf(pane: PaneId) -> Self {
-        Self::Leaf { pane }
-    }
-
-    /// Its panes, in order: left to right, top to bottom.
-    pub fn panes(&self) -> Vec<PaneId> {
-        match self {
-            Self::Leaf { pane } => vec![*pane],
-            Self::Branch { children, .. } => (children.iter())
-                .flat_map(|child| child.tree.panes())
-                .collect(),
-        }
-    }
-
-    /// Whether pane `pane` is one of its.
-    pub fn holds(&self, pane: PaneId) -> bool {
-        match self {
-            Self::Leaf { pane: it } => *it == pane,
-            Self::Branch { children, .. } => children.iter().any(|child| child.tree.holds(pane)),
-        }
-    }
-
-    /// Pane `new` beside pane `at`: after it (right of it, or under it) or before. In a branch
-    /// of the same way it is one more child, sharing `at`'s share; else `at` becomes a branch of
-    /// the two, half each. Whether `at` is one of its.
-    pub fn split(&mut self, at: PaneId, new: PaneId, across: bool, after: bool) -> bool {
-        match self {
-            Self::Leaf { pane } if *pane == at => {
-                let (first, second) = if after { (at, new) } else { (new, at) };
-                *self = Self::Branch {
-                    across,
-                    children: vec![
-                        Share {
-                            share: 0.5,
-                            tree: Self::leaf(first),
-                        },
-                        Share {
-                            share: 0.5,
-                            tree: Self::leaf(second),
-                        },
-                    ],
-                };
-                true
-            }
-            Self::Leaf { .. } => false,
-            Self::Branch {
-                across: way,
-                children,
-            } => {
-                let place = (children.iter()).position(|child| child.tree == Self::leaf(at));
-                if let (Some(place), true) = (place, *way == across) {
-                    let half = children[place].share / 2.0;
-                    children[place].share = half;
-                    let at_place = if after { place + 1 } else { place };
-                    children.insert(
-                        at_place,
-                        Share {
-                            share: half,
-                            tree: Self::leaf(new),
-                        },
-                    );
-                    return true;
-                }
-                (children.iter_mut()).any(|child| child.tree.split(at, new, across, after))
-            }
-        }
-    }
-
-    /// The tree without pane `pane`: its share goes to the rest of its branch, and a branch left
-    /// with one child is that child. None when `pane` was all of it.
-    pub fn without(self, pane: PaneId) -> Option<Self> {
-        match self {
-            Self::Leaf { pane: it } => (it != pane).then_some(self),
-            Self::Branch { across, children } => {
-                let mut kept: Vec<Share> = (children.into_iter())
-                    .filter_map(|child| {
-                        let share = child.share;
-                        child.tree.without(pane).map(|tree| Share { share, tree })
-                    })
-                    .collect();
-                match kept.len() {
-                    0 => None,
-                    1 => kept.pop().map(|child| child.tree),
-                    _ => {
-                        let whole: f64 = kept.iter().map(|child| child.share).sum();
-                        for child in &mut kept {
-                            child.share = if whole > 0.0 {
-                                child.share / whole
-                            } else {
-                                1.0 / 2.0
-                            };
-                        }
-                        Some(Self::Branch {
-                            across,
-                            children: kept,
-                        })
-                    }
-                }
-            }
-        }
-    }
-
-    /// The branch at `path` (the place of each child down from the root) gives its first `at`
-    /// children `share` of it, the rest the remainder, each side keeping its proportions, and
-    /// no child under `LEAST`. Whether there is such a branch.
-    pub fn resize(&mut self, path: &[usize], at: usize, share: f64) -> bool {
-        match (self, path.split_first()) {
-            (Self::Branch { children, .. }, Some((&first, rest))) => {
-                match children.get_mut(first) {
-                    Some(child) => child.tree.resize(rest, at, share),
-                    None => false,
-                }
-            }
-            (Self::Branch { children, .. }, None) if at > 0 && at < children.len() => {
-                let least = LEAST * at as f64;
-                let most = 1.0 - LEAST * (children.len() - at) as f64;
-                let share = share.clamp(least, most.max(least));
-                let (before, after) = children.split_at_mut(at);
-                spread(before, share);
-                spread(after, 1.0 - share);
-                true
-            }
-            _ => false,
-        }
-    }
-}
-
-/// `children` given `whole` between them, in their proportions now.
-fn spread(children: &mut [Share], whole: f64) {
-    let now: f64 = children.iter().map(|child| child.share).sum();
-    let count = children.len() as f64;
-    for child in children {
-        child.share = if now > 0.0 {
-            child.share / now * whole
-        } else {
-            whole / count
-        };
-    }
-}
-
-/// A window as kept: the workspace it shows, where it was and its side.
+/// A window as kept: the workspace it shows. (Its frame and its side are the browser's, kept
+/// with the person's settings.)
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Window {
     pub id: WindowId,
     pub shown: Option<WorkspaceId>,
-    pub frame: Option<Frame>,
-    pub side_open: bool,
-    pub side_width: Option<f64>,
-}
-
-/// Where a window is on the screen, in points.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-pub struct Frame {
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
 }
 
 /// A window's tabs of one project, and the one it shows.
@@ -227,6 +61,21 @@ pub fn open_window(tx: &Transaction<'_>, now: u64) -> Result<WindowId, String> {
     Ok(tx.last_insert_rowid())
 }
 
+/// How long a closed tab or window is kept before it is deleted, in seconds: a day. Its row only
+/// stands for a late notice that names it; its panes are in the ledger.
+const CLOSED_KEPT: u64 = 24 * 3600;
+
+/// The tabs and windows closed more than [`CLOSED_KEPT`] before `now` deleted, with their
+/// workspaces and trees (they go with them).
+fn prune_closed(tx: &Transaction<'_>, now: u64) -> Result<(), String> {
+    let before = now.saturating_sub(CLOSED_KEPT);
+    tx.execute("DELETE FROM tabs WHERE closed < ?1", [before])
+        .map_err(|why| failed(&why))?;
+    tx.execute("DELETE FROM windows WHERE closed < ?1", [before])
+        .map_err(|why| failed(&why))?;
+    Ok(())
+}
+
 /// Window `id` closed `now`, with its tabs.
 ///
 /// # Errors
@@ -249,55 +98,15 @@ pub fn close_window(tx: &Transaction<'_>, id: WindowId, now: u64) -> Result<(), 
         params![id, now],
     )
     .map_err(|why| failed(&why))?;
-    Ok(())
+    prune_closed(tx, now)
 }
 
-/// Window `id`'s frame and side, as the person left them.
-///
-/// # Errors
-/// The store refused it.
-pub fn place_window(
-    tx: &Transaction<'_>,
-    id: WindowId,
-    frame: Option<Frame>,
-    side: (bool, Option<f64>),
-) -> Result<(), String> {
-    tx.execute(
-        "UPDATE windows SET x = ?2, y = ?3, width = ?4, height = ?5, side_open = ?6,
-         side_width = ?7 WHERE id = ?1",
-        params![
-            id,
-            frame.map(|frame| frame.x),
-            frame.map(|frame| frame.y),
-            frame.map(|frame| frame.width),
-            frame.map(|frame| frame.height),
-            side.0,
-            side.1,
-        ],
-    )
-    .map_err(|why| failed(&why))?;
-    Ok(())
-}
-
-const WINDOW: &str = "id, shown, x, y, width, height, side_open, side_width";
+const WINDOW: &str = "id, shown";
 
 fn window_of(row: &rusqlite::Row<'_>) -> rusqlite::Result<Window> {
-    let (x, y, width, height): (Option<f64>, Option<f64>, Option<f64>, Option<f64>) =
-        (row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?);
     Ok(Window {
         id: row.get(0)?,
         shown: row.get(1)?,
-        frame: match (x, y, width, height) {
-            (Some(x), Some(y), Some(width), Some(height)) => Some(Frame {
-                x,
-                y,
-                width,
-                height,
-            }),
-            _ => None,
-        },
-        side_open: row.get(6)?,
-        side_width: row.get(7)?,
     })
 }
 
@@ -468,170 +277,6 @@ pub fn open_tab(
     Ok(id)
 }
 
-/// Tab `id`'s panes are `tree` now, `focused` in focus.
-///
-/// # Errors
-/// The store refused it.
-pub fn set_tree(
-    tx: &Transaction<'_>,
-    id: TabId,
-    tree: &Tree,
-    focused: Option<PaneId>,
-) -> Result<(), String> {
-    tx.execute("DELETE FROM pane_nodes WHERE tab = ?1", [id])
-        .map_err(|why| failed(&why))?;
-    let focused = focused
-        .filter(|pane| tree.holds(*pane))
-        .or_else(|| tree.panes().first().copied());
-    write_node(tx, id, None, 0, 1.0, tree, focused)
-}
-
-fn write_node(
-    tx: &Transaction<'_>,
-    tab: TabId,
-    parent: Option<i64>,
-    place: usize,
-    share: f64,
-    tree: &Tree,
-    focused: Option<PaneId>,
-) -> Result<(), String> {
-    match tree {
-        Tree::Leaf { pane } => {
-            tx.execute(
-                "INSERT INTO pane_nodes (tab, parent, place, share, pane, focused)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![tab, parent, place, share, pane, focused == Some(*pane)],
-            )
-            .map_err(|why| failed(&why))?;
-        }
-        Tree::Branch { across, children } => {
-            tx.execute(
-                "INSERT INTO pane_nodes (tab, parent, place, share, across)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![tab, parent, place, share, across],
-            )
-            .map_err(|why| failed(&why))?;
-            let branch = tx.last_insert_rowid();
-            for (place, child) in children.iter().enumerate() {
-                write_node(
-                    tx,
-                    tab,
-                    Some(branch),
-                    place,
-                    child.share,
-                    &child.tree,
-                    focused,
-                )?;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// One node as kept.
-struct Node {
-    id: i64,
-    parent: Option<i64>,
-    share: f64,
-    across: Option<bool>,
-    pane: Option<PaneId>,
-    focused: bool,
-}
-
-/// Tab `id`'s tree as kept, and its pane in focus; none when it has no node.
-fn read_tree(db: &Connection, id: TabId) -> Result<Option<(Tree, Option<PaneId>)>, String> {
-    let mut query = db
-        .prepare(
-            "SELECT id, parent, share, across, pane, focused FROM pane_nodes WHERE tab = ?1
-             ORDER BY parent, place, id",
-        )
-        .map_err(|why| failed(&why))?;
-    let nodes = query
-        .query_map([id], |row| {
-            Ok(Node {
-                id: row.get(0)?,
-                parent: row.get(1)?,
-                share: row.get(2)?,
-                across: row.get(3)?,
-                pane: row.get(4)?,
-                focused: row.get(5)?,
-            })
-        })
-        .map_err(|why| failed(&why))?
-        .collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(|why| failed(&why))?;
-    let focused = (nodes.iter())
-        .find(|node| node.focused)
-        .and_then(|node| node.pane);
-    let tree = (nodes.iter())
-        .find(|node| node.parent.is_none())
-        .and_then(|root| tree_of(&nodes, root));
-    Ok(tree.map(|tree| (tree, focused)))
-}
-
-fn tree_of(nodes: &[Node], node: &Node) -> Option<Tree> {
-    match (node.pane, node.across) {
-        (Some(pane), _) => Some(Tree::leaf(pane)),
-        (None, Some(across)) => {
-            let children: Vec<Share> = (nodes.iter())
-                .filter(|child| child.parent == Some(node.id))
-                .filter_map(|child| {
-                    let tree = tree_of(nodes, child)?;
-                    Some(Share {
-                        share: child.share,
-                        tree,
-                    })
-                })
-                .collect();
-            match children.len() {
-                0 => None,
-                1 => children.into_iter().next().map(|child| child.tree),
-                _ => Some(Tree::Branch { across, children }),
-            }
-        }
-        (None, None) => None,
-    }
-}
-
-/// Tab `id`, open or not, with its tree; none when it is not, or has no pane.
-///
-/// # Errors
-/// The store refused it.
-pub fn tab(db: &Connection, id: TabId) -> Result<Option<Tab>, String> {
-    let row: Option<(WorkspaceId, usize)> = db
-        .query_row(
-            "SELECT workspace, place FROM tabs WHERE id = ?1",
-            [id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .optional()
-        .map_err(|why| failed(&why))?;
-    let Some((workspace, place)) = row else {
-        return Ok(None);
-    };
-    Ok(read_tree(db, id)?.map(|(tree, focused)| Tab {
-        id,
-        workspace,
-        place,
-        tree,
-        focused,
-    }))
-}
-
-/// Workspace `workspace`'s open tabs, in their places, each with its tree.
-///
-/// # Errors
-/// The store refused it.
-pub fn tabs(db: &Connection, workspace: WorkspaceId) -> Result<Vec<Tab>, String> {
-    let mut out = vec![];
-    for id in open_ids(db, workspace)? {
-        if let Some(tab) = tab(db, id)? {
-            out.push(tab);
-        }
-    }
-    Ok(out)
-}
-
 /// The open tab pane `pane` is in, if one is.
 ///
 /// # Errors
@@ -729,7 +374,7 @@ pub fn close_tab(tx: &Transaction<'_>, id: TabId, now: u64) -> Result<(), String
     if let Some(workspace) = workspace {
         renumber(tx, &open_ids(tx, workspace)?)?;
     }
-    Ok(())
+    prune_closed(tx, now)
 }
 
 /// Workspace `workspace` shows tab `tab` (none: none of its).

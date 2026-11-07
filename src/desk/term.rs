@@ -9,14 +9,15 @@ use serde_json::Value;
 use crate::browser::Pane;
 use crate::terminal::{self, DEFAULT_WAIT, Painter, Session, Until};
 
-use super::args::{number, strings, text};
+use super::args::{strings, text, waits};
 use super::ledger::Facts;
 use super::{Call, Desk, Output};
 
 /// Terminal sessions at once, in all.
-const MAX_SESSIONS: usize = 16;
-/// The most text one `input` types.
+pub(super) const MAX_SESSIONS: usize = 16;
+/// The most text one `input` types, and the most keys one call presses.
 const MAX_INPUT: usize = 4096;
+const MAX_KEYS: usize = 64;
 
 impl Desk {
     /// Start `args["command"]` (the person's shell without one) in a new session. The id is
@@ -39,7 +40,7 @@ impl Desk {
             "",
         )?;
         let wanted = text(args, "wait_for");
-        let most = number(args, "yield_ms").map_or(DEFAULT_WAIT, Duration::from_millis);
+        let most = waits(args, DEFAULT_WAIT);
         let until = session.wait(wanted, 0, most);
         let output = Output {
             report: describe(until, wanted, most),
@@ -64,20 +65,14 @@ impl Desk {
     ) -> Result<(u32, Arc<Session>), String> {
         let _starting = crate::lock(&self.starting);
         if crate::lock(&self.sessions).len() >= MAX_SESSIONS {
-            let spare = self
-                .spare_session(group)
-                .ok_or_else(|| format!("{MAX_SESSIONS} terminals are open: close one first"))?;
+            let spare = self.spare_session(group).ok_or_else(|| {
+                format!(
+                    "{MAX_SESSIONS} terminals are open, counting every project's: close one \
+                         of yours with `close`, or ask the person to close one"
+                )
+            })?;
             // Its tab goes as any closed one: no longer anyone's, closed in the ledger.
-            let key = format!("t{spare}");
-            let owner = {
-                let mut registry = crate::lock(&self.registry);
-                let owner = registry.owner_named(&key);
-                registry.release(&key);
-                owner
-            };
-            if owner.is_some() {
-                self.gone(owner, &key);
-            }
+            self.let_go(&format!("t{spare}"));
             self.drop_session(spare);
         }
         let id = self.next_terminal.fetch_add(1, Ordering::SeqCst);
@@ -87,9 +82,8 @@ impl Desk {
             .map_err(|e| format!("could not start it: {e}"))?;
         let session = Arc::new(session);
         let _ = typed.set(Arc::downgrade(&session));
-        // Its program's end is news for the Event Center.
-        // Its program's end closes its row of the ledger (its last screen kept), on a thread of
-        // its own: the session's reader calls this.
+        // Its program's end is news for the Event Center, and closes its row of the ledger (its
+        // last screen kept), on a thread of its own: the session's reader calls this.
         let (feed, me) = (self.feed.clone(), Weak::clone(&self.me));
         session.on_end(move || {
             feed.record(
@@ -136,6 +130,7 @@ impl Desk {
                 }
             });
         }
+        crate::lock(&self.session_groups).insert(id, group.to_string());
         crate::lock(&self.sessions).insert(id, Arc::clone(&session));
         Ok((id, session))
     }
@@ -174,7 +169,17 @@ impl Desk {
                 }
             }
         }));
-        Some(Box::new(move |frame| panel.paint(&frame)))
+        Some(Box::new(move |frame| {
+            let open = panel.paint(&frame);
+            // Output the panel had to drop leaves its page behind the screen: it is sent the
+            // screen whole.
+            if panel.dropped()
+                && let Some(session) = typed_to.get().and_then(Weak::upgrade)
+            {
+                session.behind();
+            }
+            open
+        }))
     }
 
     /// The session of project `group` to end for a new one of it when all places are taken: the
@@ -182,10 +187,8 @@ impl Desk {
     /// running out of sight). None while every one is live in the window: another project's
     /// terminals are never ended for this one's.
     fn spare_session(&self, group: &str) -> Option<u32> {
-        let of_group = |id: u32| {
-            (crate::lock(&self.ledger).get(&format!("t{id}")))
-                .is_some_and(|(_, project)| crate::projects::key(*project) == group)
-        };
+        let groups = crate::lock(&self.session_groups).clone();
+        let of_group = |id: u32| groups.get(&id).is_some_and(|started| started == group);
         let mut ids: Vec<(u32, bool)> = crate::lock(&self.sessions)
             .iter()
             .map(|(id, session)| (*id, session.ended()))
@@ -203,6 +206,7 @@ impl Desk {
 
     fn drop_session(&self, id: u32) {
         let session = crate::lock(&self.sessions).remove(&id);
+        crate::lock(&self.session_groups).remove(&id);
         if let Some(session) = session {
             session.close();
         }
@@ -242,10 +246,13 @@ impl Desk {
                 }
         });
         let keys = strings(args, "keys");
+        if keys.len() > MAX_KEYS {
+            return Err(format!("`keys` is at most {MAX_KEYS}: press them in parts"));
+        }
         if !input.is_empty() || !keys.is_empty() {
             session.type_in(input, &keys)?;
         }
-        let most = number(args, "yield_ms").map_or(DEFAULT_WAIT, Duration::from_millis);
+        let most = waits(args, DEFAULT_WAIT);
         let until = session.wait(wanted, before, most);
         Ok(Output {
             report: describe(until, wanted, most),
@@ -262,9 +269,8 @@ impl Desk {
         Ok(format!("Closed t{id}."))
     }
 
-    /// The person asked for a terminal of their own ("+") in the project grouped as `group`.
-    /// A terminal the person opened with "+", in the project's folder: their shell, or `command`
-    /// (a coding agent's program) when it is one.
+    /// A terminal the person asked for with "+" in the project grouped as `group`, in the
+    /// project's folder: their shell, or `command` (a coding agent's program) when it is one.
     pub(super) fn person_terminal(
         &self,
         call: &Call,
@@ -311,12 +317,12 @@ pub(super) fn term_dir(call: &Call, args: &Value) -> std::path::PathBuf {
 fn describe(until: Until, wanted: Option<&str>, most: Duration) -> String {
     match (until, wanted) {
         (Until::Matched, Some(wanted)) => format!("\"{wanted}\" showed."),
-        (Until::Matched, None) | (Until::Settled, _) => "The output settled.".into(),
+        (Until::Matched | Until::Settled, _) => "The output settled.".into(),
         (Until::Deadline, Some(wanted)) => format!(
             "\"{wanted}\" did not show within {}s: the program may still be working; wait again or read the screen.",
             most.as_secs()
         ),
-        (Until::Deadline, None) => format!("Still changing after {}s.", most.as_secs()),
+        (Until::Deadline, None) => "Still changing: wait again or read the screen.".into(),
         (Until::Exited, _) => "The program ended.".into(),
     }
 }

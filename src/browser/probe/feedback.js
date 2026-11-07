@@ -68,10 +68,13 @@
     return kept
   }
 
+  // The element's opening tag alone, written from its attributes: `outerHTML` would write the whole subtree.
+  const fbTag = (e) => `<${e.localName}${[...e.attributes]
+    .map((a) => ` ${a.name}="${a.value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`).join('')}>`.slice(0, 200)
+
   function fbElement(e) {
-    const html = e.outerHTML || ''
     return {
-      tag: html.slice(0, html.indexOf('>') + 1).slice(0, 200),
+      tag: fbTag(e),
       role: e.getAttribute('role') || undefined,
       name: fbClip(e.getAttribute('aria-label') || e.getAttribute('title') || e.getAttribute('alt') || '', 120) || undefined,
       text: fbClip(e.innerText || e.textContent),
@@ -83,11 +86,22 @@
     }
   }
 
-  // The leaves inside a region: elements wholly in it whose parent is not.
+  // The leaves inside a region: elements wholly in it that hold no other element wholly in it.
   function fbMembers(r) {
     const inside = (b) => b.width > 0 && b.left >= r.left && b.top >= r.top && b.right <= r.left + r.width && b.bottom <= r.top + r.height
     const all = [...document.body.querySelectorAll('*')].filter((e) => !fbOurs(e) && inside(e.getBoundingClientRect()))
-    const leaves = all.filter((e) => !all.some((o) => o !== e && e.contains(o)))
+    // Each element marks the nearest one of `all` above it: that one marks its own the same way.
+    const members = new Set(all)
+    const holders = new Set()
+    for (const e of all) {
+      for (let n = e.parentElement; n; n = n.parentElement) {
+        if (members.has(n)) {
+          holders.add(n)
+          break
+        }
+      }
+    }
+    const leaves = all.filter((e) => !holders.has(e))
     return leaves.slice(0, FB_MAX_MEMBERS).map((e) => ({ selector: fbSelector(e), text: fbClip(e.innerText || e.textContent, 80) }))
   }
 
@@ -169,7 +183,7 @@
     const card = document.createElement('div')
     card.className = 'c'
     card.innerHTML = '<textarea placeholder="What should change? (optional)"></textarea><div><button>Cancel</button><button class="s">Send</button></div>'
-    const [cancel, send] = card.querySelectorAll('button')
+    const [cancel, sendButton] = card.querySelectorAll('button')
     const note = card.querySelector('textarea')
     const left = Math.min(Math.max(8, rect.left), innerWidth - 296)
     const below = rect.bottom + 120 < innerHeight
@@ -179,7 +193,7 @@
     const submit = () => {
       const said = note.value.trim()
       fbClose()
-      post(JSON.stringify({ t: TOKEN, fb: { ...capture, note: said, url: location.href, n: ++fb.count } }))
+      send({ fb: { ...capture, note: said, url: location.href, n: ++fb.count } })
       const n = fb.count
       setTimeout(() => {
         if (n > fb.count) return
@@ -191,7 +205,7 @@
         fbMeasure()
       }, 800)
     }
-    send.addEventListener('click', submit)
+    sendButton.addEventListener('click', submit)
     cancel.addEventListener('click', fbClose)
     note.addEventListener('keydown', (event) => {
       event.stopPropagation()

@@ -1,10 +1,10 @@
 //! The glass under the strip's open list (macOS): the address field's suggestions and the
 //! history menu are drawn by the strip's page, over the page shown, on the system's menu
-//! material, rounded as a menu is. The page says where its list is (`glass x y w h`); the pane
-//! follows it, hidden while none is open.
+//! material (on macOS 26, the system's glass, as its own menus have), rounded as a menu is. The
+//! page says where its list is (`glass x y w h`); the pane follows it, hidden while none is open.
 
 use objc2::rc::Retained;
-use objc2::runtime::{AnyObject, Bool};
+use objc2::runtime::{AnyClass, AnyObject, Bool};
 use objc2::{class, msg_send};
 use wry::{WebView, WebViewExtMacOS};
 
@@ -24,6 +24,22 @@ pub(super) fn material(material: isize) -> Retained<AnyObject> {
     // SAFETY: as above.
     let _: () = unsafe { msg_send![&*view, setMaterial: material] };
     view
+}
+
+/// A view of the system's regular glass, rounded by `radius` (macOS 26: none before), with no
+/// content: the strip's page stays a sibling above it, so what is written on it is the page's own
+/// ink. Regular, not clear: clear is for media behind it, and wants a dimming layer.
+fn glass(radius: f64) -> Option<Retained<AnyObject>> {
+    /// NSGlassEffectViewStyleRegular.
+    const REGULAR: isize = 0;
+    let class = AnyClass::get(c"NSGlassEffectView")?;
+    // SAFETY: `new` on NSGlassEffectView answers a retained view, laid out by its owner.
+    let view: Retained<AnyObject> = unsafe { msg_send![class, new] };
+    // SAFETY: an NSGlassEffectView takes an NSInteger style and a CGFloat radius.
+    let _: () = unsafe { msg_send![&*view, setStyle: REGULAR] };
+    // SAFETY: as above.
+    let _: () = unsafe { msg_send![&*view, setCornerRadius: radius] };
+    Some(view)
 }
 
 /// Put `view` just below the strip, among its siblings: over the pages, under the strip's page.
@@ -89,19 +105,22 @@ impl Pane {
         /// NSVisualEffectMaterialMenu, and a menu's corners.
         const MENU: isize = 5;
         const ROUND: f64 = 10.0;
-        let pane = material(MENU);
+        let pane = glass(ROUND).unwrap_or_else(|| {
+            let pane = material(MENU);
+            // SAFETY: an NSView takes a BOOL: drawn into a layer, which rounds its corners.
+            let _: () = unsafe { msg_send![&*pane, setWantsLayer: Bool::YES] };
+            // SAFETY: a view that wants a layer answers it.
+            let layer: Option<Retained<AnyObject>> = unsafe { msg_send![&*pane, layer] };
+            if let Some(layer) = layer {
+                // SAFETY: a CALayer takes a CGFloat radius.
+                let _: () = unsafe { msg_send![&*layer, setCornerRadius: ROUND] };
+                // SAFETY: a CALayer takes a BOOL.
+                let _: () = unsafe { msg_send![&*layer, setMasksToBounds: Bool::YES] };
+            }
+            pane
+        });
         // SAFETY: an NSView takes a BOOL.
         let _: () = unsafe { msg_send![&*pane, setHidden: Bool::YES] };
-        // SAFETY: as above: drawn into a layer, which rounds its corners.
-        let _: () = unsafe { msg_send![&*pane, setWantsLayer: Bool::YES] };
-        // SAFETY: a view that wants a layer answers it.
-        let layer: Option<Retained<AnyObject>> = unsafe { msg_send![&*pane, layer] };
-        if let Some(layer) = layer {
-            // SAFETY: a CALayer takes a CGFloat radius.
-            let _: () = unsafe { msg_send![&*layer, setCornerRadius: ROUND] };
-            // SAFETY: a CALayer takes a BOOL.
-            let _: () = unsafe { msg_send![&*layer, setMasksToBounds: Bool::YES] };
-        }
         below(&pane, strip)?;
         Some(Self(pane))
     }

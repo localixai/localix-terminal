@@ -228,8 +228,8 @@ impl On<'_> {
             Item::Split => self.split_beside(Some(key)),
             Item::Unsplit => self.split_beside(None),
             Item::Close => self.close(key),
-            Item::CloseOthers => others.into_iter().for_each(|other| self.close(other)),
-            Item::CloseRight => right.into_iter().for_each(|other| self.close(other)),
+            Item::CloseOthers => self.close_all(others, true),
+            Item::CloseRight => self.close_all(right, true),
         }
     }
 

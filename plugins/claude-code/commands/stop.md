@@ -1,7 +1,7 @@
 ---
 description: Quit LLX Desk, its window and its terminals
 disable-model-invocation: true
-allowed-tools: Bash(llx-desk:*)
+allowed-tools: Bash(llx-desk quit:*)
 ---
 
 !`llx-desk quit 2>&1`

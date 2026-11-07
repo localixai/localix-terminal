@@ -11,8 +11,8 @@ pub enum Heard<'a> {
     Did(&'a str),
     /// They closed a tab: news for whoever works in it.
     Closed(&'a str),
-    /// They asked to quit the app (its menu, the Dock, or closing its window where it has no
-    /// mini): the desk decides, asking them first when programs run.
+    /// They asked to quit the app (its menu, the Dock, or closing its main window): the desk
+    /// decides, asking them first when programs run.
     Quit,
     /// They brought the app forward with nothing to show (its Dock icon, opening it again): the
     /// desk gives them a window, with their shell when it has no tab.
@@ -35,6 +35,8 @@ pub enum Heard<'a> {
     /// The window split in the project of this key (its halves' tabs), or made whole there
     /// (none): the layout keeps it.
     Split(Option<Halves<'a>>),
+    /// They finished resizing this pane's split: the left half's share, in ten-thousandths.
+    SplitResized(u16),
     /// They dragged the tab of this key's pane before the tab of pane `before` (none: to the
     /// end of its project's list): the layout keeps it.
     Moved {

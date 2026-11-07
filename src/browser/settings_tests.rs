@@ -73,6 +73,25 @@ fn settings_outlive_the_run_and_a_file_that_does_not_read_is_the_defaults() {
 }
 
 #[test]
+fn a_size_by_hand_is_held_to_the_sizes_and_a_file_that_did_not_read_is_kept_aside() {
+    let scratch = Scratch::new();
+    let file = scratch.path().join("llx-desk").join("settings.json");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, r#"{"font_size": 0}"#).unwrap();
+    assert_eq!(Settings::read(&file).font_size, *SIZES.start());
+    std::fs::write(&file, r#"{"font_size": 200}"#).unwrap();
+    assert_eq!(Settings::read(&file).font_size, *SIZES.end());
+    // Not written over: the person's file is still theirs, beside the new one.
+    std::fs::write(&file, "{ not json").unwrap();
+    Settings::default().write(&file).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(file.with_extension("json.bad")).unwrap(),
+        "{ not json"
+    );
+    assert_eq!(Settings::read(&file), Settings::default());
+}
+
+#[test]
 fn the_page_is_told_what_each_appearance_is_by_default() {
     let mut settings = Settings::default();
     settings
@@ -98,6 +117,19 @@ fn the_pages_are_told_the_fonts() {
         "{script}"
     );
     assert!(!script.contains("</script"));
+    // The pages are told whether transparency is reduced, as WebKit's own query does not.
+    assert!(
+        script.contains("toggleAttribute('data-reduced',"),
+        "{script}"
+    );
+}
+
+#[test]
+fn the_page_says_whether_the_window_has_glass_to_make_less_clear() {
+    assert_eq!(
+        Settings::default().page()["glass"],
+        cfg!(target_os = "macos")
+    );
 }
 
 #[test]
@@ -120,31 +152,4 @@ fn a_row_of_places_takes_a_digit_and_a_single_shortcut_does_not() {
             .change(&json!({"shortcut": ["reload", "cmd+digit"]}))
             .is_err()
     );
-}
-
-#[test]
-fn the_glass_levels_are_even_steps_from_opaque_to_clearest() {
-    for standard in [
-        crate::browser::frame::coat(true).1,
-        crate::browser::frame::coat(false).1,
-    ] {
-        let levels = [
-            Transparency::Off,
-            Transparency::Low,
-            Transparency::Standard,
-            Transparency::High,
-        ]
-        .map(|level| level.coat(standard));
-        assert!((levels[0] - 1.0).abs() < f64::EPSILON, "off is opaque");
-        let steps: Vec<f64> = levels.windows(2).map(|pair| pair[0] - pair[1]).collect();
-        assert!(
-            steps.iter().all(|step| *step > 0.1),
-            "each clearer: {levels:?}"
-        );
-        let (least, most) = (
-            steps.iter().copied().fold(1.0, f64::min),
-            steps.iter().copied().fold(0.0, f64::max),
-        );
-        assert!(most - least < 0.12, "even steps: {levels:?}");
-    }
 }

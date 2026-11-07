@@ -1,21 +1,29 @@
   // `evaluate`: the caller's script runs in the page realm and its value comes back
-  // as compact text (see `script_forms` in webview.rs for how it is started).
+  // as compact text (see `script_forms` in script.rs for how it is started).
   const MAX_EVAL = 8000
   function serialize(v) {
     const cap = (s) => (s.length > MAX_EVAL ? `${s.slice(0, MAX_EVAL)}… [truncated, ${s.length} chars]` : s)
     if (v === undefined) return 'undefined'
     if (v === null || ['number', 'boolean', 'bigint'].includes(typeof v)) return String(v)
     if (typeof v === 'string') return cap(v)
+    if (v instanceof Error) return cap(`${v.name}: ${v.message}`)
     if (v instanceof Element) return cap(`<${v.tagName.toLowerCase()}> ${(v.textContent || '').trim().replace(/\s+/g, ' ')}`)
     if (v instanceof NodeList || v instanceof HTMLCollection) return cap([...v].map(serialize).join('\n'))
     try {
-      const seen = new WeakSet()
-      return cap(JSON.stringify(v, (_k, x) => {
-        if (typeof x === 'object' && x !== null) {
-          if (seen.has(x)) return '[Circular]'
-          seen.add(x)
-        }
-        return typeof x === 'bigint' ? String(x) : x
+      // The objects from the root down to the one being written: only one that holds itself is
+      // circular, an object met twice in different places is written twice. `this` is the object
+      // a value is a member of, so the way back up is known; `held` is what stands for a value in
+      // the text (a Map as its entries), which is what its members are members of.
+      const path = []
+      return cap(JSON.stringify(v, function (_k, x) {
+        while (path.length && path[path.length - 1].held !== this) path.pop()
+        if (typeof x === 'bigint') return String(x)
+        if (typeof x !== 'object' || x === null) return x
+        if (path.some((step) => step.from === x)) return '[Circular]'
+        const held = x instanceof Map ? [...x.entries()] : x instanceof Set ? [...x]
+          : x instanceof Error ? `${x.name}: ${x.message}` : x
+        path.push({ from: x, held })
+        return held
       }, 2) ?? '[unserializable]')
     } catch {
       return '[unserializable]'
@@ -37,16 +45,16 @@
   // the page says so, with its address, which names its tab.
   if (window.opener) {
     Object.defineProperty(window, 'close', {
-      value() { post(JSON.stringify({ t: TOKEN, close: location.href })) },
+      value() { send({ close: location.href }) },
     })
   }
 
   const ready = () => document.readyState
-  const CALLS = { snapshot, act, settle, read, settled, ready, keys, locate, comment, answer }
+  const CALLS = { snapshot, epoch, act, settle, read, settled, ready, keys, locate, comment, answer }
   Object.defineProperty(window, '__dloop_call', {
     value(id, name, args) {
       // What the page told since the last reply goes with this one (told.js).
-      const reply = (body) => post(JSON.stringify({ t: TOKEN, id, ...body, ...(told.length ? { told: told.splice(0) } : {}) }))
+      const reply = (body) => send({ id, ...body, ...(told.length ? { told: told.splice(0) } : {}) })
       Promise.resolve()
         .then(() => CALLS[name](args))
         .then((ok) => reply({ ok: ok ?? null }), (error) => reply({ err: String(error?.message || error) }))

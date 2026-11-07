@@ -201,6 +201,9 @@ fn panel(frame: CGRect) -> Retained<AnyObject> {
     let _: () = unsafe { msg_send![&*panel, setIgnoresMouseEvents: Bool::YES] };
     // SAFETY: a window takes a BOOL.
     let _: () = unsafe { msg_send![&*panel, setHidesOnDeactivate: Bool::NO] };
+    // SAFETY: a window takes an NSWindowAnimationBehavior (an NSInteger); 2 is none: a card
+    // that comes and goes with the pointer never fades or zooms in and out.
+    let _: () = unsafe { msg_send![&*panel, setAnimationBehavior: 2isize] };
     // SAFETY: a window takes an NSWindowLevel.
     let _: () = unsafe { msg_send![&*panel, setLevel: OVER_ALL] };
     // SAFETY: a window takes an NSWindowCollectionBehavior.

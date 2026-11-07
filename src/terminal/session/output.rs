@@ -2,29 +2,33 @@
 //! on to the window's tab at a pace, a program's cursor query answered, and how it ended once it
 //! has.
 
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 use std::os::fd::AsRawFd;
 use std::time::{Duration, Instant};
 
 use super::super::pty;
-use super::{PAINT_EVERY, Shared, UNSENT_MAX, nap};
+use super::{Input, PAINT_EVERY, Shared, UNSENT_MAX, nap};
 
 /// How long the reader waits for output while some waits to be sent, and while none does.
 const PAINT_POLL_MS: i32 = 33;
 const IDLE_POLL_MS: i32 = 1000;
+/// A title is told on at most this often: a program that sets one all the time is heard now and
+/// then, the newest each time.
+const TITLE_EVERY: Duration = Duration::from_millis(250);
 
 /// The reader thread: output into the screen, frames out to the window, until the terminal
 /// closes. It answers a program's cursor-position query, which some ask before they draw.
-pub(super) fn read(reader: &std::fs::File, writer: &std::fs::File, shared: &Shared, pid: u32) {
+pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: u32) {
     let mut reader = reader;
     let mut buffer = [0u8; 8192];
     loop {
         let mut gone = false;
-        // Output waiting for the pace is sent within a frame; with none, the reader sleeps until
-        // the program writes or ends (its end, a kill among them, wakes the poll too).
+        // Output waiting for the pace (or a title held back) is sent within a frame; with none,
+        // the reader sleeps until the program writes or ends (its end, a kill among them, wakes
+        // the poll too).
         let idle = {
             let state = shared.lock();
-            state.unsent.is_empty() && !state.replay
+            state.unsent.is_empty() && !state.replay && state.screen.retitled() == state.titled
         };
         let wait = if idle { IDLE_POLL_MS } else { PAINT_POLL_MS };
         if pty::readable(reader.as_raw_fd(), wait) {
@@ -32,7 +36,7 @@ pub(super) fn read(reader: &std::fs::File, writer: &std::fs::File, shared: &Shar
                 Ok(0) => gone = true,
                 Ok(n) => {
                     let chunk = buffer.get(..n).unwrap_or_default();
-                    take_in(shared, writer, chunk);
+                    take_in(shared, input, chunk);
                     fronted(shared, reader.as_raw_fd());
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
@@ -42,6 +46,7 @@ pub(super) fn read(reader: &std::fs::File, writer: &std::fs::File, shared: &Shar
         if shared.lock().closed {
             return;
         }
+        retitled(shared);
         paint(shared, Pace::Throttled);
         if gone {
             let status = exit_status(pid);
@@ -61,19 +66,14 @@ pub(super) fn read(reader: &std::fs::File, writer: &std::fs::File, shared: &Shar
     }
 }
 
-fn take_in(shared: &Shared, mut writer: &std::fs::File, chunk: &[u8]) {
+/// The most cursor reports one read of output is answered with: a program that asks again and
+/// again in one breath is not reading what it is told.
+const MOST_CURSOR_REPLIES: usize = 8;
+
+fn take_in(shared: &Shared, input: &Input, chunk: &[u8]) {
     let asked = chunk.windows(4).filter(|w| w == b"\x1b[6n").count();
     let mut state = shared.lock();
-    let retitled = state.screen.retitled();
     state.screen.feed(chunk);
-    let title = (state.screen.retitled() != retitled)
-        .then(|| {
-            state
-                .on_title
-                .clone()
-                .zip(state.screen.title().map(str::to_string))
-        })
-        .flatten();
     state.version += 1;
     state.changed_at = Instant::now();
     if state.painter.is_some() && !state.replay {
@@ -85,13 +85,32 @@ fn take_in(shared: &Shared, mut writer: &std::fs::File, chunk: &[u8]) {
     }
     let (row, column) = state.screen.cursor();
     drop(state);
-    if let Some((heard, title)) = title {
-        heard(&title);
-    }
-    for _ in 0..asked {
-        let _ = writer.write_all(format!("\x1b[{row};{column}R").as_bytes());
+    // The page leaves this query to the session (it answers whether or not a page is there).
+    for _ in 0..asked.min(MOST_CURSOR_REPLIES) {
+        input.queue(format!("\x1b[{row};{column}R").as_bytes());
     }
     shared.wake.notify_all();
+}
+
+/// Whoever listens told the program's title, if it changed and the last one went out long enough
+/// ago.
+fn retitled(shared: &Shared) {
+    let due = {
+        let mut state = shared.lock();
+        let now = state.screen.retitled();
+        if now == state.titled || state.titled_at.elapsed() < TITLE_EVERY {
+            return;
+        }
+        state.titled = now;
+        state.titled_at = Instant::now();
+        state
+            .on_title
+            .clone()
+            .zip(state.screen.title().map(str::to_string))
+    };
+    if let Some((heard, title)) = due {
+        heard(&title);
+    }
 }
 
 /// How often the name in front is read again while the group stays: a program that replaces
@@ -137,6 +156,14 @@ enum Pace {
     Now,
 }
 
+/// What a send to the window carries.
+enum Frame {
+    /// The whole screen, drawn again.
+    Screen(Vec<u8>),
+    /// The program's output since the last send.
+    Output(Vec<u8>),
+}
+
 /// The output (or the whole screen) to the window if there is some and it is due; a window that
 /// is gone is let go.
 fn paint(shared: &Shared, pace: Pace) {
@@ -148,23 +175,24 @@ fn paint(shared: &Shared, pace: Pace) {
                 state.replay = false;
                 state.unsent.clear();
                 state.painted_at = Instant::now();
-                Some((
-                    painter,
-                    format!("R(\"{}\")", encode(&state.screen.replay())),
-                ))
+                Some((painter, Frame::Screen(state.screen.replay())))
             }
             (true, Some(painter)) if !state.unsent.is_empty() => {
-                let output = std::mem::take(&mut state.unsent);
                 state.painted_at = Instant::now();
-                Some((painter, format!("W(\"{}\")", encode(&output))))
+                Some((painter, Frame::Output(std::mem::take(&mut state.unsent))))
             }
             _ => None,
         }
     };
-    if let Some((painter, script)) = due
-        && !painter(script)
-    {
-        shared.lock().painter = None;
+    // Encoded after the lock is let go: a long frame holds nobody up.
+    if let Some((painter, frame)) = due {
+        let script = match frame {
+            Frame::Screen(bytes) => format!("R(\"{}\")", encode(&bytes)),
+            Frame::Output(bytes) => format!("W(\"{}\")", encode(&bytes)),
+        };
+        if !painter(script) {
+            shared.lock().painter = None;
+        }
     }
 }
 

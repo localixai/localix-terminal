@@ -25,6 +25,7 @@ h1{font-size:23px;font-weight:700;letter-spacing:-.012em;margin:0 0 4px}
 h2{font-size:15px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--fg);margin:30px 4px 10px}
 .card{background:var(--ov-1);border-radius:12px;box-shadow:0 0 0 .5px var(--ov-3);overflow:hidden}
 .row{display:flex;align-items:center;gap:14px;min-height:46px;padding:7px 14px;box-sizing:border-box}
+.row[hidden]{display:none}
 .row+.row{box-shadow:0 -.5px 0 var(--ov-3)}
 .row .l{flex:1;min-width:0}
 .row .l b{display:block;font-weight:500}
@@ -52,6 +53,7 @@ select:active{background-color:var(--ov-3)}
 /* Shortcuts. */
 #find{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;margin:0 0 10px;padding:0 10px;height:30px;border-radius:var(--r-3);background:var(--ground);box-shadow:inset 0 0 0 .5px var(--ov-3)}
 html[data-glass] #find{-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);background:color-mix(in srgb,var(--ground) 80%,transparent)}
+html[data-reduced] #find{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--ground)}
 #find:focus-within{background:var(--ground);outline:3px solid var(--acc-2)}
 #find input{flex:1;font:inherit;color:inherit;background:none;border:0;outline:0;user-select:text;-webkit-user-select:text}
 #find svg{width:13px;height:13px;fill:none;stroke:var(--ink-2);stroke-width:1.5}
@@ -60,7 +62,6 @@ html[data-glass] #find{-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(2
 .row.k{cursor:pointer;transition:background-color var(--t-out) var(--ease)}
 .row.k:hover{background:var(--acc-1);transition:none}
 .row.k:active:not(:has(.ic:active)){background:var(--acc-2)}
-.row.k.rec{background:var(--acc-2)}
 .chip{font:inherit;font-size:12px;color:inherit;min-width:64px;height:24px;padding:0 9px;border-radius:var(--r-2);border:0;background:var(--ov-1);box-shadow:inset 0 0 0 .5px var(--ov-3);letter-spacing:.06em;font-variant-numeric:tabular-nums;transition:box-shadow var(--t-out)}
 .chip:hover{box-shadow:inset 0 0 0 .5px var(--ov-3),0 0 0 3px var(--ov-1)}
 .chip.has,.chip.has:hover{min-width:0;height:auto;padding:0;background:none;box-shadow:none;letter-spacing:0}
@@ -110,7 +111,7 @@ input[type=text],input:not([type]),input[type=search]{cursor:text}
     <div class="row"><div class="l"><b>Theme</b><small>Light, dark, or as the system is.</small></div>
       <button class="ic gone" data-reset="theme" aria-label="Reset Theme"></button>
       <div class="seg" id="theme" role="radiogroup" aria-label="Theme"></div></div>
-    <div class="row"><div class="l"><b>Window transparency</b><small id="tnote">How much of the desktop shows through the glass.</small></div>
+    <div class="row" id="trow"><div class="l"><b>Window transparency</b><small id="tnote">How much of the desktop shows through the glass.</small></div>
       <button class="ic gone" data-reset="transparency" aria-label="Reset Window transparency"></button>
       <div class="seg" id="transparency" role="radiogroup" aria-label="Window transparency"></div></div>
     <div class="row"><div class="l"><b>Interface font</b><small>The tabs, the bar and these pages.</small></div>
@@ -144,6 +145,8 @@ running 230 tests  <span class="p">ok</span>  0O 1lI {}[]=&gt; -&gt;</div>
 const post = (change) => window.ipc && window.ipc.postMessage("k" + JSON.stringify(change));
 const THEMES = [["system", "System"], ["light", "Light"], ["dark", "Dark"]];
 const LEVELS = [["off", "Off"], ["low", "Low"], ["standard", "Standard"], ["high", "High"]];
+const GLASSY = "How much of the desktop shows through the glass.";
+const REDUCED = "Reduced by Accessibility settings (Display > Reduce transparency).";
 const RESET = ["M3.5 8a4.5 4.5 0 1 0 1.4-3.3", "M3.5 3v2.2h2.2"];
 // What the page shows of the settings, ahead of the answer, and what the person was last asking.
 let data = null, cur = null, recording = null, asking = null, resetting = false;
@@ -227,6 +230,8 @@ const step = (by) => cur && data && change("font_size", Math.min(data.sizes[1], 
 document.getElementById("smaller").addEventListener("click", () => step(-1));
 document.getElementById("larger").addEventListener("click", () => step(1));
 document.getElementById("q").addEventListener("input", drawKeys);
+// The app tells the page again when the person's look, or the system's Accessibility options, change.
+addEventListener("desk-look", () => cur && show());
 
 // The setting a reset button is for: its name in the settings, and in the defaults the page is
 // told (settings.rs `page`); the words for the default it goes back to.
@@ -248,6 +253,13 @@ for (const button of document.querySelectorAll("button[data-reset]")) {
 function show() {
   segmented("theme", THEMES, cur.theme, "theme");
   segmented("transparency", LEVELS, cur.transparency, "transparency");
+  // The window's glass is macOS's; and the system's Reduce Transparency wins over this setting.
+  document.getElementById("trow").hidden = !data.glass;
+  const reduced = document.documentElement.hasAttribute("data-reduced");
+  const level = document.getElementById("transparency");
+  level.setAttribute("aria-disabled", String(reduced));
+  for (const button of segs.get(level).values()) button.disabled = reduced;
+  document.getElementById("tnote").textContent = reduced ? REDUCED : GLASSY;
   choices("ui_font", data.ui_fonts, cur.ui_font);
   choices("code_font", data.code_fonts, cur.code_font);
   document.getElementById("size").textContent = cur.font_size + " pt";

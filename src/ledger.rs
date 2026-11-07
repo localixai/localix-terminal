@@ -1,8 +1,8 @@
-//! The ledger of a project's tabs, kept in the store: every tab the window opened for it (a page,
-//! a terminal, the board), open or closed, and the pages it showed. A closed tab is the
-//! project's history; the tabs open when the app quit are the ones it opens again; the pages
+//! The ledger of a project's panes, kept in the store: every pane the window opened for it (a
+//! page, a terminal, the board), open or closed, and the pages it showed. A closed pane is the
+//! project's history; the panes open when the app quit are the ones it opens again; the pages
 //! shown are what the address field suggests. The desk writes it (desk/ledger.rs); nothing here
-//! knows the window.
+//! knows the window. Where a pane is shown (its tab) is the layout's (layout.rs).
 
 use std::path::{Path, PathBuf};
 
@@ -10,14 +10,14 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use crate::projects::ProjectId;
 
-/// A tab's row.
+/// A pane's row.
 pub type Row = i64;
 
-/// How many closed tabs a project keeps, and how many pages shown.
+/// How many closed panes a project keeps, and how many pages shown.
 const CLOSED_KEPT: usize = 200;
 const VISITS_KEPT: usize = 1000;
 
-/// What a tab is.
+/// What a pane is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Page,
@@ -43,9 +43,9 @@ impl Kind {
     }
 }
 
-/// A tab as the ledger keeps it.
+/// A pane as the ledger keeps it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Tab {
+pub struct Pane {
     pub row: Row,
     pub project: ProjectId,
     pub kind: Kind,
@@ -62,7 +62,7 @@ pub struct Tab {
     pub closed: Option<u64>,
 }
 
-/// A tab opened: what is known of it then.
+/// A pane opened: what is known of it then.
 #[derive(Debug, Clone, Copy)]
 pub struct Opened<'a> {
     pub project: ProjectId,
@@ -83,10 +83,10 @@ pub struct Visit {
 
 const COLUMNS: &str = "id, project, kind, agent, title, url, cwd, command, opened, closed";
 
-fn tab(row: &rusqlite::Row<'_>) -> rusqlite::Result<Tab> {
+fn pane(row: &rusqlite::Row<'_>) -> rusqlite::Result<Pane> {
     let kind: String = row.get(2)?;
     let cwd: Option<String> = row.get(6)?;
-    Ok(Tab {
+    Ok(Pane {
         row: row.get(0)?,
         project: row.get(1)?,
         kind: Kind::of(&kind),
@@ -116,7 +116,7 @@ pub fn reopen(tx: &Transaction<'_>, row: Row) -> Result<(), String> {
     Ok(())
 }
 
-/// Tab `opened`, `now`: its row, last of its project's.
+/// Pane `opened`, `now`: its row, last of its project's.
 ///
 /// # Errors
 /// The store refused it.
@@ -147,7 +147,7 @@ pub fn open(tx: &Transaction<'_>, opened: &Opened<'_>, now: u64) -> Result<Row, 
     Ok(tx.last_insert_rowid())
 }
 
-/// Tab `row` is titled `title`; whether that is news.
+/// Pane `row` is titled `title`; whether that is news.
 ///
 /// # Errors
 /// The store refused it.
@@ -242,7 +242,7 @@ fn remember(
     Ok(())
 }
 
-/// Tab `row` closed `now`; its project keeps the newest closed tabs only.
+/// Pane `row` closed `now`; its project keeps the newest closed panes only.
 ///
 /// # Errors
 /// The store refused it.
@@ -264,7 +264,7 @@ pub fn close(tx: &Transaction<'_>, row: Row, now: u64) -> Result<(), String> {
     Ok(())
 }
 
-/// Tab `row` taken out of its project's ledger: it opened again, as a new tab (a closed one,
+/// Pane `row` taken out of its project's ledger: it opened again, as a new pane (a closed one,
 /// or one open when the app last quit).
 ///
 /// # Errors
@@ -301,26 +301,26 @@ pub fn screen(db: &Connection, row: Row) -> Result<Option<String>, String> {
     .map_err(|why| failed(&why))
 }
 
-/// Tab `row`, while it is kept.
+/// Pane `row`, while it is kept.
 ///
 /// # Errors
 /// The store could not be read.
-pub fn get(db: &Connection, row: Row) -> Result<Option<Tab>, String> {
+pub fn get(db: &Connection, row: Row) -> Result<Option<Pane>, String> {
     db.query_row(
         &format!("SELECT {COLUMNS} FROM panes WHERE id = ?1"),
         [row],
-        tab,
+        pane,
     )
     .optional()
     .map_err(|why| failed(&why))
 }
 
-/// Project `project`'s tabs, the latest first (by when each closed, else when it last showed,
+/// Project `project`'s panes, the latest first (by when each closed, else when it last showed,
 /// else when it opened), `most` of them.
 ///
 /// # Errors
 /// The store could not be read.
-pub fn past(db: &Connection, project: ProjectId, most: usize) -> Result<Vec<Tab>, String> {
+pub fn past(db: &Connection, project: ProjectId, most: usize) -> Result<Vec<Pane>, String> {
     let mut statement = db
         .prepare(&format!(
             "SELECT {COLUMNS} FROM panes WHERE project = ?1
@@ -328,23 +328,23 @@ pub fn past(db: &Connection, project: ProjectId, most: usize) -> Result<Vec<Tab>
         ))
         .map_err(|why| failed(&why))?;
     let rows = statement
-        .query_map(params![project, most], tab)
+        .query_map(params![project, most], pane)
         .map_err(|why| failed(&why))?;
     rows.collect::<Result<_, _>>().map_err(|why| failed(&why))
 }
 
-/// Project `project`'s tabs not closed, in their order: the ones open when the app quit.
+/// Project `project`'s panes not closed, in their order: the ones open when the app quit.
 ///
 /// # Errors
 /// The store could not be read.
-pub fn left_open(db: &Connection, project: ProjectId) -> Result<Vec<Tab>, String> {
+pub fn left_open(db: &Connection, project: ProjectId) -> Result<Vec<Pane>, String> {
     let mut statement = db
         .prepare(&format!(
             "SELECT {COLUMNS} FROM panes WHERE project = ?1 AND closed IS NULL ORDER BY place"
         ))
         .map_err(|why| failed(&why))?;
     let rows = statement
-        .query_map([project], tab)
+        .query_map([project], pane)
         .map_err(|why| failed(&why))?;
     rows.collect::<Result<_, _>>().map_err(|why| failed(&why))
 }

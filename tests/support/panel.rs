@@ -67,7 +67,7 @@ fn shown(
 
 pub(crate) fn scenario(browser: &Browser, driver: &WebviewDriver) {
     let page = llx_desk::terminal::page("session 1 · cat");
-    let panel = browser.panel(1, "session 1 · cat", page);
+    let panel = std::sync::Arc::new(browser.panel(1, "session 1 · cat", page));
     let second = Duration::from_secs(1);
     let wait = Duration::from_secs(10);
 
@@ -100,6 +100,8 @@ pub(crate) fn scenario(browser: &Browser, driver: &WebviewDriver) {
     std::thread::sleep(Duration::from_millis(500));
     let read = shown(browser, &panel, second, |read| read["href"] != Value::Null);
     assert_eq!(read["href"], href, "the panel navigated");
+
+    super::terminal_colors::check(browser, &panel);
 
     // A burst: all of it runs in order, and the browser still answers.
     for n in 0..1000 {

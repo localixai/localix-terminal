@@ -9,13 +9,15 @@ use std::time::Duration;
 use serde_json::Value;
 
 use super::State;
-use super::shell::{Ran, login_path, run, which};
+use super::shell::{Ran, failure, find, run};
 
 /// The plugin as Claude Code names it, and its marketplace.
 const PLUGIN: &str = "llx-desk@llx-desk";
 const MARKETPLACE: &str = "llx-desk";
 /// How long a `claude plugin` command may take (an install copies the plugin).
 const MOST: Duration = Duration::from_secs(90);
+/// Why the plugin is off when the person disabled it in Claude Code: the app leaves it so.
+pub(super) const DISABLED: &str = "disabled in Claude Code";
 
 /// The marketplace in the app's bundle, when this program is the app's.
 fn marketplace() -> Option<PathBuf> {
@@ -25,74 +27,93 @@ fn marketplace() -> Option<PathBuf> {
         .then_some(dir)
 }
 
-/// `claude`, and the PATH to run it with.
-fn claude() -> Result<(PathBuf, String), String> {
-    let path = login_path().ok_or("the login shell did not say its PATH")?;
-    let claude =
-        which("claude", &path).ok_or("Claude Code is not installed (no `claude` on the PATH)")?;
-    Ok((claude, path))
-}
-
 fn ask(claude: &(PathBuf, String), args: &[&str]) -> Result<Ran, String> {
     run(&claude.0, args, &claude.1, MOST)
 }
 
-/// The plugin's version Claude Code has, if it has it enabled.
-fn installed(claude: &(PathBuf, String)) -> Result<Option<String>, String> {
+/// The plugin's version Claude Code has, and whether it has it enabled.
+fn installed(claude: &(PathBuf, String)) -> Result<Option<(String, bool)>, String> {
     let listed = ask(claude, &["plugin", "list", "--json"])?;
     if !listed.ok {
-        return Err(listed.out);
+        return Err(failure(
+            &listed,
+            "`claude plugin list` failed and said nothing",
+        ));
     }
     let plugins: Value = serde_json::from_str(listed.out.trim()).map_err(|why| why.to_string())?;
-    let mine = (plugins.as_array().into_iter().flatten())
-        .find(|plugin| plugin["id"] == PLUGIN && plugin["enabled"] == true);
-    Ok(mine.map(|plugin| plugin["version"].as_str().unwrap_or_default().to_string()))
+    let mine = (plugins.as_array().into_iter().flatten()).find(|plugin| plugin["id"] == PLUGIN);
+    Ok(mine.map(|plugin| {
+        let version = plugin["version"].as_str().unwrap_or_default().to_string();
+        (version, plugin["enabled"] == true)
+    }))
 }
 
 pub(super) fn state() -> State {
     if marketplace().is_none() {
         return State::Unavailable("from LLX Desk.app: its bundle holds the plugin".into());
     }
-    let claude = match claude() {
+    let claude = match find("claude") {
         Ok(claude) => claude,
         Err(why) => return State::Unavailable(why),
     };
     match installed(&claude) {
-        Ok(Some(version)) if version == env!("CARGO_PKG_VERSION") => {
+        Ok(Some((_, false))) => State::Off(DISABLED.into()),
+        Ok(Some((version, true))) if version == env!("CARGO_PKG_VERSION") => {
             State::On(format!("the plugin {version} is installed"))
         }
-        Ok(Some(version)) => State::Off(format!("the plugin {version} is older than the app")),
+        Ok(Some((version, true))) => {
+            State::Off(format!("the plugin {version} is older than the app"))
+        }
         Ok(None) => State::Off("not installed".into()),
         Err(why) => State::Unavailable(why),
     }
 }
 
-/// The plugin installed, of the app's version: its marketplace pointed at the bundle (an earlier
-/// one of the same name, elsewhere, is replaced), then installed or updated.
+/// The plugin installed and enabled, of the app's version: its marketplace pointed at the bundle
+/// (an earlier one of the same name, elsewhere, is replaced), then installed or updated.
 pub(super) fn turn_on() -> Result<String, String> {
     let dir = marketplace().ok_or("only LLX Desk.app holds the plugin")?;
-    let claude = claude()?;
-    if !points_at(&claude, &dir) {
-        let _ = ask(&claude, &["plugin", "marketplace", "remove", MARKETPLACE]);
-        let added = ask(
-            &claude,
-            &["plugin", "marketplace", "add", &dir.display().to_string()],
-        )?;
-        if !added.ok {
-            return Err(added.out);
+    let claude = find("claude")?;
+    // Taken out only when it is known to name another folder: a list that could not be read
+    // (it timed out, Claude Code said another thing) must not remove the plugin with it.
+    let at = market(&claude, &dir);
+    match at {
+        Market::Elsewhere | Market::Absent => {
+            if at == Market::Elsewhere {
+                let _ = ask(&claude, &["plugin", "marketplace", "remove", MARKETPLACE]);
+            }
+            let added = ask(
+                &claude,
+                &["plugin", "marketplace", "add", &dir.display().to_string()],
+            )?;
+            if !added.ok {
+                return Err(failure(
+                    &added,
+                    "`claude plugin marketplace add` failed and said nothing",
+                ));
+            }
         }
-    } else {
-        let _ = ask(&claude, &["plugin", "marketplace", "update", MARKETPLACE]);
+        Market::Here | Market::Unknown => {
+            let _ = ask(&claude, &["plugin", "marketplace", "update", MARKETPLACE]);
+        }
     }
-    let fresh =
-        |claude| installed(claude).ok().flatten().as_deref() == Some(env!("CARGO_PKG_VERSION"));
+    let fresh = |claude| {
+        installed(claude).ok().flatten() == Some((env!("CARGO_PKG_VERSION").to_string(), true))
+    };
+    // Disabled in Claude Code, and the person asks for it: enabled again.
+    if matches!(installed(&claude), Ok(Some((_, false)))) {
+        let _ = ask(&claude, &["plugin", "enable", PLUGIN]);
+    }
     if !fresh(&claude) {
         let _ = ask(&claude, &["plugin", "install", PLUGIN]);
     }
     if !fresh(&claude) {
         let updated = ask(&claude, &["plugin", "update", PLUGIN])?;
         if !fresh(&claude) {
-            return Err(updated.out);
+            return Err(failure(
+                &updated,
+                "Claude Code still lists another version of the plugin, or has it disabled: run /reload-plugins in it, or start it again",
+            ));
         }
     }
     Ok("the plugin is installed: start a new Claude Code session to use it".into())
@@ -100,22 +121,54 @@ pub(super) fn turn_on() -> Result<String, String> {
 
 /// The plugin and its marketplace gone from Claude Code.
 pub(super) fn turn_off() -> Result<String, String> {
-    let claude = claude()?;
+    let claude = find("claude")?;
     let removed = ask(&claude, &["plugin", "uninstall", PLUGIN])?;
     let _ = ask(&claude, &["plugin", "marketplace", "remove", MARKETPLACE]);
     match removed.ok {
         true => Ok("the plugin is uninstalled".into()),
-        false => Err(removed.out),
+        false => Err(failure(
+            &removed,
+            "`claude plugin uninstall` failed and said nothing",
+        )),
     }
 }
 
-/// Whether Claude Code's marketplace of the name is `dir`.
-fn points_at(claude: &(PathBuf, String), dir: &Path) -> bool {
-    let Ok(listed) = ask(claude, &["plugin", "marketplace", "list", "--json"]) else {
-        return false;
-    };
-    let markets: Value = serde_json::from_str(listed.out.trim()).unwrap_or_default();
-    (markets.as_array().into_iter().flatten()).any(|market| {
-        market["name"] == MARKETPLACE && market["path"].as_str() == Some(&dir.display().to_string())
-    })
+/// Where Claude Code's marketplace of the name is.
+#[derive(Debug, PartialEq, Eq)]
+enum Market {
+    /// At the app's folder.
+    Here,
+    /// At another folder.
+    Elsewhere,
+    /// Not listed.
+    Absent,
+    /// The list could not be read.
+    Unknown,
 }
+
+/// Where Claude Code's marketplace of the name is, as it lists them.
+fn market(claude: &(PathBuf, String), dir: &Path) -> Market {
+    let Ok(listed) = ask(claude, &["plugin", "marketplace", "list", "--json"]) else {
+        return Market::Unknown;
+    };
+    match serde_json::from_str::<Value>(listed.out.trim()) {
+        Ok(markets) if listed.ok => marketplace_in(&markets, dir),
+        _ => Market::Unknown,
+    }
+}
+
+/// Where the marketplace of the name is in `markets` (Claude Code's list).
+fn marketplace_in(markets: &Value, dir: &Path) -> Market {
+    let Some(list) = markets.as_array() else {
+        return Market::Unknown;
+    };
+    match list.iter().find(|market| market["name"] == MARKETPLACE) {
+        None => Market::Absent,
+        Some(found) if found["path"].as_str() == Some(&dir.display().to_string()) => Market::Here,
+        Some(_) => Market::Elsewhere,
+    }
+}
+
+#[cfg(test)]
+#[path = "claude_tests.rs"]
+mod tests;

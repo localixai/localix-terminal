@@ -21,5 +21,10 @@ if [ $# -gt 0 ] && [ "${1#v}" != "$cargo" ]; then
   echo "the tag $1 is not v$cargo" >&2
   bad=1
 fi
+# A release's notes are its CHANGELOG.md section: found now, not after the builds.
+if [ $# -gt 0 ] && ! grep -qx "## $cargo" CHANGELOG.md; then
+  echo "CHANGELOG.md has no section \"## $cargo\"" >&2
+  bad=1
+fi
 [ $bad -eq 0 ] && echo "version $cargo everywhere"
 exit $bad

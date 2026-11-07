@@ -10,12 +10,16 @@
 
 mod claude;
 mod command;
+mod declined;
 mod mcp_hosts;
 mod shell;
 
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use serde_json::{Value, json};
+
+use declined::{declined, remember};
 
 /// Where an integration is.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -146,6 +150,13 @@ pub const INTEGRATIONS: [Integration; 7] = [
     },
 ];
 
+/// The `PATH` of the person's login shell, as a new terminal of theirs has it (an app started from
+/// the Finder or the Dock has only the system's). It asks the shell, which may take seconds: never
+/// on the window's thread.
+pub fn login_path() -> Option<String> {
+    shell::login_path()
+}
+
 /// The integration for agent `agent` (its program's name, `claude`), when there is one to offer.
 pub fn for_agent(agent: &str) -> Option<&'static Integration> {
     (INTEGRATIONS.iter())
@@ -153,10 +164,21 @@ pub fn for_agent(agent: &str) -> Option<&'static Integration> {
 }
 
 /// Whether the window offers integration `id` where its agent runs: it is off, could be on, and
-/// the person did not take it out. It runs the person's programs: not for the window's thread.
+/// the person did not take it out (nor disable it in its agent). It runs the person's programs:
+/// not for the window's thread.
 pub fn offered(id: &str) -> bool {
-    matches!(state(id), State::Off(_)) && !declined(id)
+    let state = state(id);
+    matches!(state, State::Off(_)) && !disabled(&state) && !declined(id)
 }
+
+/// Whether `state` is the plugin the person disabled in Claude Code: it is left as it is.
+fn disabled(state: &State) -> bool {
+    matches!(state, State::Off(why) if why == claude::DISABLED)
+}
+
+/// One change of an integration at a time: Settings, the offer bar, the app opening and the
+/// command line can ask for the same one together, and the last to finish must be the last asked.
+static BUSY: Mutex<()> = Mutex::new(());
 
 /// This program, as the integrations name it: its path with links resolved (in the app, the
 /// program of the bundle).
@@ -190,6 +212,7 @@ pub fn state(id: &str) -> State {
 /// The person puts integration `id` in place (`on`) or takes it out: done, and remembered, so the
 /// app never puts back what they took out. What was done, in words.
 pub fn turn(id: &str, on: bool) -> Result<String, String> {
+    let _one = crate::lock(&BUSY);
     let done = put(id, on)?;
     remember(id, !on);
     Ok(done)
@@ -203,57 +226,19 @@ fn put(id: &str, on: bool) -> Result<String, String> {
             let linked = command::put_on_path(&exe, &home)?;
             // Elsewhere the program is the app, and the person's applications list it.
             #[cfg(target_os = "linux")]
-            let linked = format!("{linked}; {}", desktop_entry(&exe, &home)?);
+            let linked = format!("{linked}; {}", command::desktop_entry(&exe, &home)?);
             Ok(linked)
         }
-        ("command", false, _) => command::take_off_path(&exe, &home),
+        ("command", false, _) => {
+            let off = command::take_off_path(&exe, &home)?;
+            #[cfg(target_os = "linux")]
+            let off = format!("{off}; {}", command::take_off_entry(&exe, &home)?);
+            Ok(off)
+        }
         ("claude-code", true, _) => claude::turn_on(),
         ("claude-code", false, _) => claude::turn_off(),
         (_, on, Some(host)) => host.turn(&home, &exe, on),
         (other, _, None) => Err(format!("no integration `{other}`")),
-    }
-}
-
-/// The store's key of "the person took integration `id` out".
-fn declined_key(id: &str) -> String {
-    format!("integration.declined.{id}")
-}
-
-/// Whether the person took integration `id` out: the app leaves it out.
-pub fn declined(id: &str) -> bool {
-    let Ok(store) = crate::store::Store::open(&crate::paths::database()) else {
-        return false;
-    };
-    let key = declined_key(id);
-    store
-        .read(|db| {
-            use rusqlite::OptionalExtension as _;
-            db.query_row("SELECT 1 FROM state WHERE key = ?1", [&key], |_| Ok(()))
-                .optional()
-                .map(|found| found.is_some())
-                .map_err(|why| why.to_string())
-        })
-        .unwrap_or(false)
-}
-
-/// The person took integration `id` out (`out`), or put it back.
-fn remember(id: &str, out: bool) {
-    let written = crate::store::Store::open(&crate::paths::database()).and_then(|store| {
-        let key = declined_key(id);
-        store.write(|tx| {
-            let done = match out {
-                true => tx.execute(
-                    "INSERT INTO state (key, value) VALUES (?1, '1')
-                     ON CONFLICT (key) DO UPDATE SET value = '1'",
-                    [&key],
-                ),
-                false => tx.execute("DELETE FROM state WHERE key = ?1", [&key]),
-            };
-            done.map(drop).map_err(|why| why.to_string())
-        })
-    });
-    if let Err(why) = written {
-        log::warn!("setup: what the person did to {id} is not remembered: {why}");
     }
 }
 
@@ -285,7 +270,8 @@ pub fn states() -> Value {
                 "state": state.word(),
                 "note": state.note(),
                 // Taken out by the person: the app leaves it out, and offers it nowhere.
-                "declined": matches!(state, State::Off(_)) && declined(integration.id),
+                "declined": matches!(state, State::Off(_))
+                    && (disabled(&state) || declined(integration.id)),
             })
         })
         .collect();
@@ -301,6 +287,7 @@ pub fn mcp_entry() -> Result<String, String> {
 /// The app opened: the command linked (unless the person took it out). What was done, in words,
 /// for the app's log.
 pub fn opened() -> Vec<String> {
+    let _one = crate::lock(&BUSY);
     if declined("command") {
         return vec!["the command stays off the PATH, as the person left it".into()];
     }
@@ -317,11 +304,19 @@ pub fn auto() -> Vec<String> {
     let mut said = vec![];
     for integration in INTEGRATIONS.iter().filter(|known| known.id != "command") {
         let title = integration.title;
+        // One at a time with the person's own changes, and whether they took it out read again
+        // inside: what they did while this waited is not undone.
+        let _one = crate::lock(&BUSY);
         if declined(integration.id) {
             said.push(format!("{title}: left out, as the person took it out"));
             continue;
         }
-        match state(integration.id) {
+        let state = state(integration.id);
+        if disabled(&state) {
+            said.push(format!("{title}: left out, as it is disabled in its agent"));
+            continue;
+        }
+        match state {
             State::Off(why) => match put(integration.id, true) {
                 Ok(done) => said.push(format!("{title} ({why}): {done}")),
                 Err(failed) => said.push(format!("{title} ({why}) was not put in place: {failed}")),
@@ -330,18 +325,4 @@ pub fn auto() -> Vec<String> {
         }
     }
     said
-}
-
-/// The app among the person's applications (Linux): a desktop entry that opens the window.
-#[cfg(target_os = "linux")]
-fn desktop_entry(exe: &std::path::Path, home: &std::path::Path) -> Result<String, String> {
-    let dir = home.join(".local/share/applications");
-    std::fs::create_dir_all(&dir).map_err(|why| format!("{}: {why}", dir.display()))?;
-    let file = dir.join("llx-desk.desktop");
-    let entry = format!(
-        "[Desktop Entry]\nType=Application\nName=LLX Desk\nComment=Pages and terminals agents work in, and you watch\nExec=\"{}\" open\nTerminal=false\nCategories=Development;\n",
-        exe.display()
-    );
-    std::fs::write(&file, entry).map_err(|why| format!("{}: {why}", file.display()))?;
-    Ok(format!("{} opens the app", file.display()))
 }

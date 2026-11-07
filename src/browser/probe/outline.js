@@ -6,7 +6,9 @@
   // A control is known by a short name; content (a paragraph, a code block of results) says more.
   const MAX_NAME = 200
   const MAX_TEXT_NODE = 1500
-  const MAX_OUTLINE_CHARS = 12000
+  // The desk shows the first 6000 characters of the whole outline (refs and indentation too, which
+  // are not counted here): more is not read.
+  const MAX_OUTLINE_CHARS = 6000
   const LANDMARK_TAGS = { NAV: 'navigation', MAIN: 'main', HEADER: 'banner', FOOTER: 'contentinfo',
     ASIDE: 'complementary', FORM: 'form', DIALOG: 'dialog', TABLE: 'table', UL: 'list', OL: 'list' }
   const LANDMARK_ROLES = /^(navigation|main|banner|contentinfo|complementary|search|region|form|dialog|alertdialog|table|list)$/

@@ -207,3 +207,118 @@ fn a_restored_screen_shows_dimmed_before_the_programs_output() {
         session.text()
     );
 }
+
+#[test]
+fn a_bad_key_is_refused_before_any_of_the_input_is_typed() {
+    let session = start("cat");
+    let why = session
+        .type_in("never typed", &["Enter".into(), "Hyper".into()])
+        .unwrap_err();
+    assert!(why.contains("Hyper"), "{why}");
+    session.wait(None, 0, Duration::from_millis(600));
+    assert!(
+        !session.text().contains("never typed"),
+        "{}",
+        session.text()
+    );
+}
+
+#[test]
+fn input_and_keys_are_typed_in_order_text_first() {
+    let session = start("sh -c 'read x; echo \"got $x\"; sleep 20'");
+    session
+        .type_in("ab", &["Left".into(), "Backspace".into(), "Enter".into()])
+        .unwrap();
+    assert_eq!(session.wait(Some("got "), 0, DEFAULT_WAIT), Until::Matched);
+}
+
+#[test]
+fn a_program_asking_for_the_cursor_is_answered_by_the_session() {
+    // Raw, so the reply is not echoed: the program reads its six bytes and shows them.
+    let session = start(
+        r#"sh -c 'stty raw -echo; printf "\033[6n"; dd bs=1 count=6 2>/dev/null | od -An -c; sleep 20'"#,
+    );
+    let until = session.wait(Some("1   ;   1   R"), 0, DEFAULT_WAIT);
+    assert_eq!(until, Until::Matched, "{}", session.text());
+}
+
+#[test]
+fn typing_and_resizing_never_wait_for_a_program_that_reads_nothing() {
+    let session = start("sh -c 'stty raw -echo; sleep 20'");
+    session.wait(None, 0, Duration::from_millis(300));
+    let begun = Instant::now();
+    session.typed(&"x".repeat(500_000));
+    session.resized(90, 25);
+    session.typed("more");
+    assert!(
+        begun.elapsed() < Duration::from_millis(500),
+        "{:?}",
+        begun.elapsed()
+    );
+}
+
+#[test]
+fn output_still_arriving_is_not_called_settled() {
+    let busy = start("sh -c 'while :; do echo more; sleep 0.1; done'");
+    assert_eq!(busy.wait(None, 0, DEFAULT_WAIT), Until::Deadline);
+    let quiet = start("sleep 20");
+    assert_eq!(quiet.wait(None, 0, DEFAULT_WAIT), Until::Settled);
+}
+
+#[test]
+fn a_text_that_wraps_in_the_pane_is_waited_for_whole() {
+    // 150 characters on a 120-column screen: two rows, one line.
+    let session = start("sh -c 'printf \"%0150d\" 0; sleep 20'");
+    let needle = "0".repeat(150);
+    assert_eq!(session.wait(Some(&needle), 0, DEFAULT_WAIT), Until::Matched);
+    assert_eq!(session.count(&needle), 1);
+}
+
+#[test]
+fn the_screen_is_labelled_as_what_the_program_drew() {
+    let session = start("echo hi");
+    session.wait(None, 0, DEFAULT_WAIT);
+    let screen = session.snapshot();
+    assert!(
+        screen.starts_with("screen 120×40, cursor at row "),
+        "{screen}"
+    );
+    assert!(screen.contains("(untrusted program output):\n"), "{screen}");
+}
+
+#[test]
+fn a_program_that_sets_its_title_all_the_time_is_heard_now_and_then_with_the_newest() {
+    let session = start(
+        r#"sh -c 'sleep 0.4; printf "\033]0;alpha\007"; printf "\033]0;beta\007"; printf "\033]0;gamma\007"; sleep 20'"#,
+    );
+    let heard = Arc::new(Mutex::new(vec![]));
+    let told = Arc::clone(&heard);
+    session.on_title(move |title| crate::lock(&told).push(title.to_string()));
+    let deadline = Instant::now() + DEFAULT_WAIT;
+    while crate::lock(&heard).last().map(String::as_str) != Some("gamma") {
+        assert!(Instant::now() < deadline, "{:?}", crate::lock(&heard));
+        nap(20);
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn a_terminal_with_no_locale_gets_a_utf8_one_and_one_that_has_one_keeps_it() {
+    let path = std::env::var("PATH").unwrap_or_default();
+    let run = |extra: &[(&str, &str)]| {
+        let mut vars = vec![("PATH".to_string(), path.clone())];
+        vars.extend(extra.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+        let session = Session::start(
+            "sh -c 'echo \"lang=[$LANG]\"; sleep 20'",
+            &std::env::temp_dir(),
+            Some(&vars),
+            None,
+        )
+        .unwrap();
+        session.wait(Some("lang=["), 0, DEFAULT_WAIT);
+        session.text()
+    };
+    assert!(run(&[]).contains("lang=[en_US.UTF-8]"));
+    assert!(run(&[("LANG", "C")]).contains("lang=[C]"));
+    assert!(run(&[("LC_ALL", "de_DE.UTF-8")]).contains("lang=[]"));
+}

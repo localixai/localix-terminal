@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use super::catalog::OF_PAGE;
 use super::*;
 
 #[test]
@@ -103,4 +104,18 @@ fn what_needs_a_page_is_in_the_catalog() {
         assert!(SHORTCUTS.iter().any(|s| s.does == does), "{does}");
     }
     assert!(of_page("reload") && !of_page("key address") && !of_page("send"));
+}
+
+#[test]
+fn one_rule_says_what_a_shortcuts_keys_are_for_the_buttons_and_the_menus() {
+    let page = SHORTCUTS.iter().find(|s| s.id == "new-page").unwrap();
+    let text =
+        |changed: &BTreeMap<String, Option<String>>| chord_of(changed, page).map(|c| c.text());
+    assert_eq!(text(&BTreeMap::new()).as_deref(), Some("cmd+t"));
+    let set = BTreeMap::from([("new-page".to_string(), Some("cmd+shift+n".to_string()))]);
+    assert_eq!(text(&set).as_deref(), Some("shift+cmd+n"));
+    let off = BTreeMap::from([("new-page".to_string(), None)]);
+    assert_eq!(text(&off), None);
+    // A keys the person's file holds for a shortcut the catalog lacks is nobody's.
+    assert_eq!(keys_of("gone-for-good"), None);
 }

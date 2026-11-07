@@ -36,7 +36,7 @@ fn a_project_is_known_by_its_canonical_folder() {
 }
 
 #[test]
-fn a_folder_is_one_project_made_once_and_opened_again() {
+fn a_folder_is_one_project_made_once_and_only_the_person_going_to_it_opens_it() {
     let store = Store::memory().unwrap();
     let shop = Path::new("/work/shop");
     let made = store.write(|tx| find_or_make(tx, shop, 10)).unwrap();
@@ -46,8 +46,12 @@ fn a_folder_is_one_project_made_once_and_opened_again() {
     let other = store
         .write(|tx| find_or_make(tx, Path::new("/side/notes"), 15))
         .unwrap();
-    let recent = store.read(|db| recent(db, 10)).unwrap();
-    assert_eq!(recent, vec![made, other.clone()]);
+    // An agent's call finds or makes a project: none of them is used last for it.
+    let before = store.read(|db| recent(db, 10)).unwrap();
+    assert_eq!(before, vec![other.clone(), made.clone()]);
+    store.write(|tx| opened(tx, made.id, 20)).unwrap();
+    let after = store.read(|db| recent(db, 10)).unwrap();
+    assert_eq!(after, vec![made, other.clone()]);
     assert_eq!(
         store.read(|db| get(db, other.id)).unwrap(),
         Some(other.clone())

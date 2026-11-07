@@ -160,6 +160,14 @@ impl Desk {
         said
     }
 
+    /// A run begins: what the last one left open of its own (asks, programs that ended) is past.
+    pub(super) fn settle_last_run(&self) {
+        let now = board::now();
+        if let Err(why) = (self.feed.store()).write(|tx| journal::settle_run_local(tx, now)) {
+            log::warn!("desk: the last run's events stay open in the journal: {why}");
+        }
+    }
+
     /// Tab `key` closed: what was asked on it goes.
     fn tab_gone(&self, key: &str) {
         crate::lock(&self.asks).remove(&Subject::Tab(key.to_string()));

@@ -19,7 +19,8 @@ pub(super) struct Person {
 }
 
 impl Desk {
-    /// The project at `path` (absolute, made canonical), found or made, and opened now.
+    /// The project at `path` (absolute, made canonical), found or made, and not marked as used: only
+    /// the person going to it is (what the window shows).
     ///
     /// # Errors
     /// No such folder, or the store could not keep it.

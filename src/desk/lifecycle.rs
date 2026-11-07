@@ -62,14 +62,13 @@ impl Desk {
     pub fn reopen(&self) -> Result<String, String> {
         let home = self.last_project()?;
         let owner = crate::projects::owner(&home, None);
-        let vars: Vec<(String, String)> = std::env::vars().collect();
         self.present(
             &Call {
                 owner: &owner,
                 project: &home,
                 agent: None,
                 cwd: &home.path,
-                vars: Some(&vars),
+                vars: None,
                 peek: true,
                 again: None,
                 person: true,

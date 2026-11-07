@@ -1,5 +1,5 @@
 # A release from a tag (v0.1.0): the app, which is all there is to install. On macOS LLX Desk.app
-# (one universal program for both Macs, the Claude Code plugin inside), signed with the project's
+# (for Apple silicon, the Claude Code plugin inside), signed with the project's
 # Developer ID and notarized by Apple, as a disk image (LLX-Desk-macos.dmg) and as the zip that
 # install.sh fetches (LLX-Desk-macos.zip), built on GitHub's Mac runner by scripts/dmg.sh; on Linux
 # the program and its licence, built on the project's own runner in an Ubuntu 22.04 container (glibc
@@ -32,7 +32,7 @@ jobs:
   gate:
     if: github.ref_type == 'tag'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       actions: read
       contents: read
@@ -46,10 +46,21 @@ jobs:
       - name: CI is green for this commit
         env:
           GH_TOKEN: ${{ github.token }}
+        # Any run of CI for the commit that succeeded; one still running is waited for (up to 20
+        # minutes), so a tag pushed right after the merge passes.
         run: |
-          conclusion=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" \
-            --json conclusion --jq '.[0].conclusion')
-          [ "$conclusion" = success ] || { echo "CI for $GITHUB_SHA is '$conclusion'"; exit 1; }
+          for attempt in $(seq 1 40); do
+            runs=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" \
+              --json conclusion,status)
+            [ "$(jq 'map(select(.conclusion == "success")) | length' <<<"$runs")" -eq 0 ] || exit 0
+            running=$(jq 'map(select(.status != "completed")) | length' <<<"$runs")
+            total=$(jq 'length' <<<"$runs")
+            # No run yet is given a minute or two to start.
+            if [ "$running" -eq 0 ] && { [ "$total" -gt 0 ] || [ "$attempt" -ge 4 ]; }; then break; fi
+            sleep 30
+          done
+          echo "CI for $GITHUB_SHA did not succeed: $(jq -c 'map(.conclusion // .status)' <<<"$runs")"
+          exit 1
 
   linux:
     needs: gate
@@ -79,13 +90,16 @@ jobs:
     runs-on: macos-latest
     environment: release
     timeout-minutes: 60
-    env:
-      MACOSX_DEPLOYMENT_TARGET: '12.0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: scripts/check-versions.sh ${TAG:+"$TAG"}
+      # Every dependency's build script and macro runs here, before the signing key, the notary's
+      # key or any secret is on this machine; scripts/dmg.sh's own build then finds it all built.
+      # The target is Info.plist's minimum, which dmg.sh sets the same way.
+      - name: Build the program
+        run: MACOSX_DEPLOYMENT_TARGET=$(plutil -extract LSMinimumSystemVersion raw packaging/macos/Info.plist) cargo build --release --locked
       - name: The Apple secrets are all there
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -134,7 +148,8 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERTIFICATE_PATH" -k "$KEYCHAIN_PATH" \
+          # -x: the private key can sign but never be exported again.
+          security import "$CERTIFICATE_PATH" -k "$KEYCHAIN_PATH" -x \
             -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -147,7 +162,7 @@ jobs:
           LLX_DESK_SIGN: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: scripts/dmg.sh --universal --notarize --out dist
+        run: scripts/dmg.sh --notarize --out dist
       # What Gatekeeper decides on a user's Mac, asked again of the files that go up: the disk image,
       # the app inside it and the app in the zip are signed by this team, hold a stapled ticket, and
       # Gatekeeper accepts them. A signature that fell back to ad hoc fails here.
@@ -228,18 +243,32 @@ jobs:
           done
           sha256sum llx-desk-*.tar.gz LLX-Desk-macos.zip LLX-Desk-macos.dmg > SHA256SUMS
           cat SHA256SUMS
+      # The notes: the version's section of CHANGELOG.md (its bold-led entries, a first plain line
+      # summing it up when there is one), then where to get it and how to check it.
       - name: Notes from CHANGELOG.md
         run: |
           version=${GITHUB_REF_NAME#v}
-          awk -v v="$version" '$0 == "## " v { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > notes.md
-          [ -s notes.md ] || { echo "CHANGELOG.md has no section \"## $version\""; exit 1; }
+          awk -v v="$version" '$0 == "## " v { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > section.md
+          [ -s section.md ] || { echo "CHANGELOG.md has no section \"## $version\""; exit 1; }
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          {
+            cat section.md
+            echo
+            echo "### Download"
+            echo
+            echo "- **macOS 12+, Apple silicon:** [LLX-Desk-macos.dmg]($base/LLX-Desk-macos.dmg), signed and notarized. Open it and drag LLX Desk to Applications."
+            echo "- **Linux x86_64 (glibc 2.35+):** [llx-desk-x86_64-unknown-linux-gnu.tar.gz]($base/llx-desk-x86_64-unknown-linux-gnu.tar.gz)"
+            echo "- **Either, from a terminal:** \`curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install.sh | sh\`"
+            echo
+            echo "Checksums are in [SHA256SUMS]($base/SHA256SUMS)."
+          } > notes.md
       # A run that is repeated finds the draft or the release there and puts the files in it again.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "$GITHUB_REF_NAME" \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "LLX Desk ${GITHUB_REF_NAME#v}" \
               --notes-file notes.md
           fi
           gh release upload "$GITHUB_REF_NAME" dist/llx-desk-*.tar.gz dist/LLX-Desk-macos.zip \

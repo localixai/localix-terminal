@@ -135,20 +135,33 @@ pub fn ensure_runtime() -> io::Result<PathBuf> {
 fn own_private_dir(dir: &Path) -> io::Result<()> {
     create_private(dir)?;
     let found = std::fs::symlink_metadata(dir)?;
-    // SAFETY: getuid takes nothing and cannot fail.
-    if !found.is_dir() || found.uid() != unsafe { libc::getuid() } {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            format!("{} is not a directory of this user's own", dir.display()),
-        ));
+    if !found.is_dir() || !mine(&found) {
+        return Err(not_own(dir));
     }
     std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
 }
 
-/// The home directory, made with mode 0700 (and set to it when it was there already).
+/// Whether `found` is this user's.
+fn mine(found: &std::fs::Metadata) -> bool {
+    // SAFETY: getuid takes nothing and cannot fail.
+    found.uid() == unsafe { libc::getuid() }
+}
+
+fn not_own(dir: &Path) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        format!("{} is not a directory of this user's own", dir.display()),
+    )
+}
+
+/// The home directory, made with mode 0700 (and set to it when it was there already, if it is
+/// this user's: another's is refused, not changed).
 pub fn ensure_home() -> io::Result<PathBuf> {
     let home = home();
     create_private(&home)?;
+    if !mine(&std::fs::metadata(&home)?) {
+        return Err(not_own(&home));
+    }
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700))?;
     Ok(home)
 }

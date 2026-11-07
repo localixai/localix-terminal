@@ -21,6 +21,28 @@ desk/                         the window tool's actions over a project's tabs; t
 browser/  terminal/  board/          setup/  what the app puts in place: the command, the plugin, MCP
 ```
 
+## Module boundaries
+
+The root of each layer wires its parts together; it does not accumulate every handler.
+Public paths stay stable through re-exports; implementation modules stay private.
+
+| Boundary | Modules |
+| --- | --- |
+| Board data and rules | `board/model.rs` is the serializable vocabulary; `board/cards.rs` allocates cards; `board.rs` owns worker transitions. Neither depends on the desk or the UI. |
+| Tool calls and events | `desk/call.rs` renders and masks answers; `tab.rs` validates tab keys and kind-specific fields; `actions.rs` dispatches; `heard.rs` adapts window events. |
+| Application flows | `desk/board_ops.rs` applies worker operations; `restore.rs` reopens ledger rows; `layout_moves.rs` mutates tab placement; `layout_drawn.rs` projects the kept layout into browser keys. |
+| Page reads and actions | `desk/web_read.rs` labels untrusted snapshots and slices UTF-16 text; `web_controls.rs` resolves and acts on refs; `web.rs` orchestrates a call. |
+| Native UI | `browser/host_commands.rs` is the event-loop protocol; `host_events.rs` handles native events; `host_dispatch.rs` carries out commands; `host_keys.rs` and `host_newtab.rs` adapt user actions. |
+| Deck and tabs | `deck_build.rs` constructs views; `deck_layout.rs` places them; `deck_drop.rs` previews drops; `deck_render.rs` sends state as data. `tabs_transfer.rs` moves existing views and `tabs_layout.rs` sizes them. |
+| Platform and scripts | `browser/platform.rs` is the platform facade; `platform_views.rs` handles native view behavior; `webview_scripts.rs` waits for scripts across navigation. |
+| Terminal and storage | `terminal/session.rs` owns lifecycle; `session/input.rs`, `output.rs` and `wait.rs` own input, output and waits. `store.rs` manages connections; `store/schema.rs` contains unchanged, append-only SQL steps. |
+
+`cargo test --test architecture` checks that Rust files in `src/` have a responsibility header
+and at most 300 working lines, and that the core board and tree models do not import adapters.
+Store tests fingerprint existing migrations. These checks run with the normal tests in CI.
+
+## Layer map
+
 - **`projects.rs`** is the scope everything is kept in: a project is a folder (the nearest one with a
   `.git` around where the caller works, `projects::root_of`), a row of `projects` found by its
   canonical path, never by its name; Home (`~`) is the project of what has no folder. Two of one
@@ -28,7 +50,7 @@ browser/  terminal/  board/          setup/  what the app puts in place: the com
   board, its Event Center events, and its agents (`--as NAME`: an agent's own tabs and notes within
   the project). Every call names its project (`project`: a folder; `agent`: a name within it), and
   the desk resolves it before anything is done (`desk/scope.rs`).
-- **`ledger.rs`, `desk/ledger.rs`** are the ledger of a project's panes: every pane the window opened
+- **`ledger.rs`, `desk/ledger.rs`, `desk/restore.rs`** are the ledger of a project's panes: every pane the window opened
   for it (a page, a terminal, the board) is a row of `panes`, from `own` (the one place a pane becomes
   someone's) to `gone` (the one place it ends); a closed one is the project's history (the newest
   200 kept), one still open when the app quit is what it opens again (`reopen_project`: the same
@@ -70,26 +92,34 @@ browser/  terminal/  board/          setup/  what the app puts in place: the com
   and a menu for each group of shortcuts), and nothing it does for an agent activates it; only the
   person's own acts do (`appkit::activate`). What the person does to the app itself reaches the desk
   as `Heard`: `Quit` (⌘Q, the Dock's Quit and logging out, through `applicationShouldTerminate:`;
-  closing the window where there is no mini) and `Reopened` (the Dock icon, opening it again).
+  closing the main window, as ⌘Q does) and `Reopened` (the Dock icon, opening it again).
   `desk/lifecycle.rs` decides: a quit asks first (`Browser::confirm`, the system's alert) while
   terminals run a program, then stops the server (`Desk::on_quit`); a reopen brings the window on
-  the project used last, as it was left (its ledger), else the person's login shell in it. `appkit.rs` holds AppKit's common messages once.
-  A split window (`split.rs`: which tab is beside the shown one, on which side, and the halves'
-  share) lays two tabs out side by side, the one shown with the toolbar; a fourth view, the line
-  between them, is dragged to resize. A page or a terminal takes its own clicks, so the window
+  the project used last, as it was left (its ledger), else the person's login shell in it. The
+  main window's minimize button does not minimize: it collapses the window to the mini
+  (`nspanel.rs`; another window's is the system's), and the green button uses the system's zoom on
+  the current desktop rather than a separate full-screen Space. `appkit.rs` holds AppKit's common messages
+  once. A split (one tab of two panes, `split.rs`: which tab is beside the shown one, on which
+  side, and the halves' share) lays two panes out side by side, the one shown with the toolbar; a
+  fourth view, the line between them, is dragged to resize. A page or a terminal takes its own clicks, so the window
   hears of presses through the system (`presses.rs`, a local event monitor) and a press in the
   other half shows its tab (`host_split.rs`). Another tab shown makes the window whole, and its project
   keeps the split in the layout: one of its two tabs shown again, it splits as it was. Each split the
   person makes or undoes, and each tab they drag, is told to the layout (`Heard::Split`,
   `Heard::Moved`); the layout tells every window its tabs back (`Cmd::Arranged`), and the window draws
-  them so, keeping no order or split of its own.
+  them so, keeping no order or split of its own. A split is listed in the side as a pair.
   The app has several windows (`windows.rs`, docs/windows.md): each a deck with its own panes, the
   first the main one (the mini follows it). One is the window in use, as the system's key window is:
   the loop picks the window an event is for before it acts (a pane's command goes to the window the
   pane is in, a press makes its window the one in use), so a deck's code acts on one window. Pages
   take their ids from the app's places (`popup.rs`) and share the app's first page's WebKit
   configuration, in whichever window they are. ⌘N opens a window on the project, with the person's
-  shell (`Asked::Window`); one closed takes its tabs with it.
+  shell (`Asked::Window`); one closed takes its tabs with it. A tab dragged out of a side's list
+  (`host_tear.rs`, `deck_tear.rs`) is carried in a small window that follows the pointer
+  (`chip.rs`): past its window's edge it becomes a window of its own, over another window's list it
+  goes into that list. The window's layout (the strip, the side, the pages) is `deck_layout.rs`;
+  the menus a right click opens, a tab's and a panel's, `host_tab_menu.rs`; the mini's native grip
+  for its press and drag, `mini_grip.rs`.
 - **`board.rs`, `board/`** are the board: its cards and the rules every move keeps (one card in Doing
   per worker, a worker acts on its own cards, Done is the person's), the person's actions from the
   window (`person.rs`), the board as text for the agent (`text.rs`), where it is kept
@@ -97,7 +127,11 @@ browser/  terminal/  board/          setup/  what the app puts in place: the com
   `.localix/board.json` by `desk/board_file.rs`) and its page (`page.html`, `page.js`), painted whole into a panel. `desk/board.rs` acts on a board's tab (`interact` with an `op`);
   `desk/board_told.rs` gathers what the person does into one note, told as a comment is.
 - **`terminal/`** is a session: a program on a PTY, its screen kept by `vt100`, painted into a panel
-  when a window shows it. Output is untrusted; only text and CSI sequences reach the emulator. A
+  when a window shows it. What is typed is queued and written by a thread of its own, so a
+  program that reads nothing never holds the window. Output is untrusted. The model (`vt100`, what agents read) gets only
+  text and CSI sequences, but the window's xterm paints the program's raw bytes: the page's own
+  configuration (no clipboard addon, a link handler limited to http and https, `Said::Open`, the
+  CSP) is the boundary there. A
   terminal starts with the caller's environment, but for the variables its integration names
   its own in `LLX_DESK_SCRUB` (the Claude Code plugin's launcher lists Claude Code's session
   variables), so the core knows no agent's names.
@@ -108,18 +142,19 @@ browser/  terminal/  board/          setup/  what the app puts in place: the com
   the refs of its outline (`[e12]`: `click`, `fill`, `select`, in `web.rs`), never by coordinates. The registry says who owns which tab (`w1`, `t2`) and holds what the person said about it;
   nothing acts on a tab its caller does not own. A board is a kind of tab like a page or a terminal:
   `open` gives it, `interact` acts on it with an `op`, so the tools stay one surface.
-- **`store.rs`** is what outlives the app: one SQLite database (`paths::database`), one writer,
+- **`store.rs`, `store/schema.rs`** are what outlives the app: one SQLite database (`paths::database`), one writer,
   its schema the list of steps it applies in order: `projects`, and under each its `panes` (with
   their `visits` and terminals' `screens`), its board (`boards`) and its Event Center events
   (`center_events`); the layout (`windows`, `workspaces`, `tabs`, `pane_nodes`); the person's
   `answers` to offers; the change feed. Everything of a project
   goes with it (`ON DELETE CASCADE`).
 - **`feed.rs`** is the change feed, the desk's one way to say that something changed. A kept owner
-  (the boards) writes its notice, `{entity, op}`, in the transaction of its rows; a live owner (the
-  registry of notes, the tabs, the terminals, the asks) records it under the lock of its
+  (the boards and the layout: `Window`, `Workspace`, `Tab`) writes its notice, `{entity, op}`, in
+  the transaction of its rows; a live owner (the registry of notes, the panes (`Pane { owner,
+  key }`), the terminals, the asks) records it under the lock of its
   change. Each consumer has a name, a cursor kept in the store and a thread of its own, reads every
   notice at least once, re-reads the owner for what it needs, and reconciles from the owners after a
-  notice it could not handle. Notices of what does not outlive a run (a tab, a terminal) are passed
+  notice it could not handle. Notices of what does not outlive a run (a pane, a terminal) are passed
   over after a restart. The entity kinds are one enum every consumer matches whole. Its consumers:
   `desk/relay.rs` tells subscribers (`comment/added`, `tab/closed`) through the server's hub; `desk/center.rs` is the Event Center; `desk/board_file.rs` writes boards out.
 - **`desk/center.rs`, `desk/center/`** are the Event Center: what waits for the person, gathered from
@@ -142,8 +177,8 @@ browser/  terminal/  board/          setup/  what the app puts in place: the com
   method, the events, and the window tool's description and schema), `ping`, `app/status`,
   `app/quit`. Work runs on a thread of its own (answers come by id), a request with an
   `idempotencyKey` is done once (`server/idem.rs`, kept server-wide: the retry arrives on a new
-  connection), a panic is that request's error. Only the user's own processes are served (the
-  peer's uid). The server notifies by subscription (`server/hub.rs`): `comment/added` (kept by the
+  connection), a panic is that request's error. Only the user's own processes are served, and a client talks only to its
+  user's own server (the peer's uid, `wire/peer.rs`). The server notifies by subscription (`server/hub.rs`): `comment/added` (kept by the
   desk until acknowledged, and told again on every subscribe), `tab/closed`, `app/quitting`.
   `client.rs` and `client/link.rs` are the other end: `client::ask` is the one request every adapter
   makes, with the caller (`client/params.rs`: its project, from `--project DIR`,
@@ -155,9 +190,14 @@ browser/  terminal/  board/          setup/  what the app puts in place: the com
   file and starts nothing.
 - **`cli/app.rs`** is the program opened as the app (LLX Desk.app from the Finder or the Dock;
   `llx-desk open` elsewhere): it sets up what is always on, then is the server with its window
-  brought to the person at once. `llx-desk open DIR` brings the window on that folder as a project
-  (`window/present` with `go`). `scripts/bundle-macos.sh` builds the bundle (Info.plist and icon in
-  `packaging/macos`, the Claude Code plugin as a marketplace in `Contents/Resources/claude-code`).
+  brought to the person at once. On macOS `llx-desk open` asks the system to open the bundle, as the
+  Dock does, and returns once it has (`cli/app.rs`); the app is not that terminal's. `llx-desk
+  open DIR` brings the window on that folder as a project
+  (`window/present` with `go`). `scripts/bundle-macos.sh` builds the bundle (Info.plist, icon and
+  entitlements in `packaging/macos`, the Claude Code plugin as a marketplace in `Contents/Resources/claude-code`);
+  `scripts/dmg.sh` makes the release files from it, the disk image and the zip (notarized with
+  `--notarize`, as the release workflow does). The app is for Apple Silicon only.
+  `packaging/homebrew/llx-desk.rb` is the cask a tap takes, filled in per release.
 - **`setup.rs`, `setup/`** are the integrations, reached from Settings → Integrations and from
   `llx-desk setup`: the command (`command.rs`: a link in `~/.local/bin` to the program, the login
   shell's profile when its PATH lacks it; a desktop entry on Linux), the Claude Code plugin
