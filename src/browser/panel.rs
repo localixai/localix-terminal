@@ -19,12 +19,15 @@ use super::tab_view::build;
 pub(super) type Post = Box<dyn Fn(Cmd) -> bool + Send + Sync>;
 
 /// What a panel's page posts: keys the person typed or pasted (`k` and them), its size once it
-/// has loaded (`r COLS ROWS`) and when its pane changes (`s COLS ROWS`), or its menu asked for
-/// where they right-clicked, and whether something is selected (`m X Y 1`).
+/// has loaded (`r COLS ROWS`) and when its pane changes (`s COLS ROWS`), an address they opened
+/// (`o URL`), or its menu asked for where they right-clicked, and whether something is selected
+/// (`m X Y 1`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Said<'a> {
     Typed(&'a str),
     Sized(Pane, u16, u16),
+    /// An http or https address the person opened from the page's text, for a tab of its own.
+    Open(&'a str),
     /// The page's menu, where the person right-clicked: its own items.
     Menu(u32, u32, Vec<Entry>),
 }
@@ -48,6 +51,14 @@ pub(super) fn said(body: &str) -> Option<Said<'_>> {
             let (columns, rows) = size.split_once(' ')?;
             return Some(Said::Sized(pane, columns.parse().ok()?, rows.parse().ok()?));
         }
+    }
+    if let Some(address) = body.strip_prefix("o ") {
+        let web = ["http://", "https://"].into_iter().any(|scheme| {
+            address
+                .get(..scheme.len())
+                .is_some_and(|start| start.eq_ignore_ascii_case(scheme))
+        });
+        return web.then_some(Said::Open(address));
     }
     // "m x y [items]": the page's menu, the items as `choice::Entry` reads them.
     let mut parts = body.strip_prefix("m ")?.splitn(3, ' ');
@@ -76,7 +87,13 @@ pub(super) struct Slot {
     sized: Mutex<Option<Fitted>>,
     queued: AtomicBool,
     pub(super) alive: AtomicBool,
+    /// Out of sight: its page still runs what it is sent, only less often (`HIDDEN_EVERY`).
+    hidden: AtomicBool,
 }
+
+/// How often a panel out of sight runs what it was sent: its screen stays live for whoever
+/// reads it, at a fraction of the work.
+const HIDDEN_EVERY: std::time::Duration = std::time::Duration::from_millis(250);
 
 impl Slot {
     /// The frames painted since the last, one script, for the loop: a paint after this one
@@ -87,13 +104,19 @@ impl Slot {
         let frames = std::mem::take(&mut *crate::lock(&self.frames));
         (!frames.is_empty()).then_some(frames)
     }
+
+    /// The panel in sight (`shown`) or out of it; back in sight, whether frames wait to run now.
+    pub(super) fn shown(&self, shown: bool) -> bool {
+        let was_hidden = self.hidden.swap(!shown, Ordering::SeqCst);
+        shown && was_hidden && !crate::lock(&self.frames).is_empty()
+    }
 }
 
 /// A panel as its caller holds it: painted from any thread, closed when dropped.
 pub struct Panel {
     id: u32,
     pub(super) slot: Arc<Slot>,
-    send: Post,
+    send: Arc<Post>,
 }
 
 impl Panel {
@@ -105,7 +128,7 @@ impl Panel {
         Self {
             id,
             slot: Arc::new(slot),
-            send,
+            send: Arc::new(send),
         }
     }
 
@@ -124,7 +147,28 @@ impl Panel {
             frames.push_str(frame);
             frames.push(';');
         }
-        if !self.slot.queued.swap(true, Ordering::SeqCst) && !(self.send)(Cmd::Paint(self.id)) {
+        if self.slot.queued.swap(true, Ordering::SeqCst) {
+            return self.slot.alive.load(Ordering::SeqCst);
+        }
+        if self.slot.hidden.load(Ordering::SeqCst) {
+            // Out of sight: what comes meanwhile runs with it, a while later (or as it shows).
+            let (send, id) = (Arc::clone(&self.send), self.id);
+            let later = std::thread::Builder::new()
+                .name("desk-paint-later".into())
+                .spawn(move || {
+                    #[expect(
+                        clippy::disallowed_methods,
+                        reason = "the wait is the point: out of sight, a panel runs its frames \
+                                  a few times a second"
+                    )]
+                    std::thread::sleep(HIDDEN_EVERY);
+                    send(Cmd::Paint(id));
+                });
+            if later.is_ok() {
+                return self.slot.alive.load(Ordering::SeqCst);
+            }
+        }
+        if !(self.send)(Cmd::Paint(self.id)) {
             self.slot.alive.store(false, Ordering::SeqCst);
         }
         self.slot.alive.load(Ordering::SeqCst)
@@ -186,6 +230,7 @@ pub(super) fn open(
     let titles = proxy.clone();
     let keys = Arc::clone(&slot);
     let menus = proxy.clone();
+    let opens = proxy.clone();
     let webview = WebViewBuilder::new()
         // The first click in a window that is not the key one reaches the page: the person
         // never clicks twice, once to wake the window and once to do what they meant.
@@ -217,6 +262,13 @@ pub(super) fn open(
                 if let Some(sized) = sized {
                     sized(pane, columns, rows);
                 }
+            }
+            Some(Said::Open(url)) => {
+                let _ = opens.send_event(Cmd::NewTab {
+                    url: url.to_owned(),
+                    reply: None,
+                    opener: None,
+                });
             }
             Some(Said::Menu(x, y, items)) => {
                 let _ = menus.send_event(Cmd::PanelMenu(id, (x, y), items));

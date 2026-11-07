@@ -167,6 +167,10 @@ impl Frame {
         if let Some(at) = at {
             builder = builder.with_position(at);
         }
+        // A window the person sees is never made so small its bar and a page no longer fit.
+        if look != Look::Hidden {
+            builder = builder.with_min_inner_size(super::placement::LEAST);
+        }
         // On macOS, order the window only after its Space and level are configured.
         #[cfg(target_os = "macos")]
         {
@@ -238,6 +242,14 @@ impl Frame {
         let _ = &self.native;
         #[cfg(target_os = "macos")]
         super::nspanel::focus(&self.native);
+    }
+
+    /// Whether the window takes the keys now (it is the key window).
+    pub(super) fn is_key(&self) -> bool {
+        #[cfg(target_os = "macos")]
+        return super::nspanel::is_key(&self.native);
+        #[cfg(not(target_os = "macos"))]
+        return self.native.is_focused();
     }
 
     /// The window out of sight, at the size it has, clear and click-through, still drawing.

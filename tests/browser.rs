@@ -1213,6 +1213,8 @@ fn main() {
                 panel::scenario(&browser, &driver);
                 panel::glass(&browser, &driver, &window, &origin);
                 board::scenario(&browser);
+                // Last: the window in use is the new one after it.
+                panel::windows(&browser);
             });
         if driven && paneled { 0 } else { 1 }
     });

@@ -26,16 +26,21 @@ impl Desk {
     /// Tab `key` is `call`'s now, a `kind` with `facts`: owned, and a row of its project's
     /// ledger.
     pub(super) fn own(&self, key: &str, call: &Call, kind: Kind, facts: Facts<'_>) {
-        crate::lock(&self.registry).own(key, call.owner);
+        crate::lock(&self.registry).own(key, call.owner, call.person);
         // A page's first load may have made its row before the call that opened it got here
         // (`went`): of the same project it is this tab's row; of another, it never was.
         let before = crate::lock(&self.ledger).get(key).copied();
         if let Some((row, project)) = before {
-            if project == call.project.id {
+            if project == call.project.id && call.again.is_none_or(|again| again == row) {
                 return;
             }
             crate::lock(&self.ledger).remove(key);
-            if let Err(why) = (self.feed.store()).write(|tx| ledger::forget(tx, row)) {
+            let now = crate::board::now();
+            let forgot = self.feed.write(|write| {
+                Self::unplace_pane(write, row, now)?;
+                ledger::forget(write.tx(), row)
+            });
+            if let Err(why) = forgot {
                 log::warn!("tab {key}'s stray row stays: {why}");
             }
             self.tell_ledger(project);
@@ -49,16 +54,42 @@ impl Desk {
             cwd: facts.cwd,
             command: facts.command,
         };
-        self.keep(key, &opened);
+        let window = call.window.or_else(|| self.in_use());
+        self.keep(key, &opened, (call.again, window));
     }
 
-    /// A row for tab `key`, `opened`.
-    fn keep(&self, key: &str, opened: &Opened<'_>) {
-        self.begin(opened.project);
+    /// A row for tab `key`, `opened`: a new one, or the row `again` names (a pane the run
+    /// before left open). Placed in a tab in the same change: a tab of its own when it is new.
+    fn keep(
+        &self,
+        key: &str,
+        opened: &Opened<'_>,
+        (again, window): (Option<Row>, Option<crate::layout::WindowId>),
+    ) {
+        if again.is_none() {
+            self.begin(opened.project);
+        }
         let now = crate::board::now();
-        match (self.feed.store()).write(|tx| ledger::open(tx, opened, now)) {
+        let kept = self.feed.write(|write| {
+            let row = match again {
+                Some(row) => {
+                    ledger::reopen(write.tx(), row)?;
+                    row
+                }
+                None => ledger::open(write.tx(), opened, now)?,
+            };
+            Self::place_pane(write, row, (opened.project, window), now)?;
+            Ok(row)
+        });
+        match kept {
             Ok(row) => {
                 crate::lock(&self.ledger).insert(key.to_string(), (row, opened.project));
+                // The pane has its key now: the window draws it in its tab.
+                let pane = crate::feed::Entity::Pane {
+                    owner: self.owner_of(key),
+                    key: key.to_string(),
+                };
+                self.feed.record(&pane, crate::feed::Op::Upserted);
                 self.tell_ledger(opened.project);
             }
             Err(why) => log::warn!("tab {key} is not in the ledger: {why}"),
@@ -73,9 +104,10 @@ impl Desk {
             return;
         }
         let now = crate::board::now();
-        let closed = (self.feed.store()).write(|tx| {
-            for tab in ledger::left_open(tx, project)? {
-                ledger::close(tx, tab.row, now)?;
+        let closed = self.feed.write(|write| {
+            for tab in ledger::left_open(write.tx(), project)? {
+                ledger::close(write.tx(), tab.row, now)?;
+                Self::unplace_pane(write, tab.row, now)?;
             }
             Ok(())
         });
@@ -92,7 +124,11 @@ impl Desk {
             return;
         };
         let now = crate::board::now();
-        match (self.feed.store()).write(|tx| ledger::close(tx, row, now)) {
+        let closed = self.feed.write(|write| {
+            ledger::close(write.tx(), row, now)?;
+            Self::unplace_pane(write, row, now)
+        });
+        match closed {
             Ok(()) => self.tell_ledger(project),
             Err(why) => log::warn!("tab {key} did not close in the ledger: {why}"),
         }
@@ -117,7 +153,8 @@ impl Desk {
                     cwd: None,
                     command: None,
                 };
-                self.keep(key, &opened);
+                // A page the window opened itself (a popup) is of the window the person works in.
+                self.keep(key, &opened, (None, self.in_use()));
                 let kept = crate::lock(&self.ledger).get(key).copied();
                 match kept {
                     Some(known) => known,
@@ -179,49 +216,50 @@ impl Desk {
     }
 
     /// The person went to `call`'s project, which has no tab open: what it had open when the
-    /// app last quit opened again, in its order; else their shell in its folder.
+    /// app last quit opens again, the same panes in the same tabs, places and splits; else their
+    /// shell in its folder.
     pub(super) fn reopen_project(&self, call: &Call, group: &str) -> Result<(), String> {
         let open: std::collections::HashSet<Row> = (crate::lock(&self.ledger).values())
             .map(|(row, _)| *row)
             .collect();
-        let left = (self.feed.store()).read(|db| ledger::left_open(db, call.project.id))?;
-        let left: Vec<ledger::Tab> = (left.into_iter())
+        let project = call.project.id;
+        let (left, order) = (self.feed.store()).read(|db| {
+            let left = ledger::left_open(db, project)?;
+            Ok((left, Self::panes_in_order(db, project)?))
+        })?;
+        let mut left: Vec<ledger::Tab> = (left.into_iter())
             .filter(|tab| !open.contains(&tab.row))
             .collect();
         if left.is_empty() {
             return self.person_terminal(call, group, "");
         }
-        // Each tab's new key, by the row it was: a split kept splits the window again.
-        let mut keys = std::collections::HashMap::new();
+        left.sort_by_key(|tab| order.iter().position(|row| *row == tab.row));
+        // They are this run's now: nothing of the project's closes as the first of them opens.
+        crate::lock(&self.begun).insert(project);
         for tab in &left {
-            let before: std::collections::HashSet<String> =
-                crate::lock(&self.ledger).keys().cloned().collect();
             if let Err(why) = self.again_tab(call, group, tab) {
                 log::warn!("a tab of {} did not open again: {why}", call.project.name);
-                continue;
+                let now = crate::board::now();
+                let closed = self.feed.write(|write| {
+                    ledger::close(write.tx(), tab.row, now)?;
+                    Self::unplace_pane(write, tab.row, now)
+                });
+                if let Err(why) = closed {
+                    log::warn!("it stays open in the ledger: {why}");
+                }
             }
-            let new = (crate::lock(&self.ledger).iter())
-                .find(|(key, (_, project))| *project == tab.project && !before.contains(*key))
-                .map(|(key, _)| key.clone());
-            if let Some(key) = new {
-                keys.insert(tab.row, key);
-            }
-        }
-        let kept = (self.feed.store()).read(|db| super::splits::kept(db, group));
-        let halves = (kept.ok().flatten()).and_then(|kept| super::splits::halves(&kept, &keys));
-        // Kept by the rows the tabs are now, and the window split as it was; a split whose tabs
-        // did not open again is kept no more.
-        self.split_told(group, halves);
-        if let (Some(halves), Some(browser)) = (halves, self.browser.as_ref()) {
-            browser.split(group, halves);
         }
         Ok(())
     }
 
     /// `tab` opened again for the person: a page at its address, their shell in a terminal's
-    /// folder (its program is not run again), the board. The new tab is the one the ledger keeps
-    /// from then on: the row it was goes.
+    /// folder (its program is not run again), the board. It is the same pane as before: its row,
+    /// its history, its place in its tab.
     fn again_tab(&self, call: &Call, group: &str, tab: &ledger::Tab) -> Result<(), String> {
+        let call = &Call {
+            again: Some(tab.row),
+            ..*call
+        };
         let opened = match tab.kind {
             Kind::Page => {
                 let url = (tab.url.as_deref())
@@ -246,7 +284,6 @@ impl Desk {
                 .map_err(|failure| failure.message().to_string()),
         };
         opened?;
-        (self.feed.store()).write(|tx| ledger::forget(tx, tab.row))?;
         self.tell_ledger(tab.project);
         Ok(())
     }

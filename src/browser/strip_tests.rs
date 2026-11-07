@@ -329,7 +329,8 @@ fn the_bar_holds_the_projects_and_the_crumbs_and_the_page_its_own_toolbar() {
 
 #[test]
 fn the_strip_keeps_the_windows_own_colours_over_every_tab() {
-    assert!(!PAGE.contains("data-tint") && !PAGE.contains("--ink"));
+    // Its text takes the shared ink of every app page (frame.css), never a tab's colours.
+    assert!(!PAGE.contains("data-tint") && !PAGE.contains("--ink:"));
 }
 
 #[test]
@@ -385,7 +386,7 @@ fn the_side_says_what_the_strip_says_its_menus_placed_below_the_strip() {
     assert_eq!(click("side-width -4"), None);
     assert_eq!(
         click("side-width usual done"),
-        Some(Click::SideWidth(264, true))
+        Some(Click::SideWidth(248, true))
     );
     // The side's points and the browser's toolbar's, said as the window's.
     assert_eq!(moved("menu t3 40 12", (0.0, 38.0)), "menu t3 40 50");
@@ -490,7 +491,10 @@ fn a_dragged_tab_says_where_it_goes() {
         Some(Click::Move(Key::Web(2), Some(Key::Term(3))))
     );
     assert_eq!(click("move t3 end"), Some(Click::Move(Key::Term(3), None)));
-    assert_eq!(click("drop-over 400 120"), Some(Click::DropOver(400, 120)));
+    assert_eq!(
+        click("drop-over w1 400 120"),
+        Some(Click::DropOver(Key::Web(1), 400, 120))
+    );
     assert_eq!(click("drop-off"), Some(Click::DropOff));
     assert_eq!(
         click("drop w1 400 120"),
@@ -503,5 +507,8 @@ fn a_dragged_tab_says_where_it_goes() {
     assert_eq!(click("move w2"), None);
     // The side's points are the window's once moved down by the bar.
     assert_eq!(moved("drop w1 400 120", (0.0, 38.0)), "drop w1 400 158");
-    assert_eq!(moved("drop-over 400 120", (0.0, 38.0)), "drop-over 400 158");
+    assert_eq!(
+        moved("drop-over w1 400 120", (0.0, 38.0)),
+        "drop-over w1 400 158"
+    );
 }

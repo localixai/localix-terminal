@@ -23,11 +23,11 @@ pub(super) const NAV: f64 = 40.0;
 pub(super) const HEIGHT: f64 = BAR + 32.0;
 /// The side's width while it is open, in points, until the person drags it wider or narrower:
 /// the tabs listed down the window's left.
-pub(super) const SIDE: f64 = 264.0;
+pub(super) const SIDE: f64 = 248.0;
 /// The side shut: a rail of the tabs' pictures, its button where it was.
 pub(super) const RAIL: f64 = 52.0;
 /// The narrowest and widest the person can drag the side; never more than half the window.
-pub(super) const SIDE_MIN: f64 = 180.0;
+pub(super) const SIDE_MIN: f64 = 200.0;
 pub(super) const SIDE_MAX: f64 = 480.0;
 
 /// Panels past this id are boards: board `b1` is panel `BOARD + 1`, a terminal's screen is its
@@ -84,7 +84,6 @@ impl Key {
 /// A toolbar button the strip had no room for: it waits in the "»" menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Tool {
-    Split,
     History,
     Mini,
     Events,
@@ -92,12 +91,11 @@ pub(super) enum Tool {
 
 impl Tool {
     /// The buttons, in the toolbar's order (and the menu's).
-    pub(super) const ALL: [Self; 4] = [Self::Split, Self::History, Self::Mini, Self::Events];
+    pub(super) const ALL: [Self; 3] = [Self::History, Self::Mini, Self::Events];
 
     /// The button the strip names by its id.
     fn parse(id: &str) -> Option<Self> {
         Some(match id {
-            "sp" => Self::Split,
             "hs" => Self::History,
             "mn" => Self::Mini,
             "ev" => Self::Events,
@@ -108,7 +106,6 @@ impl Tool {
     /// Its line in the "»" menu.
     pub(super) fn label(self) -> &'static str {
         match self {
-            Self::Split => "Split View",
             Self::History => "History",
             Self::Mini => "Mini Player",
             Self::Events => "Events",
@@ -121,7 +118,6 @@ impl Tool {
             Self::History => 1,
             Self::Mini => 2,
             Self::Events => 4,
-            Self::Split => 8,
         }
     }
 }
@@ -176,7 +172,7 @@ pub(super) enum Click {
     /// The person dragged a tab along the list: it goes before the other (none: to the end).
     Move(Key, Option<Key>),
     /// A tab dragged out over the pages, at a point of the window: where it would go shows.
-    DropOver(u32, u32),
+    DropOver(Key, u32, u32),
     /// The dragged tab back over the list (or let go there): nothing shows on the pages.
     DropOff,
     /// A tab let go of over the pages, at a point of the window: it goes into that half.
@@ -219,6 +215,7 @@ pub(super) enum Keyed {
     LastTab,
     Next,
     Previous,
+    NewWindow,
     NewPage,
     NewTerminal,
     NewBoard,
@@ -242,6 +239,7 @@ impl Keyed {
             "split" => Self::Split,
             "next" => Self::Next,
             "previous" => Self::Previous,
+            "new window" => Self::NewWindow,
             "new page" => Self::NewPage,
             "new terminal" => Self::NewTerminal,
             "new board" => Self::NewBoard,
@@ -380,7 +378,7 @@ pub(super) fn click(body: &str) -> Option<Click> {
 }
 
 /// A tab the person drags: along the list (`move KEY BEFORE|end`), over the pages
-/// (`drop-over X Y`, `drop-off`), let go of over them (`drop KEY X Y`).
+/// (`drop-over KEY X Y`, `drop-off`), let go of over them (`drop KEY X Y`).
 fn dragged_tab(verb: &str, rest: Option<&str>) -> Option<Click> {
     let point = |at: &str| -> Option<(u32, u32)> {
         let (x, y) = at.split_once(' ')?;
@@ -396,7 +394,11 @@ fn dragged_tab(verb: &str, rest: Option<&str>) -> Option<Click> {
             Some(Click::Move(Key::parse(key)?, before))
         }
         ("drop-off", None) => Some(Click::DropOff),
-        ("drop-over", Some(at)) => point(at).map(|(x, y)| Click::DropOver(x, y)),
+        ("drop-over", Some(rest)) => {
+            let (key, at) = rest.split_once(' ')?;
+            let (x, y) = point(at)?;
+            Some(Click::DropOver(Key::parse(key)?, x, y))
+        }
         ("drop", Some(rest)) => {
             let (key, at) = rest.split_once(' ')?;
             let (x, y) = point(at)?;
@@ -423,7 +425,7 @@ pub(super) fn moved(body: &str, (x, y): (f64, f64)) -> String {
     let moved = match parts.as_slice() {
         ["menu", key, px, py] => point(px, py).map(|p| format!("menu {key} {p}")),
         ["drop", key, px, py] => point(px, py).map(|p| format!("drop {key} {p}")),
-        ["drop-over", px, py] => point(px, py).map(|p| format!("drop-over {p}")),
+        ["drop-over", key, px, py] => point(px, py).map(|p| format!("drop-over {key} {p}")),
         [
             verb @ ("new" | "frame" | "projects" | "tabs"),
             px,

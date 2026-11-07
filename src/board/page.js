@@ -165,11 +165,13 @@ function cardView(card) {
     tabindex: "-1", onclick: (e) => { e.stopPropagation(); act(offer.action); } }, icon(GLYPH[offer.glyph], 10), offer.label) : null);
   node.addEventListener("dragstart", (e) => {
     dragged = card.id;
+    slotEl = el("div.slot");
+    slotEl.style.height = `${node.offsetHeight}px`;
     e.dataTransfer.setData("text/plain", card.id);
     e.dataTransfer.effectAllowed = "move";
     requestAnimationFrame(() => node.classList.add("dragging"));
   });
-  node.addEventListener("dragend", () => { dragged = null; node.classList.remove("dragging"); slot(); });
+  node.addEventListener("dragend", () => { dragged = null; node.classList.remove("dragging"); slot(); slotEl = null; });
   return node;
 }
 
@@ -219,24 +221,38 @@ function keyOnCard(e, card) {
   }
 }
 
-// The card in `list` the dragged one goes before, from where the pointer is.
+// The card in `list` the dragged one goes before, from where the pointer is. The slot already
+// shown holds its place: the pointer passes a card's midpoint by 6px to move it past the card, and
+// by 6px back to return, so a pointer resting on a midpoint does not make it flicker.
 function before(list, y) {
   const cards = [...list.querySelectorAll(".card:not(.dragging)")];
-  const next = cards.find((card) => { const box = card.getBoundingClientRect(); return y < box.top + box.height / 2; });
+  const here = slotEl && slotEl.parentElement === list;
+  const next = cards.find((card) => {
+    const box = card.getBoundingClientRect();
+    const ahead = here && slotEl.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING;
+    return y < box.top + box.height / 2 + (here ? (ahead ? 6 : -6) : 0);
+  });
   return next ? next.dataset.id : null;
 }
-// Where the dragged card would land: a slot opened between the cards, and none once dropped.
+// Where the dragged card would land: the drag's one slot, moved between the cards, and taken out
+// once it is dropped. It grows only when it comes into a column, not at each move within it.
+let slotEl = null;
 let slotAt = null;
 function slot(list, next) {
   const at = list ? `${list.dataset.col}:${next}` : null;
-  if (at === slotAt) return;
+  if (at === slotAt && (!slotEl || !list || slotEl.parentElement)) return;
   slotAt = at;
-  for (const each of document.querySelectorAll(".slot")) each.remove();
   for (const lane of document.querySelectorAll(".over")) if (!list || !lane.contains(list)) lane.classList.remove("over");
-  if (!list) return;
-  const gap = el("div.slot");
+  if (!list) { if (slotEl) slotEl.remove(); return; }
+  if (!slotEl) return;
+  const entering = slotEl.parentElement !== list;
   const card = next && list.querySelector(`.card[data-id="${next}"]`);
-  card ? list.insertBefore(gap, card) : list.append(gap);
+  card ? list.insertBefore(slotEl, card) : list.append(slotEl);
+  if (entering) {
+    slotEl.classList.remove("enter");
+    void slotEl.offsetWidth;
+    slotEl.classList.add("enter");
+  }
 }
 function droppable(node, column, list) {
   node.addEventListener("dragover", (e) => {

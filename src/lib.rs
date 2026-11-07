@@ -20,6 +20,7 @@ pub mod feed;
 pub mod follow;
 #[cfg(feature = "test-server")]
 pub mod harness;
+pub mod layout;
 pub mod ledger;
 pub mod mcp;
 pub mod offers;

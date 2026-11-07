@@ -1,6 +1,8 @@
 //! The person's presses in the app's windows, wherever they land: a page or a terminal takes
 //! its own clicks, so the window hears of them here (a local event monitor) and knows which half
-//! of a split window the person works in.
+//! of a split window the person works in. A press in the window (a panel that never activates
+//! the app by itself, nspanel.rs) makes llx-desk the app in use, as a click in any app's window
+//! does: its menus in the menu bar, its window key. What an agent does never activates it.
 
 use block2::RcBlock;
 use objc2::rc::Retained;
@@ -23,6 +25,7 @@ pub(super) fn watch(proxy: &EventLoopProxy<Cmd>) {
     }
     let proxy = proxy.clone();
     let block = RcBlock::new(move |event: *mut AnyObject| -> *mut AnyObject {
+        take_over(event);
         if let Some((window, x, y)) = pressed(event) {
             let _ = proxy.send_event(Cmd::Pressed(window, x, y));
         }
@@ -37,6 +40,30 @@ pub(super) fn watch(proxy: &EventLoopProxy<Cmd>) {
     if let Some(monitor) = monitor {
         let _ = Retained::into_raw(monitor);
     }
+}
+
+/// NSWindowLevel of the window (the mini floats above it, and has its own way in: its click).
+const NORMAL: isize = 0;
+
+/// Press `event` in the window, llx-desk not the active app: the app made the active one, and
+/// the window its key window, the person's keys going to it.
+fn take_over(event: *mut AnyObject) {
+    // SAFETY: the monitor hands an NSEvent, or nil.
+    let Some(event) = (unsafe { event.as_ref() }) else {
+        return;
+    };
+    // SAFETY: an NSEvent answers its window, nil for none.
+    let window: *mut AnyObject = unsafe { msg_send![event, window] };
+    // SAFETY: the window answered, or nil.
+    let Some(window) = (unsafe { window.as_ref() }) else {
+        return;
+    };
+    // SAFETY: an NSWindow answers its NSWindowLevel (an NSInteger).
+    let level: isize = unsafe { msg_send![window, level] };
+    if level != NORMAL {
+        return;
+    }
+    super::appkit::activate_and_key(window);
 }
 
 /// The window of press `event`, and where in it, from its content's top left.

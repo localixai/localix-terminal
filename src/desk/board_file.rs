@@ -42,6 +42,9 @@ impl Consumer for BoardFile {
                 None => Ok(()),
             },
             Entity::Said { .. }
+            | Entity::Pane { .. }
+            | Entity::Window { .. }
+            | Entity::Workspace { .. }
             | Entity::Tab { .. }
             | Entity::Terminal { .. }
             | Entity::Ask { .. } => Ok(()),

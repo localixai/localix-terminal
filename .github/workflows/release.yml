@@ -1,26 +1,66 @@
 # A release from a tag (v0.1.0): the app, which is all there is to install. On macOS LLX Desk.app
-# (one universal program for both Macs, the Claude Code plugin inside), built on GitHub's Mac
-# runner; on Linux the program and its licence, built on the project's own runner in an Ubuntu
-# 22.04 container (glibc 2.35 at most). SHA256SUMS lists both, and install.sh checks against it.
-# The notes are the CHANGELOG.md section of that version.
+# (one universal program for both Macs, the Claude Code plugin inside), signed with the project's
+# Developer ID and notarized by Apple, as a disk image (LLX-Desk-macos.dmg) and as the zip that
+# install.sh fetches (LLX-Desk-macos.zip), built on GitHub's Mac runner by scripts/dmg.sh; on Linux
+# the program and its licence, built on the project's own runner in an Ubuntu 22.04 container (glibc
+# 2.35 at most). SHA256SUMS lists them all, and install.sh checks against it. The notes are the
+# CHANGELOG.md section of that version.
+#
+# Nothing is built before the gate: the tag is on main and CI passed for its commit. The Apple
+# secrets belong to the `release` environment (its branches and tags: main and v*) and to the macos
+# job alone, which runs on GitHub's runner: the self-hosted runner never sees them.
+#
+# Run by hand (workflow_dispatch) it is a dry run: the same builds, the same signing and
+# notarization, and the files stay on the run as artifacts. Only a tag publishes.
 name: Release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency: release-${{ github.ref }}
 
+env:
+  # Empty on a dry run, which has no tag for scripts/check-versions.sh to compare.
+  TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+
 jobs:
+  gate:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The tag is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: CI is green for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" \
+            --json conclusion --jq '.[0].conclusion')
+          [ "$conclusion" = success ] || { echo "CI for $GITHUB_SHA is '$conclusion'"; exit 1; }
+
   linux:
+    needs: gate
+    if: ${{ !cancelled() && needs.gate.result != 'failure' }}
     runs-on: [self-hosted, linux, x64, llx-desk]
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - run: scripts/check-versions.sh "$GITHUB_REF_NAME"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: scripts/check-versions.sh ${TAG:+"$TAG"}
       - run: cargo build --release --locked
       - name: No newer glibc than 2.35
         run: |
@@ -28,61 +68,180 @@ jobs:
           echo "needs $newest"
           [ "$(printf '%s\n' "$newest" GLIBC_2.35 | sort -V | tail -n 1)" = GLIBC_2.35 ]
       - run: scripts/package.sh target/release/llx-desk x86_64-unknown-linux-gnu
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: x86_64-unknown-linux-gnu
           path: dist/*.tar.gz
 
   macos:
+    needs: gate
+    if: ${{ !cancelled() && needs.gate.result != 'failure' }}
     runs-on: macos-latest
+    environment: release
     timeout-minutes: 60
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
     steps:
-      - uses: actions/checkout@v4
-      - run: scripts/check-versions.sh "$GITHUB_REF_NAME"
-      - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-      - name: LLX Desk.app, for both Macs
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: scripts/check-versions.sh ${TAG:+"$TAG"}
+      - name: The Apple secrets are all there
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY_B64 }}
         run: |
-          for target in aarch64-apple-darwin x86_64-apple-darwin; do
-            cargo build --release --locked --target "$target"
+          missing=0
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
+            APPLE_API_KEY APPLE_API_ISSUER APPLE_API_KEY_B64; do
+            if [ -z "${!name}" ]; then
+              echo "$name is not set in the release environment" >&2
+              missing=1
+            fi
           done
-          mkdir -p target/universal dist
-          lipo -create -output target/universal/llx-desk \
-            target/aarch64-apple-darwin/release/llx-desk target/x86_64-apple-darwin/release/llx-desk
-          app=$(scripts/bundle-macos.sh target/universal/llx-desk target/universal/bundle)
-          ditto -c -k --keepParent "$app" dist/LLX-Desk-macos.zip
-      - uses: actions/upload-artifact@v4
+          [ "$missing" = 0 ] || exit 1
+          team="${APPLE_SIGNING_IDENTITY##*(}"
+          team="${team%)}"
+          [[ "$team" =~ ^[A-Z0-9]{10}$ ]] || { echo "No team ID in APPLE_SIGNING_IDENTITY" >&2; exit 1; }
+      - name: Decode the App Store Connect key
+        env:
+          APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY_B64 }}
+        run: |
+          umask 077
+          printf '%s' "$APPLE_API_KEY_B64" | base64 --decode > "$RUNNER_TEMP/apple-api-key.p8"
+          echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/apple-api-key.p8" >> "$GITHUB_ENV"
+      # A keychain of its own, put first in the search list and taken out of it again when the job
+      # ends; the list as it was is saved, and the runner's keychains are never replaced.
+      - name: Import the signing certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          CERTIFICATE_PATH="$RUNNER_TEMP/llx-desk-signing.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/llx-desk-signing.keychain-db"
+          KEYCHAIN_LIST_PATH="$RUNNER_TEMP/llx-desk-keychain-search-list.txt"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          security list-keychains -d user | tr -d '"' | sed 's/^[[:space:]]*//' > "$KEYCHAIN_LIST_PATH"
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -k "$KEYCHAIN_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F -- "$APPLE_SIGNING_IDENTITY"
+          # Keychain paths contain no spaces; splitting the list into arguments is intended.
+          # shellcheck disable=SC2046
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+      - name: Build, sign and notarize LLX Desk.app and its disk image
+        env:
+          LLX_DESK_SIGN: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: scripts/dmg.sh --universal --notarize --out dist
+      # What Gatekeeper decides on a user's Mac, asked again of the files that go up: the disk image,
+      # the app inside it and the app in the zip are signed by this team, hold a stapled ticket, and
+      # Gatekeeper accepts them. A signature that fell back to ad hoc fails here.
+      - name: Verify the signature and the notarization
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          team="${APPLE_SIGNING_IDENTITY##*(}"
+          team="${team%)}"
+          dmg=dist/LLX-Desk-macos.dmg
+          mount="$RUNNER_TEMP/dmg-check"
+          unzipped="$RUNNER_TEMP/zip-check"
+          mkdir -p "$mount" "$unzipped"
+          hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$mount" "$dmg" >/dev/null
+          trap 'hdiutil detach "$mount" >/dev/null || true' EXIT
+          ditto -x -k dist/LLX-Desk-macos.zip "$unzipped"
+          codesign --verify --strict --verbose=2 "$dmg"
+          codesign --verify --deep --strict --verbose=2 "$mount/LLX Desk.app"
+          codesign --verify --deep --strict --verbose=2 "$unzipped/LLX Desk.app"
+          for target in "$dmg" "$mount/LLX Desk.app" "$unzipped/LLX Desk.app"; do
+            codesign -dv "$target" 2>&1 | grep -qx "TeamIdentifier=$team" ||
+              { echo "$target is not signed by team $team" >&2; exit 1; }
+            # Apple's CloudKit drops a hosted runner's connection now and then.
+            for attempt in 1 2 3 4; do
+              xcrun stapler validate "$target" && break
+              [ "$attempt" = 4 ] && exit 1
+              sleep 30
+            done
+          done
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+          spctl --assess --type execute --verbose=2 "$mount/LLX Desk.app"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: apple-darwin
-          path: dist/LLX-Desk-macos.zip
+          path: |
+            dist/LLX-Desk-macos.dmg
+            dist/LLX-Desk-macos.zip
+      - name: Remove the signing material
+        if: always()
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/llx-desk-signing.keychain-db"
+          KEYCHAIN_LIST_PATH="$RUNNER_TEMP/llx-desk-keychain-search-list.txt"
+          if [ -s "$KEYCHAIN_LIST_PATH" ]; then
+            ORIGINAL_KEYCHAINS=()
+            while IFS= read -r keychain; do
+              ORIGINAL_KEYCHAINS+=("$keychain")
+            done < "$KEYCHAIN_LIST_PATH"
+            security list-keychains -d user -s "${ORIGINAL_KEYCHAINS[@]}" || true
+          fi
+          security delete-keychain "$KEYCHAIN_PATH" || true
+          rm -f \
+            "$RUNNER_TEMP/llx-desk-signing.p12" \
+            "$RUNNER_TEMP/apple-api-key.p8" \
+            "$KEYCHAIN_LIST_PATH"
 
   release:
     needs: [linux, macos]
-    runs-on: [self-hosted, linux, x64, llx-desk]
+    if: ${{ !cancelled() && github.ref_type == 'tag' && needs.linux.result == 'success' && needs.macos.result == 'success' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
           merge-multiple: true
+      # Computed here, after the download, so the sums are those of the files as they are published.
       - name: Every archive, and its checksum
         run: |
           cd dist
-          for file in llx-desk-x86_64-unknown-linux-gnu.tar.gz LLX-Desk-macos.zip; do
+          for file in llx-desk-x86_64-unknown-linux-gnu.tar.gz LLX-Desk-macos.zip LLX-Desk-macos.dmg; do
             [ -s "$file" ] || { echo "missing $file"; exit 1; }
           done
-          sha256sum llx-desk-*.tar.gz LLX-Desk-macos.zip > SHA256SUMS
+          sha256sum llx-desk-*.tar.gz LLX-Desk-macos.zip LLX-Desk-macos.dmg > SHA256SUMS
           cat SHA256SUMS
       - name: Notes from CHANGELOG.md
         run: |
           version=${GITHUB_REF_NAME#v}
           awk -v v="$version" '$0 == "## " v { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > notes.md
           [ -s notes.md ] || { echo "CHANGELOG.md has no section \"## $version\""; exit 1; }
+      # A run that is repeated finds the draft or the release there and puts the files in it again.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" \
-            --notes-file notes.md dist/llx-desk-*.tar.gz dist/LLX-Desk-macos.zip dist/SHA256SUMS
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "$GITHUB_REF_NAME" \
+              --notes-file notes.md
+          fi
+          gh release upload "$GITHUB_REF_NAME" dist/llx-desk-*.tar.gz dist/LLX-Desk-macos.zip \
+            dist/LLX-Desk-macos.dmg dist/SHA256SUMS --clobber
+          gh release edit "$GITHUB_REF_NAME" --draft=false

@@ -14,18 +14,16 @@ pub use session::{DEFAULT_WAIT, Painter, Session, Until};
 pub const COLUMNS: u16 = 120;
 pub const ROWS: u16 = 40;
 
-/// xterm.js, its fit addon and its stylesheet, vendored (xterm.js 6.0.0, addon-fit 0.11.0): the
-/// page runs them by their SHA-384, so a page that was altered never runs a script.
+/// xterm.js and its stylesheet, vendored (xterm.js 6.0.0): the page runs it by its SHA-384, so a
+/// page that was altered never runs a script.
 const XTERM: &str = include_str!("terminal/vendor/xterm.js");
 const XTERM_SHA384: &str = "f/1U6Z9wM4D71a5eRXEZnyOTMOvjqxr2XLwh+Go1OvIl3L3tOcvUrzudnhbECwl4";
-const FIT: &str = include_str!("terminal/vendor/addon-fit.js");
-const FIT_SHA384: &str = "txoiwu4RR2GD3qySbaj+BbzibkLbSJRcfqGYMu6z1EqHil4A2dyBiBW5dlacG6OR";
 const XTERM_CSS: &str = include_str!("terminal/vendor/xterm.css");
 
 /// The emulator page's own script, and its SHA-384: the page's policy runs it by that hash.
 pub(crate) const GLUE: &str = include_str!("terminal/emulator.js");
 pub(crate) const GLUE_SHA384: &str =
-    "w9StU4CQwbG5gPt6Hw+OUNCQcj9vcQEJv4eECxjFxwzyXDumpZpYFAd4cTZUNY52";
+    "LfStb/O1IQ1l/kjKABHLKJo4GnbKwT7sjXFdNvjA3xWfH1oZKwtYJwW31N/uPYYK";
 
 /// The page that shows a session in xterm.js, titled `title`, in the window's light or dark.
 /// Its policy runs its own scripts only, by their hashes.
@@ -34,7 +32,7 @@ pub fn page(title: &str) -> String {
         .replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;");
-    let scripts = format!("'sha384-{XTERM_SHA384}' 'sha384-{FIT_SHA384}' 'sha384-{GLUE_SHA384}'");
+    let scripts = format!("'sha384-{XTERM_SHA384}' 'sha384-{GLUE_SHA384}'");
     fill(
         include_str!("terminal/emulator.html"),
         &[
@@ -42,7 +40,6 @@ pub fn page(title: &str) -> String {
             ("title", &title),
             ("css", XTERM_CSS),
             ("xterm", XTERM),
-            ("fit", FIT),
             ("glue", GLUE),
         ],
     )

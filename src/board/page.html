@@ -6,39 +6,31 @@
 <title>{{title}}</title>
 <style>
 /* The board as the window's own: the system's font and accent, hairlines and capsules as the
-   window's strip draws them, colours mixed from the text colour so light, dark and the window's
-   glass all hold. On the glass (macOS, data-glass) the page is clear and its troughs and cards are
-   veils over the material; elsewhere, and where the person reduces transparency, it is solid. */
+   window's strip draws them. The frame's sheet (frame.css) has the ink, fill and accent ladders, the
+   radii, the elevations and the easing; what is set here is the board's own: its grounds, its
+   column colours and its card shadows. On the glass (macOS, data-glass) the page is clear and its
+   troughs and cards are veils over the material; elsewhere, and where the person reduces
+   transparency, it is solid. */
 :root{
-  --solid:#f5f5f7;--fg:#1d1d1f;--raised:#ffffff;
-  --trough:color-mix(in srgb,currentColor 4.5%,transparent);
-  --veil:color-mix(in srgb,currentColor 6%,transparent);
-  --hair:color-mix(in srgb,currentColor 12%,transparent);
-  --strong:color-mix(in srgb,currentColor 20%,transparent);
-  --soft:color-mix(in srgb,currentColor 68%,transparent);
-  --faint:color-mix(in srgb,currentColor 50%,transparent);
-  --accent:#0a84ff;--accent:-apple-system-control-accent;
+  --solid:#f5f5f7;--raised:#ffffff;
   --gray:#8e8e93;--purple:#8e5cd9;--orange:#f08c00;--blue:#0a84ff;--green:#28a745;--red:#e5383b;--go:#1f8a3b;
   --lift:0 0 0 .5px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.06);
   --raise:0 0 0 .5px rgba(0,0,0,.1),0 2px 4px -1px rgba(0,0,0,.06),0 10px 22px -8px rgba(0,0,0,.22);
-  --float:0 0 0 .5px rgba(0,0,0,.1),0 12px 32px rgba(0,0,0,.16);
   --shine:rgba(255,255,255,.75);
-  --ease:cubic-bezier(.2,.8,.2,1);
   --spring:cubic-bezier(.3,1.35,.5,1);
   --sys:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
   --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
   --ground:var(--solid);
 }
 @media (prefers-color-scheme: dark){:root{
-  --solid:#1c1c1e;--fg:#ececf0;--raised:#2c2c2f;
+  --solid:#1c1c1e;--raised:#2c2c2f;
   --purple:#bf8cff;--orange:#ff9f0a;--blue:#409cff;--green:#32d74b;--red:#ff5d55;--go:#248a3d;
   --lift:0 0 0 .5px rgba(255,255,255,.08),0 1px 2px rgba(0,0,0,.3);
   --raise:0 0 0 .5px rgba(255,255,255,.14),0 2px 4px -1px rgba(0,0,0,.3),0 12px 26px -8px rgba(0,0,0,.6);
-  --float:0 0 0 .5px rgba(255,255,255,.12),0 14px 36px rgba(0,0,0,.45);
   --shine:rgba(255,255,255,.09);
 }}
 html:not([data-glass]){background:var(--solid)!important}
-html[data-glass]{--raised:color-mix(in srgb,#fff 74%,transparent);--trough:color-mix(in srgb,currentColor 5%,transparent)}
+html[data-glass]{--raised:color-mix(in srgb,#fff 74%,transparent)}
 @media (prefers-color-scheme: dark){html[data-glass]{--raised:color-mix(in srgb,#fff 8%,transparent)}}
 @media (prefers-reduced-transparency:reduce){html[data-glass]{background:var(--solid)!important;--raised:#fff}}
 @media (prefers-reduced-transparency:reduce) and (prefers-color-scheme: dark){html[data-glass]{--raised:#2c2c2f}}
@@ -59,168 +51,173 @@ svg{display:block;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:
 .bar h1{margin:0;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ring{flex:none}
 .ring circle{fill:none;stroke-width:2.2}
-.ring .track{stroke:var(--hair)}
+.ring .track{stroke:var(--ov-3)}
 .ring .fill{stroke:var(--green);stroke-linecap:round;transition:stroke-dashoffset .4s var(--ease)}
-.count{color:var(--soft);font-variant-numeric:tabular-nums;white-space:nowrap}
+.count{color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
 .new{flex:1;min-width:140px;max-width:440px;margin-left:auto;display:flex;align-items:center;gap:7px;height:28px;padding:0 6px 0 10px;
-  border-radius:8px;background:var(--veil);color:var(--soft);transition:background .15s,box-shadow .15s}
-.new:focus-within{background:var(--raised);box-shadow:0 0 0 .5px var(--strong),0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent);color:var(--fg)}
+  border-radius:var(--r-3);background:var(--ov-1);color:var(--ink-2);transition:background .15s,box-shadow .15s}
+.new:focus-within{background:var(--raised);box-shadow:0 0 0 .5px var(--ov-4),0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent);color:var(--fg)}
 .new input{flex:1;min-width:0;border:0;outline:0;background:transparent;padding:0;box-shadow:none!important}
-.new input::placeholder{color:var(--faint)}
-kbd{font:500 10.5px/1 var(--sys);color:var(--faint);padding:3px 5px;border-radius:4px;background:var(--veil)}
+.new input::placeholder{color:var(--ink-3)}
+kbd{font:500 10px/1 var(--sys);color:var(--ink-2);padding:3px 5px;border-radius:var(--r-1);background:var(--ov-1)}
 .new:focus-within kbd{opacity:0}
 
 /* The columns: troughs side by side, cards lifted on them; a folded one is a slim rail. */
 main{flex:1;min-height:0;display:flex;gap:10px;padding:0 12px 12px;overflow-x:auto;transition:margin-right .26s var(--ease)}
 /* With a card open, the board makes room for it rather than going under it. */
 body.inspecting main,body.inspecting .bar{margin-right:min(348px,calc(100vw - 260px))}
-.lane{flex:1 1 0;min-width:196px;display:flex;flex-direction:column;min-height:0;border-radius:12px;background:var(--trough);
+.lane{flex:1 1 0;min-width:196px;display:flex;flex-direction:column;min-height:0;border-radius:var(--r-4);background:var(--ov-1);
   transition:background .15s,box-shadow .15s}
-.lane.over{background:color-mix(in srgb,var(--accent) 9%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent)}
-.lane h2{flex:none;display:flex;align-items:center;gap:7px;margin:0;padding:0 8px 0 12px;font-size:12.5px;font-weight:600;height:40px;min-width:0;white-space:nowrap}
-.lane h2 .n{min-width:18px;height:18px;padding:0 5px;border-radius:9px;display:inline-grid;place-items:center;font-size:11px;
-  color:var(--soft);font-weight:600;font-variant-numeric:tabular-nums;background:var(--veil)}
+.lane.over{background:var(--acc-1);box-shadow:inset 0 0 0 1px var(--acc-3)}
+.lane h2{flex:none;display:flex;align-items:center;gap:7px;margin:0;padding:0 8px 0 12px;font-size:12px;font-weight:600;height:40px;min-width:0;white-space:nowrap}
+.lane h2 .n{min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);display:inline-grid;place-items:center;font-size:11px;
+  color:var(--ink-2);font-weight:600;font-variant-numeric:tabular-nums;background:var(--ov-1)}
 .lane h2 .end{margin-left:auto;display:flex;align-items:center;gap:4px}
-.fold{width:22px;height:22px;border:0;border-radius:6px;background:transparent;color:var(--faint);display:grid;place-items:center;opacity:0;transition:opacity .15s,background .15s}
+.fold{width:22px;height:22px;border:0;border-radius:var(--r-2);background:transparent;color:var(--ink-2);display:grid;place-items:center;opacity:0;
+  transition:opacity .15s,background var(--t-out)}
 .lane:hover .fold,.fold:focus-visible{opacity:1}
-.fold:hover{background:var(--veil);color:var(--fg)}
-.rail{flex:0 0 36px;min-width:36px;border:0;border-radius:12px;background:var(--trough);color:var(--soft);display:flex;flex-direction:column;
-  align-items:center;gap:9px;padding:13px 0;transition:background .15s,color .15s}
-.rail:hover{background:var(--veil);color:var(--fg)}
-.rail.over{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.fold:hover{background:var(--ov-2);color:var(--fg);transition:none}
+.rail{flex:0 0 36px;min-width:36px;border:0;border-radius:var(--r-4);background:var(--ov-1);color:var(--ink-2);display:flex;flex-direction:column;
+  align-items:center;gap:9px;padding:13px 0;transition:background var(--t-out),color var(--t-out)}
+.rail:hover{background:var(--ov-2);color:var(--fg);transition:none}
+.rail.over{background:var(--acc-1)}
 .rail .v{writing-mode:vertical-rl;font-size:12px;font-weight:600}
-.rail .n{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.rail .n{font-size:11px;color:var(--ink-2);font-variant-numeric:tabular-nums}
 .dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--c,var(--gray))}
 [data-col=backlog]{--c:var(--purple)}[data-col=todo]{--c:var(--gray)}[data-col=doing]{--c:var(--orange)}[data-col=review]{--c:var(--blue)}[data-col=done]{--c:var(--green)}[data-col=discarded]{--c:color-mix(in srgb,var(--red) 70%,var(--gray))}
-.pill{font-size:11px;font-weight:500;color:var(--soft);height:20px;padding:0 8px;border-radius:10px;
-  display:inline-flex;align-items:center;background:var(--veil);border:0;white-space:nowrap}
-button.pill:hover{background:var(--strong);color:var(--fg)}
+.pill{font-size:11px;font-weight:500;color:var(--ink-2);height:20px;padding:0 8px;border-radius:var(--r-pill);
+  display:inline-flex;align-items:center;background:var(--ov-1);border:0;white-space:nowrap;transition:background var(--t-out),color var(--t-out)}
+button.pill:hover{background:var(--ov-2);color:var(--fg);transition:none}
 .list{flex:1;min-height:0;overflow-y:auto;padding:2px 8px 10px;display:flex;flex-direction:column;gap:7px;scrollbar-width:thin}
 .list::-webkit-scrollbar,main::-webkit-scrollbar,aside .body::-webkit-scrollbar{width:9px;height:9px}
 .list::-webkit-scrollbar-thumb,main::-webkit-scrollbar-thumb,aside .body::-webkit-scrollbar-thumb{border-radius:9px;border:3px solid transparent;
-  background:var(--strong) padding-box}
+  background:var(--ov-4) padding-box}
 .list::-webkit-scrollbar-track,main::-webkit-scrollbar-track{background:transparent}
-.empty{margin:2px 0;padding:18px 12px;border-radius:10px;border:1px dashed var(--hair);color:var(--faint);text-align:center;line-height:1.45;font-size:12px;
+.empty{margin:2px 0;padding:18px 12px;border-radius:var(--r-3);border:1px dashed var(--ov-3);color:var(--ink-2);text-align:center;line-height:1.45;font-size:12px;
   display:flex;flex-direction:column;align-items:center;gap:7px}
 .empty svg{opacity:.7}
-.slot{flex:none;height:44px;border-radius:9px;background:color-mix(in srgb,var(--accent) 9%,transparent);
-  box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent) 40%,transparent);animation:grow .14s var(--ease)}
+/* The one slot a drag keeps, sized to the card it carries; it grows only when it enters a column. */
+.slot{flex:none;height:44px;border-radius:var(--r-3);background:var(--acc-1);box-shadow:inset 0 0 0 1.5px var(--acc-3)}
+.slot.enter{animation:grow .14s var(--ease)}
 @keyframes grow{from{height:0;opacity:0}}
 
 /* A card: what it is, what waits on it, who has it since when. */
-.card{position:relative;flex:none;background:var(--raised);border-radius:10px;box-shadow:var(--lift);padding:9px 10px 8px 11px;isolation:isolate;
-  overflow:hidden;transition:transform .24s var(--spring),box-shadow .2s var(--ease),opacity .15s,background .2s}
-/* Pointed at: it rises a little, the light follows the pointer across it, and its column's colour shows
-   at its edge. Pressed, it gives. */
+.card{position:relative;flex:none;background:var(--raised);border-radius:var(--r-3);box-shadow:var(--lift);padding:9px 10px 8px 11px;isolation:isolate;
+  overflow:hidden;transition:transform .12s var(--ease),box-shadow .2s var(--ease),opacity .15s,background .2s}
+/* Pointed at: its shadow deepens and the light follows the pointer across it, and its column's colour
+   shows at its edge; it never moves from under the pointer. Pressed, it gives. */
 .card::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:0;transition:opacity .25s;
   background:radial-gradient(240px circle at var(--mx,50%) var(--my,0%),var(--shine),transparent 60%)}
 .card::after{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--c,var(--accent));
-  transform:scaleY(.4);opacity:0;transition:opacity .2s,transform .24s var(--spring)}
-.card:hover{transform:translateY(-2px);box-shadow:var(--raise)}
+  transform:scaleY(.4);opacity:0;transition:opacity .2s,transform .24s var(--ease)}
+.card:hover{box-shadow:var(--raise)}
 .card:hover::before{opacity:1}
 .card:hover::after,.card.sel::after,.card:focus-visible::after{opacity:1;transform:none}
-.card:active{transform:translateY(0) scale(.985);transition-duration:.08s}
+.card:active{transform:scale(.985);transition-duration:.08s}
 .card.sel{box-shadow:0 0 0 2px var(--accent),var(--raise)}
 /* Dragged, the card it leaves behind is where it was: a ghost, not a hole. */
-.card.dragging{opacity:.5;transform:none;box-shadow:inset 0 0 0 1.5px var(--hair);background:transparent}
+.card.dragging{opacity:.5;transform:none;box-shadow:inset 0 0 0 1.5px var(--ov-3);background:transparent}
 .card.dragging>*{opacity:.35}
 /* Done and Discarded: they step back; what was given up is struck through. */
-.card[data-col=done],.card[data-col=discarded]{background:color-mix(in srgb,var(--raised) 70%,transparent);box-shadow:0 0 0 .5px var(--hair)}
-.card[data-col=done] .t,.card[data-col=discarded] .t{color:var(--soft)}
+.card[data-col=done],.card[data-col=discarded]{background:color-mix(in srgb,var(--raised) 70%,transparent);box-shadow:var(--sh-hair)}
+.card[data-col=done] .t,.card[data-col=discarded] .t{color:var(--ink-2)}
 .card[data-col=done]:hover .t,.card[data-col=discarded]:hover .t{color:var(--fg)}
 .card[data-col=discarded] .t{text-decoration:line-through;text-decoration-color:color-mix(in srgb,currentColor 45%,transparent)}
 .card .t{font-weight:500;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.card .m{display:flex;align-items:center;gap:7px;margin-top:6px;color:var(--soft);font-size:11px;min-width:0;height:16px}
-.card .id{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
-.card .age{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--faint);flex:none}
+.card .m{display:flex;align-items:center;gap:7px;margin-top:6px;color:var(--ink-2);font-size:11px;min-width:0;height:16px}
+.card .id{font-family:var(--mono);font-size:10px;color:var(--ink-2)}
+.card .age{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--ink-2);flex:none}
 .card .edge{position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--red);z-index:1}
-.quick{position:absolute;right:6px;bottom:6px;height:22px;padding:0 8px;border:0;border-radius:6px;display:inline-flex;align-items:center;gap:4px;
+.quick{position:absolute;right:6px;bottom:6px;height:22px;padding:0 8px;border:0;border-radius:var(--r-2);display:inline-flex;align-items:center;gap:4px;
   font-size:11px;font-weight:600;color:#fff;background:var(--go);box-shadow:0 1px 3px rgba(0,0,0,.18);opacity:0;transform:translateY(2px);
   transition:opacity .18s,transform .24s var(--spring)}
-.quick.plain{background:var(--solid);color:var(--fg);box-shadow:0 0 0 .5px var(--strong),0 1px 3px rgba(0,0,0,.12)}
+.quick.plain{background:var(--solid);color:var(--fg);box-shadow:0 0 0 .5px var(--ov-4),0 1px 3px rgba(0,0,0,.12)}
 .card:hover .quick,.card:focus-visible .quick,.quick:focus-visible{opacity:1;transform:none}
 .card.quick-on:hover .age,.card.quick-on:focus-visible .age{opacity:0}
 .who{display:inline-flex;align-items:center;gap:5px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.av{width:15px;height:15px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:8.5px;font-weight:700;color:#fff;background:var(--h,var(--gray));text-transform:uppercase}
-.note{margin-top:6px;font-size:12px;line-height:1.38;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;color:var(--soft)}
+.av{width:15px;height:15px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff;background:var(--h,var(--gray));text-transform:uppercase}
+.note{margin-top:6px;font-size:12px;line-height:1.38;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;color:var(--ink-2)}
 .note b{font-weight:600}
-.note.blocked,.note.back{padding:5px 7px;border-radius:6px;color:var(--fg)}
+.note.blocked,.note.back{padding:5px 7px;border-radius:var(--r-2);color:var(--fg)}
 .note.blocked{background:color-mix(in srgb,var(--red) 14%,transparent)}.note.blocked b{color:var(--red)}
 .note.back{background:color-mix(in srgb,var(--orange) 14%,transparent)}.note.back b{color:var(--orange)}
 /* A card waiting for the person: two quiet buttons, green to accept and red to send back, side by side
    at any width; each fills with its colour when pointed at. */
 .acts{display:flex;gap:6px;margin-top:8px}
-.act{flex:1;min-width:0;height:26px;border:0;border-radius:7px;display:grid;place-items:center;
-  transition:background .15s,color .15s,transform .12s var(--spring)}
+.act{flex:1;min-width:0;height:26px;border:0;border-radius:var(--r-2);display:grid;place-items:center;
+  transition:background var(--t-out),color var(--t-out),transform .12s var(--ease)}
 .act svg{stroke-width:1.9}
 .act.ok{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
-.act.ok:hover{background:var(--go);color:#fff}
+.act.ok:hover{background:var(--go);color:#fff;transition:none}
 .act.no{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
-.act.no:hover{background:var(--red);color:#fff}
+.act.no:hover{background:var(--red);color:#fff;transition:none}
 .act:active{transform:scale(.95)}
 
 /* Push buttons and fields, as the system draws them. */
-.btn{height:24px;padding:0 11px;border-radius:6px;border:0;background:var(--raised);box-shadow:0 0 0 .5px var(--strong),0 .5px 1px rgba(0,0,0,.08);
-  font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:filter .1s,background .15s}
-.btn:hover{filter:brightness(1.06)}
-.btn:not(.main):not(.go):not(.plain):hover{background:color-mix(in srgb,var(--raised) 80%,currentColor 6%)}
-.btn:active{filter:brightness(.93)}
+/* A push button's body is the raised ground; pointed at it takes the ladder's 10%, pressed 15%, mixed
+   into the body so it fades back out. The filled ones (main, go, danger) keep a brightness step. */
+.btn{height:24px;padding:0 11px;border-radius:var(--r-2);border:0;background:var(--raised);box-shadow:0 0 0 .5px var(--ov-4),0 .5px 1px rgba(0,0,0,.08);
+  font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:filter var(--t-out),background var(--t-out)}
+.btn:hover{background:color-mix(in srgb,var(--raised),currentColor 10%);transition:none}
+.btn:active{background:color-mix(in srgb,var(--raised),currentColor 15%)}
+.btn.main:hover,.btn.go:hover,.btn.danger:hover{filter:brightness(1.06)}
+.btn.main:active,.btn.go:active,.btn.danger:active{filter:brightness(.93)}
 .quick:hover{filter:brightness(1.08)}
 .btn.main{background:var(--accent);color:#fff;box-shadow:none}
 .btn.go{background:var(--go);color:#fff;box-shadow:none}
-.btn.plain{background:transparent;box-shadow:none;color:var(--soft)}
-.btn.plain:hover{background:var(--veil);color:var(--fg)}
+.btn.plain{background:transparent;box-shadow:none;color:var(--ink-2)}
+.btn.plain:hover{background:var(--ov-2);color:var(--fg)}
+.btn.plain:active{background:var(--ov-3)}
 .btn.bad{color:var(--red)}
 .btn.danger{background:var(--red);color:#fff;box-shadow:none;animation:pop .14s var(--ease)}
 /* An icon alone: a square, quiet until pointed at. */
-.btn.ico{width:26px;height:26px;padding:0;justify-content:center;border-radius:7px}
-textarea{width:100%;border:0;border-radius:7px;padding:7px 9px;background:var(--raised);box-shadow:0 0 0 .5px var(--strong);
+.btn.ico{width:26px;height:26px;padding:0;justify-content:center}
+textarea{width:100%;border:0;border-radius:var(--r-2);padding:7px 9px;background:var(--raised);box-shadow:0 0 0 .5px var(--ov-4);
   outline:none;resize:none;user-select:text;-webkit-user-select:text;line-height:1.4;transition:box-shadow .15s,background .15s}
-textarea:focus{box-shadow:0 0 0 .5px var(--strong),0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent)!important}
-textarea::placeholder{color:var(--faint)}
+textarea:focus{box-shadow:0 0 0 .5px var(--ov-4),0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent)!important}
+textarea::placeholder{color:var(--ink-3)}
 
 /* The card opened: an inspector at the side, on a veil of its own. */
-aside{position:fixed;top:8px;right:8px;bottom:8px;width:min(340px,calc(100vw - 16px));border-radius:12px;display:flex;flex-direction:column;z-index:5;
+aside{position:fixed;top:8px;right:8px;bottom:8px;width:min(340px,calc(100vw - 16px));border-radius:var(--r-4);display:flex;flex-direction:column;z-index:5;
   background:color-mix(in srgb,var(--solid) 93%,transparent);-webkit-backdrop-filter:blur(30px) saturate(1.6);backdrop-filter:blur(30px) saturate(1.6);
-  box-shadow:var(--float);transform:translateX(calc(100% + 16px));transition:transform .26s var(--ease),visibility 0s .26s;visibility:hidden}
+  box-shadow:var(--sh-lift);transform:translateX(calc(100% + 16px));transition:transform .26s var(--ease),visibility 0s .26s;visibility:hidden}
 aside.on{transform:none;visibility:visible;transition:transform .26s var(--ease)}
-aside .top{flex:none;display:flex;align-items:center;gap:6px;padding:9px 8px 9px 14px;border-bottom:.5px solid var(--hair);min-width:0}
-aside .top .id{font-family:var(--mono);font-size:11px;color:var(--faint);flex:none}
-aside .top .who{flex:0 1 auto;font-size:12px;color:var(--soft)}
+aside .top{flex:none;display:flex;align-items:center;gap:6px;padding:9px 8px 9px 14px;border-bottom:.5px solid var(--ov-3);min-width:0}
+aside .top .id{font-family:var(--mono);font-size:11px;color:var(--ink-2);flex:none}
+aside .top .who{flex:0 1 auto;font-size:12px;color:var(--ink-2)}
 aside .top .gap{flex:1}
 /* The status: a pop-up button, as the system's, its colour the column's. */
-.status{flex:none;height:24px;display:inline-flex;align-items:center;gap:6px;padding:0 7px 0 8px;border:0;border-radius:6px;font-size:12px;font-weight:600;
-  background:color-mix(in srgb,var(--c) 14%,transparent);color:color-mix(in srgb,var(--c) 75%,var(--fg));transition:background .15s}
-.status:hover{background:color-mix(in srgb,var(--c) 22%,transparent)}
+.status{flex:none;height:24px;display:inline-flex;align-items:center;gap:6px;padding:0 7px 0 8px;border:0;border-radius:var(--r-2);font-size:12px;font-weight:600;
+  background:color-mix(in srgb,var(--c) 14%,transparent);color:color-mix(in srgb,var(--c) 75%,var(--fg));transition:background var(--t-out)}
+.status:hover{background:color-mix(in srgb,var(--c) 22%,transparent);transition:none}
 .status .dot{width:7px;height:7px}
 .status svg{opacity:.7}
 aside .body{flex:1;min-height:0;overflow-y:auto;padding:12px 14px 16px;display:flex;flex-direction:column;gap:16px}
 /* A long card scrolls: nothing in it is squeezed, its title least of all. */
 aside .body>*{flex:none}
 aside .title{font-size:15px;font-weight:600;padding:6px 8px;margin:0 -8px;width:calc(100% + 16px);line-height:1.3;overflow:hidden;background:transparent;box-shadow:none}
-aside .title:hover{background:var(--veil)}
+aside .title:hover{background:var(--ov-1)}
 aside .title:focus{background:var(--raised)}
-.sec>label{display:block;font-size:11px;font-weight:600;color:var(--soft);margin:0 0 6px}
-.box{border-radius:8px;padding:8px 10px;background:var(--veil);overflow-wrap:anywhere;white-space:pre-wrap;user-select:text;-webkit-user-select:text}
+.sec>label{display:block;font-size:11px;font-weight:600;color:var(--ink-2);margin:0 0 6px}
+.box{border-radius:var(--r-3);padding:8px 10px;background:var(--ov-1);overflow-wrap:anywhere;white-space:pre-wrap;user-select:text;-webkit-user-select:text}
 .box.blocked{background:color-mix(in srgb,var(--red) 12%,transparent)}
 .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .history{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
-.history li{display:grid;grid-template-columns:15px 1fr;gap:4px 8px;font-size:12px;color:var(--soft)}
+.history li{display:grid;grid-template-columns:15px 1fr;gap:4px 8px;font-size:12px;color:var(--ink-2)}
 .history li .av{margin-top:1px}
 .history li b{color:var(--fg);font-weight:500}
 .history li .said{grid-column:2;color:var(--fg);white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text;
-  background:var(--veil);border-radius:8px;padding:6px 9px}
-.hint{color:var(--faint);font-size:11px}
+  background:var(--ov-1);border-radius:var(--r-3);padding:6px 9px}
+.hint{color:var(--ink-2);font-size:11px}
 
 @keyframes pop{from{opacity:0;transform:scale(.97)}}
 @keyframes rise{from{opacity:0;transform:translateY(5px) scale(.98)}}
 .card.fresh{animation:rise .26s var(--ease)}
 
 #toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,8px);opacity:0;pointer-events:none;z-index:9;max-width:80vw;
-  padding:8px 13px;border-radius:10px;background:color-mix(in srgb,var(--solid) 88%,transparent);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
-  box-shadow:var(--float);transition:opacity .2s,transform .2s var(--ease)}
+  padding:8px 13px;border-radius:var(--r-4);background:color-mix(in srgb,var(--solid) 88%,transparent);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  box-shadow:var(--sh-pop);transition:opacity .2s,transform .2s var(--ease)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.card:hover,.card:active{transform:none}}
 </style>
 </head>
 <body>

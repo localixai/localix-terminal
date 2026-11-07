@@ -25,10 +25,10 @@ use super::presence::Event;
 const NONACTIVATING_PANEL: usize = 1 << 7;
 /// NSWindowCollectionBehavior: on every Space, over a full-screen app, out of window cycling.
 const CAN_JOIN_ALL_SPACES: usize = 1 << 0;
-const MOVE_TO_ACTIVE_SPACE: usize = 1 << 1;
 const STATIONARY: usize = 1 << 4;
 const IGNORES_CYCLE: usize = 1 << 6;
 const FULL_SCREEN_AUXILIARY: usize = 1 << 8;
+const FULL_SCREEN_PRIMARY: usize = 1 << 7;
 /// NSWindowLevel: the ordinary windows', and floating, above them.
 const NORMAL: isize = 0;
 const FLOATING: isize = 3;
@@ -41,15 +41,12 @@ pub(super) enum Role {
 }
 
 impl Role {
-    /// The mini floats over every app; the expanded deck is an ordinary window among the
-    /// person's, which another app's window may cover.
-    /// The mini is on every Space; the deck on the one it was expanded on, a full-screen app's
-    /// too, and stays there when the person goes to another. A panel never enters full screen
-    /// of its own: AppKit's transition throws in it, and the exception aborts the process (it
-    /// unwinds through tao's `sendEvent:`). Its green button fills the screen instead.
+    /// The mini floats over every app, on every Space; the deck is an ordinary window among the
+    /// person's (not a panel: it is the app's main window, and enters full screen of its own,
+    /// on a Space of its own, as an app's window does).
     const fn spaces(self) -> usize {
         match self {
-            Self::Deck => MOVE_TO_ACTIVE_SPACE | FULL_SCREEN_AUXILIARY,
+            Self::Deck => FULL_SCREEN_PRIMARY,
             Self::Mini => CAN_JOIN_ALL_SPACES | FULL_SCREEN_AUXILIARY | STATIONARY | IGNORES_CYCLE,
         }
     }
@@ -112,15 +109,6 @@ extern "C" fn collapse(_this: &AnyObject, _sel: Sel, _sender: *mut AnyObject) {
     }
 }
 
-/// The green button fills the screen, or gives the window its size back, as a double click on
-/// the strip does: never AppKit's full screen (see `Role::spaces`).
-extern "C" fn fill(_this: &AnyObject, _sel: Sel, _sender: *mut AnyObject) {
-    let proxy = COLLAPSE.get().and_then(|held| crate::lock(held).clone());
-    if let Some(proxy) = proxy {
-        let _ = proxy.send_event(Cmd::Clicked("zoom".into()));
-    }
-}
-
 /// What the minimize button calls instead of minimizing: one object for the process.
 fn collapser() -> Option<&'static AnyObject> {
     static TARGET: OnceLock<Option<usize>> = OnceLock::new();
@@ -128,8 +116,6 @@ fn collapser() -> Option<&'static AnyObject> {
         let mut class = ClassBuilder::new(c"LlxCollapse", AnyClass::get(c"NSObject")?)?;
         // SAFETY: an action's signature: the receiver, the selector, the sender.
         unsafe { class.add_method(sel!(collapse:), collapse as extern "C" fn(_, _, _)) };
-        // SAFETY: as above.
-        unsafe { class.add_method(sel!(fill:), fill as extern "C" fn(_, _, _)) };
         let class = class.register();
         // SAFETY: `new` on an NSObject subclass answers a retained instance.
         let object: Retained<AnyObject> = unsafe { msg_send![class, new] };
@@ -140,17 +126,16 @@ fn collapser() -> Option<&'static AnyObject> {
     unsafe { (at as *const AnyObject).as_ref() }
 }
 
-/// `window`'s minimize button collapses it to the mini, and its green button fills the screen,
-/// told to `proxy`.
+/// `window`'s minimize button collapses it to the mini, told to `proxy`. Its green button is the
+/// system's: full screen, on a Space of its own.
 pub(super) fn collapse_to(window: &Window, proxy: &EventLoopProxy<Cmd>) {
-    /// NSWindowButton: the minimize and the zoom (green) buttons.
+    /// NSWindowButton: the minimize button.
     const MINIATURIZE: usize = 1;
-    const ZOOM: usize = 2;
     *crate::lock(COLLAPSE.get_or_init(|| Mutex::new(None))) = Some(proxy.clone());
     let Some(target) = collapser() else {
         return;
     };
-    for (kind, action) in [(MINIATURIZE, sel!(collapse:)), (ZOOM, sel!(fill:))] {
+    for (kind, action) in [(MINIATURIZE, sel!(collapse:))] {
         // SAFETY: a window answers its standard button of a kind, or nil.
         let button: *mut AnyObject =
             unsafe { msg_send![native(window), standardWindowButton: kind] };
@@ -200,13 +185,18 @@ fn takes(object: &AnyObject, selector: Sel) -> bool {
     yes.as_bool()
 }
 
-/// Make `window` a non-activating panel on every Space, of `role`. Where the class
-/// cannot be swapped (the new one needs more room than tao's own window class has) it stays an
-/// ordinary window with the same level and spaces: it still never takes the keyboard on its own.
+/// Make `window` the window of `role`: the mini a non-activating panel on every Space, the deck
+/// an ordinary window. Where the mini's class cannot be swapped (the new one needs more room than
+/// tao's own window class has) it stays an ordinary window with the same level and spaces.
 pub(super) fn adopt(window: &Window, role: Role) {
     let object = native(window);
-    let swapped =
-        panel_class().filter(|class| class.instance_size() <= object.class().instance_size());
+    // The deck stays the window tao made: the app's main window, which a click activates and
+    // the green button takes to full screen. Shown by an agent, it still comes to the front
+    // without taking the keys (`reveal`).
+    let swapped = (role == Role::Mini)
+        .then(panel_class)
+        .flatten()
+        .filter(|class| class.instance_size() <= object.class().instance_size());
     if let Some(class) = swapped {
         // SAFETY: NSPanel's subclass has no instance variable of its own, and NSPanel is no
         // larger than tao's window class (checked just above), whose one extra variable lies
@@ -350,10 +340,14 @@ pub(super) fn focus(window: &Window) {
     if unseen() {
         return;
     }
-    super::appkit::activate();
-    // SAFETY: `makeKeyAndOrderFront:` takes a sender, which may be nil, and returns nothing.
-    let _: () =
-        unsafe { msg_send![native(window), makeKeyAndOrderFront: std::ptr::null::<AnyObject>()] };
+    super::appkit::activate_and_key(native(window));
+}
+
+/// Whether `window` is the key window: the one the keys go to.
+pub(super) fn is_key(window: &Window) -> bool {
+    // SAFETY: an NSWindow answers whether it is the key window, a BOOL.
+    let key: Bool = unsafe { msg_send![native(window), isKeyWindow] };
+    key.as_bool()
 }
 
 fn front(object: &AnyObject) {

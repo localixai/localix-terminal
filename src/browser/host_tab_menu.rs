@@ -27,7 +27,49 @@ enum Item {
     CloseRight,
 }
 
+/// The menu of `groups`, a line between each; `shown`, the tab is the one shown.
+fn entries(groups: &[Vec<Item>], shown: bool) -> Vec<Entry> {
+    let mut entries = vec![];
+    for (at, items) in groups.iter().enumerate() {
+        if at > 0 {
+            entries.push(Entry::Line { line: true });
+        }
+        entries.extend(items.iter().map(|item| {
+            Entry::Item {
+                label: item.title().to_string(),
+                marked: false,
+                off: false,
+                paste: false,
+                icon: None,
+                // The person's own keys for it, at its right as the menu bar shows them. Close's
+                // close the tab shown: beside another tab, they would mislead.
+                key: (item.shortcut())
+                    .filter(|_| shown || *item != Item::Close)
+                    .and_then(crate::browser::shortcuts::keys_of),
+            }
+        }));
+    }
+    entries
+}
+
 impl Item {
+    /// The shortcut that does the same, if one does.
+    const fn shortcut(self) -> Option<&'static str> {
+        match self {
+            Self::Reload => Some("reload"),
+            Self::Close => Some("close-tab"),
+            Self::Duplicate
+            | Self::Outside
+            | Self::CopyAddress
+            | Self::NewTerminal
+            | Self::Reveal
+            | Self::Split
+            | Self::Unsplit
+            | Self::CloseOthers
+            | Self::CloseRight => None,
+        }
+    }
+
     fn title(self) -> &'static str {
         match self {
             Self::Reload => "Reload",
@@ -151,16 +193,7 @@ impl On<'_> {
             split,
         };
         let groups = groups(key, &url, around);
-        let mut entries = vec![];
-        for (at, items) in groups.iter().enumerate() {
-            if at > 0 {
-                entries.push(Entry::Line { line: true });
-            }
-            entries.extend(choice::items(
-                &items.iter().map(|item| item.title()).collect::<Vec<_>>(),
-                None,
-            ));
-        }
+        let entries = entries(&groups, Some(key) == shown);
         let items: Vec<Item> = groups.into_iter().flatten().collect();
         let at = (f64::from(at.0), f64::from(at.1));
         let Some(picked) = open.pick(at, &entries).and_then(|at| items.get(at)) else {

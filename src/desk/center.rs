@@ -108,14 +108,16 @@ impl Consumer for Projector {
         };
         match &notice.entity {
             // A tab closed: what was kept for it goes with it.
-            Entity::Tab { key, .. } if notice.op == Op::Deleted => {
+            Entity::Pane { key, .. } if notice.op == Op::Deleted => {
                 desk.tab_gone(key);
                 desk.paint_center();
             }
             Entity::Board { .. }
             | Entity::Terminal { .. }
             | Entity::Ask { .. }
-            | Entity::Tab { .. } => desk.paint_center(),
+            | Entity::Pane { .. } => desk.paint_center(),
+            // Where a pane is shown is not the person's to act on.
+            Entity::Window { .. } | Entity::Workspace { .. } | Entity::Tab { .. } => {}
             // A note waiting for the agent is not the person's to act on.
             Entity::Said { .. } => {}
         }

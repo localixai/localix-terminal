@@ -75,7 +75,7 @@ pub fn run(args: Vec<String>) -> ExitCode {
         Some("setup") => setup::run(&args.collect::<Vec<_>>()),
         Some("open") => match args.next() {
             Some(dir) => app::open_in(&dir),
-            None => app::run(),
+            None => app::open(),
         },
         Some(other) => {
             warn(&format!("llx-desk: no command `{other}`\n\n{HELP}"));

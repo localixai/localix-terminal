@@ -202,9 +202,11 @@ impl Settings {
         Ok(())
     }
 
-    /// The settings page's data: the settings, the choices, and every shortcut with its chord,
-    /// whether the person changed it, and whether another has the same chord.
+    /// The settings page's data: the settings and what each of the appearance's is by default
+    /// (for its reset), the choices, and every shortcut with its chord, whether the person
+    /// changed it, and whether another has the same chord.
     pub(super) fn page(&self) -> Value {
+        let default = Self::default();
         let resolved = shortcuts::resolved(&self.shortcuts);
         let clashes = shortcuts::clashes(&resolved);
         let keys: Vec<Value> = resolved
@@ -230,6 +232,13 @@ impl Settings {
         };
         json!({
             "settings": self,
+            "defaults": {
+                "theme": default.theme,
+                "transparency": default.transparency,
+                "ui_font": default.ui_font,
+                "code_font": default.code_font,
+                "size": default.font_size,
+            },
             "ui_fonts": fonts(&UI_FONTS),
             "code_fonts": fonts(&CODE_FONTS),
             "sizes": [SIZES.start(), SIZES.end()],

@@ -50,9 +50,37 @@ fn with<T>(act: impl FnOnce(&mut Places) -> T) -> T {
     PLACES.with(|places| act(&mut crate::lock(places)))
 }
 
-/// A new window's tabs start with no place taken.
-pub(super) fn reset() {
-    with(|places| *places = Places::default());
+thread_local! {
+    /// How many windows have pages now: places are the app's, so they start over only when
+    /// none has.
+    static BROWSERS: Mutex<usize> = const { Mutex::new(0) };
+}
+
+/// A window's pages begin: the first of the app's starts with no place taken (true).
+pub(super) fn begin() -> bool {
+    let first = BROWSERS.with(|count| {
+        let mut count = crate::lock(count);
+        *count += 1;
+        *count == 1
+    });
+    if first {
+        with(|places| *places = Places::default());
+    }
+    first
+}
+
+/// A window's pages begin with no page of their own: what pages it gets come from other windows,
+/// their places kept, so the places do not start over even when no other window has pages now.
+pub(super) fn join() {
+    BROWSERS.with(|count| *crate::lock(count) += 1);
+}
+
+/// A window's pages are gone.
+pub(super) fn end() {
+    BROWSERS.with(|count| {
+        let mut count = crate::lock(count);
+        *count = count.saturating_sub(1);
+    });
 }
 
 /// The id of a new place for a tab: a new one, if there is room.
@@ -90,9 +118,14 @@ pub(super) fn free(id: u32) {
     }
 }
 
-/// Tab `id`'s place taken again by a tab of the browser's own.
-pub(super) fn claim(id: u32) {
-    with(|places| places.free.retain(|free| *free != id));
+/// Tab `id`'s place taken again by a tab of the browser's own: whether it was still free (a
+/// popup of another window may have taken it meanwhile).
+pub(super) fn claim(id: u32) -> bool {
+    with(|places| {
+        let free = places.free.contains(&id);
+        places.free.retain(|free| *free != id);
+        free
+    })
 }
 
 /// The popups built since the tabs last looked, in the order of their ids.

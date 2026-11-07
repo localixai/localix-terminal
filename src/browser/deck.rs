@@ -26,8 +26,10 @@ mod acts;
 mod history;
 #[path = "deck_layout.rs"]
 mod layout;
+#[path = "deck_tear.rs"]
+mod tear;
 use super::tab_view::build;
-use super::tabs::Tabs;
+use super::tabs::{self, Tabs};
 use super::viewport::Viewport;
 pub(super) use history::Revisit;
 
@@ -41,6 +43,12 @@ pub(super) enum Shown {
     Web,
     /// A terminal session's screen: its panel's id.
     Term(u32),
+}
+
+/// A tab on its way to another window: its page or its panel, with its view as it is.
+pub(super) enum Carried {
+    Page(tabs::Carried),
+    Panel(Open),
 }
 
 /// What the strip's menu shows while it is open.
@@ -68,20 +76,23 @@ pub(super) struct Deck {
     line: Option<WebView>,
     /// The window split in two, or whole (split.rs).
     pub(super) split: super::split::Split,
-    /// The tabs in the order the person dragged them to; one not in it follows, as it came.
-    order: Vec<Key>,
-    /// A tab dragged over the pages: whether it would go into the right half (else the left).
+    /// A tab dragged over the pages: the half it lands in now (whether the right one), none off
+    /// them.
     drop: Option<bool>,
+    /// While a tab carried over the pages is laid out where it lands: what was beside the shown
+    /// tab before, to go back to when it is carried off them.
+    landing: Option<Landing>,
     /// The side is open, or slid shut.
     side_open: bool,
     /// The side's width while open, in points: `strip::SIDE` until the person drags its edge.
     side_width: f64,
-    /// How much of the side shows now, in points: it slides between its rail and `side_width`.
+    /// How wide the side is now, in points: `side_width` open, its rail shut.
     side_now: f64,
-    /// Which slide is the latest: a step of an earlier one is passed over.
-    slide: u32,
     /// The glass under the strip's open list.
     pane: Option<platform::Pane>,
+    /// What each part of the strip was last told, by kind (a hash of the script), and the count
+    /// of page loads it was told since: the same again is not sent (`Deck::say`).
+    pub(super) said: std::sync::Mutex<Said>,
     pub(super) web: Option<Tabs>,
     terms: Vec<Open>,
     pub(super) shown: Shown,
@@ -107,13 +118,13 @@ impl Deck {
 
     /// The window for the browser, on its first tab.
     pub(super) fn for_web(
-        target: &EventLoopWindowTarget<Cmd>,
+        (target, main): (&EventLoopWindowTarget<Cmd>, bool),
         window: &Window,
         shared: &Arc<Shared>,
         proxy: &EventLoopProxy<Cmd>,
     ) -> Result<Self, String> {
         let mut deck = Self::build(
-            target,
+            (target, main),
             &window.title,
             &window.viewport,
             window.headless,
@@ -123,15 +134,31 @@ impl Deck {
         Ok(deck)
     }
 
+    /// A window with nothing in it yet, not the main one: a tab carried out of a list comes into
+    /// it (docs/windows.md).
+    pub(super) fn empty(
+        target: &EventLoopWindowTarget<Cmd>,
+        shared: &Shared,
+        proxy: &EventLoopProxy<Cmd>,
+    ) -> Result<Self, String> {
+        Self::build(
+            (target, false),
+            "llx-desk",
+            &Viewport::DESKTOP,
+            false,
+            (shared, proxy),
+        )
+    }
+
     /// The window for a terminal session's screen, before the browser opened.
     pub(super) fn for_term(
-        target: &EventLoopWindowTarget<Cmd>,
+        (target, main): (&EventLoopWindowTarget<Cmd>, bool),
         opening: Opening,
         shared: &Shared,
         proxy: &EventLoopProxy<Cmd>,
     ) -> Result<Self, String> {
         let mut deck = Self::build(
-            target,
+            (target, main),
             "llx-desk",
             &Viewport::DESKTOP,
             false,
@@ -142,8 +169,9 @@ impl Deck {
     }
 
     /// The window with nothing in it yet but its strip (when shown), its content `viewport`.
+    /// Not the `main` window, it opens cascaded from where the main one is kept.
     fn build(
-        target: &EventLoopWindowTarget<Cmd>,
+        (target, main): (&EventLoopWindowTarget<Cmd>, bool),
         title: &str,
         viewport: &Viewport,
         headless: bool,
@@ -155,8 +183,14 @@ impl Deck {
         // hidden one keeps the page's own size.
         let placed = match headless {
             true => None,
-            false => platform::work_area(target)
-                .map(|area| placement::deck(area, crate::lock(&shared.kept).deck)),
+            false => platform::work_area(target).map(|area| {
+                let deck = placement::deck(area, crate::lock(&shared.kept).deck);
+                if main {
+                    deck
+                } else {
+                    placement::cascade(area, deck)
+                }
+            }),
         };
         let (size, at) = match placed {
             Some(at) => (
@@ -199,7 +233,9 @@ impl Deck {
             let kept = crate::lock(&shared.kept);
             (
                 kept.side.unwrap_or(true),
-                kept.side_width.unwrap_or(strip::SIDE),
+                (kept.side_width).map_or(strip::SIDE, |width| {
+                    width.clamp(strip::SIDE_MIN, strip::SIDE_MAX)
+                }),
             )
         };
         let pane = strip.as_ref().and_then(platform::Pane::under);
@@ -211,13 +247,13 @@ impl Deck {
             nav,
             line,
             split: super::split::Split::default(),
-            order: vec![],
             drop: None,
+            landing: None,
             side_open,
             side_width,
             side_now: if side_open { side_width } else { strip::RAIL },
-            slide: 0,
             pane,
+            said: std::sync::Mutex::default(),
             web: None,
             terms: vec![],
             shown: Shown::Web,
@@ -243,7 +279,7 @@ impl Deck {
             self.frame.show(tabs.active());
         } else {
             // As every new tab: the window shows through until its page drew, never white first.
-            super::tabs::see_through_until_drawn(tabs.active(), 1, shared);
+            tabs::see_through_until_drawn(tabs.active(), 1, shared);
         }
         self.web = Some(tabs);
         self.shown = Shown::Web;
@@ -367,9 +403,81 @@ impl Deck {
         }
     }
 
+    /// Every pane in this window: its pages, then its terminals and boards.
+    pub(super) fn keys(&self) -> Vec<Key> {
+        let pages = (self.web.as_ref())
+            .map(|web| web.listed().0)
+            .unwrap_or_default();
+        (pages.into_iter().map(Key::Web))
+            .chain(self.terms.iter().map(|open| Key::Term(open.id)))
+            .collect()
+    }
+
+    /// Whether pane `key` (`w1`, `t2`, `b1`) is in this window, open or kept.
+    pub(super) fn has(&self, key: &str) -> bool {
+        match Key::parse(key) {
+            Some(Key::Web(id)) => {
+                (self.web.as_ref()).is_some_and(|web| web.listed().0.contains(&id))
+            }
+            Some(Key::Term(id)) => self.term(id).is_some(),
+            None => false,
+        }
+    }
+
+    /// Tab `key` leaves for another window, its view as it is (docs/windows.md): another tab
+    /// is shown in its place when it was the one shown.
+    pub(super) fn take(&mut self, key: Key, shared: &Shared) -> Option<Carried> {
+        let shown = self.shown_key() == Some(key);
+        let carried = match key {
+            Key::Web(id) => {
+                let web = self.web.as_mut()?;
+                let page = web.take(id, shared)?;
+                if web.is_bare() {
+                    self.web = None;
+                }
+                Carried::Page(page)
+            }
+            Key::Term(id) => {
+                let at = (self.terms.iter())
+                    .position(|open| open.id == id && open.held == Held::Live)?;
+                Carried::Panel(self.terms.remove(at))
+            }
+        };
+        if shown && let Some(next) = self.keys().into_iter().find(|other| *other != key) {
+            self.shown = match next {
+                Key::Web(_) => Shown::Web,
+                Key::Term(id) => Shown::Term(id),
+            };
+        }
+        Some(carried)
+    }
+
+    /// A tab come from another window: its view is put in this one as it was, and shown.
+    pub(super) fn take_in(&mut self, carried: Carried, shared: &Shared) {
+        match carried {
+            Carried::Page(page) => {
+                let native = &self.frame.native;
+                let web = (self.web).get_or_insert_with(|| Tabs::empty(native, page.window()));
+                web.take_in(page, native, shared);
+                self.shown = Shown::Web;
+            }
+            Carried::Panel(open) => {
+                platform::reparent(&open.webview, &self.frame.native);
+                self.shown = Shown::Term(open.id);
+                self.terms.retain(|kept| kept.id != open.id);
+                self.terms.push(open);
+            }
+        }
+    }
+
     /// The two tabs side by side, left and right, when the window is split.
     pub(super) fn pair(&self) -> Option<(Key, Key)> {
-        super::split::pair(self.shown_key(), self.split.beside, |key| self.there(key))
+        self.pair_with(self.split.beside)
+    }
+
+    /// The two halves' tabs, left and right, were `beside` the tab beside the shown one.
+    pub(super) fn pair_with(&self, beside: Option<super::split::Beside>) -> Option<(Key, Key)> {
+        super::split::pair(self.shown_key(), beside, |key| self.there(key))
     }
 
     /// Split the window, tab `key` beside the one shown, on the right; or make it whole (none).
@@ -442,6 +550,14 @@ enum Part {
     Line,
 }
 
+/// What the parts of the strip were last told: the page loads counted then, and each part's
+/// script of each kind, hashed.
+pub(super) type Said = (u32, std::collections::HashMap<(usize, &'static str), u64>);
+
+/// How many times a part of the strip loaded its page: one that loads again has lost what it was
+/// told, so the next refresh tells it all again (`Deck::say`).
+pub(super) static LOADS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
 fn strip_page(
     native: &tao::window::Window,
     look: Look,
@@ -482,9 +598,28 @@ fn strip_page(
                 Part::Nav => Cmd::NavClicked(said),
             });
         })
-        // Its tabs are drawn once its page can draw them.
+        // Its tabs are drawn once its page can draw them, all it was told told again.
         .with_on_page_load_handler(move |_, _| {
+            LOADS.fetch_add(1, Ordering::SeqCst);
             let _ = loaded.send_event(Cmd::Strip);
         });
     build(builder, native).map_err(|error| error.to_string())
+}
+
+/// What was beside the shown tab before a tab carried over the pages was laid out where it
+/// lands.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Landing {
+    pub(super) was: Option<super::split::Beside>,
+}
+
+/// Where a point of the window is for a tab carried there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Over {
+    /// Off the pages.
+    Off,
+    /// The middle of a whole window's pages: where the tab lands stays as it is.
+    Middle,
+    /// A half of the pages, the right one or the left.
+    Half(bool),
 }

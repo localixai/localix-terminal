@@ -13,8 +13,8 @@ idempotent consumers that reconcile from the owner, and clients that are poked a
 | Term        | Meaning                                                                                  |
 | ----------- | ---------------------------------------------------------------------------------------- |
 | Owner       | The one part that writes a kind of thing (a board, a tab, a terminal) and announces its changes. |
-| Kept owner  | An owner whose state is in the store and outlives the app: the projects, their ledgers, the boards, the Event Center's journal. |
-| Live owner  | An owner whose state is in memory and goes with the app: tabs, terminals, notes on their way, asks. |
+| Kept owner  | An owner whose state is in the store and outlives the app: the projects, their ledgers, the layout (windows, workspaces, tabs, their panes), the boards, the Event Center's journal. |
+| Live owner  | An owner whose state is in memory and goes with the app: panes' keys, terminals, notes on their way, asks. |
 | Notice      | A past-tense fact `{entity, op}` about a change: what changed, never what it now holds.   |
 | Entity      | The kinds of thing that change, one enum (`feed::Entity`) every consumer matches whole.   |
 | Change feed | The ordered log of notices in the store (`change_events`), one cursor a consumer (`change_cursors`). |
@@ -84,13 +84,17 @@ memory, keeping nothing.
 | `change_events`  | the feed             | Notices, with their run.                                          |
 | `change_cursors` | the feed             | Each consumer's place.                                            |
 | `projects`       | the desk (`projects.rs`) | Every project: its folder (canonical, the key), its name, when it was made and last opened. Everything below is its, and goes with it. |
-| `tabs`           | the ledger           | A project's tabs: kind, agent, title, address or folder and program, place, opened, shown, closed. Closed: the history; open when the app quit: what opens again. |
-| `visits`         | the ledger           | The pages a project's tabs showed: what the address field suggests. |
+| `panes`          | the ledger           | A project's panes: kind, agent, title, address or folder and program, opened, shown, closed. Closed: the history; open when the app quit: what opens again, the same row. |
+| `visits`         | the ledger           | The pages a project's panes showed: what the address field suggests. |
 | `screens`        | the ledger           | A terminal's last screen, shown dimmed above the shell that takes its place. |
+| `windows`        | the layout           | Each window: the workspace it shows, its frame, its side open or shut and its width. |
+| `workspaces`     | the layout           | A window × a project: the tab it shows. |
+| `tabs`           | the layout           | A workspace's tabs, in their places; closed, they go. |
+| `pane_nodes`     | the layout           | Each tab's tree: branches (side by side or one above the other) and leaves (a pane, in focus or not), each with its share. |
 | `boards`         | the boards           | A project's board, whole, written out to `.localix/board.json` by `board-file`; its old file is taken in once. |
 | `center_events`  | the Event Center     | Every event it showed, of its project, open or settled, with what the person did: seen, dismissed. |
 | `answers`        | the offers           | What the person answered to each offer: taken, put off how often, until when. |
-| `state`          | the desk             | A few named values of its own. |
+| `state`          | the desk             | A few named values of its own: never a copy of an owner's state. |
 
 ## The Event Center
 

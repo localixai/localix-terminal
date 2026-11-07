@@ -15,14 +15,20 @@
 html:not([data-glass]){background:var(--bg)!important}
 @media (prefers-reduced-transparency:reduce){html[data-glass]{background:var(--bg)!important}}
 body{margin:0;color:var(--fg);cursor:default}
-#t{position:fixed;inset:14px}
+/* The gutter is part of the terminal, so a click, drag or wheel in it reaches xterm (whose viewport
+   covers it, with the arrow cursor its own sheet gives it). */
+#t{position:fixed;inset:0}
+.xterm{padding:8px 16px;box-sizing:border-box;height:100%}
+.xterm:not(.enable-mouse-events) .xterm-viewport{cursor:text}
+/* A full-screen program (vim, htop, an agent's screen) draws to the edge itself. */
+html[data-alt] .xterm{padding:0 0 8px}
+@media (min-resolution:1.5dppx){.xterm{-webkit-font-smoothing:antialiased}}
 .xterm .xterm-viewport{background:transparent!important;overflow:hidden!important}
 </style>
 </head>
 <body>
 <div id="t"></div>
 <script>{{xterm}}</script>
-<script>{{fit}}</script>
 <script>{{glue}}</script>
 </body>
 </html>

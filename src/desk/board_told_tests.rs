@@ -86,6 +86,9 @@ fn a_panes_look_leaves_the_persons_notes_for_the_agents_own_call() {
     desk.tell_board(mine.project.id);
     let peek = Call {
         peek: true,
+        again: None,
+        person: false,
+        window: None,
         ..mine.call()
     };
     let looked = desk.call(&peek, &json!({"action": "list"})).unwrap();

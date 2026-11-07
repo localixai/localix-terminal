@@ -71,6 +71,9 @@ impl Desk {
                 cwd: &home.path,
                 vars: Some(&vars),
                 peek: true,
+                again: None,
+                person: true,
+                window: None,
             },
             false,
         )

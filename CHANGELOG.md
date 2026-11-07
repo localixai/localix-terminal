@@ -2,12 +2,25 @@
 
 ## Unreleased
 
-- **Split View.** Two of a project's tabs side by side, any kind in either half: the bar's split
-  button, ⇧⌘\, any tab's menu (Open in Split View / Close Split View), or a tab dragged from the
-  side onto the pages (the half it would go into shows as it moves). The side lists the two as one
-  row, the half in use lit. Another tab picked shows it whole, the split kept: either of its
-  tabs picked again (still one row in the side), the window splits as it was; so too on coming
-  back to the project, and after the app restarts.
+- **A full app.** The window is an ordinary window of the app, not a panel: a click makes LLX Desk
+  the app in front, with its menu, and the green button takes it to full screen. A window an agent
+  opens still comes to the front without taking the keys. `llx-desk open` has the system open the
+  app and is done, so closing the terminal it ran in leaves the app running.
+- **A tab out into a window of its own.** Drag a tab past the edge of its window and a window opens
+  with it at once, following the pointer; the page or terminal moves as it is, nothing reloads.
+  Over another window's list of tabs it turns clear and the list opens a slot: let go there and the
+  tab goes into that window. Let go anywhere else and the new window stays. With one tab in the
+  window, the window itself moves. Back over its own list, or Escape, takes it back.
+- **Windows.** ⌘N opens a new window on the project shown, with your shell in it; each window has
+  its own tabs, side and split, and an agent's tabs open in the window you work in. Closing a window
+  closes its tabs. Agents see every window's tabs. After a restart the tabs of the other windows are
+  gathered into the first.
+- **Split View.** Two of a project's tabs side by side, any kind in either half: ⇧⌘\, any tab's
+  menu (Open in Split View / Close Split View), or a tab dragged from the side onto the pages
+  (the window splits as it moves). The side lists the two as one row, the half in use lit.
+  Another tab picked shows it whole, the split kept: either of its tabs picked again (still one
+  row in the side), the window splits as it was; so too on coming back to the project, and after
+  the app restarts.
 - **Tabs drag.** A tab dragged along the side goes where it is let go of, the others sliding aside;
   ⌘1–⌘9 follow the order. The rail's button and tabs are one tile size, lit under the pointer.
 - In a split window a click in a half makes it the one in use: it has the page's toolbar; a tab

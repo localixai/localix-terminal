@@ -33,8 +33,44 @@ pub enum Heard<'a> {
     /// window opened itself).
     Went(Went<'a>),
     /// The window split in the project of this key (its halves' tabs), or made whole there
-    /// (none): the app keeps it, to split the window again once the project's tabs open again.
+    /// (none): the layout keeps it.
     Split(Option<Halves<'a>>),
+    /// They dragged the tab of this key's pane before the tab of pane `before` (none: to the
+    /// end of its project's list): the layout keeps it.
+    Moved {
+        before: Option<&'a str>,
+        /// The window whose list it was let go over (its row in the layout), when not its own.
+        window: Option<i64>,
+    },
+    /// They let tab `key` go away from every list: it is a window of its own now (docs/windows.md).
+    Detached,
+    /// They closed window `i64` (its row in the layout; not the main one): its tabs are closed
+    /// already, and the layout closes it.
+    WindowClosed(i64),
+}
+
+/// A project's tabs in the window as the layout keeps them (docs/windows.md): the window draws
+/// them so, and keeps no order or split of its own.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Arranged {
+    /// The window (its row in the layout).
+    pub window: i64,
+    /// The project's key.
+    pub group: String,
+    /// Its tabs in their places.
+    pub tabs: Vec<Arranging>,
+    /// The pane in focus of the tab the workspace shows.
+    pub shown: Option<String>,
+}
+
+/// One tab: its panes' keys left to right (a split's two, or one), side by side or not, each
+/// one's share, and the one in focus.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Arranging {
+    pub panes: Vec<String>,
+    pub across: bool,
+    pub shares: Vec<f64>,
+    pub focused: Option<String>,
 }
 
 /// A project's split window: the tab in use, the one beside it, and whether that one is on the
@@ -143,6 +179,8 @@ pub enum Asked {
     /// They went to the project, which has no tab open: what it had open when the app quit, or
     /// their shell in its folder.
     Project,
+    /// A new window, on the project, with their shell in its folder.
+    Window,
 }
 
 /// One tab as the agent reads it.

@@ -32,7 +32,7 @@ const fn at(
 
 /// Every shortcut, in the order Settings lists them. The chords follow the system's browsers and
 /// editors, so the hand already knows them.
-pub(super) const SHORTCUTS: [Shortcut; 28] = [
+pub(super) const SHORTCUTS: [Shortcut; 29] = [
     at(
         "open-folder",
         "Open Folder\u{2026}",
@@ -70,6 +70,13 @@ pub(super) const SHORTCUTS: [Shortcut; 28] = [
         "Tabs",
         "cmd+shift+[",
         "key previous",
+    ),
+    at(
+        "new-window",
+        "New Window",
+        "Tabs",
+        "cmd+n",
+        "key new window",
     ),
     at("new-page", "New Page", "Tabs", "cmd+t", "key new page"),
     at(
@@ -340,6 +347,19 @@ pub(super) fn resolved(
             (shortcut, chord)
         })
         .collect()
+}
+
+/// Shortcut `id`'s keys as the person has them now (`cmd+t`), none when they took it off.
+pub(super) fn keys_of(id: &str) -> Option<String> {
+    let changed = super::settings::now().shortcuts;
+    let chord = match changed.get(id) {
+        Some(Some(keys)) => Chord::parse(keys),
+        Some(None) => None,
+        None => (SHORTCUTS.iter())
+            .find(|shortcut| shortcut.id == id)
+            .and_then(|shortcut| Chord::parse(shortcut.keys)),
+    };
+    chord.map(|chord| chord.text())
 }
 
 impl Chord {

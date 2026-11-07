@@ -37,7 +37,7 @@ impl Consumer for Relay {
             }
             // A tab of no one's (the person's in no project's own) is told to no one.
             (
-                Entity::Tab {
+                Entity::Pane {
                     owner: Some(owner),
                     key,
                 },
@@ -47,10 +47,15 @@ impl Consumer for Relay {
             }
             // What subscribers are not told of.
             (Entity::Said { .. }, Op::Deleted)
-            | (Entity::Tab { owner: None, .. }, Op::Deleted)
-            | (Entity::Tab { .. }, Op::Upserted)
+            | (Entity::Pane { owner: None, .. }, Op::Deleted)
+            | (Entity::Pane { .. }, Op::Upserted)
             | (
-                Entity::Board { .. } | Entity::Terminal { .. } | Entity::Ask { .. },
+                Entity::Board { .. }
+                | Entity::Terminal { .. }
+                | Entity::Ask { .. }
+                | Entity::Window { .. }
+                | Entity::Workspace { .. }
+                | Entity::Tab { .. },
                 Op::Upserted | Op::Deleted,
             ) => {}
         }

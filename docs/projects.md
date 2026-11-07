@@ -20,7 +20,8 @@ out of sight. This replaces the owner string (a path or a name) and its basename
 ## Hierarchy
 
 ```text
-project ─┬─ tab (web | terminal | board)   open, or closed (the history)
+project ─┬─ pane (web | terminal | board)  open, or closed (the history); shown in a tab of a
+         │    │                             window's workspace of the project (docs/windows.md)
          │    ├─ visits (web: each page it showed)
          │    └─ screen (terminal: its last screen, restored above a new prompt)
          ├─ board                           one per project

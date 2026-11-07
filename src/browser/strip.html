@@ -5,8 +5,10 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>tabs</title>
 <style>
-:root{--ground:#f7f7f7;color:#1d1d1f;font:12px/1 var(--ui-font,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif);-webkit-font-smoothing:antialiased}
-@media (prefers-color-scheme: dark){:root{--ground:#070707;color:#e6e6e6}}
+:root{--ground:#f7f7f7;font:12px/1 var(--ui-font,var(--ui-sys));color:var(--fg);-webkit-font-smoothing:antialiased}
+:root{--card:rgba(252,252,253,.97)}
+@media (prefers-color-scheme: dark){:root{--ground:#070707}}
+@media (prefers-color-scheme: dark){:root{--card:rgba(44,44,47,.97)}}
 body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
 /* The bar is the window's own, in its theme, over whatever tab: never in a page's colours. */
 #head{position:relative;z-index:2}
@@ -14,38 +16,40 @@ body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
    the button that does it and Not Now. Its height is the window's to lay out (offer::ROW). */
 #offer{display:none;height:36px;padding:0 10px 6px;box-sizing:border-box}
 #offer.on{display:block}
-#offer .card{height:100%;display:flex;align-items:center;gap:8px;padding:0 4px 0 10px;border-radius:8px;font-size:12px;background:color-mix(in srgb,currentColor 6%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 12%,transparent)}
+#offer .card{height:100%;display:flex;align-items:center;gap:12px;padding:0 4px 0 10px;border-radius:8px;font-size:12px;background:color-mix(in srgb,currentColor 6%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 12%,transparent)}
 #offer .mk{flex:none;width:14px;height:14px;display:flex}
 #offer .mk svg{width:14px;height:14px;opacity:.85}
 #offer .mk:empty{display:none}
 #offer .says{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.78}
 #offer.busy .says{opacity:.5}
 #offer.failed .says{opacity:1;color:#d70015}
+@keyframes offer-in{from{opacity:0}to{opacity:1}}
+#offer.on .card{animation:offer-in .16s ease-out}
 @media (prefers-color-scheme: dark){#offer.failed .says{color:#ff6961}}
-#offer button{flex:none;border:0;color:inherit;cursor:pointer;font:500 11.5px/22px -apple-system,BlinkMacSystemFont,system-ui,sans-serif}
-#offer button.take{height:22px;padding:0 10px;border-radius:6px;background:color-mix(in srgb,currentColor 11%,transparent)}
-#offer button.take:hover{background:color-mix(in srgb,currentColor 17%,transparent)}
-#offer button.take:active{background:color-mix(in srgb,currentColor 22%,transparent)}
+#offer button{flex:none;border:0;color:inherit;cursor:pointer;font:500 11px/22px var(--ui-font,var(--ui-sys));transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+#offer button:hover,#offer button:active{transition:none}
+#offer button.take{height:22px;padding:0 10px;border-radius:6px;font-weight:600;background:var(--ov-2)}
+#offer button.take:hover,#offer button.take:active{background:var(--ov-3)}
 #offer button.later{width:22px;height:22px;padding:0;border-radius:6px;background:none;opacity:.45;display:grid;place-items:center}
-#offer button.later:hover{opacity:.9;background:color-mix(in srgb,currentColor 8%,transparent)}
+#offer button.later:hover{opacity:.9;background:var(--ov-2)}
 #offer button.later svg{width:10px;height:10px;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;fill:none}
 /* The bar (38 points, a compact titlebar's): beside the window's buttons, where the shown tab
    is, as crumbs: its project (a folder), then the tab; each a button whose menu is the system's
    (host_project.rs): every project and Open Folder, or the project's tabs. A dot on the project's
    crumb: something happened in another one, out of sight. Then the window's own buttons. */
 #cr{display:flex;align-items:center;gap:2px;min-width:0;overflow:hidden;white-space:nowrap}
-#cr .c{flex:0 1 auto;display:flex;align-items:center;gap:5px;min-width:0;height:24px;padding:0 6px;border-radius:6px;font-size:12px;font-weight:500;opacity:.62;transition:opacity .16s ease,background-color .16s ease}
-#cr .c:hover{opacity:1;background:color-mix(in srgb,currentColor 7%,transparent)}
-#cr .c:active{opacity:.6}
+#cr .c{flex:0 1 auto;display:flex;align-items:center;gap:5px;min-width:0;height:24px;padding:0 6px;border-radius:6px;font-size:12px;font-weight:400;color:var(--ink-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+#cr .c:hover{color:var(--ink);background:var(--ov-2);transition:none}
+#cr .c:active{background:var(--ov-3);transition:none}
 #cr .c .n{min-width:0;overflow:hidden;text-overflow:ellipsis}
-#cr .c.here{flex:0 2 auto;font-size:13px;opacity:.95}
+#cr .c.here{flex:0 2 auto;font-size:12px;font-weight:500;color:var(--fg)}
 #cr .c svg{flex:none;width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
 #cr .c .mk{display:flex}
 #cr .c .mk svg{fill:currentColor;stroke:none}
-#cr .c .dn{width:9px;height:9px;stroke-width:1.6;opacity:.6}
-#cr .c .d{flex:none;width:6px;height:6px;border-radius:3px;background:#0a84ff;background:-apple-system-control-accent}
-#cr .sep{flex:none;padding:0 1px;font-size:12px;opacity:.3}
-#cr .b{min-width:24px;height:24px;border-radius:6px;margin-left:2px}
+#cr .c .dn{width:9px;height:9px;stroke-width:1.6}
+#cr .c .d{flex:none;width:6px;height:6px;border-radius:3px;background:var(--accent)}
+#cr .sep{flex:none;padding:0 1px;font-size:12px;color:var(--ink-3)}
+#cr .b{width:24px;min-width:24px;height:24px;border-radius:6px;margin-left:2px}
 #cr .b svg{width:14px;height:14px}
 /* Three columns, as Safari's toolbar: the address field stays in the middle whatever comes and goes beside it. */
 #bar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;height:38px;padding:0 8px 0 10px;box-sizing:border-box}
@@ -54,49 +58,66 @@ body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
    less room still, the buttons go into "»" (fit). */
 [hidden]{display:none!important}
 /* Back, forward and reload, bare as in Safari's toolbar. */
-.b,#nav{transition:opacity .16s ease}
 #nav{flex:none;display:flex;align-items:center;gap:2px}
-#nav .b{width:30px;opacity:.6}
-#nav .b:hover{opacity:1}
-#nav svg{width:14px;height:14px;stroke-width:1.6}
-#rl svg{width:13px;height:13px}
+#rl svg{width:15px;height:15px}
 #end{display:flex;align-items:center;justify-content:flex-end;gap:8px}
 /* The browser's toolbar (data-part=nav): the same page in a view of its own over a page only,
    back, forward and reload, the address field, the page's size and comments. The bar is the
    strip's; this view shows nothing else, and the strip none of this. */
 #browse{display:none}
 /* A tab dragged: it lifts under the pointer, its place in the list held faintly, the others moving
-   aside; dragged out over the pages, the half it would go into is shown there (the line's view). */
-#sl .t.held{opacity:.3}
-.t.lift{position:fixed;z-index:9;margin:0;pointer-events:none;border-radius:10px;opacity:.97;background:color-mix(in srgb,currentColor 10%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);box-shadow:0 10px 28px rgba(0,0,0,.28),inset 0 0 0 .5px color-mix(in srgb,currentColor 14%,transparent);transition:opacity .16s,scale .16s;scale:1.03}
-.t.lift.out{opacity:.55;scale:.92}
+   aside; dragged out over the pages, the half it would go into is shown there (the line's view).
+   The card is the row itself, drawn in #gh over the page so that it keeps the row's styling. */
+#gh{position:fixed;inset:0;pointer-events:none;z-index:9}
+#sl .t.held{background:var(--ov-1)!important;box-shadow:none!important;opacity:1}
+/* The row as the card it becomes, the moment its picture is taken. */
+#sl .t.shot{background:var(--card)!important;box-shadow:inset 0 0 0 .5px var(--ov-3)!important;color:var(--fg)!important;opacity:1;transition:none!important}
+#sl .t.held>*{visibility:hidden}
+.t.lift{position:fixed;z-index:9;margin:0;pointer-events:none;border-radius:10px;opacity:1;background:var(--card);box-shadow:inset 0 0 0 .5px var(--ov-3);scale:1;will-change:transform;transition:scale .18s cubic-bezier(.2,.8,.2,1),box-shadow .18s,opacity .12s}
+.t.lift.up{scale:1.025;box-shadow:var(--sh-lift)}
+.t.lift.out{scale:.98}
+.t.lift.away{opacity:0;transition:opacity .1s}
+.t.lift.home{transition:transform .2s cubic-bezier(.2,.8,.2,1),scale .2s cubic-bezier(.2,.8,.2,1),box-shadow .2s,opacity .12s}
+/* Carried over the pages: a card of the tab under the pointer, in the half it would go into. */
+/* What a click acts on shows the hand: the tabs, the buttons, the crumbs, what the menus and
+   the Event Center list; the side's edge and the halves' line keep their resize cursor. */
+/* What a click acts on shows the hand. A new clickable joins this one rule. */
+:where(button,[role=button],a[href],select,summary,.t,.t *,.half,.half *,#cr .c,#cr .c *,.q,.q *,.v,.v *,.ev.go,.ev.go *,.s,.x,.b,.b *,.ic,.empty button){cursor:pointer}
+:where(button:disabled,[aria-disabled=true],.gone){cursor:default}
+:where(#url,#sq,#sk,textarea){cursor:text}
 html.dragging,html.dragging *{cursor:grabbing!important;user-select:none}
-html[data-part=line][data-drop] #line{cursor:default}
-html[data-part=line][data-drop] #line::after{content:"";inset:6px;left:6px;width:auto;transform:none;border-radius:12px;background:color-mix(in srgb,var(--accent,#0a84ff) 14%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent,#0a84ff) 55%,transparent);animation:landing .16s ease-out}
 @keyframes landing{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:none}}
 #line{display:none}
 html[data-part=line] body>*:not(#line){display:none!important}
 html[data-part=line],html[data-part=line] body{background:transparent!important}
 html[data-part=line] #line{display:block;position:fixed;inset:0;cursor:col-resize}
-html[data-part=line] #line::after{content:"";position:absolute;top:0;bottom:0;left:50%;width:1px;transform:translateX(-50%);border-radius:2px;background:color-mix(in srgb,currentColor 12%,transparent);transition:width .15s,background .15s}
-html[data-part=line] #line:hover::after,html[data-part=line] #line.held::after{width:3px;background:color-mix(in srgb,currentColor 32%,transparent)}
+/* The line between the halves: one point, a quiet fill; hot (under the pointer, held) the
+   accent, its width never changing. */
+html[data-part=line] #line::after{content:"";position:absolute;top:0;bottom:0;left:calc(50% - .5px);width:1px;background:var(--ov-3);transition:background-color .1s}
+html[data-part=line] #line:hover::after,html[data-part=line] #line.held::after{background:var(--acc-4)}
+html[data-part=line].held,html[data-part=line].held *{cursor:col-resize!important;user-select:none}
 html[data-part=nav] #bar,html[data-part=nav] #tabs,html[data-part=nav] #offer,html[data-part=nav] #menu,html[data-part=nav] #back{display:none!important}
-html[data-part=nav] #browse{display:grid;grid-template-columns:auto minmax(120px,1fr) auto;align-items:center;gap:10px;height:40px;padding:0 10px;box-sizing:border-box;box-shadow:inset 0 -1px 0 color-mix(in srgb,currentColor 8%,transparent)}
+html[data-part=nav] #browse{display:grid;grid-template-columns:1fr minmax(120px,720px) 1fr;align-items:center;gap:10px;height:40px;padding:0 10px;box-sizing:border-box;box-shadow:inset 0 -1px 0 var(--ov-2)}
 html[data-part=nav]:not([data-glass]) #browse{background:var(--ground)}
-#browse #addr{justify-self:center;width:100%;max-width:720px}
+#browse #addr{width:100%}
+#browse #nav{justify-self:start}
+#browse #tools{justify-self:end}
 /* Every empty place says so the same way, centred: a glyph, a quiet line, and what can be done
    there. No tab left, the browser's toolbar gives the pages' whole part to it. */
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:26px 16px;box-sizing:border-box}
-.empty .g{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:color-mix(in srgb,currentColor 7%,transparent);opacity:.7}
+.empty .g{box-sizing:border-box;width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:color-mix(in srgb,currentColor 7%,transparent);opacity:.7}
 .empty .g svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
-.empty .w{font-size:13px;opacity:.5}
+.empty .w{font-size:13px;color:var(--ink-2)}
 .empty .row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:440px}
 .empty .row:first-of-type{margin-top:4px}
-.empty button{font:inherit;font-size:12px;color:inherit;border:0;border-radius:8px;height:28px;padding:0 11px;background:color-mix(in srgb,currentColor 6%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 11%,transparent);cursor:default;display:flex;gap:7px;align-items:center;opacity:.85;transition:background-color .15s,opacity .15s}
-.empty button:hover{background:color-mix(in srgb,currentColor 11%,transparent);opacity:1}
+.empty button{font:inherit;font-size:12px;color:var(--ink);border:0;border-radius:8px;height:28px;padding:0 11px;background:color-mix(in srgb,currentColor 6%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 11%,transparent);display:flex;gap:7px;align-items:center;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+.empty button:hover{background:color-mix(in srgb,currentColor 11%,transparent);transition:none}
 .empty button .mk{display:grid;place-items:center}
 .empty button .mk svg{width:13px;height:13px;fill:currentColor}
 #sl .empty{flex:1}
+/* Where a tab carried in from another window would go: an empty place, as the held row's. */
+#sl .slot{flex:none;border-radius:10px;background:var(--ov-1)}
+/* A tab held: the side covers the window, clear past its column, which keeps its width. */
 #blank{display:none}
 html[data-part=nav][data-blank] #browse{display:none}
 html[data-part=nav][data-blank] #blank{position:fixed;inset:0;display:flex}
@@ -112,80 +133,100 @@ html[data-part=nav][data-blank] #blank{position:fixed;inset:0;display:flex}
 #tabs .t:hover{background:color-mix(in srgb,currentColor 6%,transparent)}
 #tabs .t.on{background:color-mix(in srgb,currentColor 11%,transparent);font-weight:500}
 /* The address field, as Safari's: the page's host while it rests, its whole address to edit. */
-#addr{position:relative;min-width:0;height:28px;border-radius:14px;display:flex;align-items:center;gap:8px;padding:0 3px 0 12px;box-sizing:border-box;transition:background-color .16s ease}
-#addr:hover{background:color-mix(in srgb,currentColor 4%,transparent)}
-#addr:focus-within{background:color-mix(in srgb,currentColor 9%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,currentColor 22%,transparent)}
+#addr{position:relative;cursor:text;background:var(--ov-1);min-width:0;height:28px;border-radius:14px;display:flex;align-items:center;gap:8px;padding:0 3px 0 12px;box-sizing:border-box;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+#addr:hover{background:var(--ov-2);transition:none}
+#addr:focus-within{background:var(--ov-1);box-shadow:inset 0 0 0 1px var(--accent),0 0 0 3px var(--acc-2);transition:none}
 #ai{flex:none;display:grid;place-items:center;opacity:.45}
 #ai svg,.i svg,.x svg{display:block;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
 #ai svg{width:13px;height:13px}
-#url{flex:1;min-width:0;border:0;outline:0;background:transparent;color:inherit;font:13px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;text-align:center;text-overflow:ellipsis}
+#url{flex:1;min-width:0;border:0;outline:0;background:transparent;color:inherit;font:13px/1 var(--ui-font,var(--ui-sys));text-align:center;text-overflow:ellipsis}
 #url:focus{text-align:left}
+#url::placeholder{color:currentColor;opacity:.45}
 #url::selection{background:color-mix(in srgb,currentColor 22%,transparent)}
 /* The open lists (the suggestions, the history menu), as the system's menus: on its menu glass
    (pane.rs, macOS; elsewhere the ground), compact rows, the accent on the row picked. */
-#sug,#menu{position:absolute;display:none;box-sizing:border-box;padding:5px;border-radius:10px;z-index:3;overflow-y:auto;font:13px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;box-shadow:0 0 0 .5px color-mix(in srgb,currentColor 24%,transparent),0 10px 28px rgba(0,0,0,.22)}
+#sug,#menu{position:absolute;display:none;box-sizing:border-box;padding:5px;border-radius:var(--r-4);z-index:3;overflow-y:auto;font:13px/1.3 var(--ui-font,var(--ui-sys));box-shadow:0 0 0 .5px color-mix(in srgb,currentColor 24%,transparent),0 10px 28px rgba(0,0,0,.22)}
 html:not([data-glass]) #sug,html:not([data-glass]) #menu{background:var(--ground)}
 #sug{max-height:calc(100vh - 60px)}
-.q{display:flex;align-items:center;gap:8px;height:24px;padding:0 8px;border-radius:5px;white-space:nowrap}
+.q{display:flex;align-items:center;gap:8px;height:24px;padding:0 8px;border-radius:var(--r-2);white-space:nowrap}
 .q .i{width:14px;text-align:center;opacity:.6}
 .q .w{min-width:0;display:flex;align-items:baseline;gap:8px;overflow:hidden}
 .q .n{flex:none;max-width:62%;overflow:hidden;text-overflow:ellipsis}
-.q .u{min-width:0;font-size:12px;opacity:.5;overflow:hidden;text-overflow:ellipsis}
-.q.on,.v:hover{background:#0a84ff;background:-apple-system-control-accent;color:#fff}
-.q.on .i,.q.on .u,.v:hover .u{opacity:.85}
-.g{padding:6px 8px 3px;font-size:11px;font-weight:600;opacity:.5}
-.b{flex:none;height:26px;min-width:28px;padding:0;box-sizing:border-box;border-radius:13px;display:grid;place-items:center;opacity:.72}
-.b:hover{opacity:1}
-.b:active{opacity:.5}
-.b.on{opacity:1;background:color-mix(in srgb,currentColor 14%,transparent)}
-.b svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
-.t{display:flex;align-items:center;gap:7px;min-width:0;max-width:220px;height:26px;padding:0 6px 0 10px;border-radius:9px;font-size:12.5px;opacity:.62}
-.t:hover{opacity:.85;background:color-mix(in srgb,currentColor 6%,transparent)}
-.t.on{opacity:1;background:color-mix(in srgb,currentColor 10%,transparent)}
+.q .u{min-width:0;font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis}
+/* The pointer lights a row (hover); the keyboard picks one: the accent, solid, with white words. */
+.q:hover,.v:hover{background:var(--acc-2)}
+.q.on,.q.on:hover,.v.sel{background:var(--acc-sel);color:#fff}
+.q.on .i,.v.sel .i{opacity:.85}
+.q.on .u,.v.sel .u{color:inherit;opacity:.85}
+.gh{padding:6px 8px 3px;font-size:11px;font-weight:600;color:var(--ink-2)}
+.b{flex:none;width:28px;min-width:28px;height:28px;padding:0;box-sizing:border-box;border-radius:var(--r-2);display:grid;place-items:center;color:var(--ink-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+.b:hover{color:var(--ink);background:var(--ov-2);transition:none}
+.b:active{background:var(--ov-3);transition:none}
+.b.on{color:var(--fg);background:var(--ov-3)}
+.b.on:hover{background:var(--ov-4)}
+.b svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.t{display:flex;align-items:center;gap:7px;min-width:0;max-width:220px;height:26px;padding:0 6px 0 10px;border-radius:var(--r-3);font-size:12px;color:var(--ink-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+.t:hover{color:var(--ink);background:color-mix(in srgb,currentColor 6%,transparent);transition:none}
+.t.on{color:var(--fg);background:color-mix(in srgb,currentColor 10%,transparent)}
 .i{flex:none;opacity:.6}
 .i svg{width:12px;height:12px}
 .n{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.x{flex:none;width:18px;height:18px;border-radius:5px;display:grid;place-items:center;opacity:0}
+.x{flex:none;width:18px;height:18px;border-radius:var(--r-1);display:grid;place-items:center;opacity:0;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 .x svg{width:10px;height:10px;stroke-width:1.5}
 .t:hover .x,.t.on .x{opacity:.6}
-.x:hover{opacity:1!important;background:color-mix(in srgb,currentColor 14%,transparent)}
+.x:hover{opacity:1!important;background:color-mix(in srgb,currentColor 14%,transparent);transition:none}
 #back{position:fixed;inset:0;display:none;z-index:1}
 #menu{right:8px;width:min(380px,calc(100vw - 16px));max-height:calc(100vh - 100px)}
-.v{padding:4px 8px;border-radius:5px}
+.v{padding:4px 8px;border-radius:var(--r-2)}
 .v .h{display:flex;align-items:center;gap:7px}
 .v .n{display:block}
 .v.off .h{opacity:.62}
-.v .u{display:block;margin-top:1px;padding-left:17px;font-size:11px;opacity:.5;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.v .u{display:block;margin-top:1px;padding-left:17px;font-size:11px;color:var(--ink-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 /* The Event Center: the bell's count, and each event with what it is, its words and its buttons. */
 #ev{position:relative}
-#evn{position:absolute;top:2px;right:2px;min-width:14px;height:14px;padding:0 3.5px;box-sizing:border-box;border-radius:7px;background:#ff3b30;color:#fff;font:600 9.5px/14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;text-align:center;display:none}
+#evn{position:absolute;top:2px;right:2px;min-width:14px;height:14px;padding:0 3.5px;box-sizing:border-box;border-radius:7px;background:#ff3b30;color:#fff;font:600 10px/14px var(--ui-font,var(--ui-sys));text-align:center;display:none}
 #evn.on{display:block}
-.ev{display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:center;column-gap:9px;padding:5px 8px;border-radius:7px;cursor:pointer}
-.ev:hover{background:color-mix(in srgb,currentColor 7%,transparent)}
+.ev{display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:center;column-gap:9px;padding:5px 8px;border-radius:var(--r-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+.ev.go:hover{background:var(--ov-2);transition:none}
+.ev.go.sel{background:var(--ov-3)}
+.ev.go:active{background:var(--ov-3);transition:none}
 .ev .dot{width:7px;height:7px;border-radius:4px;background:var(--hue);opacity:.35}
 .ev.new .dot{opacity:1}
 .ev .tx{min-width:0}
 .ev .n{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ev .u{display:block;margin-top:1px;font-size:11.5px;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev .u{display:block;margin-top:1px;font-size:11px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ev .side{display:flex;align-items:center;gap:4px}
-.ev .w{font-size:11px;opacity:.45;min-width:22px;text-align:right}
-.ev .act{height:20px;padding:0 9px;border:0;border-radius:10px;font:500 11.5px/20px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#fff;background:var(--hue);cursor:pointer}
-.ev .act:hover{filter:brightness(1.1)}
-.ev .x{width:18px;height:18px;border-radius:9px;display:none;place-items:center;cursor:pointer;opacity:.55}
-.ev:hover .x{display:grid}
-.ev:hover .w{display:none}
+/* The time and the × share one place: neither moves the row, the × takes the time's place under the
+   pointer or the keyboard's pick. */
+.ev .tm{display:grid;min-width:22px;justify-items:end;align-items:center}
+.ev .tm>*{grid-area:1/1}
+.ev .w{font-size:11px;color:var(--ink-3);text-align:right}
+.ev .x{width:18px;height:18px;border-radius:9px;display:grid;place-items:center;cursor:pointer;opacity:0;pointer-events:none}
+.ev:hover .x,.ev.sel .x{opacity:.55;pointer-events:auto}
+.ev:hover .w,.ev.sel .w{opacity:0}
+/* An event's button: outlined, so its words read on any ground; filled only in the blue tone. */
+.ev .act{height:20px;padding:0 9px;border:0;border-radius:10px;font:500 11px/20px var(--ui-font,var(--ui-sys));color:inherit;background:transparent;box-shadow:inset 0 0 0 1px var(--ov-4);cursor:pointer;transition:background-color var(--t-out) var(--ease)}
+.ev .act:hover{background:var(--ov-2);transition:none}
+.ev .act:active{background:var(--ov-3);transition:none}
+.ev[data-tone=blue] .act{color:#fff;background:var(--hue);box-shadow:none}
+.ev[data-tone=blue] .act:hover{background:color-mix(in srgb,var(--hue) 88%,#fff)}
 .ev .x:hover{opacity:1;background:color-mix(in srgb,currentColor 12%,transparent)}
 .ev .x svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
 .evh{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 4px 8px;font-weight:600}
-.evh .clr{font:inherit;font-size:11px;font-weight:500;color:var(--accent,#0a84ff);background:none;border:0;border-radius:5px;padding:2px 6px;cursor:pointer}
+.evh .clr{font:inherit;font-size:11px;font-weight:500;color:var(--accent);background:none;border:0;border-radius:5px;padding:2px 6px;cursor:pointer}
 .evh .clr:hover{background:rgba(127,127,127,.16)}
-.evg{padding:8px 8px 2px;font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;opacity:.45}
+.evg{padding:8px 8px 2px;font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2)}
+/* The Events list: its heading stays, only the events under it scroll. */
+#menu.evs{flex-direction:column;overflow:hidden}
+.evh{flex:none}
+.evl{flex:1;min-height:0;overflow-y:auto}
 
-.s{display:none;flex:none;height:28px;padding:0 13px;border-radius:14px;align-items:center;font-weight:500;background:color-mix(in srgb,currentColor 10%,transparent)}
+.s{display:none;flex:none;height:28px;padding:0 13px;border-radius:var(--r-pill);align-items:center;font-weight:500;background:color-mix(in srgb,currentColor 10%,transparent);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 .s.on{display:flex}
-.s:hover{background:color-mix(in srgb,currentColor 15%,transparent)}
+.s:hover{background:color-mix(in srgb,currentColor 15%,transparent);transition:none}
+.s:active{background:var(--ov-3);transition:none}
 /* Whose turn, in quiet words at the end of the address field: nothing while the agent is idle. */
-#tn{display:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:11.5px;white-space:nowrap;opacity:.5;pointer-events:none}
+#tn{display:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:11px;white-space:nowrap;opacity:.5;pointer-events:none}
 #tn.on{display:block}
 /* Glass (macOS): the strip is the titlebar, its toolbar row clear of the window's buttons (a unified toolbar's: 18 to 80 points); the projects and the tabs under it run from the edge. */
 html[data-glass] #bar{padding-left:78px}
@@ -196,44 +237,60 @@ html[data-part=side] #head,html[data-part=side] #back{display:none}
 #side{display:none}
 html[data-part=side],html[data-part=side] body{height:100%;overflow:hidden}
 html[data-part=side]:not([data-glass]) body{background:var(--ground)}
-html[data-part=side] #side{display:flex;flex-direction:column;gap:8px;height:100%;padding:6px 8px 8px 10px;box-sizing:border-box;box-shadow:inset -1px 0 0 color-mix(in srgb,currentColor 9%,transparent)}
+html[data-part=side] #side{display:flex;flex-direction:column;gap:8px;height:100%;padding:4px 8px 8px;box-sizing:border-box;box-shadow:inset -1px 0 0 var(--ov-2)}
 /* The side's head: the search as a line of the column, no field drawn around it, and its two
    buttons beside it. */
 #sh{flex:none;display:flex;align-items:center;gap:2px;height:28px;padding-left:4px}
 #sk{flex:1;min-width:0;display:flex;align-items:center;gap:7px;height:100%;cursor:text}
 #si{flex:none;display:grid;opacity:.5;pointer-events:none}
 #si svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round}
-#sq{flex:1;min-width:0;height:100%;border:0;outline:0;padding:0;background:none;color:inherit;font:12.5px/1 var(--ui-font,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif)}
+#sq{flex:1;min-width:0;height:100%;border:0;outline:0;padding:0;background:none;color:inherit;font:12px/1 var(--ui-font,var(--ui-sys))}
 #sq::placeholder{color:currentColor;opacity:.45}
 #sk:focus-within #si{opacity:.8}
-#sh .b{min-width:26px;height:26px;border-radius:7px}
-#sl{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
-#sl .t{flex:none;max-width:none;height:auto;padding:7px 6px 7px 8px;gap:10px;border-radius:10px;opacity:.78}
-#sl .t.on{opacity:1}
-#sl .ic{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;opacity:1;background:color-mix(in srgb,currentColor 9%,transparent)}
-#sl .ic svg{width:14px;height:14px}
-#sl .ic .mk{display:grid;place-items:center}
-#sl .ic .mk svg{width:16px;height:16px}
-#sl .t.on .ic{background:color-mix(in srgb,currentColor 16%,transparent)}
-#sl .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-#sl .n{font-size:13px;font-weight:500}
-#sl .u{font-size:11px;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sh .b{min-width:28px;height:28px;border-radius:var(--r-2)}
+#sh .b:hover{background:var(--ov-2);color:var(--ink)}
+#sh .b:active,#sh .b.on{background:var(--ov-3)}
+#sl{position:relative;flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
+/* A row rests in the quiet ink, lit under the pointer, filled and framed when it is the one shown;
+   only a colour moves, and it goes out over a moment, never in. */
+:is(#sl,#gh) .t{flex:none;max-width:none;height:auto;padding:7px 8px;gap:8px;border-radius:10px}
+#sl .t,#sl .t.pair .half{transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+#sl .t:hover,#sl .t.pair .half:hover{transition:none}
+:is(#sl,#gh) .t:not(.pair){color:var(--ink-2)}
+#sl .t:not(.pair):hover{color:var(--ink);background:var(--ov-1)}
+#sl .t.on:not(.pair){color:var(--fg);background:var(--ov-2);box-shadow:inset 0 0 0 1px var(--ov-3)}
+:is(#sl,#gh) .ic{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;opacity:1;background:color-mix(in srgb,currentColor 9%,transparent)}
+:is(#sl,#gh) .ic svg{width:14px;height:14px}
+:is(#sl,#gh) .ic .mk{display:grid;place-items:center}
+:is(#sl,#gh) .ic .mk svg{width:16px;height:16px}
+:is(#sl,#gh) .t.on .ic{background:color-mix(in srgb,currentColor 16%,transparent)}
+:is(#sl,#gh) .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+:is(#sl,#gh) .n{font-size:13px;font-weight:500}
+:is(#sl,#gh) .u{font-size:11px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* The close button takes its place on every row and shows only while the row is under the pointer
+   (the one shown, too), and not while a tab is carried; the text never moves for it. */
+:is(#sl,#gh) .x{width:20px;height:20px;border-radius:var(--r-1);opacity:0}
+:is(#sl,#gh) .x svg{width:12px;height:12px}
+#sl .t:not(.pair):hover .x,#sl .half:hover .x{opacity:.6}
+#sl .x:hover{opacity:1;background:var(--ov-3)}
+#sl .t.on:not(:hover) .x,#sl .t.pair .half:not(:hover) .x{opacity:0}
+html.dragging #sl .x{opacity:0!important}
 /* A split window's two tabs: one group, each its own row as any tab's (stacked, a hairline
    between), in a frame of their own; the one in use lit. */
-#sl .t.pair{flex-direction:column;align-items:stretch;gap:0;padding:2px;border-radius:12px;background:color-mix(in srgb,currentColor 4%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 13%,transparent);opacity:1}
-#sl .t.pair.on{background:color-mix(in srgb,currentColor 4%,transparent)}
-#sl .t.pair .half{display:flex;align-items:center;gap:10px;min-width:0;padding:5px 4px 5px 6px;border-radius:10px;opacity:.78;transition:background-color .15s,opacity .15s}
-#sl .t.pair .half:hover{opacity:1;background:color-mix(in srgb,currentColor 6%,transparent)}
-#sl .t.pair .half.on{opacity:1;background:color-mix(in srgb,currentColor 9%,transparent)}
-#sl .t.pair .half:not(.on) .ic{background:color-mix(in srgb,currentColor 9%,transparent);box-shadow:none}
-#sl .t.pair .half .x{display:none}
-#sl .t.pair .half:hover .x{display:grid}
-#sl .t.pair .cut{flex:none;height:1px;margin:1px 10px;background:color-mix(in srgb,currentColor 10%,transparent)}
+:is(#sl,#gh) .t.pair{flex-direction:column;align-items:stretch;gap:0;padding:2px;border-radius:12px;background:color-mix(in srgb,currentColor 4%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 13%,transparent)}
+:is(#sl,#gh) .t.pair.on{background:color-mix(in srgb,currentColor 4%,transparent)}
+:is(#sl,#gh) .t.pair .half{display:flex;align-items:center;gap:8px;min-width:0;padding:5px 6px;border-radius:10px;color:var(--ink-2)}
+#sl .t.pair .half:hover{color:var(--ink);background:var(--ov-1)}
+:is(#sl,#gh) .t.pair .half.on{color:var(--fg);background:var(--ov-2);box-shadow:inset 0 0 0 1px var(--ov-3)}
+:is(#sl,#gh) .t.pair .half:not(.on) .ic{background:color-mix(in srgb,currentColor 9%,transparent);box-shadow:none}
+:is(#sl,#gh) .t.pair .cut{flex:none;height:1px;margin:1px 10px;background:color-mix(in srgb,currentColor 10%,transparent)}
+#gh .t.lift{opacity:1;color:var(--fg);background:var(--card)}
+#gh .t.lift.up{box-shadow:var(--sh-lift)}
 /* The side's edge: dragged, the side is wider or narrower; a double click sets it back. */
 #grip{display:none;position:fixed;top:0;right:0;bottom:0;width:7px;cursor:col-resize;z-index:4}
 html[data-part=side] #grip{display:block}
 #grip::after{content:"";position:absolute;top:0;bottom:0;right:0;width:2px;background:transparent;transition:background-color .15s}
-#grip:hover::after,html.resizing #grip::after{background:color-mix(in srgb,var(--accent,#0a84ff) 70%,transparent)}
+#grip:hover::after,html.resizing #grip::after{background:var(--acc-4)}
 html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
 html[data-part=side] #side{transition:none}
 /* Shut, the side is a rail: its button where it was, and each tab's picture, the one shown lit,
@@ -243,24 +300,27 @@ html[data-part=side] #side{transition:none}
   html[data-part=side] #sh{padding:0;justify-content:center;width:100%}
   html[data-part=side] #sk,html[data-part=side] #sg,html[data-part=side] #sn,html[data-part=side] #grip{display:none}
   html[data-part=side] #sl{align-items:center;width:100%;gap:4px}
-  html[data-part=side] #sl .t{padding:0;width:auto;justify-content:center;background:none;opacity:1}
-  html[data-part=side] #sl .t > :not(.ic){display:none}
+  html[data-part=side] :is(#sl,#gh) .t{padding:0;width:auto;justify-content:center;background:none}
+  html[data-part=side] :is(#sl,#gh) .t > :not(.ic){display:none}
   html[data-part=side] #sl .empty{display:none}
   /* One tile for all: the button and each tab the same size, a glyph the same size in each; the
      one shown filled, the one under the pointer lit, a press sinking it. */
-  html[data-part=side] #sh .b,html[data-part=side] #sl .ic{width:32px;min-width:32px;height:32px;border-radius:9px;opacity:.6;background:transparent;transition:background-color .16s,opacity .16s,transform .12s}
-  html[data-part=side] #sh .b svg,html[data-part=side] #sl .ic svg{width:16px;height:16px}
-  html[data-part=side] #sl .ic .mk svg{width:17px;height:17px}
-  html[data-part=side] #sl .t.on .ic{opacity:1;background:color-mix(in srgb,currentColor 15%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 14%,transparent)}
-  html[data-part=side] #sh .b:hover,html[data-part=side] #sl .t:hover .ic{opacity:1;background:color-mix(in srgb,currentColor 10%,transparent)}
-  html[data-part=side] #sl .t.on:hover .ic{background:color-mix(in srgb,currentColor 19%,transparent)}
-  html[data-part=side] #sh .b:active,html[data-part=side] #sl .t:active .ic{transform:scale(.92)}
-  html[data-part=side] #sl .t.pair{flex-direction:column;gap:3px;padding:3px;border-radius:12px}
-  html[data-part=side] #sl .t.pair .half{flex:none;padding:0;justify-content:center;background:none;opacity:1}
-  html[data-part=side] #sl .t.pair .half > :not(.ic),html[data-part=side] #sl .t.pair .cut{display:none}
-  html[data-part=side] #sl .t.pair .half.on .ic{opacity:1;background:color-mix(in srgb,currentColor 15%,transparent)}
-  html[data-part=side] #sl .t.pair .half:not(.on) .ic{background:transparent;opacity:.6}
-  html[data-part=side] #sl .t.pair .half:hover .ic{opacity:1;background:color-mix(in srgb,currentColor 10%,transparent)}
+  html[data-part=side] #sh .b,html[data-part=side] :is(#sl,#gh) .ic{width:32px;min-width:32px;height:32px;border-radius:var(--r-3);background:transparent;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease),transform .12s}
+  /* The 52 point rail shows no frame round a tile: the tile alone is lit. */
+  html[data-part=side] :is(#sl,#gh) .t:not(.pair):is(:hover,.on),html[data-part=side] :is(#sl,#gh) .t.pair .half:is(:hover,.on){box-shadow:none;background:none}
+  html[data-part=side] #sh .b svg,html[data-part=side] :is(#sl,#gh) .ic svg{width:16px;height:16px}
+  html[data-part=side] :is(#sl,#gh) .ic .mk svg{width:17px;height:17px}
+  html[data-part=side] :is(#sl,#gh) .t.on .ic{background:color-mix(in srgb,currentColor 15%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 14%,transparent)}
+  html[data-part=side] #sh .b:hover,html[data-part=side] :is(#sl,#gh) .t:hover .ic{color:var(--ink);background:color-mix(in srgb,currentColor 10%,transparent);transition:none}
+  html[data-part=side] :is(#sl,#gh) .t.on:hover .ic{background:color-mix(in srgb,currentColor 19%,transparent)}
+  html[data-part=side] #sh .b:active,html[data-part=side] :is(#sl,#gh) .t:active .ic{transform:scale(.92)}
+  html[data-part=side] :is(#sl,#gh) .t.pair{flex-direction:column;gap:3px;padding:3px;border-radius:12px}
+  html[data-part=side] :is(#sl,#gh) .t.pair .half{flex:none;padding:0;justify-content:center;background:none}
+  html[data-part=side] :is(#sl,#gh) .t.pair .half > :not(.ic),html[data-part=side] :is(#sl,#gh) .t.pair .cut{display:none}
+  html[data-part=side] :is(#sl,#gh) .t.pair .half.on .ic{background:color-mix(in srgb,currentColor 15%,transparent)}
+  html[data-part=side] :is(#sl,#gh) .t.pair .half:not(.on) .ic{background:transparent}
+  html[data-part=side] :is(#sl,#gh) .t.pair .half:hover .ic{color:var(--ink);background:color-mix(in srgb,currentColor 10%,transparent);transition:none}
+  html[data-part=side] #gh .t.lift{background:var(--card)}
 }
 </style>
 </head>
@@ -272,7 +332,6 @@ html[data-part=side] #side{transition:none}
     </div>
     <div id="end">
     <div class="grp">
-      <span class="b" id="sp" title="Split View"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.6"/><path d="M8 3.4v9.2"/></svg></span>
       <span class="b" id="hs" title="History"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.3"/></svg></span>
       <span class="b" id="mn" title="Mini Player"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.6"/><rect x="8" y="8" width="4.5" height="3.4" rx=".7"/></svg></span>
       <span class="b" id="ev" title="Events"><svg viewBox="0 0 16 16"><path d="M4.2 11V7.4a3.8 3.8 0 0 1 7.6 0V11l1 1.2H3.2zM6.6 13.4a1.5 1.5 0 0 0 2.8 0"/></svg><span id="evn"></span></span>
@@ -305,6 +364,7 @@ html[data-part=side] #side{transition:none}
   <div id="sl"></div>
 </div>
 <div id="grip" title="Drag to resize; double-click for the usual width"></div>
+<div id="gh"></div>
 <div id="line" title="Drag to resize the halves; double-click to even them"></div>
 <script>
 "use strict";
@@ -431,6 +491,12 @@ function wire(item, close, key) {
     window.ipc.postMessage("close " + key);
   });
   item.addEventListener("click", () => window.ipc.postMessage("show " + key));
+  // The middle button closes it, as the × does (the host asks nothing more of either).
+  item.addEventListener("auxclick", (event) => {
+    if (event.button !== 1) return;
+    event.preventDefault();
+    window.ipc.postMessage("close " + key);
+  });
   item.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     window.ipc.postMessage("menu " + key + " " + Math.round(event.clientX) + " " + Math.round(event.clientY));
@@ -479,6 +545,9 @@ let listed = [], listedShown = "";
 // The split's two tabs, left and right (none while the window is whole); a tab being dragged in the
 // side, and whether the list waits to be drawn again until it is let go of.
 let splitPair = null, lifting = false, redraw = false;
+// What the list was last drawn from: the same again draws nothing, so a hover or a click is not
+// lost to a list that did not change. A tab let go of always draws it afresh.
+let sig = null;
 function side(data) {
   titled(document.getElementById("sc"), data.side ? "Hide the tabs" : "Show the tabs");
   listed = data.tabs.filter((tab) => ours(tab, data.project));
@@ -554,8 +623,11 @@ function drawSide() {
   const typed = document.getElementById("sq").value.trim().toLowerCase();
   const rows = listed.filter((tab) => !typed || (tab.title + " " + (tab.name || "") + " " + holds(tab)).toLowerCase().includes(typed));
   const list = document.getElementById("sl");
-  if (!rows.length) return void list.replaceChildren(emptied("sc", typed ? "No tab matches" : "No tabs"));
   const pair = splitPair && rows.filter((tab) => splitPair.includes(tab.key)).length === 2 ? splitPair : null;
+  const now = JSON.stringify([typed, rows.map((tab) => [tab.key, tab.title, tab.name, tab.agent, tab.kind, holds(tab), placeKey(listed.indexOf(tab))]), listedShown, pair]);
+  if (now === sig) return;
+  sig = now;
+  if (!rows.length) return void list.replaceChildren(emptied("sc", typed ? "No tab matches" : "No tabs"));
   const drawn = [];
   for (const tab of rows) {
     if (!pair || !pair.includes(tab.key)) drawn.push(sideRow(tab));
@@ -667,40 +739,109 @@ if (document.documentElement.dataset.part === "side") {
 // opens in that half (split.rs). A press that moves less than a few points is a click.
 if (document.documentElement.dataset.part === "side") {
   const list = document.getElementById("sl");
-  let drag = null, swallow = false, queued = false;
+  let drag = null, swallow = false, queued = false, scrolling = false, aborted = false;
   const rows = () => [...list.querySelectorAll(".t")];
+  const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   // A row's first tab: a split's row is its two tabs.
   const keyOf = (row) => row?.dataset.key ?? row?.querySelector("[data-key]")?.dataset.key ?? "end";
-  // Rows move to their new places from where they were: each one slides, none jumps.
+  // Rows move to their new places from where they were: each one slides, none jumps. A row still
+  // sliding goes on from where it is seen.
   const flip = (change) => {
     const before = new Map(rows().map((row) => [row, row.getBoundingClientRect()]));
+    rows().forEach((row) => row.getAnimations().forEach((one) => one.cancel()));
     change();
     for (const row of rows()) {
       const was = before.get(row), now = row.getBoundingClientRect();
-      if (!was || (was.top === now.top && was.left === now.left)) continue;
-      row.style.transition = "none";
-      row.style.transform = `translate(${was.left - now.left}px, ${was.top - now.top}px)`;
-      requestAnimationFrame(() => {
-        row.style.transition = "transform .18s cubic-bezier(.2,.8,.2,1)";
-        row.style.transform = "";
-      });
+      if (!was) continue;
+      const dy = was.top - now.top;
+      if (Math.abs(dy) < .5 || calm()) continue;
+      row.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 180, easing: "cubic-bezier(.2,.8,.2,1)" });
     }
+  };
+  // A tab carried out of another window, over this list: the list opens an empty place `tall`
+  // points high where it would go (the card itself the app draws where the pointer is), and the
+  // window is told which tab it would go before. `DS()` closes it.
+  let slot = null, slotBefore = null;
+  window.DS = (y, tall) => {
+    if (y === undefined) {
+      if (slot) flip(() => slot.remove());
+      slot = slotBefore = null;
+      return;
+    }
+    // `y` is a point of this page, as the rows' boxes are.
+    const next = rows().find((row) => {
+      const box = row.getBoundingClientRect();
+      return y < box.top + box.height / 2;
+    }) ?? null;
+    const before = next ? keyOf(next) : "end";
+    if (slot && before === slotBefore) return;
+    slotBefore = before;
+    if (!slot) {
+      slot = document.createElement("div");
+      slot.className = "slot";
+      slot.style.height = (tall || 44) + "px";
+    }
+    flip(() => list.insertBefore(slot, next));
+    window.ipc.postMessage("slot " + before);
+  };
+  // The window the tab is held in moves under the pointer (it had that tab only): the tab is out
+  // of this list till it is let go, wherever the pointer is.
+  window.TO = () => {
+    if (drag) drag.torn = true;
+  };
+  // The app has the card's picture and draws it where the pointer is, over everything: this
+  // page's own card is hidden till the tab is let go.
+  window.CH = () => shot(true);
+  // The card's picture taken (`taken`: the app draws it now) or not: the row is the empty place
+  // the tab leaves, and this page's own card follows the pointer only when the app's does not.
+  const shot = (taken) => {
+    if (!drag?.shooting) return;
+    drag.shooting = false;
+    drag.row.classList.remove("shot");
+    drag.row.classList.add("held");
+    drag.ghost.style.visibility = taken ? "hidden" : "";
   };
   const lift = (event) => {
     const box = drag.row.getBoundingClientRect();
     drag.ghost = drag.row.cloneNode(true);
     drag.ghost.classList.remove("on", "held");
     drag.ghost.classList.add("lift");
+    drag.ghost.style.transition = "none";
+    drag.ghost.style.visibility = "hidden";
     Object.assign(drag.ghost.style, { left: box.left + "px", top: box.top + "px", width: box.width + "px", height: box.height + "px" });
     drag.box = box;
-    document.body.append(drag.ghost);
-    drag.row.classList.add("held");
+    document.getElementById("gh").append(drag.ghost);
+    // The row itself is drawn as a card where it is, and the window told the tab is held: where in
+    // the card the pointer holds it, where the card is in this page, and how tall the page's view
+    // is (its view may begin above it). The app takes the card's picture and draws it where the
+    // pointer is, over the list, the pages, other windows, unbounded by this view; then (`CH()`,
+    // or a moment without it) the row is the empty place it leaves.
+    drag.w = innerWidth;
+    drag.row.classList.add("shot");
+    drag.shooting = true;
+    window.ipc.postMessage("drag-start " + [drag.x - box.left, drag.y - box.top, box.left, box.top, box.width, box.height, innerHeight].map(Math.round).join(" "));
+    setTimeout(() => shot(false), 400);
     document.documentElement.classList.add("dragging");
     lifting = true;
+    sig = null;
     drag.next = keyOf(drag.row.nextElementSibling);
+    drag.nextEl = drag.row.nextElementSibling;
   };
+  // Where the card's middle is among the rows' places: a row's place is its layout's, which a slide
+  // in flight does not move, so a swap does not flip back and forth.
+  const layoutMid = (row, room) => room.top + list.clientTop - list.scrollTop + row.offsetTop + row.offsetHeight / 2;
   const over = (event) => {
-    const out = event.clientX > innerWidth - 2;
+    // Out over the pages, or out of the window: the window says which (past its edge the tab
+    // comes out into a window of its own, docs/windows.md).
+    const out = drag.torn || event.clientX > drag.w - 2 || event.clientX < -10 || event.clientY < -10 || event.clientY > innerHeight + 10;
+    drag.last = { clientX: event.clientX, clientY: event.clientY };
+    // The app's card follows the pointer on the screen, wherever it is.
+    window.ipc.postMessage("drag-at " + Math.round(event.screenX) + " " + Math.round(event.screenY));
+    // Along the list it moves up and down only, kept within the list.
+    const room = list.getBoundingClientRect();
+    const dy = Math.min(Math.max(event.clientY - drag.y, room.top - drag.box.top), room.bottom - drag.box.bottom);
+    // The card goes where the pointer goes, in the list, over the pages, to the window's edge;
+    // its place in the list is found from where it is along the list.
     drag.ghost.style.transform = `translate(${event.clientX - drag.x}px, ${event.clientY - drag.y}px)`;
     drag.ghost.classList.toggle("out", out);
     if (out !== drag.out) {
@@ -708,42 +849,91 @@ if (document.documentElement.dataset.part === "side") {
       if (!out) window.ipc.postMessage("drop-off");
     }
     if (out) {
-      drag.at = [Math.round(event.clientX), Math.round(event.clientY)];
+      // The point in this page, and on the screen (a window that moves under the pointer
+      // moves this page with it: only the screen's point stays put).
+      drag.at = [Math.round(event.clientX), Math.round(event.clientY), Math.round(event.screenX), Math.round(event.screenY)];
       if (!queued) {
         queued = true;
         requestAnimationFrame(() => {
           queued = false;
-          if (drag?.out) window.ipc.postMessage("drop-over " + drag.at.join(" "));
+          if (drag?.out) window.ipc.postMessage("drop-over " + drag.key + " " + drag.at.join(" "));
         });
       }
       return;
     }
-    // Along the list: before the first row whose middle is past the pointer.
-    const others = rows().filter((row) => row !== drag.row);
-    const next = others.find((row) => {
-      const box = row.getBoundingClientRect();
-      return event.clientY < box.top + box.height / 2;
-    }) ?? null;
-    if (drag.row.nextElementSibling !== next && next !== drag.row) {
-      flip(() => list.insertBefore(drag.row, next));
-    }
+    // Along the list: one step at a time, past a neighbour when the card's middle is past its middle.
+    const mid = drag.box.top + dy + drag.box.height / 2;
+    const step = () => {
+      const prev = drag.row.previousElementSibling, next = drag.row.nextElementSibling;
+      if (prev?.classList.contains("t") && mid < layoutMid(prev, room)) return prev;
+      if (next?.classList.contains("t") && mid > layoutMid(next, room)) return next.nextElementSibling ?? false;
+      return null;
+    };
+    if (step() === null) return;
+    flip(() => {
+      for (let at = step(), n = 0; at !== null && n < 64; at = step(), n++) list.insertBefore(drag.row, at || null);
+    });
   };
-  const land = (event) => {
-    drag.ghost.remove();
-    drag.row.classList.remove("held");
+  // The list scrolls while the card is held near its edge (28 points; at most 14 a frame), and the
+  // card's place is looked for again as it goes.
+  const scroll = () => {
+    scrolling = false;
+    if (!drag?.moving || drag.out || !drag.last) return;
+    const room = list.getBoundingClientRect();
+    const up = 28 - (drag.last.clientY - room.top), down = 28 - (room.bottom - drag.last.clientY);
+    const speed = up > 0 ? -Math.min(14, up / 2) : down > 0 ? Math.min(14, down / 2) : 0;
+    if (!speed) return;
+    const was = list.scrollTop;
+    list.scrollTop += speed;
+    if (list.scrollTop !== was) over(drag.last);
+    scrolling = true;
+    requestAnimationFrame(scroll);
+  };
+  // Let go: over the pages the tab goes there; along the list, the card settles into its place,
+  // and only then is the list drawn again. Cancelled (Escape), or with the search filtering the
+  // list, the row goes back where it was and nothing is said.
+  const land = (event, cancelled) => {
+    const { ghost, row } = drag;
     document.documentElement.classList.remove("dragging");
-    lifting = false;
+    const done = () => {
+      ghost.remove();
+      row.classList.remove("held");
+      lifting = false;
+      sig = null;
+      if (redraw) {
+        redraw = false;
+        drawSide();
+      }
+    };
     if (drag.out) {
-      window.ipc.postMessage("drop " + drag.key + " " + Math.round(event.clientX) + " " + Math.round(event.clientY));
+      if (cancelled) window.ipc.postMessage("drop-off");
+      else {
+        window.ipc.postMessage("drop " + drag.key + " " + [event.clientX, event.clientY, event.screenX, event.screenY].map(Math.round).join(" "));
+        window.ipc.postMessage("drag-end");
+        return done();
+      }
+    }
+    // The app's card goes; this page's settles into the tab's place, from where the pointer was.
+    window.ipc.postMessage("drag-end");
+    ghost.style.visibility = "";
+    const filtered = document.getElementById("sq").value.trim() !== "";
+    if (cancelled || filtered) {
+      if (row.nextElementSibling !== drag.nextEl) flip(() => list.insertBefore(row, drag.nextEl));
     } else {
       // A split's row moves both its tabs, in their order.
-      const next = keyOf(drag.row.nextElementSibling);
+      const next = keyOf(row.nextElementSibling);
       if (next !== drag.next) for (const key of drag.keys) window.ipc.postMessage("move " + key + " " + next);
     }
-    if (redraw) {
-      redraw = false;
-      drawSide();
-    }
+    row.getAnimations().forEach((one) => one.cancel());
+    const to = row.getBoundingClientRect();
+    ghost.classList.add("home");
+    ghost.classList.remove("up", "out");
+    ghost.style.transform = `translate(0, ${to.top - drag.box.top}px)`;
+    let settled = false;
+    const settle = () => { if (!settled) { settled = true; done(); } };
+    if (calm()) return settle();
+    ghost.addEventListener("transitionend", settle, { once: true });
+    setTimeout(settle, 260);
   };
   list.addEventListener("mousedown", (event) => {
     // The tab pressed (a split's half), and the row it is in, which moves along the list.
@@ -761,11 +951,30 @@ if (document.documentElement.dataset.part === "side") {
       lift(event);
     }
     over(event);
+    if (!scrolling && !drag.out) {
+      scrolling = true;
+      requestAnimationFrame(scroll);
+    }
+  });
+  // Escape puts the tab back; the button is still down, so what follows it shows nothing.
+  addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !drag?.moving) return;
+    event.preventDefault();
+    land(null, true);
+    drag = null;
+    aborted = true;
   });
   addEventListener("mouseup", (event) => {
     const was = drag;
     drag = null;
-    if (!was?.moving) return;
+    if (!was?.moving) {
+      if (aborted) {
+        aborted = false;
+        swallow = true;
+        setTimeout(() => { swallow = false; }, 0);
+      }
+      return;
+    }
     drag = was;
     land(event);
     drag = null;
@@ -788,9 +997,12 @@ if (document.documentElement.dataset.part === "line") {
   line.addEventListener("mousedown", (event) => {
     if (event.button !== 0) return;
     event.preventDefault();
+    // A second press evens the halves, decided as it goes down.
+    if (event.detail === 2) return void window.ipc.postMessage("split-even");
     from = event.screenX;
     moved = 0;
     line.classList.add("held");
+    document.documentElement.classList.add("held");
   });
   addEventListener("mousemove", (event) => {
     if (from === null) return;
@@ -806,9 +1018,9 @@ if (document.documentElement.dataset.part === "line") {
     if (from === null) return;
     from = null;
     line.classList.remove("held");
+    document.documentElement.classList.remove("held");
     window.ipc.postMessage("split-move " + moved + " done");
   });
-  line.addEventListener("dblclick", () => window.ipc.postMessage("split-even"));
 }
 looked(window.__deskLook);
 // The strip is the window's own: no page's menu (Reload, AutoFill) but in the address field.
@@ -819,6 +1031,13 @@ document.addEventListener("contextmenu", (event) => {
 // types, where Enter goes (the address, else a search) and the pages seen that match it.
 const field = document.getElementById("url"), sug = document.getElementById("sug");
 let here = { url: "", web: true }, seen = [], rows = [], picked = 0;
+// The whole field is the one place to click: a press anywhere in it, beside the text too, is in the text.
+document.getElementById("addr").addEventListener("mousedown", (event) => {
+  if (event.target !== field) {
+    event.preventDefault();
+    field.focus();
+  }
+});
 const host = (url) => {
   try {
     const at = new URL(url);
@@ -834,15 +1053,17 @@ function address(shown, visited) {
   document.getElementById("ai").replaceChildren(glyph(GLYPHS[here.kind] ? here.kind : "web"));
   if (document.activeElement !== field) field.value = here.web ? host(here.url) : here.title || "";
 }
-function suggest() {
-  const typed = field.value.trim(), low = typed.toLowerCase();
+// The list under the field: for what is typed, or (`zero`, as the field is entered) the pages seen
+// most lately, none of them picked, so that Enter still takes what the field says.
+function suggest(zero) {
+  const typed = zero ? "" : field.value.trim(), low = typed.toLowerCase();
   rows = [];
   if (typed && typed !== here.url) {
     rows.push(addressy(typed) ? { go: typed, name: typed, about: "Go to the website" } : { go: typed, name: typed, about: "Search Google", search: true });
   }
   const matches = seen.filter((page) => page.url !== here.url && (!low || (page.title + " " + page.url).toLowerCase().includes(low)));
-  const pages = matches.slice(0, 8).map((page) => ({ go: page.url, name: page.title || host(page.url), about: page.url }));
-  picked = 0;
+  const pages = matches.slice(0, typed ? 8 : 3).map((page) => ({ go: page.url, name: page.title || host(page.url), about: page.url }));
+  picked = zero ? -1 : 0;
   const parts = [];
   const row = (item, at) => {
     const line = document.createElement("div");
@@ -860,6 +1081,18 @@ function suggest() {
     about.textContent = item.about;
     words.append(name, about);
     line.append(icon, words);
+    // The pointer picks the row it moves over (a still pointer, and WebKit's moves of a row under it
+    // when the list is drawn again, pick nothing).
+    let lx = -1, ly = -1;
+    line.addEventListener("mousemove", (event) => {
+      if (event.clientX === lx && event.clientY === ly) return;
+      lx = event.clientX;
+      ly = event.clientY;
+      if (picked !== at) {
+        picked = at;
+        mark();
+      }
+    });
     line.addEventListener("mousedown", (event) => event.preventDefault());
     line.addEventListener("click", () => go(item));
     return line;
@@ -867,7 +1100,7 @@ function suggest() {
   if (rows.length > 0) parts.push(row(rows[0], 0));
   if (pages.length > 0) {
     const label = document.createElement("div");
-    label.className = "g";
+    label.className = "gh";
     label.textContent = "History";
     parts.push(label);
     for (const page of pages) {
@@ -883,7 +1116,7 @@ function suggest() {
 // The system's glass under the open list (pane.rs): where it is, said once each time it moves.
 let glassed = "";
 function glass() {
-  const open = [sug, document.getElementById("menu")].find((list) => list.style.display === "block");
+  const open = [sug, document.getElementById("menu")].find(opened);
   const box = open && open.getBoundingClientRect();
   const said = box ? "glass " + [box.left, box.top, box.width, box.height].map(Math.round).join(" ") : "glass none";
   if (said !== glassed) {
@@ -905,8 +1138,9 @@ field.addEventListener("focus", () => {
   window.ipc.postMessage("typing on");
   field.value = here.web ? here.url : "";
   field.select();
+  suggest(true);
 });
-field.addEventListener("input", suggest);
+field.addEventListener("input", () => suggest());
 field.addEventListener("blur", () => {
   window.ipc.postMessage("typing off");
   sug.style.display = "none";
@@ -916,11 +1150,15 @@ field.addEventListener("blur", () => {
 field.addEventListener("keydown", (event) => {
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
-    if (rows.length) picked = (picked + (event.key === "ArrowDown" ? 1 : rows.length - 1)) % rows.length;
+    if (rows.length) {
+      const down = event.key === "ArrowDown";
+      picked = picked < 0 ? (down ? 0 : rows.length - 1) : (picked + (down ? 1 : rows.length - 1)) % rows.length;
+    }
     mark();
+    sug.querySelector(".q.on")?.scrollIntoView({ block: "nearest" });
   } else if (event.key === "Enter") {
     event.preventDefault();
-    const item = rows[picked] || (field.value.trim() && { go: field.value.trim() });
+    const item = (picked >= 0 && rows[picked]) || (field.value.trim() && { go: field.value.trim() });
     if (item) go(item);
   } else if (event.key === "Escape") {
     field.blur();
@@ -954,44 +1192,107 @@ function O(bar) {
 }
 document.querySelector("#offer .take").addEventListener("click", () => window.ipc.postMessage("offer take"));
 document.querySelector("#offer .later").addEventListener("click", () => window.ipc.postMessage("offer later"));
+// The list in the menu now, as it was drawn (the history's or the Events'), and whether a menu or
+// the suggestions are open. Drawn again only when what it lists changed, so a hover, a scroll or
+// a keyboard pick is not lost to a refresh that brought nothing new.
+let menuSig = null;
+const opened = (list) => list.style.display !== "" && list.style.display !== "none";
+const picks = (menu) => [...menu.querySelectorAll(".v,.ev.go")];
+const ident = (node) => node.dataset.at ?? node.dataset.key;
+// The keyboard's pick in the menu: one row at a time, scrolled into view when it moves.
+function choose(menu, node, scroll) {
+  menu.querySelector(".sel")?.classList.remove("sel");
+  if (!node) return;
+  node.classList.add("sel");
+  if (scroll) node.scrollIntoView({ block: "nearest" });
+}
+// Draws the menu again from `build` (the rows it makes), keeping its scroll and its pick: the same
+// row by its identity, or the place it was if the row is gone.
+function redrawn(menu, kind, now, build) {
+  const again = menuSig !== null && menuSig[0] === kind;
+  const was = again ? picks(menu).findIndex((node) => node.classList.contains("sel")) : -1;
+  const id = was >= 0 ? ident(picks(menu)[was]) : null;
+  const scroller = () => menu.querySelector(".evl") || menu;
+  const top = again ? scroller().scrollTop : 0;
+  menuSig = now;
+  build();
+  scroller().scrollTop = top;
+  if (was >= 0) {
+    const after = picks(menu);
+    choose(menu, after.find((node) => ident(node) === id) || after[Math.min(was, after.length - 1)], false);
+  }
+}
 // The history menu: the tabs the window has held, newest first, each with what became of it;
 // null closes it. Titles, pages and projects are set as text.
 const SAID = { open: "open", hidden: "closed · still running", ended: "ended", closed: "closed" };
 function M(rows) {
-  // Once the rows are in: where the menu is now.
+  // The pane under the menu is said at once, and a frame on again, as a safety net.
   requestAnimationFrame(glass);
   const menu = document.getElementById("menu");
   const open = rows !== null;
   menu.style.display = document.getElementById("back").style.display = open ? "block" : "none";
+  menu.classList.remove("evs");
   document.getElementById("hs").className = open ? "b on" : "b";
-  if (!open) return menu.replaceChildren();
+  if (!open) {
+    menuSig = null;
+    menu.replaceChildren();
+    return glass();
+  }
   under(menu, "hs");
-  if (rows.length === 0) return void menu.replaceChildren(emptied("hs", "No history yet"));
-  const several = new Set(rows.map((row) => row.group)).size > 1;
-  menu.replaceChildren(...rows.map((row) => {
-    const item = document.createElement("div");
-    item.className = row.state === "open" ? "v" : "v off";
-    item.dataset.at = row.at;
-    item.dataset.key = row.key;
-    item.dataset.state = row.state;
-    item.title = row.detail || row.title;
-    const icon = document.createElement("span");
-    icon.className = "i";
-    icon.append(glyph(GLYPHS[row.kind] ? row.kind : "web"));
-    const name = document.createElement("span");
-    name.className = "n";
-    name.textContent = row.title || row.detail || ({ term: "Terminal", board: "Board", settings: "Settings" }[row.kind] || "New tab");
-    const head = document.createElement("span");
-    head.className = "h";
-    head.append(icon, name);
-    const about = document.createElement("span");
-    about.className = "u";
-    about.textContent = [several ? row.group || "—" : "", row.detail, SAID[row.state]].filter(Boolean).join(" · ");
-    item.append(head, about);
-    item.addEventListener("click", () => window.ipc.postMessage("visit " + row.at));
-    return item;
-  }));
+  const now = "h" + JSON.stringify(rows);
+  if (now === menuSig) return glass();
+  redrawn(menu, "h", now, () => {
+    if (rows.length === 0) return void menu.replaceChildren(emptied("hs", "No history yet"));
+    const several = new Set(rows.map((row) => row.group)).size > 1;
+    menu.replaceChildren(...rows.map((row) => {
+      const item = document.createElement("div");
+      item.className = row.state === "open" ? "v" : "v off";
+      item.dataset.at = row.at;
+      item.dataset.key = row.key;
+      item.dataset.state = row.state;
+      item.title = row.detail || row.title;
+      const icon = document.createElement("span");
+      icon.className = "i";
+      icon.append(glyph(GLYPHS[row.kind] ? row.kind : "web"));
+      const name = document.createElement("span");
+      name.className = "n";
+      name.textContent = row.title || row.detail || ({ term: "Terminal", board: "Board", settings: "Settings" }[row.kind] || "New tab");
+      const head = document.createElement("span");
+      head.className = "h";
+      head.append(icon, name);
+      const about = document.createElement("span");
+      about.className = "u";
+      about.textContent = [several ? row.group || "—" : "", row.detail, SAID[row.state]].filter(Boolean).join(" · ");
+      item.append(head, about);
+      item.addEventListener("click", () => window.ipc.postMessage("visit " + row.at));
+      return item;
+    }));
+  });
+  glass();
 }
+// The keys in an open menu: Up and Down pick a row (round the ends, from the first or the last
+// when none is picked), Home and End the ends, Enter does what a click on it would, Escape closes.
+document.addEventListener("keydown", (event) => {
+  const menu = document.getElementById("menu");
+  if (!opened(menu) || event.metaKey || event.ctrlKey || event.altKey || event.target === field) return;
+  const rows = picks(menu), at = rows.findIndex((node) => node.classList.contains("sel"));
+  const go = (to) => {
+    event.preventDefault();
+    if (rows.length) choose(menu, rows[to], true);
+  };
+  if (event.key === "ArrowDown") go(at < 0 ? 0 : (at + 1) % rows.length);
+  else if (event.key === "ArrowUp") go(at < 0 ? rows.length - 1 : (at + rows.length - 1) % rows.length);
+  else if (event.key === "Home") go(0);
+  else if (event.key === "End") go(rows.length - 1);
+  else if (event.key === "Enter") {
+    if (at < 0 || event.target.closest("button")) return;
+    event.preventDefault();
+    rows[at].click();
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    window.ipc.postMessage("unmenu");
+  }
+});
 // The Event Center: what waits for the person, newest first, under the bell; the bell counts what
 // wants them and they have not seen. While it is `open` the list is in the menu, each event with its buttons,
 // whose place is said back. Every word is set as text.
@@ -1002,6 +1303,15 @@ function ago(at) {
   const s = Math.max(0, Date.now() / 1000 - at);
   return s < 60 ? "now" : s < 3600 ? Math.floor(s / 60) + "m" : s < 86400 ? Math.floor(s / 3600) + "h" : Math.floor(s / 86400) + "d";
 }
+// While the Events are open their times keep up with the clock, and nothing else is drawn again.
+setInterval(() => {
+  const menu = document.getElementById("menu");
+  if (!opened(menu) || !menu.classList.contains("evs")) return;
+  for (const item of menu.querySelectorAll(".ev")) {
+    const when = item.querySelector(".w");
+    if (when) when.textContent = ago(Number(item.dataset.when));
+  }
+}, 30000);
 function V(events, open) {
   // The bell counts what wants the person and is new; what ended well is listed, quietly.
   const unseen = events.filter((event) => event.unseen && event.urgent).length;
@@ -1011,45 +1321,62 @@ function V(events, open) {
   const bell = document.getElementById("ev");
   bell.title = events.length ? "Events: " + events.length + (unseen ? ", " + unseen + " new" : "") : "Events";
   bell.classList.toggle("on", open);
-  if (!open) return;
+  if (!open) {
+    if (menuSig?.[0] === "e") menuSig = null;
+    return;
+  }
   requestAnimationFrame(glass);
   const menu = document.getElementById("menu");
-  menu.style.display = document.getElementById("back").style.display = "block";
+  // Flex, not block: the heading stays and the events under it scroll (.evs).
+  menu.style.display = "flex";
+  document.getElementById("back").style.display = "block";
+  menu.classList.add("evs");
   under(menu, "ev");
   document.getElementById("hs").className = "b";
-  const head = document.createElement("div");
-  head.className = "evh";
-  const title = document.createElement("span");
-  title.textContent = "Events";
-  head.append(title);
-  if (events.length) {
-    const clear = document.createElement("button");
-    clear.className = "clr";
-    clear.textContent = "Clear All";
-    clear.title = "Dismiss every event: each comes back only when it changes";
-    clear.addEventListener("click", () => window.ipc.postMessage("clear"));
-    head.append(clear);
-  }
-  if (events.length === 0) return menu.replaceChildren(head, emptied("ev", "Nothing waits for you"));
-  const several = new Set(events.map((event) => event.group)).size > 1;
-  const rows = [head];
-  // They come in their sections' order: a heading where a section begins.
-  events.forEach((event, at) => {
-    if (at === 0 || events[at - 1].rank !== event.rank) {
-      const group = document.createElement("div");
-      group.className = "evg";
-      group.textContent = event.section + " · " + events.filter((other) => other.rank === event.rank).length;
-      rows.push(group);
+  const now = "e" + JSON.stringify(events);
+  if (now === menuSig) return glass();
+  redrawn(menu, "e", now, () => {
+    const head = document.createElement("div");
+    head.className = "evh";
+    const title = document.createElement("span");
+    title.textContent = "Events";
+    head.append(title);
+    if (events.length) {
+      const clear = document.createElement("button");
+      clear.className = "clr";
+      clear.textContent = "Clear All";
+      clear.title = "Dismiss every event: each comes back only when it changes";
+      clear.addEventListener("click", () => window.ipc.postMessage("clear"));
+      head.append(clear);
     }
-    rows.push(row(event, several));
+    if (events.length === 0) return void menu.replaceChildren(head, emptied("ev", "Nothing waits for you"));
+    const several = new Set(events.map((event) => event.group)).size > 1;
+    const list = document.createElement("div");
+    list.className = "evl";
+    // They come in their sections' order: a heading where a section begins.
+    events.forEach((event, at) => {
+      if (at === 0 || events[at - 1].rank !== event.rank) {
+        const group = document.createElement("div");
+        group.className = "evg";
+        group.textContent = event.section + " · " + events.filter((other) => other.rank === event.rank).length;
+        list.append(group);
+      }
+      list.append(row(event, several));
+    });
+    menu.replaceChildren(head, list);
   });
-  menu.replaceChildren(...rows);
+  glass();
 }
 // A row's own click opens what it is about; its one button acts on it; its x dismisses it.
 function row(event, several) {
   const say = (at) => window.ipc.postMessage("event " + event.n + " " + at);
+  const at = (role) => event.buttons.findIndex((button) => button.role === role);
   const item = document.createElement("div");
-  item.className = event.unseen ? "ev new" : "ev";
+  // Only a row that opens something shows the hand and lights under the pointer.
+  item.className = (event.unseen ? "ev new" : "ev") + (at("open") >= 0 ? " go" : "");
+  item.dataset.key = event.n;
+  item.dataset.when = event.at;
+  item.dataset.tone = event.tone || "";
   item.style.setProperty("--hue", TONES[event.tone] || "#8e8e93");
   const dot = document.createElement("span");
   dot.className = "dot";
@@ -1068,8 +1395,10 @@ function row(event, several) {
   const when = document.createElement("span");
   when.className = "w";
   when.textContent = ago(event.at);
-  side.append(when);
-  const at = (role) => event.buttons.findIndex((button) => button.role === role);
+  // The time and the × share one place (.tm), so the row does not change as the pointer comes.
+  const spot = document.createElement("span");
+  spot.className = "tm";
+  spot.append(when);
   if (at("open") >= 0) item.addEventListener("click", () => say(at("open")));
   if (at("act") >= 0) {
     const button = document.createElement("button");
@@ -1084,18 +1413,18 @@ function row(event, several) {
     x.title = event.buttons[at("dismiss")].label;
     x.append(glyph("close"));
     x.addEventListener("click", (e) => { e.stopPropagation(); say(at("dismiss")); });
-    side.append(x);
+    spot.append(x);
   }
+  side.append(spot);
   item.append(dot, text, side);
   return item;
 }
 // The comment button, on while the person comments on the pages, and Send while some are held.
 // The window split (its two tabs, left and right), or whole (null): the split button is lit while
 // it is, and the side lists the two as one.
-// The project's split (its two tabs, left and right), and whether the window shows it.
-function SP(pair, on) {
+// The project's split (its two tabs, left and right): the side lists the two as one.
+function SP(pair) {
   splitPair = pair;
-  document.getElementById("sp").classList.toggle("on", !!on);
 }
 function C(on, held) {
   document.getElementById("cm").className = on ? "b on" : "b";
@@ -1136,7 +1465,7 @@ document.getElementById("fs").addEventListener("click", () => {
 // Buttons with no room, as Safari's: the rightmost go first into "»", whose system menu holds
 // them (strip.rs's Tool), until the crumbs have room again. Only the bar's: the browser's
 // toolbar keeps its few, and its address field gives way.
-const TOOLS = ["sp", "hs", "mn", "ev"];
+const TOOLS = ["hs", "mn", "ev"];
 const ROOM = 160;
 function fit() {
   if (document.documentElement.dataset.part) return;
@@ -1168,7 +1497,7 @@ for (const id of ["bar", "lead", "cr", "tabs", "end"]) {
     if (event.target === part) window.ipc.postMessage("zoom");
   });
 }
-for (const [id, what] of [["sp", "key split"], ["mn", "collapse"], ["sd", "send"], ["cm", "comment"], ["bk", "back"], ["fw", "forward"], ["hs", "history"], ["ev", "events"], ["back", "unmenu"]]) {
+for (const [id, what] of [["mn", "collapse"], ["sd", "send"], ["cm", "comment"], ["bk", "back"], ["fw", "forward"], ["hs", "history"], ["ev", "events"], ["back", "unmenu"]]) {
   document.getElementById(id).addEventListener("click", () => window.ipc.postMessage(what));
 }
 // No tab left: the kinds of tab, and the agents installed, each one click.

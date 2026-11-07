@@ -30,3 +30,11 @@ fn labels_make_items_with_one_checked() {
     assert!(matches!(&made[1], Entry::Item { marked: true, .. }));
     assert!(matches!(&made[0], Entry::Item { marked: false, .. }));
 }
+
+#[test]
+fn a_pages_item_may_show_its_keys() {
+    let entries: Vec<Entry> =
+        serde_json::from_str(r#"[{"label":"Copy","key":"cmd+c"},{"label":"Open"}]"#).unwrap();
+    assert!(matches!(&entries[0], Entry::Item { key: Some(key), .. } if key == "cmd+c"));
+    assert!(matches!(&entries[1], Entry::Item { key: None, .. }));
+}

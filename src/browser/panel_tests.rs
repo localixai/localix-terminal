@@ -83,3 +83,47 @@ fn a_page_says_its_size_when_it_loads_and_when_it_changes() {
         assert_eq!(said(bad), None, "{bad}");
     }
 }
+
+#[test]
+fn a_page_opens_only_a_web_address_in_a_tab() {
+    assert_eq!(
+        said("o https://example.com/a?b=1"),
+        Some(Said::Open("https://example.com/a?b=1"))
+    );
+    assert_eq!(
+        said("o HTTP://example.com"),
+        Some(Said::Open("HTTP://example.com"))
+    );
+    for bad in [
+        "o file:///etc/passwd",
+        "o javascript:alert(1)",
+        "o ftp://host",
+        "o http:/x",
+        "o ",
+        "o é",
+    ] {
+        assert_eq!(said(bad), None, "{bad}");
+    }
+}
+
+#[test]
+fn out_of_sight_frames_run_a_while_later_and_at_once_when_shown() {
+    let (panel, sent) = recorded(true);
+    assert!(!panel.slot.shown(false));
+    assert!(panel.paint("W(1)"));
+    assert!(panel.paint("W(2)"));
+    // Not at once: one paint comes a while later, for all of it.
+    assert!(sent.lock().unwrap().is_empty());
+    let deadline = std::time::Instant::now() + HIDDEN_EVERY * 20;
+    while sent.lock().unwrap().is_empty() {
+        assert!(std::time::Instant::now() < deadline, "no paint came");
+        std::thread::yield_now();
+    }
+    assert_eq!(*sent.lock().unwrap(), vec!["paint 4".to_string()]);
+    // Back in sight with frames waiting, they run now.
+    assert!(panel.paint("W(3)"));
+    assert!(panel.slot.shown(true));
+    assert_eq!(panel.slot.latest().as_deref(), Some("W(1);W(2);W(3);"));
+    // Shown again with nothing waiting, nothing is due.
+    assert!(!panel.slot.shown(true));
+}

@@ -217,17 +217,22 @@ impl Browser {
         let _ = self.proxy.send_event(Cmd::Strip);
     }
 
-    /// Project `project`'s split, kept by the app across a restart, now its tabs are open again:
-    /// tab `shown` in use, `beside` on the right (`right`) or left. The window splits so when it
-    /// shows that project. Kept by the window once it has the tabs (this comes after them), lest
-    /// it find the split's tabs gone before they come.
-    pub fn split(&self, project: &str, halves: super::Halves<'_>) {
-        let kept = crate::browser::split::Kept {
-            shown: halves.shown.to_string(),
-            beside: halves.beside.to_string(),
-            right: halves.right,
-        };
-        let _ = (self.proxy).send_event(Cmd::SplitKept(project.to_string(), kept));
+    /// The window's projects' tabs as the layout keeps them: their order, their splits, the one
+    /// each shows. The window draws them so.
+    pub fn arranged(&self, windows: Vec<i64>, arranged: Vec<super::Arranged>) {
+        let _ = self.proxy.send_event(Cmd::Arranged(windows, arranged));
+    }
+
+    /// The app opened window `window` (its row in the layout): the window in use from now on,
+    /// made with the first tab the app opens next.
+    pub fn new_window(&self, window: i64) {
+        let _ = self.proxy.send_event(Cmd::NewWindow(window));
+    }
+
+    /// The window the person works in, by its row in the layout; none before the app named it.
+    pub fn in_use(&self) -> Option<i64> {
+        let window = self.shared.in_use.load(Ordering::SeqCst);
+        (window != 0).then_some(window)
     }
 
     /// The person shows tab `id`: the window goes to its project, then to it.

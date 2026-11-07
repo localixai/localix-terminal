@@ -68,6 +68,25 @@ fn picture(svg: &str) -> Option<Retained<AnyObject>> {
     Some(image)
 }
 
+/// NSEvent's modifier flags.
+pub(super) const SHIFT: usize = 1 << 17;
+pub(super) const CONTROL: usize = 1 << 18;
+pub(super) const OPTION: usize = 1 << 19;
+pub(super) const COMMAND: usize = 1 << 20;
+
+/// The modifier flags of `chord`, `shift` the shift its key takes as typed.
+pub(super) fn modifiers(chord: &super::shortcuts::Chord, shift: bool) -> usize {
+    [
+        (chord.cmd, COMMAND),
+        (chord.ctrl, CONTROL),
+        (chord.alt, OPTION),
+        (shift, SHIFT),
+    ]
+    .iter()
+    .filter(|(held, _)| *held)
+    .fold(0, |mask, (_, bit)| mask | bit)
+}
+
 /// Show `entries` as a menu at `at` of `view` (its points, from its top left) and wait for the
 /// person: the place of the item picked among the menu's items, or none when they dismissed it.
 pub(super) fn show(view: &WebView, at: (f64, f64), entries: &[Entry]) -> Option<usize> {
@@ -83,6 +102,18 @@ pub(super) fn show(view: &WebView, at: (f64, f64), entries: &[Entry]) -> Option<
         msg_send![&*menu, popUpMenuPositioningItem: std::ptr::null::<AnyObject>(), atLocation: point, inView: &*view]
     };
     usize::try_from(PICKED.load(Ordering::SeqCst)).ok()
+}
+
+/// `item` shows `chord` at its right, as the system shows an item's keys.
+fn shortcut(item: &AnyObject, chord: &super::shortcuts::Chord) {
+    let (key, shift) = chord.menu_key();
+    let Some(key) = super::appkit::string(&key) else {
+        return;
+    };
+    // SAFETY: an NSMenuItem takes its key equivalent (an NSString) and keeps it.
+    let _: () = unsafe { msg_send![item, setKeyEquivalent: &*key] };
+    // SAFETY: an NSMenuItem takes its key equivalent's modifier flags (an NSUInteger).
+    let _: () = unsafe { msg_send![item, setKeyEquivalentModifierMask: modifiers(chord, shift)] };
 }
 
 /// A menu of `entries`, its items tagged from `next` on.
@@ -108,6 +139,7 @@ fn filled(entries: &[Entry], target: &AnyObject, next: &mut isize) -> Option<Ret
                 marked,
                 off,
                 icon,
+                key,
                 ..
             } => {
                 let Some(title) = super::appkit::string(label) else {
@@ -126,6 +158,9 @@ fn filled(entries: &[Entry], target: &AnyObject, next: &mut isize) -> Option<Ret
                     let _: () = unsafe { msg_send![item, setTag: *next] };
                     // SAFETY: an NSMenuItem takes a BOOL: whether it can be picked.
                     let _: () = unsafe { msg_send![item, setEnabled: Bool::new(!off)] };
+                    if let Some(chord) = key.as_deref().and_then(super::shortcuts::Chord::parse) {
+                        shortcut(item, &chord);
+                    }
                     if let Some(picture) = icon.and_then(picture) {
                         // SAFETY: an NSMenuItem takes an NSImage and keeps it.
                         let _: () = unsafe { msg_send![item, setImage: &*picture] };

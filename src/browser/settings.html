@@ -5,87 +5,99 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>Settings</title>
 <style>
-/* The window's own Settings, drawn as the board is: the system's font and accent, hairlines and
-   veils mixed from the text colour, so light, dark and the glass all hold. */
+/* The window's own Settings, drawn as the board is: the system's font and accent, and the frame's
+   ladders of ink, fill and accent (frame.css), so light, dark and the glass all hold. */
 :root{
-  --fg:#1d1d1f;--solid:#f5f5f7;
-  --veil:color-mix(in srgb,currentColor 5.5%,transparent);
-  --hair:color-mix(in srgb,currentColor 11%,transparent);
-  --soft:color-mix(in srgb,currentColor 66%,transparent);
-  --faint:color-mix(in srgb,currentColor 46%,transparent);
-  --accent:#0a84ff;--accent:-apple-system-control-accent;
+  --solid:#f5f5f7;
   --warn:#d97706;
-  --ease:cubic-bezier(.2,.8,.2,1);
   --ground:var(--solid);
+  --ctl:26px;
   color:var(--fg);
-  font:13px/1.35 var(--ui-font,-apple-system,BlinkMacSystemFont,system-ui,sans-serif);
+  font:13px/1.35 var(--ui-font,var(--ui-sys));
   -webkit-font-smoothing:antialiased;
 }
-@media (prefers-color-scheme: dark){:root{--fg:#e8e8ea;--solid:#161618;--warn:#f0a020}}
+@media (prefers-color-scheme: dark){:root{--solid:#161618;--warn:#f0a020}}
 html:not([data-glass]) body{background:var(--ground)}
 body{margin:0;cursor:default;user-select:none;-webkit-user-select:none;overflow:auto!important}
 main{max-width:680px;margin:0 auto;padding:26px 28px 48px}
-h1{font-size:22px;font-weight:650;letter-spacing:-.01em;margin:0 0 4px}
-.lead{color:var(--faint);margin:0 0 22px}
-h2{font-size:12px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--faint);margin:28px 4px 8px}
-.card{background:var(--veil);border-radius:12px;box-shadow:0 0 0 .5px var(--hair)}
+h1{font-size:23px;font-weight:700;letter-spacing:-.012em;margin:0 0 4px}
+.lead{color:var(--ink-2);margin:0 0 22px}
+h2{font-size:15px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--fg);margin:30px 4px 10px}
+.card{background:var(--ov-1);border-radius:12px;box-shadow:0 0 0 .5px var(--ov-3);overflow:hidden}
 .row{display:flex;align-items:center;gap:14px;min-height:46px;padding:7px 14px;box-sizing:border-box}
-.row+.row{box-shadow:0 -.5px 0 var(--hair)}
+.row+.row{box-shadow:0 -.5px 0 var(--ov-3)}
 .row .l{flex:1;min-width:0}
 .row .l b{display:block;font-weight:500}
-.row .l small{display:block;color:var(--faint);font-size:11.5px;margin-top:2px}
+.row .l small{display:block;color:var(--ink-2);font-size:12px;margin-top:3px}
 /* A segmented control, as the system's. */
-.seg{display:inline-flex;padding:2px;border-radius:8px;background:var(--veil);box-shadow:inset 0 0 0 .5px var(--hair)}
-.seg button{font:inherit;font-size:12px;color:inherit;border:0;background:none;padding:4px 11px;border-radius:6px;cursor:default;opacity:.75;transition:background-color .15s var(--ease),opacity .15s}
-.seg button:hover{opacity:1}
-.seg button.on{opacity:1;background:color-mix(in srgb,var(--ground) 70%,#fff);box-shadow:0 0 0 .5px var(--hair),0 1px 2px rgba(0,0,0,.12)}
+.seg{display:inline-flex;padding:2px;border-radius:var(--r-3);background:var(--ov-1);box-shadow:inset 0 0 0 .5px var(--ov-3)}
+.seg button{font:inherit;font-size:12px;color:var(--ink-2);border:0;background:none;height:22px;padding:0 11px;border-radius:var(--r-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+.seg button:hover{color:var(--fg);transition:none}
+.seg button.on{color:var(--fg);background:color-mix(in srgb,var(--ground) 70%,#fff);box-shadow:0 0 0 .5px var(--ov-3),0 1px 2px rgba(0,0,0,.12)}
 @media (prefers-color-scheme: dark){.seg button.on{background:color-mix(in srgb,currentColor 18%,transparent)}}
-select{font:inherit;font-size:12.5px;color:inherit;background:var(--veil);border:0;box-shadow:inset 0 0 0 .5px var(--hair);border-radius:7px;padding:5px 26px 5px 10px;-webkit-appearance:none;appearance:none;
+select{font:inherit;font-size:12px;color:inherit;background:var(--ov-1);border:0;box-shadow:inset 0 0 0 .5px var(--ov-3);border-radius:7px;height:var(--ctl);padding:0 28px 0 10px;-webkit-appearance:none;appearance:none;
   background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
-  background-position:calc(100% - 13px) 52%,calc(100% - 9px) 52%;background-size:4px 4px;background-repeat:no-repeat;min-width:160px}
-select:focus-visible,.seg button:focus-visible,.chip:focus-visible,.btn:focus-visible{outline:2px solid color-mix(in srgb,var(--accent) 70%,transparent);outline-offset:1px}
-.step{display:inline-flex;align-items:center;gap:2px;border-radius:8px;background:var(--veil);box-shadow:inset 0 0 0 .5px var(--hair)}
-.step button{font:inherit;font-size:15px;line-height:1;width:28px;height:26px;border:0;background:none;color:inherit;border-radius:7px;cursor:default}
-.step button:hover{background:var(--veil)}
+  background-position:calc(100% - 13px) 52%,calc(100% - 9px) 52%;background-size:4px 4px;background-repeat:no-repeat;min-width:160px;transition:background-color var(--t-out) var(--ease)}
+select:hover{background-color:var(--ov-2);transition:none}
+select:active{background-color:var(--ov-3)}
+:focus-visible{outline:3px solid var(--acc-3);outline-offset:0}
+.step{display:inline-flex;align-items:center;gap:2px;height:var(--ctl);border-radius:var(--r-3);background:var(--ov-1);box-shadow:inset 0 0 0 .5px var(--ov-3)}
+.step button{font:inherit;font-size:15px;line-height:1;width:28px;height:calc(var(--ctl) - 4px);border:0;background:none;color:inherit;border-radius:7px;transition:background-color var(--t-out) var(--ease)}
+.step button:hover:not(:disabled){background:var(--ov-2);transition:none}
+.step button:active{background:var(--ov-3)}
 .step span{min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
 .preview{margin:0 14px 12px;padding:10px 12px;border-radius:9px;background:color-mix(in srgb,currentColor 7%,transparent);font-family:var(--mono,ui-monospace,Menlo,monospace);font-size:var(--mono-size,13px);line-height:1.35;white-space:pre;overflow:hidden;user-select:text;-webkit-user-select:text}
-.preview .p{color:#3fb950}.preview .d{color:var(--faint)}
+.preview .p{color:#3fb950}.preview .d{color:var(--ink-3)}
 @media (prefers-color-scheme: light){.preview .p{color:#1a7f37}}
 /* Shortcuts. */
-#find{display:flex;align-items:center;gap:8px;margin:0 0 10px;padding:0 10px;height:30px;border-radius:8px;background:var(--veil);box-shadow:inset 0 0 0 .5px var(--hair)}
+#find{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;margin:0 0 10px;padding:0 10px;height:30px;border-radius:var(--r-3);background:var(--ground);box-shadow:inset 0 0 0 .5px var(--ov-3)}
+html[data-glass] #find{-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);background:color-mix(in srgb,var(--ground) 80%,transparent)}
+#find:focus-within{background:var(--ground);outline:3px solid var(--acc-2)}
 #find input{flex:1;font:inherit;color:inherit;background:none;border:0;outline:0;user-select:text;-webkit-user-select:text}
-#find svg{width:13px;height:13px;opacity:.5;fill:none;stroke:currentColor;stroke-width:1.5}
-.group{font-size:11.5px;font-weight:600;color:var(--faint);padding:12px 14px 4px}
+#find svg{width:13px;height:13px;fill:none;stroke:var(--ink-2);stroke-width:1.5}
+.group{font-size:12px;font-weight:600;color:var(--ink-2);padding:12px 14px 4px}
 .k{min-height:38px}
-.chip{font:inherit;font-size:12px;color:inherit;min-width:64px;height:24px;padding:0 9px;border-radius:6px;border:0;background:var(--veil);box-shadow:inset 0 0 0 .5px var(--hair);cursor:default;letter-spacing:.06em;font-variant-numeric:tabular-nums;transition:box-shadow .15s}
-.chip:hover{box-shadow:inset 0 0 0 .5px var(--hair),0 0 0 3px var(--veil)}
-.chip.none{color:var(--faint);letter-spacing:0}
+.row.k{cursor:pointer;transition:background-color var(--t-out) var(--ease)}
+.row.k:hover{background:var(--acc-1);transition:none}
+.row.k:active:not(:has(.ic:active)){background:var(--acc-2)}
+.row.k.rec{background:var(--acc-2)}
+.chip{font:inherit;font-size:12px;color:inherit;min-width:64px;height:24px;padding:0 9px;border-radius:var(--r-2);border:0;background:var(--ov-1);box-shadow:inset 0 0 0 .5px var(--ov-3);letter-spacing:.06em;font-variant-numeric:tabular-nums;transition:box-shadow var(--t-out)}
+.chip:hover{box-shadow:inset 0 0 0 .5px var(--ov-3),0 0 0 3px var(--ov-1)}
+.chip.has,.chip.has:hover{min-width:0;height:auto;padding:0;background:none;box-shadow:none;letter-spacing:0}
+.chip.none{color:var(--ink-3);letter-spacing:0}
 .chip.rec{letter-spacing:0;color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent);animation:pulse 1.2s ease-in-out infinite}
 .chip.rec.short{color:var(--warn);box-shadow:inset 0 0 0 1.5px var(--warn);animation:none}
-@keyframes pulse{50%{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent) 40%,transparent)}}
-.chip.clash{box-shadow:inset 0 0 0 1px var(--warn)}
-.ic{width:24px;height:24px;border:0;background:none;color:inherit;border-radius:6px;display:grid;place-items:center;opacity:.55;cursor:default;padding:0}
-.ic:hover{opacity:1;background:var(--veil)}
+@keyframes pulse{50%{box-shadow:inset 0 0 0 1.5px var(--acc-3)}}
+.keys{display:inline-flex;align-items:center;gap:3px}
+.cap{box-sizing:border-box;min-width:22px;height:22px;padding:0 6px;display:inline-grid;place-items:center;font-size:12px;line-height:1;border-radius:var(--r-1);background:var(--ov-1);font-variant-numeric:tabular-nums}
+.chip.clash .cap{box-shadow:inset 0 0 0 2px var(--warn)}
+.ic{width:24px;height:24px;border:0;background:none;color:var(--ink-2);border-radius:var(--r-2);display:grid;place-items:center;padding:0;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+.ic:hover{color:var(--fg);background:var(--ov-2);transition:none}
+.ic:active{background:var(--ov-3)}
 .ic svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .ic.gone{visibility:hidden}
-.note{font-size:11.5px;color:var(--warn);margin-top:2px}
+.note{font-size:12px;color:var(--warn);margin-top:2px}
 .ask{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px 10px;font-size:12px}
-.ask span{flex:1;min-width:200px;color:var(--soft)}
-.btn{font:inherit;font-size:12px;color:inherit;border:0;border-radius:7px;padding:5px 11px;background:var(--veil);box-shadow:inset 0 0 0 .5px var(--hair);cursor:default}
-.btn:hover{background:color-mix(in srgb,currentColor 9%,transparent)}
+.ask span{flex:1;min-width:200px;color:var(--ink-2)}
+.btn{font:inherit;font-size:12px;font-weight:500;height:24px;padding:0 11px;display:inline-flex;align-items:center;border:0;border-radius:var(--r-2);color:inherit;background:var(--ov-1);box-shadow:inset 0 0 0 .5px var(--ov-3);transition:background-color var(--t-out) var(--ease)}
+.btn:hover:not(:disabled){background:var(--ov-2);transition:none}
+.btn:active:not(:disabled){background:var(--ov-3)}
 .btn.go{background:var(--accent);color:#fff;box-shadow:none}
+.btn.go:hover:not(:disabled){background:var(--accent);filter:brightness(1.08)}
+.btn.go:active:not(:disabled){background:var(--accent);filter:brightness(.92)}
+button:disabled,select:disabled{opacity:.4;cursor:default;pointer-events:none}
 .foot{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px}
-.foot span{color:var(--soft);font-size:12px}
-.empty{padding:14px;color:var(--faint);text-align:center}
+.foot span{color:var(--ink-2);font-size:12px}
+.empty{padding:14px;color:var(--ink-3);text-align:center}
 /* Integrations. */
-.state{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--faint)}
+.state{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--ink-3)}
 .state.on{background:#34c759}
-.state.unavailable{background:transparent;box-shadow:inset 0 0 0 1px var(--faint)}
-.row.busy .btn{opacity:.5}
+.state.unavailable{background:transparent;box-shadow:inset 0 0 0 1px var(--ink-3)}
 #err.ok{background:color-mix(in srgb,var(--fg) 82%,transparent);color:var(--ground)}
-#err{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);padding:7px 12px;border-radius:8px;background:var(--warn);color:#fff;font-size:12px;opacity:0;transition:opacity .2s;pointer-events:none}
-#err.on{opacity:1}
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+#err{position:fixed;left:50%;bottom:18px;transform:translate(-50%,8px);padding:8px 13px;border-radius:var(--r-3);max-width:80vw;background:var(--warn);color:#fff;font-size:12px;opacity:0;transition:opacity .2s,transform .2s var(--ease);pointer-events:none}
+#err.on{opacity:1;transform:translate(-50%,0)}
+button,.chip,.btn,select,label:has(input[type=checkbox]),input[type=checkbox],input[type=range]{cursor:pointer}
+input[type=text],input:not([type]),input[type=search]{cursor:text}
 </style>
 </head>
 <body>
@@ -96,14 +108,19 @@ select:focus-visible,.seg button:focus-visible,.chip:focus-visible,.btn:focus-vi
   <h2>Appearance</h2>
   <div class="card">
     <div class="row"><div class="l"><b>Theme</b><small>Light, dark, or as the system is.</small></div>
+      <button class="ic gone" data-reset="theme" aria-label="Reset Theme"></button>
       <div class="seg" id="theme" role="radiogroup" aria-label="Theme"></div></div>
     <div class="row"><div class="l"><b>Window transparency</b><small id="tnote">How much of the desktop shows through the glass.</small></div>
+      <button class="ic gone" data-reset="transparency" aria-label="Reset Window transparency"></button>
       <div class="seg" id="transparency" role="radiogroup" aria-label="Window transparency"></div></div>
     <div class="row"><div class="l"><b>Interface font</b><small>The tabs, the bar and these pages.</small></div>
+      <button class="ic gone" data-reset="ui_font" aria-label="Reset Interface font"></button>
       <select id="ui_font" aria-label="Interface font"></select></div>
     <div class="row"><div class="l"><b>Code font</b><small>Terminals; a font not installed falls back to the system's.</small></div>
+      <button class="ic gone" data-reset="code_font" aria-label="Reset Code font"></button>
       <select id="code_font" aria-label="Code font"></select></div>
     <div class="row"><div class="l"><b>Terminal font size</b></div>
+      <button class="ic gone" data-reset="font_size" aria-label="Reset Terminal font size"></button>
       <div class="step"><button id="smaller" aria-label="Smaller">−</button><span id="size"></span><button id="larger" aria-label="Larger">+</button></div></div>
     <div class="preview" aria-hidden="true"><span class="p">~/project</span> <span class="d">$</span> cargo test
 running 230 tests  <span class="p">ok</span>  0O 1lI {}[]=&gt; -&gt;</div>
@@ -113,8 +130,8 @@ running 230 tests  <span class="p">ok</span>  0O 1lI {}[]=&gt; -&gt;</div>
   <div class="card" id="integrations"><div class="empty">Looking for your tools…</div></div>
   <div class="foot"><span>Another MCP host?</span><button class="btn" id="copy-mcp">Copy MCP Entry</button></div>
 
-  <h2>Keyboard Shortcuts</h2>
-  <label id="find"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><input id="q" placeholder="Search shortcuts" spellcheck="false" autocomplete="off"></label>
+  <h2>Keyboard shortcuts</h2>
+  <label id="find"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><input id="q" placeholder="Search by name or keys (ex. &quot;cmd d&quot;)" spellcheck="false" autocomplete="off"></label>
   <div class="card" id="keys"></div>
   <div class="foot" id="foot"></div>
 </main>
@@ -123,10 +140,13 @@ running 230 tests  <span class="p">ok</span>  0O 1lI {}[]=&gt; -&gt;</div>
 "use strict";
 // The settings come as P(data) (settings.rs `page`); each change goes back as one object
 // ("k" and its JSON, as a panel's page posts what the person does), and the answer is P again.
+// A change shows at once, here, and the answer overwrites it: a change turned down snaps back.
 const post = (change) => window.ipc && window.ipc.postMessage("k" + JSON.stringify(change));
 const THEMES = [["system", "System"], ["light", "Light"], ["dark", "Dark"]];
 const LEVELS = [["off", "Off"], ["low", "Low"], ["standard", "Standard"], ["high", "High"]];
-let data = null, recording = null, asking = null, resetting = false;
+const RESET = ["M3.5 8a4.5 4.5 0 1 0 1.4-3.3", "M3.5 3v2.2h2.2"];
+// What the page shows of the settings, ahead of the answer, and what the person was last asking.
+let data = null, cur = null, recording = null, asking = null, resetting = false;
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
@@ -144,31 +164,102 @@ const icon = (paths) => {
   }
   return svg;
 };
+// A change, shown here at once and then sent.
+function change(name, value) {
+  if (!cur || cur[name] === value) return;
+  cur[name] = value;
+  show();
+  post({ [name]: value });
+}
+
+// A segmented control: its buttons made once, then only marked; one is in the tab order, and the
+// arrow keys, Home and End select and focus.
+const segs = new WeakMap();
+function mark(holder, value) {
+  for (const [key, button] of segs.get(holder)) {
+    button.classList.toggle("on", key === value);
+    button.setAttribute("aria-checked", String(key === value));
+    button.tabIndex = key === value ? 0 : -1;
+  }
+}
 function segmented(id, options, value, name) {
   const holder = document.getElementById(id);
-  holder.replaceChildren(...options.map(([key, label]) => {
-    const button = el("button", key === value ? "on" : "", label);
-    button.setAttribute("role", "radio");
-    button.setAttribute("aria-checked", String(key === value));
-    button.addEventListener("click", () => post({ [name]: key }));
-    return button;
-  }));
+  if (!segs.has(holder)) {
+    const keys = options.map(([key]) => key);
+    const buttons = new Map(options.map(([key, label]) => {
+      const button = el("button", "", label);
+      button.setAttribute("role", "radio");
+      button.addEventListener("click", () => change(name, key));
+      return [key, button];
+    }));
+    holder.addEventListener("keydown", (event) => {
+      const at = keys.indexOf(cur && cur[name]);
+      const to = { ArrowLeft: at - 1, ArrowUp: at - 1, ArrowRight: at + 1, ArrowDown: at + 1, Home: 0, End: keys.length - 1 }[event.key];
+      if (to === undefined || event.metaKey || event.ctrlKey || event.altKey) return;
+      event.preventDefault();
+      const key = keys[(to + keys.length) % keys.length];
+      change(name, key);
+      buttons.get(key).focus();
+    });
+    holder.replaceChildren(...buttons.values());
+    segs.set(holder, buttons);
+  }
+  mark(holder, value);
 }
+// A choice of fonts: the options made again only when the list is another, else the value set.
 function choices(id, fonts, value) {
   const select = document.getElementById(id);
-  select.replaceChildren(...fonts.map((font) => {
-    const option = el("option", "", font.name);
-    option.value = font.id;
-    option.selected = font.id === value;
-    return option;
-  }));
+  const ids = fonts.map((font) => font.id).join();
+  if (select.dataset.ids !== ids) {
+    select.dataset.ids = ids;
+    select.replaceChildren(...fonts.map((font) => {
+      const option = el("option", "", font.name);
+      option.value = font.id;
+      return option;
+    }));
+  }
+  select.value = value;
 }
 for (const id of ["ui_font", "code_font"]) {
-  document.getElementById(id).addEventListener("change", (event) => post({ [id]: event.target.value }));
+  document.getElementById(id).addEventListener("change", (event) => change(id, event.target.value));
 }
-document.getElementById("smaller").addEventListener("click", () => post({ font_size: data.settings.font_size - 1 }));
-document.getElementById("larger").addEventListener("click", () => post({ font_size: data.settings.font_size + 1 }));
+const step = (by) => cur && data && change("font_size", Math.min(data.sizes[1], Math.max(data.sizes[0], cur.font_size + by)));
+document.getElementById("smaller").addEventListener("click", () => step(-1));
+document.getElementById("larger").addEventListener("click", () => step(1));
 document.getElementById("q").addEventListener("input", drawKeys);
+
+// The setting a reset button is for: its name in the settings, and in the defaults the page is
+// told (settings.rs `page`); the words for the default it goes back to.
+const RESETS = { theme: "theme", transparency: "transparency", ui_font: "ui_font", code_font: "code_font", font_size: "size" };
+function defaultLabel(name) {
+  const value = data.defaults[RESETS[name]];
+  if (name === "font_size") return value + " pt";
+  const list = { theme: THEMES, transparency: LEVELS }[name];
+  if (list) return list.find(([key]) => key === value)?.[1];
+  return data[name === "ui_font" ? "ui_fonts" : "code_fonts"].find((font) => font.id === value)?.name;
+}
+for (const button of document.querySelectorAll("button[data-reset]")) {
+  const name = button.dataset.reset;
+  button.append(icon(RESET));
+  button.addEventListener("click", () => data && change(name, data.defaults[RESETS[name]]));
+}
+// The Appearance rows as `cur` has them, set in place: nothing is made again, so a hover or a
+// focus is not lost, and the transitions play.
+function show() {
+  segmented("theme", THEMES, cur.theme, "theme");
+  segmented("transparency", LEVELS, cur.transparency, "transparency");
+  choices("ui_font", data.ui_fonts, cur.ui_font);
+  choices("code_font", data.code_fonts, cur.code_font);
+  document.getElementById("size").textContent = cur.font_size + " pt";
+  document.getElementById("smaller").disabled = cur.font_size <= data.sizes[0];
+  document.getElementById("larger").disabled = cur.font_size >= data.sizes[1];
+  for (const button of document.querySelectorAll("button[data-reset]")) {
+    const name = button.dataset.reset;
+    const same = cur[name] === data.defaults[RESETS[name]];
+    button.classList.toggle("gone", same);
+    if (!same) button.title = "Back to " + defaultLabel(name);
+  }
+}
 
 // A chord as the person pressed it, in the settings' words (shortcuts.rs `Chord`): by the key's
 // place, not the character a layout or Option makes of it.
@@ -194,6 +285,17 @@ function shown(keys) {
   const key = parts.pop();
   return parts.map((part) => MARKS[part]).join("") + (key === "digit" ? "1…8" : NAMED[key] || key.toUpperCase());
 }
+// A chord as keycaps, one for each modifier (in the system's order) and one for the key; a row
+// of places is one wide cap, "1…8".
+function caps(keys) {
+  const parts = keys.split("+");
+  const key = parts.pop();
+  const box = el("span", "keys");
+  box.setAttribute("aria-hidden", "true");
+  for (const mod of Object.keys(MARKS).filter((mod) => parts.includes(mod))) box.append(el("span", "cap", MARKS[mod]));
+  box.append(el("span", "cap", key === "digit" ? "1…8" : NAMED[key] || key.toUpperCase()));
+  return box;
+}
 // What the recording chip shows as the keys go down and up: the modifiers held (⌘⇧…), and a
 // key pressed without one, with what it needs.
 const MODIFIERS = ["Meta", "Shift", "Control", "Alt"];
@@ -207,15 +309,15 @@ function preview(event) {
   const mods = held(event);
   chip.classList.remove("short");
   if (MODIFIERS.includes(event.key) || event.type === "keyup") {
-    chip.textContent = mods ? mods + "\u2026" : "Press keys\u2026";
+    chip.textContent = mods ? mods + "…" : "Press keys…";
     return;
   }
   const row = data.shortcuts.find((one) => one.id === recording)?.row;
   if (row && !/^Digit[1-9]$/.test(event.code)) {
-    chip.textContent = (mods || "") + "1\u20268?";
+    chip.textContent = (mods || "") + "1…8?";
   } else if (!mods) {
     const key = /^Key[A-Z]$/.test(event.code) ? event.code.slice(3) : NAMED[CODES[event.code]] || event.key.toUpperCase();
-    chip.textContent = key + ": add \u2318, \u2303 or \u2325";
+    chip.textContent = key + ": add ⌘, ⌃ or ⌥";
   } else {
     return;
   }
@@ -259,86 +361,152 @@ function stop() {
 }
 addEventListener("blur", () => recording && stop());
 
-function drawKeys() {
-  if (!data) return;
-  const typed = document.getElementById("q").value.trim().toLowerCase();
-  const rows = data.shortcuts.filter((row) => !typed || (row.title + " " + (row.shown || "") + " " + row.group).toLowerCase().includes(typed));
-  const list = document.getElementById("keys");
-  if (!rows.length) return void list.replaceChildren(el("div", "empty", "No shortcut matches"));
-  const out = [];
-  let group = null;
-  for (const row of rows) {
-    if (row.group !== group) {
-      group = row.group;
-      out.push(el("div", "group", group));
-    }
-    const line = el("div", "row k");
-    const label = el("div", "l");
-    label.append(el("b", "", row.title));
-    if (row.row) label.append(el("small", "", "1 to 8: the project's tabs in order. The last tab, the next and the search have their own keys below."));
-    if (row.clash) {
-      const others = data.shortcuts.filter((other) => other.id !== row.id && other.keys && sameChord(other.keys, row.keys));
-      label.append(el("div", "note", "Also " + others.map((other) => other.title).join(", ") + ": only one works"));
-    }
-    const chip = el("button", "chip");
-    chip.setAttribute("aria-label", row.title + ": " + (row.shown || "none") + ". Press to change");
-    if (recording === row.id) {
+// What a search asks of the keys, when it can be read as keys: the modifiers named (cmd, ctrl,
+// alt or option, shift, apart or joined by +) and one key. More than one other word is a name.
+const ASKED = { cmd: "cmd", command: "cmd", ctrl: "ctrl", control: "ctrl", alt: "alt", option: "alt", opt: "alt", shift: "shift" };
+function queryKeys(typed) {
+  const mods = [];
+  let key = null;
+  for (const word of typed.split(/[\s+]+/).filter(Boolean)) {
+    if (ASKED[word]) mods.push(ASKED[word]);
+    else if (key === null) key = word;
+    else return null;
+  }
+  return mods.length || key !== null ? { mods, key } : null;
+}
+// Whether a shortcut answers a search: by its words, or by the keys asked (a row of places has
+// each of 1 to 8).
+function matches(row, typed, asked) {
+  if ((row.title + " " + (row.shown || "") + " " + row.group).toLowerCase().includes(typed)) return true;
+  if (!asked || !row.keys) return false;
+  const parts = row.keys.split("+");
+  const key = parts.pop();
+  return asked.mods.every((mod) => parts.includes(mod))
+    && (asked.key === null || key === asked.key || (key === "digit" && /^[1-8]$/.test(asked.key)));
+}
+
+// The shortcut rows, each made once and kept by id: only what changed is set, the list made
+// again only when the rows shown are others, so a hover or a focus is not lost.
+const rowNodes = new Map();
+let listed = null, footed = "";
+function keyRow(row) {
+  const line = el("div", "row k");
+  const label = el("div", "l");
+  label.append(el("b", "", row.title));
+  if (row.row) label.append(el("small", "", "1 to 8: the project's tabs in order. The last tab, the next and the search have their own keys below."));
+  const chip = el("button", "chip");
+  const reset = el("button", "ic");
+  reset.setAttribute("aria-label", "Reset " + row.title);
+  reset.append(icon(RESET));
+  reset.addEventListener("click", () => post({ reset: row.id }));
+  line.append(label, chip, reset);
+  // The whole row records; the chip is what the keyboard reaches (Enter or Space clicks it).
+  line.addEventListener("click", (event) => {
+    if (event.target.closest(".ic")) return;
+    asking = null;
+    recording = recording === row.id ? null : row.id;
+    drawKeys();
+  });
+  const node = { line, label, note: el("div", "note"), chip, reset, state: "" };
+  rowNodes.set(row.id, node);
+  return node;
+}
+function patchRow(node, row) {
+  const { chip } = node;
+  if (row.clash) {
+    const others = data.shortcuts.filter((other) => other.id !== row.id && other.keys && sameChord(other.keys, row.keys));
+    node.note.textContent = "Also " + others.map((other) => other.title).join(", ") + ": only one works";
+    if (!node.note.isConnected) node.label.append(node.note);
+  } else {
+    node.note.remove();
+  }
+  // The chip's look comes from the state alone: it is made again when that changes, and always
+  // while it records (the keys held were written into it).
+  const mode = recording === row.id ? "rec" : row.shown ? "keys" : "none";
+  const state = mode + "|" + (row.keys || "") + "|" + row.clash;
+  if (mode === "rec" || state !== node.state) {
+    node.state = state;
+    chip.className = "chip";
+    chip.replaceChildren();
+    if (mode === "rec") {
       chip.classList.add("rec");
       chip.textContent = "Press keys…";
-    } else if (row.shown) {
-      chip.textContent = row.shown;
+    } else if (mode === "keys") {
+      chip.classList.add("has");
       if (row.clash) chip.classList.add("clash");
+      chip.append(caps(row.keys));
     } else {
       chip.classList.add("none");
       chip.textContent = "None";
     }
-    chip.title = recording === row.id
-      ? (row.row ? "Press the modifiers with any digit. " : "") + "Esc cancels, ⌫ takes the shortcut off"
-      : "Default: " + (row.default || "none");
-    chip.addEventListener("click", () => {
-      asking = null;
-      recording = recording === row.id ? null : row.id;
-      drawKeys();
-    });
-    const reset = el("button", "ic" + (row.changed ? "" : " gone"));
-    reset.title = "Back to " + (row.default || "none");
-    reset.setAttribute("aria-label", "Reset " + row.title);
-    reset.append(icon(["M3.5 8a4.5 4.5 0 1 0 1.4-3.3", "M3.5 3v2.2h2.2"]));
-    reset.addEventListener("click", () => post({ reset: row.id }));
-    line.append(label, chip, reset);
-    out.push(line);
-    if (asking && asking.id === row.id) {
-      const ask = el("div", "ask");
-      ask.append(el("span", "", shown(asking.keys) + " is " + asking.owner.title + "'s. Give it to " + row.title + "?"));
-      const take = el("button", "btn go", "Use Here");
-      take.addEventListener("click", () => {
-        const { id, keys, owner } = asking;
-        asking = null;
-        post({ shortcut: [owner.id, null] });
-        post({ shortcut: [id, keys] });
+  }
+  chip.setAttribute("aria-label", row.title + ": " + (row.shown || "none") + ". Press to change");
+  chip.title = mode === "rec"
+    ? (row.row ? "Press the modifiers with any digit. " : "") + "Esc cancels, ⌫ takes the shortcut off"
+    : "Default: " + (row.default || "none");
+  node.reset.classList.toggle("gone", !row.changed);
+  node.reset.title = "Back to " + (row.default || "none");
+}
+// The question of a chord another shortcut has, under the row asked about.
+function askRow(row) {
+  const ask = el("div", "ask");
+  ask.append(el("span", "", shown(asking.keys) + " is " + asking.owner.title + "'s. Give it to " + row.title + "?"));
+  const take = el("button", "btn go", "Use Here");
+  take.addEventListener("click", () => {
+    const { id, keys, owner } = asking;
+    asking = null;
+    post({ shortcut: [owner.id, null] });
+    post({ shortcut: [id, keys] });
+  });
+  const cancel = el("button", "btn", "Cancel");
+  cancel.addEventListener("click", () => { asking = null; drawKeys(); });
+  ask.append(take, cancel);
+  return ask;
+}
+const resetAll = el("button", "btn", "Reset All Shortcuts");
+resetAll.addEventListener("click", () => { resetting = true; drawKeys(); });
+function drawFoot() {
+  const foot = document.getElementById("foot");
+  resetAll.disabled = !data.shortcuts.some((row) => row.changed);
+  const now = resetting ? "ask" : "all";
+  if (now === footed) return;
+  footed = now;
+  if (!resetting) return foot.replaceChildren(resetAll);
+  const yes = el("button", "btn go", "Reset All");
+  yes.addEventListener("click", () => { resetting = false; post({ reset: "all" }); });
+  const no = el("button", "btn", "Cancel");
+  no.addEventListener("click", () => { resetting = false; drawKeys(); });
+  foot.replaceChildren(el("span", "", "Every shortcut back to its default?"), no, yes);
+}
+function drawKeys() {
+  if (!data) return;
+  const typed = document.getElementById("q").value.trim().toLowerCase();
+  const asked = typed ? queryKeys(typed) : null;
+  // The row asked about stays, though the search no longer shows it, with its question.
+  const rows = data.shortcuts.filter((row) => !typed || (asking && asking.id === row.id) || matches(row, typed, asked));
+  const nodes = rows.map((row) => rowNodes.get(row.id) || keyRow(row));
+  rows.forEach((row, at) => patchRow(nodes[at], row));
+  const list = document.getElementById("keys");
+  const seen = rows.map((row) => row.id).join() + "|" + (asking ? asking.id + " " + asking.keys : "");
+  if (seen !== listed) {
+    listed = seen;
+    if (!rows.length) {
+      list.replaceChildren(el("div", "empty", "No shortcut matches"));
+    } else {
+      const out = [];
+      let group = null;
+      rows.forEach((row, at) => {
+        if (row.group !== group) {
+          group = row.group;
+          out.push(el("div", "group", group));
+        }
+        out.push(nodes[at].line);
+        if (asking && asking.id === row.id) out.push(askRow(row));
       });
-      const cancel = el("button", "btn", "Cancel");
-      cancel.addEventListener("click", () => { asking = null; drawKeys(); });
-      ask.append(take, cancel);
-      out.push(ask);
+      list.replaceChildren(...out);
     }
   }
-  list.replaceChildren(...out);
-  const foot = document.getElementById("foot");
-  const changed = data.shortcuts.some((row) => row.changed);
-  if (resetting) {
-    const yes = el("button", "btn go", "Reset All");
-    yes.addEventListener("click", () => { resetting = false; post({ reset: "all" }); });
-    const no = el("button", "btn", "Cancel");
-    no.addEventListener("click", () => { resetting = false; drawKeys(); });
-    foot.replaceChildren(el("span", "", "Every shortcut back to its default?"), no, yes);
-  } else {
-    const all = el("button", "btn", "Reset All Shortcuts");
-    all.disabled = !changed;
-    all.style.opacity = changed ? "" : ".45";
-    all.addEventListener("click", () => { resetting = true; drawKeys(); });
-    foot.replaceChildren(all);
-  }
+  drawFoot();
 }
 
 // The integrations (setup.rs `states`), each with its state and the act it takes; the answer
@@ -356,7 +524,6 @@ function I(list) {
       const on = one.state === "on";
       const act = el("button", on ? "btn" : "btn go", on ? "Remove" : "Add");
       act.addEventListener("click", () => {
-        row.classList.add("busy");
         act.disabled = true;
         act.textContent = on ? "Removing…" : "Adding…";
         post({ integration: one.id, on: !on });
@@ -375,21 +542,14 @@ function T(text, error) {
 }
 document.getElementById("copy-mcp").addEventListener("click", () => post({ copy: "mcp" }));
 
+// The answer to a change, or the first reading: it overwrites what the page showed ahead of
+// it, an error too (the settings are then as they were kept).
 function P(next, error) {
   data = next;
-  const s = data.settings;
-  segmented("theme", THEMES, s.theme, "theme");
-  segmented("transparency", LEVELS, s.transparency, "transparency");
-  choices("ui_font", data.ui_fonts, s.ui_font);
-  choices("code_font", data.code_fonts, s.code_font);
-  document.getElementById("size").textContent = s.font_size + " pt";
-  document.getElementById("smaller").disabled = s.font_size <= data.sizes[0];
-  document.getElementById("larger").disabled = s.font_size >= data.sizes[1];
+  cur = { ...data.settings };
+  show();
   drawKeys();
-  const toast = document.getElementById("err");
-  toast.textContent = error || "";
-  toast.className = error ? "on" : "";
-  if (error) setTimeout(() => { toast.className = ""; }, 3000);
+  if (error) T(error, true);
 }
 </script>
 </body>

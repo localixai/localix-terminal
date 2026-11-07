@@ -14,6 +14,7 @@ use tao::event_loop::EventLoopProxy;
 
 use super::appkit::{self, text};
 use super::host::Cmd;
+use super::menu::{COMMAND, OPTION};
 use super::shortcuts::{self, Chord, Shortcut};
 
 /// The group whose shortcuts are the app's own menu's.
@@ -33,12 +34,6 @@ fn edits() -> [(&'static str, Sel, &'static str); 6] {
         ("Select All", sel!(selectAll:), "a"),
     ]
 }
-
-/// NSEvent's modifier flags.
-const SHIFT: usize = 1 << 17;
-const CONTROL: usize = 1 << 18;
-const OPTION: usize = 1 << 19;
-const COMMAND: usize = 1 << 20;
 
 fn menu(title: &str) -> Retained<AnyObject> {
     // SAFETY: `alloc` answers an NSMenu to initialize.
@@ -177,15 +172,7 @@ impl Items<'_> {
                 || shortcut.title.to_string(),
                 |place| format!("Show Tab {place}"),
             );
-            let mask = [
-                (chord.cmd, COMMAND),
-                (chord.ctrl, CONTROL),
-                (chord.alt, OPTION),
-                (shift, SHIFT),
-            ]
-            .iter()
-            .filter(|(held, _)| *held)
-            .fold(0, |mask, (_, bit)| mask | bit);
+            let mask = super::menu::modifiers(&chord, shift);
             let does = match place {
                 Some(place) => format!("{} {place}", shortcut.does),
                 None => shortcut.does.to_string(),

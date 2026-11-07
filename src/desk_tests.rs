@@ -22,6 +22,9 @@ impl Caller {
             cwd: &self.cwd,
             vars: None,
             peek: false,
+            again: None,
+            person: false,
+            window: None,
         }
     }
 }
@@ -280,4 +283,31 @@ fn a_field_a_tab_does_not_take_is_refused_with_what_it_takes_and_nothing_is_done
     let added = json!({"action": "interact", "tab": "b1", "op": "add", "title": "Fix it", "note": "Done when fixed."});
     assert!(desk.window(&me, &added).unwrap().contains("added c1"));
     desk.end(&mine.owner);
+}
+
+#[test]
+fn closing_a_tab_the_person_opened_is_news_to_no_agent() {
+    let scratch = Scratch::new();
+    let desk = desk();
+    let mine = caller(&desk, scratch.path(), None);
+    let open: Value = serde_json::from_str(
+        r#"{"action": "open", "kind": "terminal", "command": "sleep 30", "yield_ms": 200}"#,
+    )
+    .unwrap();
+    // The agent's own terminal, then one the person asked for in the window.
+    desk.window(&mine.call(), &open).unwrap();
+    let theirs = Call {
+        person: true,
+        window: None,
+        ..mine.call()
+    };
+    desk.window(&theirs, &open).unwrap();
+    desk.heard("t2", Heard::Closed("closed"));
+    assert_eq!(desk.said(&mine.owner), None);
+    desk.heard("t1", Heard::Closed("closed"));
+    assert!(
+        desk.said(&mine.owner)
+            .is_some_and(|said| said.contains("closed"))
+    );
+    desk.shutdown();
 }

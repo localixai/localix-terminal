@@ -22,8 +22,8 @@ use super::comments::Comments;
 use super::panel;
 use super::strip::{Click, Key};
 pub use super::told::{
-    Answers, Asked, CenterDid, Confirm, Halves, Heard, Ledger, Past, Place, Tab, TabKind, Visited,
-    Went,
+    Answers, Arranged, Arranging, Asked, CenterDid, Confirm, Halves, Heard, Ledger, Past, Place,
+    Tab, TabKind, Visited, Went,
 };
 use super::viewport::Viewport;
 
@@ -135,8 +135,6 @@ pub(super) enum Cmd {
     /// The person clicked in the browser's toolbar: said as the strip says it, its points the
     /// toolbar's.
     NavClicked(String),
-    /// A step of the side's slide: the slide's number, and how much of it shows.
-    Slide(u32, f64),
     /// The person's settings changed: the window takes them.
     Restyle,
     /// A comment the person made on a page: pictured, then held.
@@ -147,9 +145,12 @@ pub(super) enum Cmd {
     Offered(&'static str, bool),
     /// The window goes to the project of this key (one the app just made, the person's pick).
     Go(String),
-    /// The app kept the split of the project of this key (`Browser::split`): the window splits
-    /// so when it shows that project.
-    SplitKept(String, super::split::Kept),
+    /// The layout of the windows' projects (`Browser::arranged`), and the windows open, the main
+    /// one first: drawn as it is.
+    Arranged(Vec<i64>, Vec<Arranged>),
+    /// The app opened window `i64` (`Browser::new_window`): the window in use from now on, its
+    /// deck made with the first tab it is given.
+    NewWindow(i64),
     /// Take in the popups pages opened (popup.rs), and show the last.
     #[cfg_attr(
         not(target_os = "macos"),
@@ -202,6 +203,8 @@ pub(super) struct Shared {
     /// tab's (a page that opened a tab has started a load: the new tab's).
     seq: AtomicU64,
     pub(super) tabs: Mutex<Vec<Tab>>,
+    /// Each window's pages open now, by the native window: `tabs` is all of them.
+    pub(super) pages: Mutex<HashMap<tao::window::WindowId, Vec<u32>>>,
     /// Who hears what the person does in the window.
     listener: Mutex<Option<Listener>>,
     /// The group (a project) of each tab, by key, as its opener named it.
@@ -221,9 +224,13 @@ pub(super) struct Shared {
     /// Each project's past (its tabs, its pages), as the app tells it (`Browser::ledger`), by
     /// the project's key: for the history menu and the address field's suggestions.
     pub(super) ledgers: Mutex<HashMap<String, Ledger>>,
-    /// Each project's split window, by the project's key, kept while the window shows another
-    /// (split.rs).
-    pub(super) splits: Mutex<HashMap<String, super::split::Kept>>,
+    /// Each window's projects' tabs as the layout keeps them (`Cmd::Arranged`), by the window and
+    /// the project's key: their order and their splits. Written only as the app tells it: the
+    /// window keeps none of its own.
+    pub(super) arranged: Mutex<HashMap<(i64, String), Arranged>>,
+    /// The window in use, by its row in the layout (0: not known yet): the one the person works
+    /// in, where what opens with no window named goes.
+    pub(super) in_use: std::sync::atomic::AtomicI64,
     /// The person's comments on the pages, until they send them.
     pub(super) comments: Comments,
     /// Whose turn it is: the agent's actions wait while the person comments.
@@ -298,6 +305,7 @@ impl Shared {
         }
         crate::lock(&self.loads).clear();
         crate::lock(&self.tabs).clear();
+        crate::lock(&self.pages).clear();
         self.notices.forget_all();
         // No window, no one commenting: actions waiting for the person go (and find it closed).
         self.turn.commenting(false);
@@ -355,10 +363,35 @@ impl Shared {
         self.heard(&key, Heard::Went(went));
     }
 
-    /// The tabs open now, `active` acted on; what is known of each is kept.
-    pub(super) fn set_tabs(&self, active: u32, ids: &[u32]) {
+    /// Project `group`'s tabs in the window in use, as the layout keeps them.
+    pub(super) fn arranged_of(&self, group: &str) -> Option<Arranged> {
+        let window = self.in_use.load(Ordering::SeqCst);
+        (crate::lock(&self.arranged).get(&(window, group.to_string()))).cloned()
+    }
+
+    /// Every project's tabs in the window in use, by the project's key.
+    pub(super) fn arranged_here(&self) -> HashMap<String, Arranged> {
+        let window = self.in_use.load(Ordering::SeqCst);
+        (crate::lock(&self.arranged).iter())
+            .filter(|((of, _), _)| *of == window)
+            .map(|((_, group), arranged)| (group.clone(), arranged.clone()))
+            .collect()
+    }
+
+    /// Window `window`'s pages open now (`ids`, every other window's as they were), `active`
+    /// acted on; what is known of each is kept.
+    pub(super) fn set_tabs(&self, window: tao::window::WindowId, active: u32, ids: &[u32]) {
+        let all: Vec<u32> = {
+            let mut pages = crate::lock(&self.pages);
+            if ids.is_empty() {
+                pages.remove(&window);
+            } else {
+                pages.insert(window, ids.to_vec());
+            }
+            pages.values().flatten().copied().collect()
+        };
         let mut tabs = crate::lock(&self.tabs);
-        tabs.retain(|tab| ids.contains(&tab.id));
+        tabs.retain(|tab| all.contains(&tab.id));
         for id in ids {
             if !tabs.iter().any(|tab| tab.id == *id) {
                 tabs.push(Tab {

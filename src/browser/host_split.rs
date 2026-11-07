@@ -59,9 +59,12 @@ impl On<'_> {
         let Some(open) = self.deck.as_mut() else {
             return;
         };
-        let target = open.drop_target(x, y);
-        open.drop_over(None);
-        let Some(right) = target else {
+        // Laid out where it landed as it was carried: so it stays.
+        let over = open.over(x, y);
+        if open.land() {
+            return open.refresh(self.shared);
+        }
+        let crate::browser::deck::Over::Half(right) = over else {
             return;
         };
         let shown = open.shown_key();
@@ -97,10 +100,11 @@ impl On<'_> {
         open.refresh(self.shared);
     }
 
-    /// The split kept with its project. Split, the project keeps it, and the app is told.
-    /// Another tab shown (of the project, or of another: a split window shows one project), the
-    /// window is whole and the project keeps its split; one of its two tabs shown again, the
-    /// window splits as it was. A half's tab closed, the project keeps none.
+    /// The window's split and its project's as the layout keeps it, made one: the person split
+    /// it (or swapped, or resized), and the layout is told; the person shows one of the kept
+    /// split's two tabs, and the window splits as it was. A half's tab closed, the layout is
+    /// told the split is gone. Each change is told once, and nothing told is undone before the
+    /// layout tells it back.
     pub(super) fn keep_split(&mut self) {
         let Some(open) = self.deck.as_mut() else {
             return;
@@ -122,50 +126,54 @@ impl On<'_> {
         {
             open.split_with(None);
         }
-        let mut splits = crate::lock(&self.shared.splits);
+        let kept = (self.shared.arranged_of(&group).as_ref()).and_then(split::kept_of);
         let now = (open.pair().and(open.split.beside)).map(|beside| split::Kept {
             shown: id.clone(),
             beside: beside.key.name(),
             right: beside.right,
         });
-        let told = match (now, splits.get(&group).cloned()) {
-            (Some(now), kept) if kept.as_ref() != Some(&now) => {
-                splits.insert(group.clone(), now.clone());
-                Some(Some(now))
+        let told = open.split.told.clone();
+        let tell = match (now, kept) {
+            (Some(now), kept) if kept.as_ref() != Some(&now) && !same(&now, kept.as_ref()) => {
+                (told != split::Told::of(Some(&now))).then_some(Some(now))
             }
             (Some(_), _) | (None, None) => None,
             (None, Some(kept)) => {
                 let there = |name: &str| group_of(name) == Some(group.as_str());
                 if !there(&kept.shown) || !there(&kept.beside) {
-                    splits.remove(&group);
-                    Some(None)
+                    (told != split::Told::Whole).then_some(None)
                 } else {
-                    if let Some(beside) = split::again(&kept, &id) {
+                    // Undone by the person and not yet told back: it stays undone.
+                    if told != split::Told::Whole
+                        && let Some(beside) = split::again(&kept, &id)
+                    {
                         open.split.beside = Some(beside);
                     }
                     None
                 }
             }
         };
-        drop(splits);
-        if let Some(told) = told {
-            self.tell_split(&group, told.as_ref());
+        if let Some(tell) = tell {
+            open.split.told = split::Told::of(tell.as_ref());
+            self.tell_split(&group, tell.as_ref());
         }
     }
 
-    /// The person made the window whole: its project keeps no split.
+    /// The person made the window whole: the layout is told.
     fn unsplit(&mut self) {
         let Some(open) = self.deck.as_mut() else {
             return;
         };
         open.split_with(None);
         let group = open.shown_project(self.shared);
-        if crate::lock(&self.shared.splits).remove(&group).is_some() {
+        let kept = (self.shared.arranged_of(&group).as_ref()).and_then(split::kept_of);
+        if kept.is_some() {
+            open.split.told = split::Told::Whole;
             self.tell_split(&group, None);
         }
     }
 
-    /// The app told project `group`'s split (`kept`), or that it has none.
+    /// The layout told the split of project `group` (`kept`), or that it has none.
     fn tell_split(&self, group: &str, kept: Option<&split::Kept>) {
         let halves = kept.map(|kept| Halves {
             shown: &kept.shown,
@@ -175,22 +183,28 @@ impl On<'_> {
         self.shared.heard(group, Heard::Split(halves));
     }
 
-    /// The app kept project `project`'s split across a restart, and its tabs are open again:
-    /// shown, the window splits as it was; else it splits so once the person comes to it.
-    pub(super) fn split_kept(&mut self, project: &str, kept: split::Kept) {
-        let halves = (Key::parse(&kept.shown)).zip(split::again(&kept, &kept.shown));
-        crate::lock(&self.shared.splits).insert(project.to_string(), kept);
-        if crate::lock(&self.shared.scope).shown() != project {
-            return;
-        }
-        let Some((shown, beside)) = halves else {
-            return;
-        };
-        let _ = act(self.deck, Click::Show(shown), self.shared);
-        if let Some(open) = self.deck.as_mut()
-            && open.shown_key() == Some(shown)
+    /// The layout of the window's projects, as the app keeps it: the order of their tabs and
+    /// their splits. Kept as told; the window draws it, splitting as kept when it shows one of
+    /// a split's tabs.
+    pub(super) fn arranged(&mut self, arranged: Vec<crate::browser::Arranged>) {
         {
-            open.split.beside = Some(beside);
+            let mut kept = crate::lock(&self.shared.arranged);
+            kept.clear();
+            for one in arranged {
+                kept.insert((one.window, one.group.clone()), one);
+            }
+        }
+        self.arranged_here();
+    }
+
+    /// This window's layout as last told, drawn: what it told the layout is heard back.
+    pub(super) fn arranged_here(&mut self) {
+        if let Some(open) = self.deck.as_mut() {
+            open.split.told = split::Told::Nothing;
+        }
+        self.keep_split();
+        if let Some(open) = self.deck.as_ref() {
+            open.refresh(self.shared);
         }
     }
 
@@ -211,4 +225,10 @@ impl On<'_> {
         };
         let _ = act(self.deck, Click::Show(key), self.shared);
     }
+}
+
+/// Whether split `now` is split `kept` seen from its other half: the same two tabs on the same
+/// sides, the other one in use.
+fn same(now: &split::Kept, kept: Option<&split::Kept>) -> bool {
+    kept.is_some_and(|kept| split::sides(kept) == split::sides(now))
 }

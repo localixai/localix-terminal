@@ -27,6 +27,10 @@ pub(super) enum Entry {
         /// from a page: the window's own menus alone set it.
         #[serde(skip)]
         icon: Option<&'static str>,
+        /// Its keys, shown at its right as the system shows a shortcut (`cmd+t`); only a label:
+        /// the keys themselves are the window's, whether or not the menu is open.
+        #[serde(default)]
+        key: Option<String>,
     },
     /// A line between groups.
     Line { line: bool },
@@ -41,6 +45,7 @@ pub(super) fn items(labels: &[&str], marked: Option<usize>) -> Vec<Entry> {
             off: false,
             paste: false,
             icon: None,
+            key: None,
         })
         .collect()
 }

@@ -38,25 +38,43 @@ pub(super) fn below(view: &AnyObject, strip: &WebView) -> Option<()> {
     Some(())
 }
 
-/// The strip over every page, a page built since included: its open list lies over the page
-/// shown, which stays where it is.
-pub(super) fn raise(strip: &WebView) -> bool {
-    let view = strip.webview();
+/// `views` over every page, a page built since included, in this order, the last on top: the
+/// strip's open list lies over the page shown, which stays where it is. Views already so are
+/// left alone (a view moved is taken out and put back, which a page under the pointer feels), so
+/// a layout run again moves nothing. False when they are in no window.
+pub(super) fn stack(views: &[&WebView]) -> bool {
+    let views: Vec<Retained<_>> = views.iter().map(|view| view.webview()).collect();
+    let Some(first) = views.first() else {
+        return false;
+    };
     // SAFETY: an NSView answers its superview, or nil.
-    let parent: Option<Retained<AnyObject>> = unsafe { msg_send![&*view, superview] };
+    let parent: Option<Retained<AnyObject>> = unsafe { msg_send![&**first, superview] };
     let Some(parent) = parent else {
         return false;
     };
     // SAFETY: an NSView answers its subviews, an NSArray.
     let subviews: Retained<AnyObject> = unsafe { msg_send![&*parent, subviews] };
-    // SAFETY: an NSArray answers its last object, or nil.
-    let last: Option<Retained<AnyObject>> = unsafe { msg_send![&*subviews, lastObject] };
-    let strip_view: &AnyObject = &view;
-    if !last.is_some_and(|last| std::ptr::eq(&*last, strip_view)) {
+    // SAFETY: an NSArray answers how many it holds, an NSUInteger.
+    let count: usize = unsafe { msg_send![&*subviews, count] };
+    // Where each is now among its siblings (NSNotFound, past any index, for one not there).
+    let at: Vec<usize> = (views.iter())
+        .map(|view| {
+            let view: &AnyObject = view;
+            // SAFETY: an NSArray answers the index of the very object, an NSUInteger.
+            unsafe { msg_send![&*subviews, indexOfObjectIdenticalTo: view] }
+        })
+        .collect();
+    let in_order = at
+        .windows(2)
+        .all(|pair| matches!(pair, [low, high] if low < high));
+    if in_order && at.last() == Some(&(count.wrapping_sub(1))) {
+        return true;
+    }
+    for view in &views {
         // A sibling added again goes on top (NSWindowAbove, 1, relative to none).
         // SAFETY: an NSView adds (here: moves) a subview to the top of its siblings.
         let _: () = unsafe {
-            msg_send![&*parent, addSubview: &*view, positioned: 1_isize, relativeTo: std::ptr::null::<AnyObject>()]
+            msg_send![&*parent, addSubview: &**view, positioned: 1_isize, relativeTo: std::ptr::null::<AnyObject>()]
         };
     }
     true

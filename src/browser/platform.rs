@@ -268,6 +268,66 @@ pub(super) enum Follow {
 /// AppKit resizes `webview` with its window in the same pass as the window itself: the window's
 /// own resize event comes after the frame is drawn, and a view laid out only then leaves the
 /// new part of the window empty for a frame. The layout that event brings corrects the rest.
+/// `native` clear, or seen again: the window a carried tab is in, over another window's list.
+#[cfg(target_os = "macos")]
+pub(super) fn clear(native: &tao::window::Window, clear: bool) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+    use tao::platform::macos::WindowExtMacOS;
+    let alpha: f64 = if clear { 0.0 } else { 1.0 };
+    // SAFETY: tao's NSWindow is alive while its `Window` is borrowed; it takes a CGFloat.
+    let window = unsafe { &*native.ns_window().cast::<AnyObject>() };
+    // SAFETY: as above.
+    let _: () = unsafe { msg_send![window, setAlphaValue: alpha] };
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(super) fn clear(_native: &tao::window::Window, _clear: bool) {}
+
+/// `native` over the app's other windows, without taking the keys.
+#[cfg(target_os = "macos")]
+pub(super) fn to_front(native: &tao::window::Window) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+    use tao::platform::macos::WindowExtMacOS;
+    // SAFETY: tao's NSWindow is alive while its `Window` is borrowed; `orderFront:` takes a sender.
+    let window = unsafe { &*native.ns_window().cast::<AnyObject>() };
+    let none: *const AnyObject = std::ptr::null();
+    // SAFETY: as above; the sender may be nil.
+    let _: () = unsafe { msg_send![window, orderFront: none] };
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(super) fn to_front(native: &tao::window::Window) {
+    native.set_visible(true);
+}
+
+/// Move `webview` into `native`'s content, as it is: a tab's page or panel going to another
+/// window goes on (no reload, its program running), and lays out as that window's children do.
+#[cfg(target_os = "macos")]
+pub(super) fn reparent(webview: &wry::WebView, native: &tao::window::Window) {
+    use tao::platform::macos::WindowExtMacOS;
+    use wry::WebViewExtMacOS;
+    if let Err(why) = webview.reparent(native.ns_window().cast()) {
+        log::warn!("a tab's view could not move to its window: {why}");
+    }
+}
+
+/// Move `webview` into `native`'s box (GTK), as it is.
+#[cfg(target_os = "linux")]
+pub(super) fn reparent(webview: &wry::WebView, native: &tao::window::Window) {
+    use tao::platform::unix::WindowExtUnix;
+    use wry::WebViewExtUnix;
+    if let Some(vbox) = native.default_vbox()
+        && let Err(why) = webview.reparent(vbox)
+    {
+        log::warn!("a tab's view could not move to its window: {why}");
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub(super) fn reparent(_webview: &wry::WebView, _native: &tao::window::Window) {}
+
 #[cfg(target_os = "macos")]
 pub(super) fn follow(webview: &wry::WebView, follow: Follow) {
     use objc2::msg_send;
@@ -395,11 +455,11 @@ pub(super) fn copy(text: &str) {
 
 /// The glass under the strip's open list, and the strip over every page (pane.rs).
 #[cfg(target_os = "macos")]
-pub(super) use super::pane::{Pane, raise};
+pub(super) use super::pane::{Pane, stack};
 
 /// Elsewhere the strip cannot be put over the pages: they stand aside while a list is open.
 #[cfg(not(target_os = "macos"))]
-pub(super) fn raise(_strip: &wry::WebView) -> bool {
+pub(super) fn stack(_views: &[&wry::WebView]) -> bool {
     false
 }
 

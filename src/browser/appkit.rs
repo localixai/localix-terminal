@@ -39,6 +39,82 @@ pub(super) fn activate() {
     let _: () = unsafe { msg_send![&*app(), activateIgnoringOtherApps: Bool::YES] };
 }
 
+/// Whether one wait for the app to become active is set, so a second press never stacks another.
+static AWAITING_ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// llx-desk the active app and `window` its key window, for the person's press. The app becomes
+/// active only later (the system answers the request on a later turn), so the window is made key
+/// again once it has: done at once, it would be key in an app still behind another.
+pub(super) fn activate_and_key(window: &AnyObject) {
+    use std::sync::atomic::Ordering;
+    // SAFETY: NSApplication answers whether it is the active app, a BOOL.
+    let active: Bool = unsafe { msg_send![&*app(), isActive] };
+    if active.as_bool() {
+        // SAFETY: an NSWindow answers whether it is the key window, a BOOL.
+        let key: Bool = unsafe { msg_send![window, isKeyWindow] };
+        if !key.as_bool() {
+            // SAFETY: `makeKeyAndOrderFront:` takes a sender, which may be nil, and returns nothing.
+            let _: () =
+                unsafe { msg_send![window, makeKeyAndOrderFront: std::ptr::null::<AnyObject>()] };
+        }
+        return;
+    }
+    if !AWAITING_ACTIVE.swap(true, Ordering::AcqRel) {
+        when_active(window);
+    }
+    activate();
+    // SAFETY: `makeKeyWindow` takes no argument and returns nothing.
+    let _: () = unsafe { msg_send![window, makeKeyWindow] };
+}
+
+/// `window` made key once, when the app next becomes active; the wait then ends.
+fn when_active(window: &AnyObject) {
+    use block2::RcBlock;
+    use std::sync::atomic::Ordering;
+    let window: Retained<AnyObject> = {
+        // SAFETY: `window` is a live NSWindow; retaining it keeps it for the block.
+        let Some(window) = (unsafe { Retained::retain(std::ptr::from_ref(window).cast_mut()) })
+        else {
+            AWAITING_ACTIVE.store(false, Ordering::Release);
+            return;
+        };
+        window
+    };
+    // SAFETY: `defaultCenter` is NSNotificationCenter's class method, answering the shared center.
+    let center: Retained<AnyObject> =
+        unsafe { msg_send![class!(NSNotificationCenter), defaultCenter] };
+    let observer = std::sync::Arc::new(std::sync::atomic::AtomicPtr::new(std::ptr::null_mut()));
+    let held = std::sync::Arc::clone(&observer);
+    let block = RcBlock::new(move |_note: *mut AnyObject| {
+        // SAFETY: `makeKeyAndOrderFront:` takes a sender, which may be nil, and returns nothing.
+        let _: () =
+            unsafe { msg_send![&*window, makeKeyAndOrderFront: std::ptr::null::<AnyObject>()] };
+        let mine = held.swap(std::ptr::null_mut(), Ordering::AcqRel);
+        // SAFETY: the observer the center answered below, retained there; removed once, then
+        // released.
+        if let Some(mine) = unsafe { Retained::from_raw(mine) } {
+            // SAFETY: the shared center; an observer it gave.
+            let center: Retained<AnyObject> =
+                unsafe { msg_send![class!(NSNotificationCenter), defaultCenter] };
+            // SAFETY: `removeObserver:` takes the observer and returns nothing.
+            let _: () = unsafe { msg_send![&*center, removeObserver: &*mine] };
+        }
+        AWAITING_ACTIVE.store(false, Ordering::Release);
+    });
+    let name = text("NSApplicationDidBecomeActiveNotification");
+    // SAFETY: `mainQueue` is NSOperationQueue's class method: the block runs on the main thread.
+    let queue: Retained<AnyObject> = unsafe { msg_send![class!(NSOperationQueue), mainQueue] };
+    // SAFETY: a name, a nil object, a queue and a block of `void (^)(NSNotification *)`, which
+    // the center copies; it answers the observer (autoreleased, retained here).
+    let made: Option<Retained<AnyObject>> = unsafe {
+        msg_send![&*center, addObserverForName: &*name, object: std::ptr::null::<AnyObject>(), queue: &*queue, usingBlock: &*block]
+    };
+    match made {
+        Some(made) => observer.store(Retained::into_raw(made), Ordering::Release),
+        None => AWAITING_ACTIVE.store(false, Ordering::Release),
+    }
+}
+
 /// The person's answer to `question`, asked as the system asks it (an alert, in front of every
 /// app): whether they chose `yes` over Cancel.
 pub(super) fn confirm(question: &super::Confirm) -> bool {

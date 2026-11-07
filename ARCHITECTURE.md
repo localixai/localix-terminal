@@ -28,15 +28,21 @@ browser/  terminal/  board/          setup/  what the app puts in place: the com
   board, its Event Center events, and its agents (`--as NAME`: an agent's own tabs and notes within
   the project). Every call names its project (`project`: a folder; `agent`: a name within it), and
   the desk resolves it before anything is done (`desk/scope.rs`).
-- **`ledger.rs`, `desk/ledger.rs`** are the ledger of a project's tabs: every tab the window opened
-  for it (a page, a terminal, the board) is a row of `tabs`, from `own` (the one place a tab becomes
+- **`ledger.rs`, `desk/ledger.rs`** are the ledger of a project's panes: every pane the window opened
+  for it (a page, a terminal, the board) is a row of `panes`, from `own` (the one place a pane becomes
   someone's) to `gone` (the one place it ends); a closed one is the project's history (the newest
-  200 kept), one still open when the app quit is what it opens again (`reopen_project`: pages at
-  their address, the person's shell in each terminal's folder with its last screen above, dimmed,
-  from `screens`; a program is never run again). The pages each tab showed are `visits`, which the
+  200 kept), one still open when the app quit is what it opens again (`reopen_project`: the same
+  rows, pages at their address, the person's shell in each terminal's folder with its last screen
+  above, dimmed, from `screens`; a program is never run again). The pages each tab showed are `visits`, which the
   address field suggests. The window is told each project's past as it changes
   (`Browser::ledger`), and tells the desk what a page showed (`Heard::Went`): the window keeps none
   of it.
+- **`layout.rs`, `desk/layout.rs`** are the layout (`docs/windows.md`): the windows, each window's
+  workspace of a project, each workspace's tabs in their places and each tab's tree of panes (a
+  split is one tab of two panes). `desk/layout.rs` is its one owner: a pane placed in a tab of its
+  own as it opens (in the same transaction as its ledger row), taken out as it closes, put beside
+  another, a project or a tab shown; each change with its notices (`Window`, `Workspace`, `Tab`).
+  It outlives the app, so a project opens again with the same tabs, places and splits.
 - **`browser/`** is the window: a `tao` event loop on the main thread, a `wry` WebView per page, a
   probe script injected in each page for observing and acting (`probe/`: the snapshot, the page's own
   requests, what the page tells, frames, the outline, refs found again, actions, typing, keys, comments,
@@ -73,9 +79,17 @@ browser/  terminal/  board/          setup/  what the app puts in place: the com
   between them, is dragged to resize. A page or a terminal takes its own clicks, so the window
   hears of presses through the system (`presses.rs`, a local event monitor) and a press in the
   other half shows its tab (`host_split.rs`). Another tab shown makes the window whole, and its project
-  keeps the split (`Shared::splits`): one of its two tabs shown again, it splits as it was. A
-  split window shows one project; the app keeps each project's across restarts by its tabs' rows
-  (`desk/splits.rs`, in the store's `state`) and tells the window once they open again.
+  keeps the split in the layout: one of its two tabs shown again, it splits as it was. Each split the
+  person makes or undoes, and each tab they drag, is told to the layout (`Heard::Split`,
+  `Heard::Moved`); the layout tells every window its tabs back (`Cmd::Arranged`), and the window draws
+  them so, keeping no order or split of its own.
+  The app has several windows (`windows.rs`, docs/windows.md): each a deck with its own panes, the
+  first the main one (the mini follows it). One is the window in use, as the system's key window is:
+  the loop picks the window an event is for before it acts (a pane's command goes to the window the
+  pane is in, a press makes its window the one in use), so a deck's code acts on one window. Pages
+  take their ids from the app's places (`popup.rs`) and share the app's first page's WebKit
+  configuration, in whichever window they are. ⌘N opens a window on the project, with the person's
+  shell (`Asked::Window`); one closed takes its tabs with it.
 - **`board.rs`, `board/`** are the board: its cards and the rules every move keeps (one card in Doing
   per worker, a worker acts on its own cards, Done is the person's), the person's actions from the
   window (`person.rs`), the board as text for the agent (`text.rs`), where it is kept
@@ -95,9 +109,10 @@ browser/  terminal/  board/          setup/  what the app puts in place: the com
   nothing acts on a tab its caller does not own. A board is a kind of tab like a page or a terminal:
   `open` gives it, `interact` acts on it with an `op`, so the tools stay one surface.
 - **`store.rs`** is what outlives the app: one SQLite database (`paths::database`), one writer,
-  its schema the list of steps it applies in order: `projects`, and under each its `tabs` (with
+  its schema the list of steps it applies in order: `projects`, and under each its `panes` (with
   their `visits` and terminals' `screens`), its board (`boards`) and its Event Center events
-  (`center_events`); the person's `answers` to offers; the change feed. Everything of a project
+  (`center_events`); the layout (`windows`, `workspaces`, `tabs`, `pane_nodes`); the person's
+  `answers` to offers; the change feed. Everything of a project
   goes with it (`ON DELETE CASCADE`).
 - **`feed.rs`** is the change feed, the desk's one way to say that something changed. A kept owner
   (the boards) writes its notice, `{entity, op}`, in the transaction of its rows; a live owner (the

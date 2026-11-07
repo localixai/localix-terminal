@@ -19,6 +19,12 @@ pub(super) struct Rect {
     pub height: f64,
 }
 
+/// The smallest a window the person sees is made: its bar, and room for a page under it.
+pub(super) const LEAST: tao::dpi::LogicalSize<f64> = tao::dpi::LogicalSize {
+    width: 480.0,
+    height: 192.0,
+};
+
 /// What the person moved or sized, kept for the process (host.rs's `Shared`).
 #[derive(Debug, Default, Clone, Copy)]
 pub(super) struct Kept {
@@ -45,7 +51,11 @@ fn tens(value: f64) -> f64 {
 /// than a page needs, no wider than reads well) on the right, the height the screen has.
 pub(super) fn deck(area: Area, kept: Option<Rect>) -> Rect {
     if let Some(kept) = kept {
-        return kept;
+        return Rect {
+            width: kept.width.max(LEAST.width),
+            height: kept.height.max(LEAST.height),
+            ..kept
+        };
     }
     let room = area.width - 2.0 * MARGIN;
     let width = tens(area.width * 0.6).clamp(960.0, 1440.0).min(room);
@@ -55,6 +65,19 @@ pub(super) fn deck(area: Area, kept: Option<Rect>) -> Rect {
         width,
         height: (area.height - 2.0 * MARGIN).max(0.0),
     }
+}
+
+/// Another window's place: `deck` moved down and right by a step, as the system cascades new
+/// windows, kept inside `area`.
+pub(super) fn cascade(area: Area, deck: Rect) -> Rect {
+    const STEP: f64 = 28.0;
+    let x = (deck.x + STEP)
+        .min(area.x + area.width - deck.width)
+        .max(area.x);
+    let y = (deck.y + STEP)
+        .min(area.y + area.height - deck.height)
+        .max(area.y);
+    Rect { x, y, ..deck }
 }
 
 /// The mini's top left: `kept` while it is on the screen, else the bottom right corner.

@@ -25,6 +25,7 @@ impl On<'_> {
             off,
             paste: false,
             icon,
+            key: None,
         };
         let mut entries = vec![
             item(
@@ -91,6 +92,7 @@ impl On<'_> {
                     off: false,
                     paste: false,
                     icon: Some(mark.map_or_else(|| icons::of_kind(key.kind()), |agent| agent.mark)),
+                    key: None,
                 }
             })
             .collect();

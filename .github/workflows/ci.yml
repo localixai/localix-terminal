@@ -1,6 +1,7 @@
-# The checks of CONTRIBUTING.md on every push to main, on the project's own runners. The repository
-# is public and its runners are self-hosted, so nothing here runs for a pull request: a fork's code
-# never reaches them.
+# The checks of CONTRIBUTING.md on every push to main: on the project's own runners for Linux, which
+# are self-hosted, and on GitHub's Mac runner for the code that is macOS's. The repository is public,
+# so nothing here runs for a pull request: a fork's code never reaches the self-hosted runners.
+# workflow_dispatch runs the checks on any branch, before it is merged.
 name: CI
 
 on:
@@ -20,7 +21,9 @@ jobs:
     runs-on: [self-hosted, linux, x64, llx-desk]
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: scripts/check-versions.sh
       - run: sh -n install.sh && sh -n plugins/claude-code/bin/llx-desk
       - run: cargo fmt --check
@@ -31,9 +34,29 @@ jobs:
     runs-on: [self-hosted, linux, x64, llx-desk]
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: cargo check on the rust-version of Cargo.toml
         run: |
           msrv=$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)
           rustup toolchain install "$msrv" --profile minimal --no-self-update
           cargo "+$msrv" check --locked --all-targets
+
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: scripts/check-versions.sh
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+      - name: The app bundles and its signature holds (ad hoc, nothing is notarized)
+        run: |
+          cargo build --locked
+          app=$(scripts/bundle-macos.sh target/debug/llx-desk target/smoke)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          lipo -archs "$app/Contents/MacOS/llx-desk"

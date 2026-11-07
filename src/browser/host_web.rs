@@ -145,12 +145,12 @@ pub(super) fn on_browser(
         | Cmd::Clicked(_)
         | Cmd::SideClicked(_)
         | Cmd::NavClicked(_)
-        | Cmd::Slide(..)
         | Cmd::Restyle
         | Cmd::Strip
         | Cmd::Offered(..)
         | Cmd::Go(_)
-        | Cmd::SplitKept(..)
+        | Cmd::Arranged(..)
+        | Cmd::NewWindow(_)
         | Cmd::Dressed(_)
         | Cmd::Listing(_)
         | Cmd::Act(..)

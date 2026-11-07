@@ -31,6 +31,9 @@ pub struct Said {
 pub(super) struct Registry {
     /// Tab key (`w1`, `t2`) to owner.
     tabs: HashMap<String, String>,
+    /// The tabs the person opened themselves (their own, or theirs opened again): closing one
+    /// is news to no agent.
+    persons: std::collections::HashSet<String>,
     said: HashMap<String, Vec<Said>>,
     next_said: u64,
     owners: HashMap<String, Known>,
@@ -66,12 +69,24 @@ impl Registry {
         Some((&known.project, known.agent.as_deref()))
     }
 
-    pub(super) fn own(&mut self, key: &str, owner: &str) {
+    /// Tab `key` is `owner`'s; the person's own when `person`.
+    pub(super) fn own(&mut self, key: &str, owner: &str, person: bool) {
         self.tabs.insert(key.to_string(), owner.to_string());
+        if person {
+            self.persons.insert(key.to_string());
+        } else {
+            self.persons.remove(key);
+        }
     }
 
     pub(super) fn release(&mut self, key: &str) {
         self.tabs.remove(key);
+        self.persons.remove(key);
+    }
+
+    /// Whether the person opened tab `key` themselves.
+    pub(super) fn persons(&self, key: &str) -> bool {
+        self.persons.contains(key)
     }
 
     /// Every page's key, whoever owns it.

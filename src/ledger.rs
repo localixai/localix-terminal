@@ -105,6 +105,17 @@ fn failed(why: &rusqlite::Error) -> String {
     why.to_string()
 }
 
+/// Pane `row`, left open by the run before, open again in this one: the same row, its history
+/// and its place in its tab with it.
+///
+/// # Errors
+/// The store refused it.
+pub fn reopen(tx: &Transaction<'_>, row: Row) -> Result<(), String> {
+    tx.execute("UPDATE panes SET closed = NULL WHERE id = ?1", [row])
+        .map_err(|why| failed(&why))?;
+    Ok(())
+}
+
 /// Tab `opened`, `now`: its row, last of its project's.
 ///
 /// # Errors
@@ -112,13 +123,13 @@ fn failed(why: &rusqlite::Error) -> String {
 pub fn open(tx: &Transaction<'_>, opened: &Opened<'_>, now: u64) -> Result<Row, String> {
     let place: i64 = tx
         .query_row(
-            "SELECT COALESCE(MAX(place), 0) + 1 FROM tabs WHERE project = ?1",
+            "SELECT COALESCE(MAX(place), 0) + 1 FROM panes WHERE project = ?1",
             [opened.project],
             |row| row.get(0),
         )
         .map_err(|why| failed(&why))?;
     tx.execute(
-        "INSERT INTO tabs (project, kind, agent, title, url, cwd, command, place, opened, shown)
+        "INSERT INTO panes (project, kind, agent, title, url, cwd, command, place, opened, shown)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
         params![
             opened.project,
@@ -143,7 +154,7 @@ pub fn open(tx: &Transaction<'_>, opened: &Opened<'_>, now: u64) -> Result<Row, 
 pub fn titled(tx: &Transaction<'_>, row: Row, title: &str) -> Result<bool, String> {
     let changed = tx
         .execute(
-            "UPDATE tabs SET title = ?2 WHERE id = ?1 AND title <> ?2",
+            "UPDATE panes SET title = ?2 WHERE id = ?1 AND title <> ?2",
             params![row, title],
         )
         .map_err(|why| failed(&why))?;
@@ -164,7 +175,7 @@ pub fn went(
 ) -> Result<bool, String> {
     let before: Option<(ProjectId, Option<String>, String)> = tx
         .query_row(
-            "SELECT project, url, title FROM tabs WHERE id = ?1",
+            "SELECT project, url, title FROM panes WHERE id = ?1",
             [row],
             |found| Ok((found.get(0)?, found.get(1)?, found.get(2)?)),
         )
@@ -178,7 +189,7 @@ pub fn went(
         return Ok(false);
     }
     tx.execute(
-        "UPDATE tabs SET url = ?2, title = ?3, shown = ?4 WHERE id = ?1",
+        "UPDATE panes SET url = ?2, title = ?3, shown = ?4 WHERE id = ?1",
         params![row, url, title, now],
     )
     .map_err(|why| failed(&why))?;
@@ -210,14 +221,14 @@ fn remember(
         false => tx
             .execute(
                 "UPDATE visits SET title = ?3 WHERE id =
-                 (SELECT MAX(id) FROM visits WHERE tab = ?1 AND url = ?2)",
+                 (SELECT MAX(id) FROM visits WHERE pane = ?1 AND url = ?2)",
                 params![row, url, title],
             )
             .map_err(|why| failed(&why))?,
     };
     if retitled == 0 {
         tx.execute(
-            "INSERT INTO visits (project, tab, url, title, at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO visits (project, pane, url, title, at) VALUES (?1, ?2, ?3, ?4, ?5)",
             params![project, row, url, title, now],
         )
         .map_err(|why| failed(&why))?;
@@ -237,15 +248,15 @@ fn remember(
 /// The store refused it.
 pub fn close(tx: &Transaction<'_>, row: Row, now: u64) -> Result<(), String> {
     tx.execute(
-        "UPDATE tabs SET closed = ?2 WHERE id = ?1 AND closed IS NULL",
+        "UPDATE panes SET closed = ?2 WHERE id = ?1 AND closed IS NULL",
         params![row, now],
     )
     .map_err(|why| failed(&why))?;
     tx.execute(
-        "DELETE FROM tabs WHERE closed IS NOT NULL
-         AND project = (SELECT project FROM tabs WHERE id = ?1)
-         AND id NOT IN (SELECT id FROM tabs WHERE closed IS NOT NULL
-             AND project = (SELECT project FROM tabs WHERE id = ?1)
+        "DELETE FROM panes WHERE closed IS NOT NULL
+         AND project = (SELECT project FROM panes WHERE id = ?1)
+         AND id NOT IN (SELECT id FROM panes WHERE closed IS NOT NULL
+             AND project = (SELECT project FROM panes WHERE id = ?1)
              ORDER BY closed DESC, id DESC LIMIT ?2)",
         params![row, CLOSED_KEPT],
     )
@@ -259,7 +270,7 @@ pub fn close(tx: &Transaction<'_>, row: Row, now: u64) -> Result<(), String> {
 /// # Errors
 /// The store refused it.
 pub fn forget(tx: &Transaction<'_>, row: Row) -> Result<(), String> {
-    tx.execute("DELETE FROM tabs WHERE id = ?1", [row])
+    tx.execute("DELETE FROM panes WHERE id = ?1", [row])
         .map_err(|why| failed(&why))?;
     Ok(())
 }
@@ -270,8 +281,8 @@ pub fn forget(tx: &Transaction<'_>, row: Row) -> Result<(), String> {
 /// The store refused it.
 pub fn keep_screen(tx: &Transaction<'_>, row: Row, text: &str, now: u64) -> Result<(), String> {
     tx.execute(
-        "INSERT INTO screens (tab, text, at) VALUES (?1, ?2, ?3)
-         ON CONFLICT (tab) DO UPDATE SET text = excluded.text, at = excluded.at",
+        "INSERT INTO screens (pane, text, at) VALUES (?1, ?2, ?3)
+         ON CONFLICT (pane) DO UPDATE SET text = excluded.text, at = excluded.at",
         params![row, text, now],
     )
     .map_err(|why| failed(&why))?;
@@ -283,7 +294,7 @@ pub fn keep_screen(tx: &Transaction<'_>, row: Row, text: &str, now: u64) -> Resu
 /// # Errors
 /// The store could not be read.
 pub fn screen(db: &Connection, row: Row) -> Result<Option<String>, String> {
-    db.query_row("SELECT text FROM screens WHERE tab = ?1", [row], |found| {
+    db.query_row("SELECT text FROM screens WHERE pane = ?1", [row], |found| {
         found.get(0)
     })
     .optional()
@@ -296,7 +307,7 @@ pub fn screen(db: &Connection, row: Row) -> Result<Option<String>, String> {
 /// The store could not be read.
 pub fn get(db: &Connection, row: Row) -> Result<Option<Tab>, String> {
     db.query_row(
-        &format!("SELECT {COLUMNS} FROM tabs WHERE id = ?1"),
+        &format!("SELECT {COLUMNS} FROM panes WHERE id = ?1"),
         [row],
         tab,
     )
@@ -312,7 +323,7 @@ pub fn get(db: &Connection, row: Row) -> Result<Option<Tab>, String> {
 pub fn past(db: &Connection, project: ProjectId, most: usize) -> Result<Vec<Tab>, String> {
     let mut statement = db
         .prepare(&format!(
-            "SELECT {COLUMNS} FROM tabs WHERE project = ?1
+            "SELECT {COLUMNS} FROM panes WHERE project = ?1
              ORDER BY COALESCE(closed, shown, opened) DESC, id DESC LIMIT ?2"
         ))
         .map_err(|why| failed(&why))?;
@@ -329,7 +340,7 @@ pub fn past(db: &Connection, project: ProjectId, most: usize) -> Result<Vec<Tab>
 pub fn left_open(db: &Connection, project: ProjectId) -> Result<Vec<Tab>, String> {
     let mut statement = db
         .prepare(&format!(
-            "SELECT {COLUMNS} FROM tabs WHERE project = ?1 AND closed IS NULL ORDER BY place"
+            "SELECT {COLUMNS} FROM panes WHERE project = ?1 AND closed IS NULL ORDER BY place"
         ))
         .map_err(|why| failed(&why))?;
     let rows = statement

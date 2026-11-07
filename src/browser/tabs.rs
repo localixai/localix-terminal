@@ -1,4 +1,4 @@
-//! The browser's tabs in the one window (deck.rs): one WebView per tab, the active tab filling
+//! A window's browser tabs (deck.rs): one WebView per tab, the active tab filling
 //! the browser's part of the window while it is shown and the others beside it, out of sight but
 //! still rendering (WebKit stops a hidden view's animation
 //! frames; a tab moved aside is not hidden). A closed tab's WebView is kept, blank, and reused by
@@ -23,8 +23,10 @@ use super::tab_view::{build, builder, share};
 pub use super::told::MAX_TABS;
 pub(super) const BLANK: &str = "about:blank";
 
-/// One WebView: a tab while `open`, else blank and waiting to be reused. Its id is its place + 1.
+/// One WebView: a tab while `open`, else blank and waiting to be reused. Its id is its place
+/// among the app's pages (popup.rs), whichever window it is in.
 struct Slot {
+    id: u32,
     webview: WebView,
     open: bool,
     /// The page's zoom now, an `f64`'s bits: points per CSS pixel, below 1 while a size larger
@@ -33,8 +35,9 @@ struct Slot {
 }
 
 impl Slot {
-    fn new(webview: WebView) -> Self {
+    fn new(id: u32, webview: WebView) -> Self {
         Self {
+            id,
             webview,
             open: true,
             zoom: AtomicU64::new(1.0_f64.to_bits()),
@@ -53,6 +56,21 @@ impl Slot {
     }
 }
 
+/// A page on its way to another window: its view as it is, moved and not loaded again
+/// (docs/windows.md), with what its window kept of it.
+pub(super) struct Carried {
+    slot: Slot,
+    frame: Option<Frame>,
+    window: Window,
+}
+
+impl Carried {
+    /// How its window opened its pages: one with none of its own yet opens them the same.
+    pub(super) fn window(&self) -> &Window {
+        &self.window
+    }
+}
+
 pub(super) struct Tabs {
     slots: Vec<Slot>,
     /// The id of the tab shown and acted on.
@@ -60,6 +78,8 @@ pub(super) struct Tabs {
     window: Window,
     /// Each tab's size, by id, while one is set (sizes.rs); else it fills the window.
     frames: HashMap<u32, Frame>,
+    /// The native window its pages are in.
+    native: tao::window::WindowId,
 }
 
 impl Tabs {
@@ -75,12 +95,26 @@ impl Tabs {
             active: 1,
             window: window.clone(),
             frames: HashMap::new(),
+            native: native.id(),
         };
-        popup::reset();
-        let id = popup::reserve().unwrap_or(1);
+        // The app's first pages start the places over, and the configuration every later page
+        // shares; another window's take the next places.
+        let first = popup::begin();
+        if first {
+            super::tab_view::forget();
+        }
+        // Begun, the pages end with `tabs` (its drop), opened or not.
+        let id = match popup::reserve() {
+            Some(id) => id,
+            None if first => 1,
+            None => return Err(full()),
+        };
         let webview = tabs.build(native, id, &window.url, shared, proxy)?;
+        if first {
+            super::tab_view::remember(&webview);
+        }
         keep_tab_rendering(&webview);
-        tabs.slots.push(Slot::new(webview));
+        tabs.slots.push(Slot::new(id, webview));
         // The first page is of the project the call opening it named, as every later one.
         let opening = {
             let mut scope = crate::lock(&shared.scope);
@@ -93,13 +127,28 @@ impl Tabs {
         if let Some(project) = opening {
             crate::lock(&shared.groups).insert(Key::Web(id).name(), project);
         }
-        shared.set_tabs(1, &tabs.ids());
+        shared.set_tabs(tabs.native, 1, &tabs.ids());
         Ok(tabs)
     }
 
     /// The tab shown and acted on.
     pub(super) fn active(&self) -> &WebView {
-        &self.slots[self.active as usize - 1].webview
+        let slot = self
+            .slot(self.active)
+            .or_else(|| self.slots.iter().find(|slot| slot.open));
+        // A browser always has a tab open: it goes when its last one closes.
+        &slot.unwrap_or(&self.slots[0]).webview
+    }
+
+    /// Whether no page is left at all, open or kept blank: its last went to another window. A
+    /// window keeps no such browser (`active` answers a page).
+    pub(super) fn is_bare(&self) -> bool {
+        self.slots.is_empty()
+    }
+
+    /// Tab `id`'s slot while it is open.
+    fn slot(&self, id: u32) -> Option<&Slot> {
+        self.slots.iter().find(|slot| slot.id == id && slot.open)
     }
 
     /// The id of the tab acted on.
@@ -113,13 +162,16 @@ impl Tabs {
         let Some(id) = id else {
             return Some(self.active());
         };
-        let slot = self.slots.get((id as usize).wrapping_sub(1));
-        slot.filter(|slot| slot.open).map(|slot| &slot.webview)
+        self.slot(id).map(|slot| &slot.webview)
     }
 
     fn ids(&self) -> Vec<u32> {
-        let open = self.slots.iter().enumerate().filter(|(_, slot)| slot.open);
-        open.map(|(at, _)| id_of(at)).collect()
+        let mut ids: Vec<u32> = (self.slots.iter())
+            .filter(|slot| slot.open)
+            .map(|slot| slot.id)
+            .collect();
+        ids.sort_unstable();
+        ids
     }
 
     /// Open `url` in a new tab of `project` (none: of the tab it was opened from), the one
@@ -135,26 +187,34 @@ impl Tabs {
     ) -> Result<u32, String> {
         // A popup built meanwhile takes the place it was given first.
         self.adopt(shared);
-        let id = match self.slots.iter().position(|slot| !slot.open) {
+        // A closed tab's view is used again while its place is still free; one a popup of
+        // another window took meanwhile goes (its place is that popup's now).
+        let mut reused = None;
+        while let Some(at) = self.slots.iter().position(|slot| !slot.open) {
+            if popup::claim(self.slots[at].id) {
+                reused = Some(at);
+                break;
+            }
+            self.slots.remove(at);
+        }
+        let id = match reused {
             Some(at) => {
-                popup::claim(id_of(at));
                 let slot = &mut self.slots[at];
                 slot.open = true;
                 // A tab used again starts its loads over: the last page's are not this one's.
-                crate::lock(&shared.loads).remove(&id_of(at));
+                crate::lock(&shared.loads).remove(&slot.id);
                 slot.webview
                     .load_url(url)
                     .map_err(|error| error.to_string())?;
-                id_of(at)
+                slot.id
             }
-            None if self.slots.len() < MAX_TABS => {
+            None => {
                 let id = popup::reserve().ok_or_else(full)?;
                 let webview = self.build(native, id, url, shared, proxy)?;
                 keep_tab_rendering(&webview);
-                self.slots.push(Slot::new(webview));
+                self.slots.push(Slot::new(id, webview));
                 id
             }
-            None => return Err(full()),
         };
         if let Some(webview) = self.at(Some(id)) {
             see_through_until_drawn(webview, id, shared);
@@ -168,7 +228,7 @@ impl Tabs {
         if shown || !ids.contains(&self.active) || self.active == id {
             self.active = id;
         }
-        shared.set_tabs(self.active, &ids);
+        shared.set_tabs(self.native, self.active, &ids);
         Ok(id)
     }
 
@@ -178,17 +238,11 @@ impl Tabs {
         let mut last = None;
         for (id, webview, opener) in popup::waiting() {
             keep_tab_rendering(&webview);
-            let at = id as usize - 1;
-            let end = self.slots.len();
-            match self.slots.get_mut(at) {
+            match self.slots.iter_mut().find(|slot| slot.id == id) {
                 // A closed tab's place: its blank view goes, the popup's takes it.
-                Some(slot) if !slot.open => {
-                    *slot = Slot::new(webview);
-                }
+                Some(slot) if !slot.open => *slot = Slot::new(id, webview),
                 Some(_) => continue,
-                None if at == end => self.slots.push(Slot::new(webview)),
-                // Places are handed out in order: one past the end was never given.
-                None => continue,
+                None => self.slots.push(Slot::new(id, webview)),
             }
             let mut groups = crate::lock(&shared.groups);
             let project = groups
@@ -207,7 +261,7 @@ impl Tabs {
             last = Some((id, shown));
         }
         if last.is_some() {
-            shared.set_tabs(self.active, &self.ids());
+            shared.set_tabs(self.native, self.active, &self.ids());
         }
         last
     }
@@ -216,7 +270,7 @@ impl Tabs {
     pub(super) fn switch(&mut self, id: u32, shared: &Shared) -> Result<(), String> {
         self.check(id)?;
         self.active = id;
-        shared.set_tabs(id, &self.ids());
+        shared.set_tabs(self.native, id, &self.ids());
         Ok(())
     }
 
@@ -224,13 +278,20 @@ impl Tabs {
     /// with none, the browser part goes, and the window stays.
     pub(super) fn close(&mut self, id: u32, shared: &Shared) -> Result<bool, String> {
         self.check(id)?;
-        let slot = &mut self.slots[id as usize - 1];
+        let Some(slot) = self
+            .slots
+            .iter_mut()
+            .find(|slot| slot.id == id && slot.open)
+        else {
+            return Err(format!("there is no tab {id}"));
+        };
         slot.open = false;
         self.frames.remove(&id);
         popup::free(id);
         let _ = slot.webview.load_url(BLANK);
         let ids = self.ids();
         let Some(last) = ids.last() else {
+            shared.set_tabs(self.native, self.active, &ids);
             return Ok(false);
         };
         if self.active == id {
@@ -241,14 +302,65 @@ impl Tabs {
                 .copied()
                 .unwrap_or(*last);
         }
-        shared.set_tabs(self.active, &ids);
+        shared.set_tabs(self.native, self.active, &ids);
         Ok(true)
     }
 
+    /// No page yet, in `native`: its pages come from other windows.
+    pub(super) fn empty(native: &tao::window::Window, window: &Window) -> Self {
+        // Joined, the pages end with `tabs` (its drop), as an opened one's do; the places stay.
+        popup::join();
+        Self {
+            slots: vec![],
+            active: 1,
+            window: window.clone(),
+            frames: HashMap::new(),
+            native: native.id(),
+        }
+    }
+
+    /// Page `id` leaves for another window, its view as it is: the page acted on here is the one
+    /// before it, as when it closes.
+    pub(super) fn take(&mut self, id: u32, shared: &Shared) -> Option<Carried> {
+        let at = (self.slots.iter()).position(|slot| slot.id == id && slot.open)?;
+        let slot = self.slots.remove(at);
+        let frame = self.frames.remove(&id);
+        let ids = self.ids();
+        if self.active == id
+            && let Some(last) = ids.last()
+        {
+            self.active = (ids.iter().rev().find(|other| **other < id)).map_or(*last, |one| *one);
+        }
+        shared.set_tabs(self.native, self.active, &ids);
+        Some(Carried {
+            slot,
+            frame,
+            window: self.window.clone(),
+        })
+    }
+
+    /// A page come from another window: its view is put in `native`, this window, as it was,
+    /// and it is the page acted on.
+    pub(super) fn take_in(
+        &mut self,
+        carried: Carried,
+        native: &tao::window::Window,
+        shared: &Shared,
+    ) {
+        super::platform::reparent(&carried.slot.webview, native);
+        let id = carried.slot.id;
+        if let Some(frame) = carried.frame {
+            self.frames.insert(id, frame);
+        }
+        self.slots.push(carried.slot);
+        self.active = id;
+        shared.set_tabs(self.native, self.active, &self.ids());
+    }
+
     fn check(&self, id: u32) -> Result<(), String> {
-        match self.slots.get((id as usize).wrapping_sub(1)) {
-            Some(slot) if slot.open => Ok(()),
-            _ => Err(format!("there is no tab {id}: {}", list(&self.ids()))),
+        match self.slot(id) {
+            Some(_) => Ok(()),
+            None => Err(format!("there is no tab {id}: {}", list(&self.ids()))),
         }
     }
 
@@ -261,8 +373,7 @@ impl Tabs {
     /// drawn smaller to fit the window. A picture's clip, in CSS pixels, is in points times it.
     pub(super) fn zoom(&self, id: Option<u32>) -> f64 {
         let id = id.unwrap_or(self.active);
-        let slot = self.slots.get((id as usize).wrapping_sub(1));
-        slot.map_or(1.0, Slot::zoomed)
+        self.slot(id).map_or(1.0, Slot::zoomed)
     }
 
     /// Tab `id`'s size (the one acted on with none), while one is set.
@@ -283,8 +394,8 @@ impl Tabs {
     /// size, and `left` and `top` points from the window's corner. The others stand beside,
     /// out of sight.
     pub(super) fn layout(&self, shown: &[Pane]) {
-        for (at, slot) in self.slots.iter().enumerate() {
-            let pane = shown.iter().find(|pane| pane.0 == id_of(at));
+        for slot in &self.slots {
+            let pane = shown.iter().find(|pane| pane.0 == slot.id);
             let here = pane.is_some();
             let (_, size, left, top) =
                 pane.copied()
@@ -297,7 +408,7 @@ impl Tabs {
                     -(size.width + left + 10_000.0)
                 }
             };
-            if let Some(frame) = self.frames.get(&id_of(at)) {
+            if let Some(frame) = self.frames.get(&slot.id) {
                 // A size of its own: in the middle, below the strip, nothing of it under it.
                 // Larger than the window, drawn smaller: the page lays out at its size still.
                 let placed = sizes::place(size, top, Some(frame));
@@ -426,7 +537,9 @@ pub(super) fn pin(strip: &WebView, size: LogicalSize<f64>) {
     }
 }
 
-/// The id of the tab in slot `at`: ids count from 1, and there are at most `MAX_TABS`.
-fn id_of(at: usize) -> u32 {
-    u32::try_from(at + 1).unwrap_or(u32::MAX)
+impl Drop for Tabs {
+    /// The window's pages are gone: the app's places start over once no window has any.
+    fn drop(&mut self) {
+        popup::end();
+    }
 }

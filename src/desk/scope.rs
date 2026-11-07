@@ -101,7 +101,13 @@ impl Desk {
             return;
         };
         let now = crate::board::now();
-        match (self.feed.store()).write(|tx| projects::opened(tx, id, now)) {
+        let window = self.in_use();
+        // The project used last, and the window's workspace of it the one it shows.
+        let shown = self.feed.write(|write| {
+            projects::opened(write.tx(), id, now)?;
+            Self::show_project(write, (id, window), now)
+        });
+        match shown {
             Ok(()) => self.tell_places(),
             Err(why) => log::warn!("the project shown was not kept as the last: {why}"),
         }

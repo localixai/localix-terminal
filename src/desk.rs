@@ -14,13 +14,13 @@ mod board_told;
 mod center;
 mod changes;
 mod events;
+mod layout;
 mod ledger;
 mod lifecycle;
 mod open;
 mod registry;
 mod relay;
 mod scope;
-mod splits;
 mod term;
 mod told;
 mod web;
@@ -33,7 +33,7 @@ use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use serde_json::{Value, json};
 
-use crate::browser::{Asked, Browser, HOME, Heard, Page, Shot};
+use crate::browser::{Asked, Browser, HOME, Heard, Page, Shot, Went};
 use crate::feed::{Entity, Op};
 use crate::projects::{Project, ProjectId};
 use crate::served::Served;
@@ -59,6 +59,14 @@ pub struct Call<'a> {
     pub vars: Option<&'a [(String, String)]>,
     /// A look for a pane, not the agent's call: the person's notes stay for the agent.
     pub peek: bool,
+    /// The pane this call opens again after a restart: its row, which it stays (its tab, its
+    /// place and its split with it).
+    pub again: Option<crate::ledger::Row>,
+    /// The person asked for it in the window (a tab of theirs, or their tabs opened again): what
+    /// it opens is theirs, and their closing it is news to no agent.
+    pub person: bool,
+    /// The window it opens in (its row in the layout); none: the window the person works in.
+    pub window: Option<crate::layout::WindowId>,
 }
 
 /// Why a call did not come to what it asked.
@@ -159,6 +167,9 @@ pub struct Desk {
     projects: Mutex<HashMap<PathBuf, Project>>,
     /// The desk itself, for what the window calls back.
     me: Weak<Self>,
+    /// What the window told that is written to the store, in order, on a thread of its own:
+    /// the window's loop never waits on the disk.
+    writes: OnceLock<std::sync::mpsc::SyncSender<Box<dyn FnOnce() + Send>>>,
     /// Each open tab's row in the ledger, and its project, by key.
     ledger: Mutex<HashMap<String, (crate::ledger::Row, ProjectId)>>,
     /// The app is ending: its tabs go with it, yet stay open in the ledger, a split kept.
@@ -210,6 +221,7 @@ impl Desk {
                 board_news: Mutex::default(),
                 projects: Mutex::default(),
                 me: Weak::clone(weak),
+                writes: OnceLock::new(),
                 ledger: Mutex::default(),
                 ending: AtomicBool::new(false),
                 begun: Mutex::default(),
@@ -229,6 +241,13 @@ impl Desk {
         };
         if let Err(error) = desk.feed.consume(Box::new(center)) {
             log::warn!("desk: the Event Center will not follow what changes: {error}");
+        }
+        desk.gather_windows();
+        let drawn = layout::Drawn {
+            desk: Arc::downgrade(&desk),
+        };
+        if let Err(error) = desk.feed.consume(Box::new(drawn)) {
+            log::warn!("desk: the window will not follow the layout: {error}");
         }
         let files = board_file::BoardFile {
             desk: Arc::downgrade(&desk),
@@ -337,7 +356,7 @@ impl Desk {
     fn gone(&self, owner: Option<String>, key: &str) {
         self.unkeep(key);
         let key = key.to_string();
-        self.feed.record(&Entity::Tab { owner, key }, Op::Deleted);
+        self.feed.record(&Entity::Pane { owner, key }, Op::Deleted);
     }
 
     /// What the person did in the window: a comment, a closed tab, a terminal asked for.
@@ -345,22 +364,70 @@ impl Desk {
         match heard {
             Heard::Sent(words) | Heard::Did(words) => self.kept(key, words),
             // A tab the person closed is no news worth waking the agent for: it hears it with its
-            // next call. A board is kept; a page or a terminal is gone.
+            // next call; one the person opened themselves is no news to an agent at all. A board
+            // is kept; a page or a terminal is gone.
             Heard::Closed(words) => {
-                self.hear(key, words, false);
+                if !crate::lock(&self.registry).persons(key) {
+                    self.hear(key, words, false);
+                }
                 match key.starts_with('b') {
                     true => self.unkeep(key),
                     false => self.gone(self.owner_of(key), key),
                 }
             }
-            Heard::Went(went) => self.went(key, &went),
+            Heard::Went(went) => {
+                let (desk, key) = (Arc::clone(self), key.to_string());
+                let (url, title, group) = (
+                    went.url.to_string(),
+                    went.title.to_string(),
+                    went.group.to_string(),
+                );
+                self.write_later(move || {
+                    let went = Went {
+                        url: &url,
+                        title: &title,
+                        group: &group,
+                    };
+                    desk.went(&key, &went);
+                });
+            }
             Heard::Folder(folder) => self.open_folder(folder),
             Heard::Showing => self.showing(key),
             Heard::Split(halves) => self.split_told(key, halves),
+            Heard::Moved { before, window } => self.moved(key, before, window),
+            Heard::Detached => self.detached(key),
+            Heard::WindowClosed(window) => self.window_closed(window),
             Heard::Quit => self.quit_asked(),
             Heard::Reopened => self.reopened(),
             Heard::Asked(asked) => self.person_asked(key, asked),
             Heard::Center(did) => self.person_on_center(did),
+        }
+    }
+
+    /// How many writes wait for the writer thread at most.
+    const WRITES: usize = 256;
+
+    /// `write` done on the desk's writer thread, after what was handed it before: the window's
+    /// loop goes on at once. With no thread to be had, it is done here.
+    fn write_later(&self, write: impl FnOnce() + Send + 'static) {
+        let writes = self.writes.get_or_init(|| {
+            let (send, take) =
+                std::sync::mpsc::sync_channel::<Box<dyn FnOnce() + Send>>(Self::WRITES);
+            let started = std::thread::Builder::new()
+                .name("desk-writes".into())
+                .spawn(move || take.into_iter().for_each(|write| write()));
+            if let Err(why) = started {
+                log::warn!("desk: no writer thread ({why}): writes are done in place");
+            }
+            send
+        });
+        // A queue full (the disk far behind) or gone: done here, rather than waiting on it.
+        match writes.try_send(Box::new(write)) {
+            Ok(()) => {}
+            Err(
+                std::sync::mpsc::TrySendError::Full(write)
+                | std::sync::mpsc::TrySendError::Disconnected(write),
+            ) => write(),
         }
     }
 
@@ -386,6 +453,9 @@ impl Desk {
                     cwd: &person.cwd,
                     vars: person.vars.as_deref(),
                     peek: false,
+                    again: None,
+                    person: true,
+                    window: None,
                 };
                 // The person is known as their project's own, as an agent is once it calls: what
                 // they open is of that project wherever it is listed (an ended terminal's event).
@@ -412,6 +482,7 @@ impl Desk {
                         .map_err(|failure| failure.message().to_string()),
                     Asked::Again(row) => desk.again(&call, &group, *row),
                     Asked::Project => desk.reopen_project(&call, &group),
+                    Asked::Window => desk.new_window(&call, &group),
                 };
                 if let Err(why) = done {
                     log::warn!("a {asked:?} the person asked for did not open: {why}");

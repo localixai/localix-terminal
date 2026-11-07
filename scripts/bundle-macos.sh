@@ -5,8 +5,10 @@
 # from (src/setup/claude.rs). The app is all there is to install: opened, it is the server and
 # links `llx-desk` into ~/.local/bin (src/cli/app.rs); the CLI and the app are the one program.
 #   scripts/bundle-macos.sh [target/release/llx-desk] [out-dir]
-# Signed ad hoc, so the system runs it here; a release signs it with its own identity
-# (LLX_DESK_SIGN="Developer ID Application: …") and notarizes it.
+# Signed ad hoc, so the system runs it here, unless LLX_DESK_SIGN names an identity
+# ("Developer ID Application: …"): then it is signed with that, with a secure timestamp, and a
+# signature that fails is an error, never a quiet fall back to ad hoc. Notarization is not done
+# here: it is scripts/dmg.sh.
 set -eu
 cd "$(dirname "$0")/.."
 binary=${1:-target/release/llx-desk}
@@ -32,8 +34,32 @@ rsync -a --exclude '.claude-plugin/types' --exclude node_modules plugins/claude-
 sed 's#"\./plugins/claude-code"#"./plugin"#' .claude-plugin/marketplace.json > "$market/.claude-plugin/marketplace.json"
 grep -q '"./plugin"' "$market/.claude-plugin/marketplace.json" || { echo "the marketplace does not point at its plugin" >&2; exit 1; }
 printf 'APPL????' > "$stage/Contents/PkgInfo"
-codesign --force --sign "${LLX_DESK_SIGN:--}" --options runtime --timestamp=none "$stage" >/dev/null 2>&1 ||
-  codesign --force --sign - "$stage"
+# The one signature of the bundle covers its program and its resources, but a Mach-O file among the
+# resources would not be signed as code: it has to be signed before the bundle, so it stops here.
+if find "$stage/Contents/Resources" -type f -exec file {} + | grep -q 'Mach-O'; then
+  echo "a Mach-O file in Contents/Resources: sign it before the bundle" >&2
+  exit 1
+fi
+sign=${LLX_DESK_SIGN:--}
+sign_once() {
+  if [ "$sign" = - ]; then
+    codesign --force --sign - --options runtime "$stage"
+  else
+    codesign --force --sign "$sign" --options runtime --timestamp "$stage"
+  fi
+}
+# Apple's timestamp server fails now and then: four tries, the wait doubling between them.
+tries=0
+delay=5
+until sign_once; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 4 ] || { echo "codesign failed" >&2; exit 1; }
+  sleep "$delay"
+  delay=$((delay * 2))
+done
+if [ "$sign" != - ]; then
+  codesign --verify --deep --strict "$stage"
+fi
 # The new app replaces the old whole: what was there is moved aside, then let go.
 if [ -e "$app" ]; then
   mv "$app" "$out/.LLX Desk.app.old.$$"

@@ -73,6 +73,20 @@ fn settings_outlive_the_run_and_a_file_that_does_not_read_is_the_defaults() {
 }
 
 #[test]
+fn the_page_is_told_what_each_appearance_is_by_default() {
+    let mut settings = Settings::default();
+    settings
+        .change(&json!({"theme": "dark", "font_size": 17}))
+        .unwrap();
+    let defaults = &settings.page()["defaults"];
+    assert_eq!(defaults["theme"], "system");
+    assert_eq!(defaults["transparency"], "standard");
+    assert_eq!(defaults["ui_font"], "system");
+    assert_eq!(defaults["code_font"], "system");
+    assert_eq!(defaults["size"], 13);
+}
+
+#[test]
 fn the_pages_are_told_the_fonts() {
     let mut settings = Settings::default();
     settings

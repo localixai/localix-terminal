@@ -27,6 +27,9 @@ const DRAGGED_OR_UP: u64 = (1 << 6) | (1 << 2);
 const LEFT_UP: usize = 2;
 /// NSViewAutoresizingMask: its width and height follow the window's.
 const SIZABLE: usize = (1 << 1) | (1 << 4);
+/// NSTrackingAreaOptions: tell the owner when the pointer enters (`cursorUpdate:`), whichever
+/// window or app is active, over the part of the view that shows.
+const CURSOR_AREA: usize = 0x4 | 0x80 | 0x200;
 
 /// Where a click on the grip goes: the loop, told to expand. One mini per process.
 static PROXY: OnceLock<Mutex<Option<EventLoopProxy<Cmd>>>> = OnceLock::new();
@@ -51,6 +54,50 @@ extern "C" fn hit_test(this: &AnyObject, _sel: Sel, point: CGPoint) -> *mut AnyO
         true => std::ptr::from_ref(this).cast_mut(),
         false => std::ptr::null_mut(),
     }
+}
+
+/// The pointing hand over the grip: the page under it is a click that expands.
+extern "C" fn cursor_update(_this: &AnyObject, _sel: Sel, _event: *mut AnyObject) {
+    // SAFETY: NSCursor's class method answers the shared pointing hand, which `set` makes current.
+    let _: () = unsafe { msg_send![&*pointing_hand(), set] };
+}
+
+fn pointing_hand() -> Retained<AnyObject> {
+    // SAFETY: NSCursor's class method answers a cursor.
+    unsafe { msg_send![class!(NSCursor), pointingHandCursor] }
+}
+
+/// One tracking area over what shows of the view, rebuilt whenever AppKit asks. A view's cursor
+/// rects only work for the key window; the mini is a panel that never takes the key.
+extern "C" fn update_tracking_areas(this: &AnyObject, _sel: Sel) {
+    // SAFETY: the superclass's own method keeps AppKit's bookkeeping.
+    let _: () = unsafe { msg_send![super(this, class!(NSView)), updateTrackingAreas] };
+    // SAFETY: a view answers its tracking areas, an array.
+    let areas: Retained<AnyObject> = unsafe { msg_send![this, trackingAreas] };
+    // SAFETY: an array answers a copy that is safe to walk while areas are removed.
+    let areas: Retained<AnyObject> = unsafe { msg_send![&*areas, copy] };
+    // SAFETY: an array answers its count, an NSUInteger.
+    let count: usize = unsafe { msg_send![&*areas, count] };
+    for at in 0..count {
+        // SAFETY: the index is below the count; the area is an NSTrackingArea.
+        let area: Retained<AnyObject> = unsafe { msg_send![&*areas, objectAtIndex: at] };
+        // SAFETY: a tracking area answers its owner.
+        let owner: *mut AnyObject = unsafe { msg_send![&*area, owner] };
+        if std::ptr::eq(owner, this) {
+            // SAFETY: a view takes a tracking area it holds off.
+            let _: () = unsafe { msg_send![this, removeTrackingArea: &*area] };
+        }
+    }
+    // SAFETY: a view answers `bounds` with an NSRect.
+    let bounds: CGRect = unsafe { msg_send![this, bounds] };
+    // SAFETY: an NSTrackingArea is allocated...
+    let made: Allocated<AnyObject> = unsafe { msg_send![class!(NSTrackingArea), alloc] };
+    // SAFETY: ...and given its rect, options and owner (the rect is the visible one anyway).
+    let area: Retained<AnyObject> = unsafe {
+        msg_send![made, initWithRect: bounds, options: CURSOR_AREA, owner: this, userInfo: std::ptr::null::<AnyObject>()]
+    };
+    // SAFETY: the view keeps the area it is given.
+    let _: () = unsafe { msg_send![this, addTrackingArea: &*area] };
 }
 
 /// The pointer on the screen, in points.
@@ -123,6 +170,15 @@ fn grip_class() -> Option<&'static AnyClass> {
         };
         // SAFETY: NSResponder's `mouseDown:` takes an event and answers nothing.
         unsafe { class.add_method(sel!(mouseDown:), mouse_down as extern "C" fn(_, _, _)) };
+        // SAFETY: NSResponder's `cursorUpdate:` takes an event and answers nothing.
+        unsafe { class.add_method(sel!(cursorUpdate:), cursor_update as extern "C" fn(_, _, _)) };
+        // SAFETY: NSView's `updateTrackingAreas` takes nothing and answers nothing.
+        unsafe {
+            class.add_method(
+                sel!(updateTrackingAreas),
+                update_tracking_areas as extern "C" fn(_, _),
+            );
+        };
         Some(class.register())
     })
 }
@@ -150,4 +206,6 @@ pub(super) fn grip(window: &Window, proxy: &EventLoopProxy<Cmd>) {
     let _: () = unsafe { msg_send![&*view, setAutoresizingMask: SIZABLE] };
     // SAFETY: added last, it lies over the page; the content view keeps it.
     let _: () = unsafe { msg_send![content, addSubview: &*view] };
+    // SAFETY: the view makes its tracking area, as AppKit does when it joins a window.
+    let _: () = unsafe { msg_send![&*view, updateTrackingAreas] };
 }

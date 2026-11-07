@@ -70,9 +70,13 @@ fn the_halves_share_the_width_with_a_line_between() {
 
 #[test]
 fn a_dragged_line_leaves_each_half_some_of_the_width() {
-    assert!((held(0.05) - LEAST).abs() < f64::EPSILON);
-    assert!((held(0.97) - (1.0 - LEAST)).abs() < f64::EPSILON);
-    assert!((held(0.4) - 0.4).abs() < f64::EPSILON);
+    // Each half keeps its least, in points, on any room.
+    assert!((held(0.05, 1000.0) - 0.19).abs() < 1e-9);
+    assert!((held(0.97, 1000.0) - 0.81).abs() < 1e-9);
+    assert!((held(0.4, 1000.0) - 0.4).abs() < f64::EPSILON);
+    assert!((held(0.05, 2000.0) - 0.095).abs() < 1e-9);
+    // Too narrow for both: half each.
+    assert!((held(0.1, 300.0) - 0.5).abs() < f64::EPSILON);
 }
 
 #[test]
@@ -99,4 +103,42 @@ fn a_kept_split_comes_back_around_either_of_its_tabs() {
         })
     );
     assert_eq!(again(&kept, "w3"), None);
+}
+
+#[test]
+fn a_carried_tab_lands_beside_a_whole_window_or_in_the_half_not_in_use() {
+    use super::{Beside, landed};
+    let (shown, other, third) = (Key::Term(1), Key::Web(2), Key::Term(3));
+    // Whole: beside the shown tab, on the side it is carried to; the shown tab itself lands nowhere.
+    assert_eq!(
+        landed(None, Some(shown), None, other, true),
+        Some(Beside {
+            key: other,
+            right: true
+        })
+    );
+    assert_eq!(landed(None, Some(shown), None, shown, false), None);
+    // Split, the shown tab on the left: another tab takes the right half, the one not in use.
+    let beside = Some(Beside {
+        key: other,
+        right: true,
+    });
+    let pair = Some((shown, other));
+    assert_eq!(
+        landed(beside, Some(shown), pair, third, true),
+        Some(Beside {
+            key: third,
+            right: true
+        })
+    );
+    // Over the half in use: nothing laid out before it is let go of.
+    assert_eq!(landed(beside, Some(shown), pair, third, false), None);
+    // The shown tab carried over the other half: the two change sides.
+    assert_eq!(
+        landed(beside, Some(shown), pair, shown, true),
+        Some(Beside {
+            key: other,
+            right: false
+        })
+    );
 }

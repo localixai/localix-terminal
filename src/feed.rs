@@ -36,8 +36,14 @@ pub enum Entity {
     /// A note the person sent from the window to an owner's agent (the registry keeps it until
     /// it is delivered).
     Said { owner: String, id: u64 },
-    /// A tab of the window (`w1`, `t2`, `b1`), and whose it was.
-    Tab { owner: Option<String>, key: String },
+    /// A pane of the window (`w1`, `t2`, `b1`) in this run, and whose it was.
+    Pane { owner: Option<String>, key: String },
+    /// A window: what it shows, where it is (docs/windows.md).
+    Window { id: crate::layout::WindowId },
+    /// A window's workspace of a project: its tabs, their places, the one shown.
+    Workspace { id: crate::layout::WorkspaceId },
+    /// A tab: its tree of panes, the one in focus.
+    Tab { id: crate::layout::TabId },
     /// A project's board: one of its cards changed.
     Board { project: crate::projects::ProjectId },
     /// A terminal's program.
@@ -47,14 +53,17 @@ pub enum Entity {
 }
 
 impl Entity {
-    /// Whether what it names outlives the app. A board does. A tab, a terminal, a note on its
-    /// way and an ask do not, and their ids are given again after a
+    /// Whether what it names outlives the app. A board and the layout (windows, workspaces, tabs) do. A pane's key, a terminal, a
+    /// note on its way and an ask do not, and their ids are given again after a
     /// restart: a notice of one from an earlier run names something else, and is passed over.
     pub fn outlives_the_run(&self) -> bool {
         match self {
-            Entity::Board { .. } => true,
+            Entity::Board { .. }
+            | Entity::Window { .. }
+            | Entity::Workspace { .. }
+            | Entity::Tab { .. } => true,
             Entity::Said { .. }
-            | Entity::Tab { .. }
+            | Entity::Pane { .. }
             | Entity::Terminal { .. }
             | Entity::Ask { .. } => false,
         }

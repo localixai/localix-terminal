@@ -127,26 +127,52 @@ pub(super) fn builder<'a>(
 /// Whether the tabs share one WebKit configuration (see `share`).
 pub(super) const SHARED: bool = cfg!(target_os = "macos");
 
-/// On macOS a new tab shares the first one's configuration: one cookie store for the window, as
-/// in a browser (a page opened in a new tab stays signed in), and one IPC channel.
+#[cfg(target_os = "macos")]
+thread_local! {
+    /// The app's first page's configuration: every page of every window shares it.
+    static FIRST: std::sync::Mutex<Option<objc2::rc::Retained<objc2_web_kit::WKWebViewConfiguration>>> =
+        const { std::sync::Mutex::new(None) };
+}
+
+/// On macOS a new tab shares the app's first page's configuration, in whichever window: one
+/// cookie store, as in a browser (a page opened in a new tab or window stays signed in), and one
+/// IPC channel (the first page's view serves it).
 #[cfg(target_os = "macos")]
 pub(super) fn share<'a>(
     builder: WebViewBuilder<'a>,
     first: Option<&WebView>,
 ) -> WebViewBuilder<'a> {
+    use wry::WebViewBuilderExtMacos;
+    let kept = FIRST.with(|kept| crate::lock(kept).clone());
+    match kept.or_else(|| first.map(configuration)) {
+        Some(configuration) => builder.with_webview_configuration(configuration),
+        None => builder,
+    }
+}
+
+/// `view`'s WebKit configuration.
+#[cfg(target_os = "macos")]
+fn configuration(view: &WebView) -> objc2::rc::Retained<objc2_web_kit::WKWebViewConfiguration> {
     use objc2::msg_send;
-    use objc2::rc::Retained;
-    use objc2_web_kit::WKWebViewConfiguration;
-    use wry::{WebViewBuilderExtMacos, WebViewExtMacOS};
-    let Some(first) = first else {
-        return builder;
-    };
-    let view = first.webview();
-    // SAFETY: the first tab's WKWebView is alive (borrowed); `configuration` answers a copy of
-    // its WKWebViewConfiguration, retained.
-    let configuration: Retained<WKWebViewConfiguration> =
-        unsafe { msg_send![&*view, configuration] };
-    builder.with_webview_configuration(configuration)
+    use wry::WebViewExtMacOS;
+    let view = view.webview();
+    // SAFETY: the WKWebView is alive (borrowed); `configuration` answers a copy of its
+    // WKWebViewConfiguration, retained.
+    unsafe { msg_send![&*view, configuration] }
+}
+
+/// `first` is the app's first page (its pages start over): the pages after it share its
+/// configuration.
+#[cfg(target_os = "macos")]
+pub(super) fn remember(first: &WebView) {
+    let configuration = configuration(first);
+    FIRST.with(|kept| *crate::lock(kept) = Some(configuration));
+}
+
+/// The app has no page: the next one is the first again.
+#[cfg(target_os = "macos")]
+pub(super) fn forget() {
+    FIRST.with(|kept| *crate::lock(kept) = None);
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -156,6 +182,12 @@ pub(super) fn share<'a>(
 ) -> WebViewBuilder<'a> {
     builder
 }
+
+#[cfg(not(target_os = "macos"))]
+pub(super) fn remember(_first: &WebView) {}
+
+#[cfg(not(target_os = "macos"))]
+pub(super) fn forget() {}
 
 #[cfg(not(target_os = "linux"))]
 pub(super) fn build(builder: WebViewBuilder, window: &tao::window::Window) -> wry::Result<WebView> {

@@ -8,6 +8,11 @@ mod app_menu;
 #[cfg(target_os = "macos")]
 mod appkit;
 mod capture;
+#[cfg(target_os = "macos")]
+mod chip;
+#[cfg(not(target_os = "macos"))]
+#[path = "browser/chip_other.rs"]
+mod chip;
 mod choice;
 mod comments;
 mod deck;
@@ -54,6 +59,7 @@ mod turn;
 #[cfg(target_os = "macos")]
 mod viewport;
 mod webview;
+mod windows;
 
 use std::time::Duration;
 
@@ -63,8 +69,8 @@ use serde::{Deserialize, Serialize};
 pub use capture::{Clip, Shot};
 pub use guard::loadable;
 pub use host::{
-    Answers, Asked, Browser, CenterDid, Confirm, Dressing, Halves, Heard, Ledger, Past, Place, Tab,
-    TabKind, Visited, Went, Window, host,
+    Answers, Arranged, Arranging, Asked, Browser, CenterDid, Confirm, Dressing, Halves, Heard,
+    Ledger, Past, Place, Tab, TabKind, Visited, Went, Window, host,
 };
 pub use notices::{Armed, Notice};
 pub use page::Page;

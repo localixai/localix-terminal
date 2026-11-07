@@ -54,6 +54,35 @@ pub(super) fn partner(tabs: &[Key], shown: Key) -> Option<Key> {
         .copied()
 }
 
+/// Where tab `key`, carried over the pages, lands when let go of over the right half (`right`)
+/// or the left: the tab beside the shown one then. The window lays it out so as the tab is
+/// carried, the halves as they will be. A whole window gets it beside; a split one, in the
+/// half not in use (the shown tab carried there, the two change sides). None when the half is
+/// the one in use, or the tab is the shown one over a whole window: nothing to lay out before
+/// it is let go of.
+pub(super) fn landed(
+    beside: Option<Beside>,
+    shown: Option<Key>,
+    pair: Option<(Key, Key)>,
+    key: Key,
+    right: bool,
+) -> Option<Beside> {
+    let Some((left_half, right_half)) = pair else {
+        return (Some(key) != shown).then_some(Beside { key, right });
+    };
+    let into = if right { right_half } else { left_half };
+    if Some(into) == shown {
+        return None;
+    }
+    if Some(key) == shown {
+        return beside.map(|beside| Beside {
+            key: beside.key,
+            right: !beside.right,
+        });
+    }
+    Some(Beside { key, right })
+}
+
 /// A project's split as kept while the window shows another: the tab in use, the one beside,
 /// by their keys (`w1`, `t2`), and whether that one is on the right.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,6 +90,45 @@ pub(super) struct Kept {
     pub shown: String,
     pub beside: String,
     pub right: bool,
+}
+
+/// What the window told the layout of its project's split and is waiting to hear back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Told {
+    /// Nothing waits: the window follows the layout.
+    Nothing,
+    /// The project splits so.
+    Split(Kept),
+    /// The project is whole.
+    Whole,
+}
+
+impl Told {
+    /// What telling `split` (none: whole) is.
+    pub(super) fn of(split: Option<&Kept>) -> Self {
+        split.map_or(Self::Whole, |kept| Self::Split(kept.clone()))
+    }
+}
+
+/// Project `arranged`'s split as the layout keeps it: the tab it shows when that one is split,
+/// else its first split tab; of its two panes, the one in focus is the one in use.
+pub(super) fn kept_of(arranged: &super::Arranged) -> Option<Kept> {
+    let split = |tab: &&super::Arranging| tab.panes.len() == 2;
+    let shown = (arranged.tabs.iter()).filter(split).find(|tab| {
+        arranged
+            .shown
+            .as_ref()
+            .is_some_and(|shown| tab.panes.contains(shown))
+    });
+    let tab = shown.or_else(|| arranged.tabs.iter().find(split))?;
+    let shown = tab.focused.clone().unwrap_or_else(|| tab.panes[0].clone());
+    let at = tab.panes.iter().position(|pane| *pane == shown)?;
+    let beside = tab.panes.get(1 - at)?.clone();
+    Some(Kept {
+        shown,
+        beside,
+        right: at == 0,
+    })
 }
 
 /// Split `kept`'s tabs, left and right.
@@ -90,20 +158,24 @@ pub(super) fn again(kept: &Kept, shown: &str) -> Option<Beside> {
 
 /// The space between the halves, in points: the window's glass, as a line.
 pub(super) const GAP: f64 = 1.0;
-/// The least share of the width either half keeps while the line between them is dragged.
-pub(super) const LEAST: f64 = 0.2;
+/// The least either half keeps, in points, however the line is dragged or the window sized.
+pub(super) const LEAST_POINTS: f64 = 190.0;
 
-/// The width of the line between the halves that the person takes hold of, in points.
-pub(super) const LINE: f64 = 7.0;
+/// The width of the line between the halves that the person takes hold of, in points: the
+/// drawn point and four either side of it.
+pub(super) const LINE: f64 = 9.0;
 
 /// The window split, or not, and how.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(super) struct Split {
     pub beside: Option<Beside>,
     /// The left half's share of the width, as the person left it (a half until they drag).
     pub share: f64,
     /// The share when the person took hold of the line: a drag moves from it.
     pub grabbed: Option<f64>,
+    /// What the window last told the layout of its project's split, until the layout tells it
+    /// back: told twice is told once, and a split the person undid does not come back meanwhile.
+    pub told: Told,
 }
 
 impl Default for Split {
@@ -112,13 +184,16 @@ impl Default for Split {
             beside: None,
             share: 0.5,
             grabbed: None,
+            told: Told::Nothing,
         }
     }
 }
 
-/// A share held where both halves keep some of the width.
-pub(super) fn held(share: f64) -> f64 {
-    share.clamp(LEAST, 1.0 - LEAST)
+/// A share of `room` points held where both halves keep `LEAST_POINTS` (on a room too narrow
+/// for both, they keep half each).
+pub(super) fn held(share: f64, room: f64) -> f64 {
+    let least = (LEAST_POINTS / room.max(1.0)).min(0.5);
+    share.clamp(least, 1.0 - least)
 }
 
 /// The halves of `width` points starting `left`, the first `share` of it: each one's left and

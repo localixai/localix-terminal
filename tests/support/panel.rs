@@ -347,13 +347,13 @@ pub(crate) fn first(browser: &Browser) {
         browser.click("side-width 300");
         width(300);
         browser.click("side-width 40 done");
-        width(180);
+        width(200);
         browser.click("history");
         browser.click("side-width 260 done");
         width(260);
         browser.click("unmenu");
         browser.click("side-width usual done");
-        width(264);
+        width(248);
     }
     let listed = browser.listing().unwrap_or_default();
     let groups: Vec<&str> = listed.iter().map(|tab| tab.group.as_str()).collect();
@@ -513,4 +513,33 @@ pub(crate) fn active() -> bool {
     // SAFETY: `isActive` is a BOOL property of the object above, readable from any thread.
     let active: Bool = unsafe { msg_send![app, isActive] };
     active.as_bool()
+}
+
+/// A second window: the app opens it, and the next terminal opens in it, a window of its own;
+/// the agent still reads every window's tabs, and works in the new one's.
+pub(crate) fn windows(browser: &Browser) {
+    let before = browser.listing().expect("a window is open").len();
+    browser.new_window(77);
+    let page = llx_desk::terminal::page("session 41 · sh");
+    let panel = browser.panel(41, "session 41 · sh", page);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while browser.peek(&panel, "typeof W") != Ok(json!("function")) {
+        assert!(
+            Instant::now() < deadline,
+            "the second window's panel never loaded"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(
+        browser.in_use(),
+        Some(77),
+        "the new window is the one in use"
+    );
+    let listed = browser.listing().expect("the windows are open");
+    assert!(listed.iter().any(|tab| tab.id == "t41"), "{listed:?}");
+    assert_eq!(
+        listed.len(),
+        before + 1,
+        "the first window's tabs are listed too"
+    );
 }

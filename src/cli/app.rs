@@ -51,6 +51,49 @@ pub(super) fn run() -> u8 {
     }
 }
 
+/// `llx-desk open`: on macOS the system opens LLX Desk.app, as the Dock does, and the command
+/// is done; the app is not this terminal's (closing the terminal leaves it running). Elsewhere,
+/// or run from no app (a build in the tree), this process is the app.
+pub(super) fn open() -> u8 {
+    #[cfg(target_os = "macos")]
+    if let Some(bundle) = crate::bundle::app() {
+        return match ask_open(&bundle) {
+            Ok(()) => super::OK,
+            Err(why) => {
+                crate::out::warn(&format!(
+                    "llx-desk: {} did not open: {why}",
+                    bundle.display()
+                ));
+                super::FAILED
+            }
+        };
+    }
+    run()
+}
+
+/// The system asked to open `bundle`, as the Dock does: done once `open` says so, within a few
+/// seconds.
+#[cfg(target_os = "macos")]
+fn ask_open(bundle: &Path) -> Result<(), String> {
+    let mut child = std::process::Command::new("/usr/bin/open")
+        .arg(bundle)
+        .spawn()
+        .map_err(|why| why.to_string())?;
+    let (said, heard) = std::sync::mpsc::sync_channel(1);
+    std::thread::Builder::new()
+        .name("open-reaper".into())
+        .spawn(move || {
+            let _ = said.send(child.wait());
+        })
+        .map_err(|why| why.to_string())?;
+    match heard.recv_timeout(std::time::Duration::from_secs(10)) {
+        Ok(Ok(status)) if status.success() => Ok(()),
+        Ok(Ok(status)) => Err(status.to_string()),
+        Ok(Err(why)) => Err(why.to_string()),
+        Err(_) => Err("the system did not answer".into()),
+    }
+}
+
 /// How many times a server of another build is stopped for this one, when another starts again
 /// in its place before this one could (a client of that build that starts its own).
 const TAKEOVERS: usize = 3;

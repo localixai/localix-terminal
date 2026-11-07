@@ -86,6 +86,23 @@ impl Scope {
     pub(super) fn take_opening(&mut self) -> Option<String> {
         self.opening.take()
     }
+
+    /// What of this scope is its window's (the project it shows, each project's last tab in it,
+    /// a project it waits on) traded with `other`'s: the window in use is another. The marks and
+    /// the project of the tab opening next are the app's, and stay.
+    pub(super) fn trade_window(&mut self, other: &mut Self) {
+        std::mem::swap(&mut self.shown, &mut other.shown);
+        std::mem::swap(&mut self.last, &mut other.last);
+        std::mem::swap(&mut self.awaiting, &mut other.awaiting);
+    }
+
+    /// A new window's scope: the project this one shows, no tab of it shown yet.
+    pub(super) fn fresh(&self) -> Self {
+        Self {
+            shown: self.shown.clone(),
+            ..Self::default()
+        }
+    }
 }
 
 #[cfg(test)]

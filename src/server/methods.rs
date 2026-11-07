@@ -198,6 +198,9 @@ pub(super) fn window_call(shared: &Shared, conn: &Conn, params: &Value) -> Outco
             cwd: &cwd,
             vars: vars.as_deref(),
             peek: params.get("peek").and_then(Value::as_bool).unwrap_or(false),
+            again: None,
+            person: false,
+            window: None,
         };
         let answered = shared
             .desk
@@ -249,6 +252,9 @@ fn presented(shared: &Shared, params: &Value) -> Result<Value, RpcError> {
         cwd: &cwd,
         vars: vars.as_deref(),
         peek: true,
+        again: None,
+        person: false,
+        window: None,
     };
     let go = params.get("go").and_then(Value::as_bool).unwrap_or(false);
     (shared.desk.present(&call, go))

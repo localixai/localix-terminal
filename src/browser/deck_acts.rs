@@ -362,12 +362,16 @@ impl Deck {
                 group: group(Key::Term(open.id)),
             });
         }
-        // As the person ordered them, the rest as they came; each project's together.
-        out.sort_by_key(|tab| {
-            Key::parse(&tab.id)
-                .and_then(|key| self.order.iter().position(|kept| *kept == key))
+        // In the layout's order (each tab's panes left to right), the rest as they came; each
+        // project's together.
+        let arranged = shared.arranged_here();
+        let place = |tab: &WindowTab| {
+            (arranged.get(&tab.group).into_iter())
+                .flat_map(|arranged| arranged.tabs.iter().flat_map(|tab| tab.panes.iter()))
+                .position(|key| *key == tab.id)
                 .unwrap_or(usize::MAX)
-        });
+        };
+        out.sort_by_key(place);
         strip::by_group(out, |tab| tab.group.as_str())
     }
 
@@ -375,18 +379,5 @@ impl Deck {
     fn split_follows(&mut self, key: Key) {
         let was = self.shown_key();
         self.split.beside = super::super::split::after_show(self.split.beside, was, key);
-    }
-
-    /// Tab `key` dragged before tab `before` (none: to the end).
-    pub(in super::super) fn move_tab(&mut self, key: Key, before: Option<Key>, shared: &Shared) {
-        let mut order: Vec<Key> = (self.listing(shared).iter())
-            .filter_map(|tab| Key::parse(&tab.id))
-            .filter(|tab| *tab != key)
-            .collect();
-        let at = before
-            .and_then(|before| order.iter().position(|tab| *tab == before))
-            .unwrap_or(order.len());
-        order.insert(at, key);
-        self.order = order;
     }
 }

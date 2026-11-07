@@ -158,6 +158,11 @@ impl Desk {
                     .as_ref()
                     .ok_or_else(|| "there is no window here to show it in".to_string())?;
                 browser.act(&tab.key, false)?;
+                // The layout's too: its tab the one its workspace shows, the pane in focus.
+                let row = crate::lock(&self.ledger).get(&tab.key).map(|(row, _)| *row);
+                if let Some(Err(why)) = row.map(|row| self.show_pane(row)) {
+                    log::warn!("{} is not shown in the layout: {why}", tab.key);
+                }
                 let read = self.read(&tab)?;
                 Ok(Output {
                     report: format!("Showing {}.", tab.key),

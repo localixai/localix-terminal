@@ -12,6 +12,7 @@ use crate::browser::agents::AGENTS;
 use crate::browser::capture::Shot;
 use crate::browser::choice::Entry;
 use crate::browser::deck::{Deck, Revisit, Shown};
+use crate::browser::icons;
 use crate::browser::presence::Event as Presence;
 use crate::browser::sizes;
 use crate::browser::strip::{Click, Key, Keyed, Tool, click, went};
@@ -60,6 +61,22 @@ impl On<'_> {
         self.presenter.opened(&mut stage);
     }
 
+    /// Whether `said` is one of what a drag sends a frame at a time (the side's edge, the line
+    /// between the halves, a tab carried over the pages, the strip's glass): it changes no tab
+    /// shown, so the window is neither kept on its project nor drawn again for it.
+    pub(super) fn streamed(said: &str) -> bool {
+        matches!(
+            click(said),
+            Some(
+                Click::SideWidth(..)
+                    | Click::SplitMove(..)
+                    | Click::DropOver(..)
+                    | Click::DropOff
+                    | Click::Glass(_)
+            )
+        )
+    }
+
     /// The person's click. Closing the last tab leaves the window, with its start of a new tab.
     pub(super) fn clicked(&mut self, said: &str) {
         if let Some(url) = went(said) {
@@ -87,22 +104,27 @@ impl On<'_> {
                 }
                 return;
             }
+            // The list shows the move already: the layout keeps it, and tells the window back.
             Some(Click::Move(key, before)) => {
-                if let Some(open) = self.deck.as_mut() {
-                    open.move_tab(key, before, self.shared);
-                    open.refresh(self.shared);
-                }
+                let before = before.map(|before| before.name());
+                let moved = Heard::Moved {
+                    before: before.as_deref(),
+                    window: None,
+                };
+                self.shared.heard(&key.name(), moved);
                 return;
             }
-            Some(Click::DropOver(x, y)) => {
+            // Carried over the pages, the window lays the tab out where it lands as it moves;
+            // off them, back as it was.
+            Some(Click::DropOver(key, x, y)) => {
                 if let Some(open) = self.deck.as_mut() {
-                    open.drop_over(Some((f64::from(x), f64::from(y))));
+                    open.drop_over(key, Some((f64::from(x), f64::from(y))));
                 }
                 return;
             }
             Some(Click::DropOff) => {
                 if let Some(open) = self.deck.as_mut() {
-                    open.drop_over(None);
+                    open.drop_off();
                 }
                 return;
             }
@@ -110,6 +132,7 @@ impl On<'_> {
             Some(Click::SplitEven) => {
                 if let Some(open) = self.deck.as_mut() {
                     open.split.share = 0.5;
+                    open.split.grabbed = None;
                     open.layout();
                 }
                 return;
@@ -134,10 +157,26 @@ impl On<'_> {
         match click(said) {
             Some(Click::Close(key)) => self.close(key),
             Some(said) => {
-                let _ = act(self.deck, said, self.shared);
+                let shows = matches!(said, Click::Show(_));
+                if act(self.deck, said, self.shared).is_ok()
+                    && shows
+                    && let Some(open) = self.deck.as_ref()
+                {
+                    open.focus_shown();
+                }
             }
             None => {}
         }
+    }
+
+    /// The person closed this window (not the main one): each of its tabs closes as the person
+    /// closing it would, and whoever works in it is told; then the window goes.
+    pub(super) fn close_window(&mut self) {
+        let keys = self.deck.as_ref().map(Deck::keys).unwrap_or_default();
+        for key in keys {
+            self.close(key);
+        }
+        *self.deck = None;
     }
 
     /// The person closes tab `key`, and whoever works in it is told.
@@ -185,7 +224,6 @@ impl On<'_> {
         let labels: Vec<&str> = tools.iter().map(|tool| tool.label()).collect();
         let at = (f64::from(x), f64::from(y));
         match open.choose(at, &labels, None).and_then(|at| tools.get(at)) {
-            Some(Tool::Split) => self.clicked("key split"),
             Some(Tool::History) => self.clicked("history"),
             Some(Tool::Mini) => self.clicked("collapse"),
             Some(Tool::Events) => self.clicked("events"),
@@ -239,12 +277,22 @@ impl On<'_> {
         let path = std::env::var_os("PATH").unwrap_or_default();
         let found: Vec<Option<&'static str>> =
             AGENTS.iter().map(|agent| agent.command_on(&path)).collect();
+        // Each with its picture and the person's own keys for it, as the menu bar shows them.
+        let keyed = |label: &str, kind: &str, id: &str| Entry::Item {
+            label: label.into(),
+            marked: false,
+            off: false,
+            paste: false,
+            icon: Some(icons::of_kind(kind)),
+            key: crate::browser::shortcuts::keys_of(id),
+        };
         let item = |label: String, off: bool, icon: Option<&'static str>| Entry::Item {
             label,
             marked: false,
             off,
             paste: false,
             icon,
+            key: None,
         };
         let agents = (AGENTS.iter().zip(&found))
             .map(|(agent, command)| match command {
@@ -257,9 +305,9 @@ impl On<'_> {
             })
             .collect();
         let entries = [
-            item("New Page".into(), false, None),
-            item("New Terminal".into(), false, None),
-            item("Board".into(), false, None),
+            keyed("New Page", "web", "new-page"),
+            keyed("New Terminal", "term", "new-terminal"),
+            keyed("Board", "board", "board"),
             Entry::Line { line: true },
             Entry::Sub {
                 label: "Agents".into(),
@@ -330,6 +378,7 @@ impl On<'_> {
             Keyed::LastTab => tabs.last().copied(),
             Keyed::Next => step(true),
             Keyed::Previous => step(false),
+            Keyed::NewWindow => return asked(Asked::Window),
             Keyed::NewPage => return asked(Asked::Page(None)),
             Keyed::NewTerminal => return asked(Asked::Terminal(None)),
             Keyed::NewBoard => return asked(Asked::Board),
@@ -361,8 +410,11 @@ impl On<'_> {
                 return self.close_project(&shown);
             }
         };
-        if let Some(key) = show {
-            let _ = act(self.deck, Click::Show(key), self.shared);
+        if let Some(key) = show
+            && act(self.deck, Click::Show(key), self.shared).is_ok()
+            && let Some(open) = self.deck.as_ref()
+        {
+            open.focus_shown();
         }
     }
 
