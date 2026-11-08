@@ -27,6 +27,7 @@ LLX_DESK_DISPLAY_TESTS=1 cargo test --test browser   # real windows: needs a dis
 - SQL migrations in `src/store/schema.rs` are append-only. A regression test fingerprints the
   existing steps: append a new step instead of changing an existing step or its fingerprint.
 - Update `README.md` and `CHANGELOG.md` (under `## Unreleased`) with any change of behaviour.
+- A change a person sees follows [docs/ui.md](docs/ui.md) in every state of its matrix.
 - English only, in code, comments and docs.
 
 ## Releasing
