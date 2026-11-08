@@ -29,9 +29,9 @@ const CAN_JOIN_ALL_SPACES: usize = 1 << 0;
 const STATIONARY: usize = 1 << 4;
 const IGNORES_CYCLE: usize = 1 << 6;
 const FULL_SCREEN_AUXILIARY: usize = 1 << 8;
-/// Keep the deck on its desktop: the green button uses native zoom, not a full-screen Space.
-const FULL_SCREEN_NONE: usize = 1 << 9;
-const FULL_SCREEN_DISALLOWS_TILING: usize = 1 << 12;
+/// The deck may go full screen and be tiled: macOS offers its window tiling (the green button's
+/// menu, dragging to an edge or a corner, Option-drag) only to windows that may.
+const FULL_SCREEN_PRIMARY: usize = 1 << 7;
 /// NSWindowLevel: the ordinary windows', and floating, above them.
 const NORMAL: isize = 0;
 const FLOATING: isize = 3;
@@ -45,10 +45,10 @@ pub(super) enum Role {
 
 impl Role {
     /// The mini floats over every app, on every Space; the deck is an ordinary window among the
-    /// person's, without moving it into a separate full-screen Space.
+    /// person's, native in tiling and full screen.
     const fn spaces(self) -> usize {
         match self {
-            Self::Deck => FULL_SCREEN_NONE | FULL_SCREEN_DISALLOWS_TILING,
+            Self::Deck => FULL_SCREEN_PRIMARY,
             Self::Mini => CAN_JOIN_ALL_SPACES | FULL_SCREEN_AUXILIARY | STATIONARY | IGNORES_CYCLE,
         }
     }
@@ -128,11 +128,17 @@ fn collapser() -> Option<&'static AnyObject> {
 }
 
 /// The main `window`'s minimize button collapses it to the mini, told to `proxy`. Its green
-/// button keeps the system's native zoom action.
+/// button keeps the system's own: full screen, and its tiling menu.
 pub(super) fn collapse_to(window: &Window, proxy: &EventLoopProxy<Cmd>) {
+    *crate::lock(COLLAPSE.get_or_init(|| Mutex::new(None))) = Some(proxy.clone());
+    hook_collapse(window);
+}
+
+/// The minimize button of `window` calls the collapse again (the system makes its buttons anew
+/// when full screen ends).
+pub(super) fn hook_collapse(window: &Window) {
     /// NSWindowButton: the minimize button.
     const MINIATURIZE: usize = 1;
-    *crate::lock(COLLAPSE.get_or_init(|| Mutex::new(None))) = Some(proxy.clone());
     let Some(target) = collapser() else {
         return;
     };
@@ -184,7 +190,7 @@ fn takes(object: &AnyObject, selector: Sel) -> bool {
 pub(super) fn adopt(window: &Window, role: Role) {
     let object = native(window);
     // The deck stays the window tao made: the app's main window, which a click activates and
-    // the green button zooms on its desktop. Shown by an agent, it still comes to the front
+    // the green button takes to full screen. Shown by an agent, it still comes to the front
     // without taking the keys (`reveal`).
     let swapped = (role == Role::Mini)
         .then(panel_class)
@@ -396,10 +402,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn deck_zooms_on_its_desktop_without_becoming_a_full_screen_tile() {
+    fn deck_goes_full_screen_and_tiles_as_an_ordinary_window() {
         let behavior = Role::Deck.spaces();
-        assert_ne!(behavior & FULL_SCREEN_NONE, 0);
-        assert_ne!(behavior & FULL_SCREEN_DISALLOWS_TILING, 0);
+        assert_ne!(behavior & FULL_SCREEN_PRIMARY, 0);
         assert_eq!(behavior & FULL_SCREEN_AUXILIARY, 0);
         assert_eq!(behavior & CAN_JOIN_ALL_SPACES, 0);
         assert_ne!(Role::Mini.spaces() & FULL_SCREEN_AUXILIARY, 0);

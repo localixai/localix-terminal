@@ -185,7 +185,7 @@ html:not([data-glass]) #sug,html:not([data-glass]) #menu{background:var(--ground
 .v .h{display:flex;align-items:center;gap:7px}
 .v .n{display:block}
 .v.off .h{opacity:.62}
-.v .u{display:block;margin-top:1px;padding-left:17px;font-size:11px;color:var(--ink-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.v .u{display:block;margin-top:1px;padding-left:17px;font-size:11px;line-height:1.35;color:var(--ink-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 /* The Event Center: the bell's count, and each event with what it is, its words and its buttons. */
 #ev{position:relative}
 #evn{position:absolute;top:2px;right:2px;min-width:14px;height:14px;padding:0 3.5px;box-sizing:border-box;border-radius:7px;background:#ff3b30;color:#fff;font:600 10px/14px var(--ui-font,var(--ui-sys));text-align:center;display:none}
@@ -234,6 +234,8 @@ html:not([data-glass]) #sug,html:not([data-glass]) #menu{background:var(--ground
 #tn.on{display:block}
 /* Glass (macOS): the strip is the titlebar, its toolbar row clear of the window's buttons (a unified toolbar's: 18 to 80 points). */
 html[data-glass] #bar{padding-left:78px}
+/* Full screen has no window buttons: the crumbs start at the edge, as the rest of the bar does. */
+html[data-glass][data-full] #bar{padding-left:4px}
 /* The side (data-part=side): the same page in a view of its own down the window's left, listing
    the shown project's tabs; the strip then has no row of them (data-side). */
 html[data-side] #tabs{display:none}
@@ -270,8 +272,8 @@ html[data-part=side] #side{display:flex;flex-direction:column;gap:8px;height:100
 :is(#sl,#gh) .ic .mk svg{width:16px;height:16px}
 :is(#sl,#gh) .t.on .ic{background:color-mix(in srgb,currentColor 16%,transparent)}
 :is(#sl,#gh) .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-:is(#sl,#gh) .n{font-size:13px;font-weight:500}
-:is(#sl,#gh) .u{font-size:11px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+:is(#sl,#gh) .n{font-size:13px;font-weight:500;line-height:1.3}
+:is(#sl,#gh) .u{font-size:11px;line-height:1.35;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* The close button takes its place on every row and shows only while the row is under the pointer
    (the one shown, too), and not while a tab is carried; the text never moves for it. */
 :is(#sl,#gh) .x{width:20px;height:20px;border-radius:var(--r-1);opacity:0}

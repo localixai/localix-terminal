@@ -141,17 +141,19 @@ pub(super) fn coat(dark: bool, level: super::settings::Transparency) -> (Rgb, f6
     }
 }
 
-/// Respect accessibility overrides without changing the person's chosen transparency.
+/// The person's chosen transparency, or none while the window must be `solid`: they reduce
+/// transparency or increase contrast (a window's background is not to stay semi-transparent
+/// then), or it is full screen, where no desktop lies behind it for the glass to sample (the
+/// material would show a flat grey with the pages' ink over it).
 #[cfg_attr(
     not(any(target_os = "macos", test)),
     expect(dead_code, reason = "the native glass is macOS's only")
 )]
 fn glass_level(
     chosen: super::settings::Transparency,
-    reduced: bool,
-    increased: bool,
+    solid: bool,
 ) -> super::settings::Transparency {
-    if reduced || increased {
+    if solid {
         super::settings::Transparency::Off
     } else {
         chosen
@@ -197,6 +199,9 @@ pub(super) struct Frame {
     /// How the window keeps drawing while it is concealed.
     #[cfg(target_os = "macos")]
     rendering: super::nspanel::Rendering,
+    /// What the window remembers of full screen.
+    #[cfg(target_os = "macos")]
+    screen: std::sync::Mutex<native::Screen>,
 }
 
 impl Frame {
@@ -245,6 +250,8 @@ impl Frame {
             glass: None,
             #[cfg(target_os = "macos")]
             rendering: super::nspanel::Rendering::Switched,
+            #[cfg(target_os = "macos")]
+            screen: std::sync::Mutex::default(),
         })
     }
 
@@ -281,7 +288,27 @@ impl Frame {
         #[cfg(not(target_os = "macos"))]
         let _ = &self.native;
         #[cfg(target_os = "macos")]
-        super::nspanel::reveal(&self.native, super::nspanel::Role::Deck, self.rendering);
+        {
+            super::nspanel::reveal(&self.native, super::nspanel::Role::Deck, self.rendering);
+            crate::lock(&self.screen).remember(&self.native);
+        }
+    }
+
+    /// Full screen draws no toolbar over the strip (macOS), and leaving it gives the toolbar back.
+    pub(super) fn follow_full_screen(&self) -> bool {
+        #[cfg(target_os = "macos")]
+        if self.look != Look::Hidden {
+            let full = self.native.fullscreen().is_some();
+            native::chrome(&self.native, full);
+            // Leaving full screen, tao zooms the window it believed zoomed on the way in: the
+            // frame the person had comes back instead of one that fills the screen.
+            let was = crate::lock(&self.screen).step(&self.native, full);
+            if was != full {
+                self.retint();
+                return !full;
+            }
+        }
+        false
     }
 
     /// The window takes the person's keys: they just opened it themselves.
@@ -310,15 +337,15 @@ impl Frame {
     }
 
     /// Tint the glass for the window's appearance now (the person's theme, or the system's).
-    /// Solid, as the person's Off is, while they reduce transparency or increase contrast: a
-    /// window's background is not to stay semi-transparent then.
+    /// Solid, as the person's Off is, while they reduce transparency or increase contrast, and in
+    /// full screen (`glass_level`).
     pub(super) fn retint(&self) {
         #[cfg(target_os = "macos")]
         if let Some(glass) = &self.glass {
             let dark = self.native.theme() == Theme::Dark;
             let chosen = super::settings::now().transparency;
-            let level = glass_level(chosen, native::reduced(), native::increased());
-            let (colour, alpha) = coat(dark, level);
+            let solid = native::reduced() || native::increased() || self.native.fullscreen().is_some();
+            let (colour, alpha) = coat(dark, glass_level(chosen, solid));
             glass.tint(material(dark), colour, alpha);
         }
     }

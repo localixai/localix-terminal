@@ -4,7 +4,7 @@
 //! page says where its list is (`glass x y w h`); the pane follows it, hidden while none is open.
 
 use objc2::rc::Retained;
-use objc2::runtime::{AnyClass, AnyObject, Bool};
+use objc2::runtime::{AnyObject, Bool};
 use objc2::{class, msg_send};
 use wry::{WebView, WebViewExtMacOS};
 
@@ -24,22 +24,6 @@ pub(super) fn material(material: isize) -> Retained<AnyObject> {
     // SAFETY: as above.
     let _: () = unsafe { msg_send![&*view, setMaterial: material] };
     view
-}
-
-/// A view of the system's regular glass, rounded by `radius` (macOS 26: none before), with no
-/// content: the strip's page stays a sibling above it, so what is written on it is the page's own
-/// ink. Regular, not clear: clear is for media behind it, and wants a dimming layer.
-fn glass(radius: f64) -> Option<Retained<AnyObject>> {
-    /// NSGlassEffectViewStyleRegular.
-    const REGULAR: isize = 0;
-    let class = AnyClass::get(c"NSGlassEffectView")?;
-    // SAFETY: `new` on NSGlassEffectView answers a retained view, laid out by its owner.
-    let view: Retained<AnyObject> = unsafe { msg_send![class, new] };
-    // SAFETY: an NSGlassEffectView takes an NSInteger style and a CGFloat radius.
-    let _: () = unsafe { msg_send![&*view, setStyle: REGULAR] };
-    // SAFETY: as above.
-    let _: () = unsafe { msg_send![&*view, setCornerRadius: radius] };
-    Some(view)
 }
 
 /// Put `view` just below the strip, among its siblings: over the pages, under the strip's page.
@@ -105,7 +89,9 @@ impl Pane {
         /// NSVisualEffectMaterialMenu, and a menu's corners.
         const MENU: isize = 5;
         const ROUND: f64 = 10.0;
-        let pane = glass(ROUND).unwrap_or_else(|| {
+        // A material, not an NSGlassEffectView: that one's own layout holds the window's size
+        // where it is, and the window could no longer be made smaller.
+        let pane = {
             let pane = material(MENU);
             // SAFETY: an NSView takes a BOOL: drawn into a layer, which rounds its corners.
             let _: () = unsafe { msg_send![&*pane, setWantsLayer: Bool::YES] };
@@ -118,7 +104,7 @@ impl Pane {
                 let _: () = unsafe { msg_send![&*layer, setMasksToBounds: Bool::YES] };
             }
             pane
-        });
+        };
         // SAFETY: an NSView takes a BOOL.
         let _: () = unsafe { msg_send![&*pane, setHidden: Bool::YES] };
         below(&pane, strip)?;

@@ -40,12 +40,24 @@ pub(super) fn on_window(
         // Another window closed: it goes, and its tabs with it.
         WindowEvent::CloseRequested => return true,
         event if frame::relayout(event) => {
+            // Full screen over: the system made the window's buttons anew, and the main
+            // window's minimize button is the mini's again.
+            #[cfg(target_os = "macos")]
+            if open.frame.follow_full_screen() && main {
+                crate::browser::nspanel::hook_collapse(&open.frame.native);
+            }
+            #[cfg(not(target_os = "macos"))]
+            open.frame.follow_full_screen();
+            open.tell_full_screen();
             open.layout();
             if main {
                 presenter.deck_moved(open, event, shared);
             }
         }
-        WindowEvent::Moved(_) if main => presenter.deck_moved(open, event, shared),
+        WindowEvent::Moved(_) if main => {
+            open.frame.follow_full_screen();
+            presenter.deck_moved(open, event, shared);
+        }
         // The system's appearance changed: a glass that follows it is tinted again.
         WindowEvent::ThemeChanged(_) => open.frame.retint(),
         _ => {}

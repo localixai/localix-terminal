@@ -135,6 +135,7 @@ impl Deck {
             self.say((part, view), "agents", &super::super::agents::script());
             self.say((part, view), "drawn", &drawn);
         }
+        self.tell_full_screen();
         let rows = (self.menu == Some(Menu::History)).then(|| self.rows(shared));
         if self.menu != Some(Menu::Events) {
             let _ = strip.evaluate_script(&strip::menu(rows.as_deref()));
@@ -166,6 +167,24 @@ impl Deck {
         let (acting, waiting) = shared.turn.now();
         let turn = strip::Turn::of(acting, self.commenting, waiting);
         self.say((Part::Nav, nav), "turn", &strip::turn(turn));
+    }
+
+    /// The pages know whether the window is full screen (`data-full`): it has no buttons of its
+    /// own then, and the crumbs give up the room kept for them. Told on every refresh too, so a
+    /// page loaded again has it back.
+    pub(in super::super) fn tell_full_screen(&self) {
+        let full = self.frame.native.fullscreen().is_some();
+        let script = format!("document.documentElement.toggleAttribute('data-full',{full})");
+        let views = [
+            (Part::Strip, self.strip.as_ref()),
+            (Part::Side, self.side.as_ref()),
+            (Part::Nav, self.nav.as_ref()),
+        ];
+        for (part, view) in views {
+            if let Some(view) = view {
+                self.say((part, view), "full", &script);
+            }
+        }
     }
 
     /// `script`, of `kind`, run in `view`, which is `part` of the strip, unless it is what that

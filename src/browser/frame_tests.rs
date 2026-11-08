@@ -85,10 +85,8 @@ fn each_appearance_has_its_own_material_and_coat() {
 fn the_glass_keeps_the_chosen_level_in_every_window_state() {
     use super::super::settings::Transparency as Level;
     for chosen in [Level::Off, Level::Low, Level::Standard, Level::High] {
-        assert_eq!(glass_level(chosen, false, false), chosen);
-        assert_eq!(glass_level(chosen, true, false), Level::Off);
-        assert_eq!(glass_level(chosen, false, true), Level::Off);
-        assert_eq!(glass_level(chosen, true, true), Level::Off);
+        assert_eq!(glass_level(chosen, false), chosen);
+        assert_eq!(glass_level(chosen, true), Level::Off);
     }
 }
 

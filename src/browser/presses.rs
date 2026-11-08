@@ -63,6 +63,16 @@ fn take_over(event: *mut AnyObject) {
     if level != NORMAL {
         return;
     }
+    // Only the app's own windows: the system's own (the green button's tiling menu is one, in
+    // this process) must not be made key by a press, or they close before they act.
+    let Some(ours) = objc2::runtime::AnyClass::get(c"TaoWindow") else {
+        return;
+    };
+    // SAFETY: `isKindOfClass:` takes a class and answers a BOOL.
+    let is_ours: objc2::runtime::Bool = unsafe { msg_send![window, isKindOfClass: ours] };
+    if !is_ours.as_bool() {
+        return;
+    }
     super::appkit::activate_and_key(window);
 }
 

@@ -61,6 +61,25 @@ pub(super) fn toolbar(window: &Window) {
     let _: () = unsafe { msg_send![object, setToolbarStyle: UNIFIED] };
 }
 
+/// Full screen has no titlebar of its own to draw: the system gives a window with a toolbar a
+/// solid bar of it over the top of the content, which would hide the strip. So the toolbar is let
+/// go while the window is full screen (the strip is the top, the buttons come over it when the
+/// pointer reaches the top edge) and made again when it leaves.
+pub(super) fn chrome(window: &Window, full: bool) {
+    let object = crate::browser::appkit::native(window);
+    // SAFETY: a window answers its toolbar, or nil.
+    let has: *mut AnyObject = unsafe { msg_send![object, toolbar] };
+    match (full, has.is_null()) {
+        (true, false) => {
+            let none: Option<&AnyObject> = None;
+            // SAFETY: a window takes a toolbar, or nil to have none.
+            let _: () = unsafe { msg_send![object, setToolbar: none] };
+        }
+        (false, true) => toolbar(window),
+        _ => {}
+    }
+}
+
 /// Whether the person asked for less transparency (Accessibility, Display).
 pub(super) fn reduced() -> bool {
     // SAFETY: `sharedWorkspace` is NSWorkspace's class method, returning the shared instance.
@@ -218,4 +237,51 @@ pub(super) fn dressed(window: &Window) -> (usize, isize, bool, f64, bool) {
         }
     }
     (found.0, found.1, opaque.as_bool(), aspect, coated)
+}
+
+/// What a window remembers of full screen: whether it was in it at the last event, the frame it
+/// had outside it (outer position, inner size), and until when that frame is put back (tao zooms
+/// a window it took for zoomed on the way in, as it comes out; the zoom lands a moment later).
+#[derive(Default)]
+pub(super) struct Screen {
+    was: bool,
+    frame: Option<(tao::dpi::PhysicalPosition<i32>, tao::dpi::PhysicalSize<u32>)>,
+    until: Option<std::time::Instant>,
+}
+
+impl Screen {
+    /// The frame the window has now, when it is not full screen: the one to come back to.
+    pub(super) fn remember(&mut self, window: &Window) {
+        if window.fullscreen().is_none()
+            && let Ok(at) = window.outer_position()
+        {
+            self.frame = Some((at, window.inner_size()));
+        }
+    }
+
+    /// An event of the window, `full` or not: the frame is kept while it is the person's, and put
+    /// back, for a moment, after full screen ends. Whether it was full before.
+    pub(super) fn step(&mut self, window: &Window, full: bool) -> bool {
+        let was = self.was;
+        self.was = full;
+        if was && !full {
+            self.until = Some(std::time::Instant::now() + std::time::Duration::from_millis(1500));
+        }
+        if full {
+            return was;
+        }
+        if self.until.is_some_and(|until| std::time::Instant::now() < until) {
+            if let Some((at, size)) = self.frame {
+                let now = (window.outer_position().ok(), window.inner_size());
+                if now != (Some(at), size) {
+                    window.set_inner_size(size);
+                    window.set_outer_position(at);
+                }
+            }
+        } else {
+            self.until = None;
+            self.remember(window);
+        }
+        was
+    }
 }
