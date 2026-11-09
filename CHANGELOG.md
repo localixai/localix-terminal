@@ -32,6 +32,19 @@
 - Every page the app builds takes the first click of a window that is not the key one, so a
   button acts at once, not on the second press; a test requires it.
 
+### Security
+
+- A page's own scripts can no longer speak for the app or the person. Only the app's own calls
+  reach the probe, by a per-run key. Each call carries a random 64-bit id and a 128-bit word from
+  the system's random source, and its reply counts only with both and only from the tab it went
+  to. A comment counts only while the person is commenting in that window, and only the app's
+  checks take a script's presses as the person's.
+- The probe keeps the builtins it uses from when it is installed, and builds its replies from
+  plain copies. A page that changes prototypes or gives Object and Array a `toJSON` cannot alter a
+  reply or reach the comment card.
+- The strip and Settings run their one script by its SHA-384 and allow no inline script. The
+  agents' marks reach the strip as JSON data.
+
 ### Removed
 
 - The mini player, the small floating preview of the tab. The main window's yellow button and ⌘M

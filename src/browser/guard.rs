@@ -26,9 +26,9 @@ pub fn loadable(url: &str) -> Option<String> {
     })
 }
 
-/// 32 hex characters from the clock and the address space; unguessable to a page in one run.
+/// 32 hex characters from the system's random source; unguessable to a page in one run.
 pub(super) fn token() -> String {
-    crate::token()
+    super::secret::word()
 }
 
 /// Whether `url` is an address another browser can open: a web page, or a file.

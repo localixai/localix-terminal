@@ -17,9 +17,10 @@ fn closed(command: &Cmd, shared: &Shared) {
     }
 }
 
-/// `script` run in `webview`, its call `id` answered by the page; a tab closed answers at once.
+/// `script` run in tab `tab`'s `webview`, its call `id` answered by that page alone; a tab closed
+/// answers at once.
 fn eval(
-    webview: Option<&wry::WebView>,
+    (tab, webview): (u32, Option<&wry::WebView>),
     id: u64,
     script: &str,
     failed: &'static str,
@@ -28,6 +29,7 @@ fn eval(
     let Some(webview) = webview else {
         return shared.answer(id, Err(format!("{failed}: the tab is closed")));
     };
+    shared.calls.aimed(id, tab);
     let answer = Arc::clone(shared);
     let sent = webview.evaluate_script_with_callback(script, move |started| {
         if started.trim() != "true" {
@@ -74,6 +76,10 @@ pub(super) fn on_browser(
     let Some(open) = deck.as_mut() else {
         return closed(&command, shared);
     };
+    // A comment is the person's only while they comment in this window: no page can say they did.
+    if matches!(command, Cmd::Noted(_)) && !open.is_commenting() {
+        return;
+    }
     let Some(tabs) = open.web.as_mut() else {
         return closed(&command, shared);
     };
@@ -84,7 +90,10 @@ pub(super) fn on_browser(
             failed,
             tab,
             ..
-        } => return eval(tabs.at(tab), id, &script, failed, shared),
+        } => {
+            let to = tab.unwrap_or_else(|| tabs.active_id());
+            return eval((to, tabs.at(tab)), id, &script, failed, shared);
+        }
         Cmd::Frame(tab, frame) => return reframe(open, tab, frame, shared),
         Cmd::Capture { clip, reply, tab } => match tabs.at(tab) {
             Some(webview) => return capture(webview, zoomed(clip, tabs.zoom(tab)), reply),

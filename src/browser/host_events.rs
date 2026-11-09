@@ -275,12 +275,12 @@ impl Looping {
 }
 
 /// What the loop and the worker share, as it starts.
-fn fresh() -> Arc<Shared> {
+pub(super) fn fresh() -> Arc<Shared> {
     Arc::new(Shared {
         token: token(),
+        key: token(),
         open: AtomicBool::new(false),
-        next_id: AtomicU64::new(1),
-        pending: Mutex::new(HashMap::new()),
+        calls: Default::default(),
         loads: Mutex::new(HashMap::new()),
         loaded: Condvar::new(),
         active: AtomicU32::new(1),

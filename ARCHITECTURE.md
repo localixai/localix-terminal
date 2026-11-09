@@ -66,11 +66,14 @@ Store tests fingerprint existing migrations. These checks run with the normal te
   another, a project or a tab shown; each change with its notices (`Window`, `Workspace`, `Tab`).
   It outlives the app, so a project opens again with the same tabs, places and splits.
 - **`browser/`** is the window: a `tao` event loop on the main thread, a `wry` WebView per page, a
-  probe script injected in each page for observing and acting (`probe/`: the snapshot, the page's own
+  probe script injected in each page for observing and acting (`probe/`: its start, which keeps the
+  builtins it uses as they were at install and answers only the app's calls, the snapshot, the page's own
   requests, what the page tells, frames, the outline, refs found again, actions, typing, keys, comments,
   evaluate), the strip, comments, screenshots. What a page tells besides its content
   (its dialogs, answered Cancel unless a call armed OK, live-region announcements, a field that refused
   a value) comes with the probe's replies and is kept per tab across its documents (`notices.rs`).
+  A call names a random id and word (`secret.rs`), and its reply counts only with both and only
+  from the tab it went to (`calls.rs`).
   The window is an ordinary one, put away only when the person asks (`presence.rs`). `host` takes the main thread and runs the server on another; a `Browser` handle sends it
   commands. Panels are tabs whose page the caller paints (terminals, the board, Settings).
   The window shows one project at a time (`scope.rs`): its tabs are the ones listed, what the person

@@ -47,10 +47,13 @@ pub(super) fn builder<'a>(
         .with_permission_handler(|_| wry::PermissionResponse::Default)
         .with_incognito(forget)
         .with_initialization_script_for_main_only(
-            PROBE.replace("__TOKEN__", &shared.token).replace(
-                "__HEADLESS__",
-                if window.headless { "true" } else { "false" },
-            ),
+            PROBE
+                .replace("__TOKEN__", &shared.token)
+                .replace("__CALL_KEY__", &shared.key)
+                .replace(
+                    "__HEADLESS__",
+                    if window.headless { "true" } else { "false" },
+                ),
             true,
         )
         .with_on_page_load_handler(move |event, url| {
@@ -106,8 +109,10 @@ pub(super) fn builder<'a>(
         builder = builder.with_url(url);
     }
     if with_ipc {
+        // A tab's own handler knows its tab; the one shared by all knows none.
+        let from = (!SHARED).then_some(id);
         builder = builder.with_ipc_handler(move |request| {
-            let command = match ipc.ipc(request.body()) {
+            let command = match ipc.ipc(request.body(), from) {
                 Some(Said::Noted(noted)) => Cmd::Noted(noted),
                 Some(Said::Close(id)) => {
                     // Nobody waits for the answer.

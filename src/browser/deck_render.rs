@@ -73,7 +73,7 @@ impl Deck {
         self.layout();
         // Again on every refresh: a tab switched to, or a page loaded, comments as the strip says.
         if let Some(web) = &self.web {
-            let script = strip::comment(self.commenting, self.sent);
+            let script = strip::comment(&shared.key, self.commenting, self.sent);
             let _ = web.active().evaluate_script(&script);
         }
         let Some(strip) = &self.strip else {
