@@ -265,14 +265,5 @@ pub(super) fn work_area() -> Option<Area> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn deck_goes_full_screen_and_tiles_as_an_ordinary_window() {
-        let behavior = DECK_SPACES;
-        assert_ne!(behavior & FULL_SCREEN_PRIMARY, 0);
-        assert_eq!(behavior & FULL_SCREEN_AUXILIARY, 0);
-        assert_eq!(behavior & CAN_JOIN_ALL_SPACES, 0);
-    }
-}
+#[path = "nspanel_tests.rs"]
+mod tests;

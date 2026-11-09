@@ -244,16 +244,5 @@ fn failed(message: &str) -> Value {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{failed, initialized};
-    use serde_json::json;
-
-    #[test]
-    fn the_revision_asked_is_spoken_when_known_else_the_newest() {
-        let known = initialized(&json!({"protocolVersion": "2025-03-26"}));
-        assert_eq!(known["protocolVersion"], "2025-03-26");
-        let unknown = initialized(&json!({"protocolVersion": "1999-01-01"}));
-        assert_eq!(unknown["protocolVersion"], "2025-06-18");
-        assert_eq!(failed("no")["isError"], true);
-    }
-}
+#[path = "mcp_tests.rs"]
+mod tests;

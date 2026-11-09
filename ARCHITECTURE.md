@@ -37,9 +37,21 @@ Public paths stay stable through re-exports; implementation modules stay private
 | Platform and scripts | `browser/platform.rs` is the platform facade; `platform_views.rs` handles native view behavior; `webview_scripts.rs` waits for scripts across navigation. |
 | Terminal and storage | `terminal/session.rs` owns lifecycle; `session/input.rs`, `output.rs` and `wait.rs` own input, output and waits. `store.rs` manages connections; `store/schema.rs` contains unchanged, append-only SQL steps. |
 
-`cargo test --test architecture` checks that Rust files in `src/` have a responsibility header
-and at most 300 working lines, and that the core board and tree models do not import adapters.
-Store tests fingerprint existing migrations. These checks run with the normal tests in CI.
+### Rules the tests check
+
+`cargo test --test architecture` reads the module tree from `src/lib.rs` (a file reached by
+`#[path]` is in the module that declares it) and checks: every file in `src/` is in that tree,
+opens with a `//!` and holds at most 300 working lines; each top-level module uses only the
+others its row of the module map allows (`tests/architecture/module_map.rs`, written from this
+file: the foundations (`paths`, `store`, `wire`, `view`…) use nothing of the crate, the kept owners
+(`projects`, `ledger`, `layout`, `board`, `feed`) nothing above them, the window (`browser`) no
+domain, and the adapters reach the app through `client`), with each real dependency the map does
+not draw named there as an exception with its reason; the top-level modules form no cycle; no
+working file holds an inline test module (tests sit in `x_tests.rs`); and nothing pulls in an async
+runtime (no such dependency in `Cargo.toml`, no `async` or `await` in `src/`). Paths are read from
+code only, never from comments or strings: `crate::x`, grouped `crate::{x, y::z}` and `super::`
+that climbs to the root. Store tests fingerprint existing migrations. These checks run with the
+normal tests in CI.
 
 ## Layer map
 
