@@ -15,6 +15,7 @@
   `url` start on `about:blank` instead of a search page.
 - Open Folder… and the question before quitting are sheets on the window (an alert of their own
   only while the window is away), so pages, terminals and agents keep running while they wait.
+  Quitting again while the question is up keeps that one question; its answer goes to both.
   Screenshots are encoded off the window's thread. Refreshes during a command are drawn once, the
   page's scripts are sent only when what they say changed, and views that already stand where a
   layout puts them are left alone. A load into a closed tab is refused at once, and a closed tab

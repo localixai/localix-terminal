@@ -1,0 +1,37 @@
+//! Tests of `bundle`: which program is an app's, and which bundle is a temporary one.
+
+use super::{adds_only_options, of, temporary};
+use std::path::Path;
+
+#[test]
+fn the_program_of_a_bundle_names_it_and_any_other_names_none() {
+    let exe = Path::new("/Applications/LLX Desk.app/Contents/MacOS/llx-desk");
+    assert_eq!(of(exe), Some(Path::new("/Applications/LLX Desk.app")));
+    assert_eq!(of(Path::new("/usr/local/bin/llx-desk")), None);
+    assert_eq!(of(Path::new("/x/Contents/MacOS/llx-desk")), None);
+    assert_eq!(of(Path::new("llx-desk")), None);
+}
+
+#[test]
+fn a_run_is_the_app_for_what_the_system_adds_and_the_command_for_the_rest() {
+    let args = |words: &[&str]| words.iter().map(|w| (*w).to_string()).collect::<Vec<_>>();
+    assert!(adds_only_options(&args(&[])));
+    assert!(adds_only_options(&args(&["-psn_0_12345"])));
+    assert!(adds_only_options(&args(&[
+        "-ApplePersistenceIgnoreState",
+        "YES"
+    ])));
+    assert!(!adds_only_options(&args(&["--help"])));
+    assert!(!adds_only_options(&args(&["-V"])));
+    assert!(!adds_only_options(&args(&["window", "{}"])));
+}
+
+#[test]
+fn an_app_on_a_disk_image_or_translocated_is_not_in_place() {
+    assert!(temporary(Path::new("/Volumes/LLX Desk/LLX Desk.app")));
+    assert!(temporary(Path::new(
+        "/private/var/folders/x/AppTranslocation/ABC/d/LLX Desk.app"
+    )));
+    assert!(!temporary(Path::new("/Applications/LLX Desk.app")));
+    assert!(!temporary(Path::new("/Users/me/Applications/LLX Desk.app")));
+}
