@@ -7,6 +7,8 @@ use serde_json::{Value, json};
 use super::*;
 #[path = "desk/events_tests.rs"]
 mod events;
+#[path = "desk/plugin_tests.rs"]
+mod plugin;
 use crate::testing::Scratch;
 
 /// A caller of `desk`: an agent (`agent`; none: the project's own) of the project at `cwd`.

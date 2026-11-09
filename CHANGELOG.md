@@ -18,6 +18,14 @@
   before notifying its waiters.
 - Normal tests now enforce documented, named Rust modules under 300 working lines in `src/`,
   domain-model independence from adapters, and unchanged existing SQL migrations.
+- The Claude Code plugin asks the program that answered last first, so a `llx-desk` missing from
+  the PATH no longer costs a failed start every few seconds, and redraws its line only when
+  something changed. A hung app is no longer asked again under each of the program's places, and
+  closing the tabs as a session ends waits 1.5 s at most.
+- CI also runs the Bun tests, shellcheck and `cargo deny`; a test pins the `status` and `list`
+  lines and the board columns the plugin reads. Releases build with an exact Rust and carry a build
+  provenance attestation. `install.sh` runs only once it is downloaded whole, and can pin the
+  team that signs the Mac app (`TEAM_ID`).
 
 - Settings' Theme and Window Transparency are pop-up buttons, as the fonts are, rather than
   segmented controls. The shortcuts search is a field in the controls' own fill and hairline, no

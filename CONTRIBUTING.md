@@ -8,8 +8,16 @@ cargo clippy --all-targets -- -D warnings
 cargo test                                   # unit tests, and the CLI against a server with no window
 bun test plugins/claude-code/hooks/register.test.ts  # plugin hooks with a mocked host; Bun 1.3+
 bun test src/browser                               # UI gestures, frame cadence and motion lifecycle
+bunx tsc -p plugins/claude-code                    # the plugin's types (see below)
+shellcheck install.sh scripts/*.sh plugins/claude-code/bin/llx-desk
+cargo deny --locked check                          # advisories, licences and sources (deny.toml)
 LLX_DESK_DISPLAY_TESTS=1 cargo test --test browser   # real windows: needs a display, and shows some
 ```
+
+- The plugin's type check needs the `claude-code` module's declarations, which Claude Code writes
+  to `plugins/claude-code/.claude-plugin/types/` (ignored by git) when it loads the plugin from the
+  folder: run `claude --plugin-dir plugins/claude-code` once. CI cannot get them, so it does not run
+  this check; run it before you change the hooks.
 
 - `cargo test` builds a test build (the `test-server` feature, turned on only by the crate's own
   dev-dependency): its server never opens a window and keeps its lock and socket in `LLX_DESK_TEST_DIR`,
@@ -40,7 +48,12 @@ LLX_DESK_DISPLAY_TESTS=1 cargo test --test browser   # real windows: needs a dis
    the tag is on main and that CI passed for it. Then it builds Linux on the project's server and the
    Mac app on GitHub's Mac runner, signed and notarized with the project's Developer ID: one disk image
    (`LLX-Desk-macos.dmg`) and one zip (`LLX-Desk-macos.zip`, which `install.sh` fetches), for Apple
-   Silicon only. It publishes them with the Linux archive and `SHA256SUMS`.
+   Silicon only. It publishes them with the Linux archive and `SHA256SUMS`, each with a build
+   provenance attestation (`gh attestation verify FILE -R rsaryev/llx-desk`).
+
+Releases build with the exact Rust that `RUSTUP_TOOLCHAIN` names in `release.yml`; move it to a
+newer stable once CI passed on it. `TEAM_ID` in `install.sh` is the Apple team that signs the app:
+the Release workflow fails when it names another team, and warns while it is empty.
 
 `scripts/dmg.sh [--universal] [--notarize]` makes the same Mac files here (ad hoc signed unless you
 have a Developer ID identity; `--notarize` needs `LLX_NOTARY_PROFILE`, see the script's header).

@@ -25,6 +25,8 @@ if [ -z "${LLX_DESK_WRAPPED:-}" ]; then
     [ -n "$dir" ] && [ -x "$dir/llx-desk" ] || continue
     [ "$(cd "$dir" 2>/dev/null && pwd -P)" = "$here" ] && continue
     IFS=$old_ifs
+    # The first program found replaces this script; the loop goes on only past those it skips.
+    # shellcheck disable=SC2093
     exec "$dir/llx-desk" "$@"
   done
   IFS=$old_ifs
