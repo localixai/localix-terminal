@@ -8,6 +8,7 @@ use objc2::runtime::{AnyObject, Bool};
 use objc2::{class, msg_send};
 use tao::platform::macos::WindowExtMacOS;
 
+pub(super) mod masks;
 mod sheet;
 pub(super) use sheet::{confirm, pick_folder};
 

@@ -170,20 +170,16 @@ pub(in super::super) fn reparent(_webview: &wry::WebView, _native: &tao::window:
 /// new part of the window empty for a frame. The layout that event brings corrects the rest.
 #[cfg(target_os = "macos")]
 pub(in super::super) fn follow(webview: &wry::WebView, follow: Follow) {
+    use crate::browser::appkit::masks::{
+        HEIGHT_SIZABLE, MAX_X_MARGIN, MAX_Y_MARGIN, MIN_X_MARGIN, MIN_Y_MARGIN, WIDTH_SIZABLE,
+    };
     use objc2::msg_send;
     use wry::WebViewExtMacOS;
-    /// NSAutoresizingMaskOptions.
-    const LEFT: usize = 1;
-    const WIDTH: usize = 2;
-    const RIGHT: usize = 4;
-    const BELOW: usize = 8;
-    const HEIGHT: usize = 16;
-    const ABOVE: usize = 32;
     let mask = match follow {
-        Follow::Fill => WIDTH | HEIGHT,
-        Follow::Top => WIDTH | BELOW,
-        Follow::Centre => LEFT | RIGHT | BELOW | ABOVE,
-        Follow::Side => HEIGHT,
+        Follow::Fill => WIDTH_SIZABLE | HEIGHT_SIZABLE,
+        Follow::Top => WIDTH_SIZABLE | MIN_Y_MARGIN,
+        Follow::Centre => MIN_X_MARGIN | MAX_X_MARGIN | MIN_Y_MARGIN | MAX_Y_MARGIN,
+        Follow::Side => HEIGHT_SIZABLE,
     };
     let view = webview.webview();
     // SAFETY: an NSView answers its NSAutoresizingMaskOptions (an NSUInteger).

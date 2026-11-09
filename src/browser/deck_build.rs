@@ -138,9 +138,7 @@ impl Deck {
             let kept = crate::lock(&shared.kept);
             (
                 kept.side.unwrap_or(true),
-                (kept.side_width).map_or(strip::SIDE, |width| {
-                    width.clamp(strip::SIDE_MIN, strip::SIDE_MAX)
-                }),
+                (kept.side_width).map_or(strip::SIDE, |width| strip::side_held(width, None)),
             )
         };
         let pane = strip.as_ref().and_then(platform::Pane::under);

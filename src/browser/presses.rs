@@ -42,9 +42,6 @@ pub(super) fn watch(proxy: &EventLoopProxy<Cmd>) {
     }
 }
 
-/// NSWindowLevel of the window.
-const NORMAL: isize = 0;
-
 /// Press `event` in the window, llx-desk not the active app: the app made the active one, and
 /// the window its key window, the person's keys going to it.
 fn take_over(event: *mut AnyObject) {
@@ -60,7 +57,7 @@ fn take_over(event: *mut AnyObject) {
     };
     // SAFETY: an NSWindow answers its NSWindowLevel (an NSInteger).
     let level: isize = unsafe { msg_send![window, level] };
-    if level != NORMAL {
+    if level != super::appkit::masks::NORMAL_LEVEL {
         return;
     }
     // Only the app's own windows: the system's own (the green button's tiling menu is one, in

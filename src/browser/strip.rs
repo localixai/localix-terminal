@@ -23,8 +23,10 @@ pub(super) const BAR: f64 = 38.0;
 /// The browser's toolbar over a page, in points: back, forward, reload, the address field, the
 /// page's size and comments. Only a page has it.
 pub(super) const NAV: f64 = 40.0;
+/// The tabs' row under the bar, in points, where there is no side.
+const ROW: f64 = 32.0;
 /// The strip's height, in points, where the tabs are a row under the toolbar (no side).
-pub(super) const HEIGHT: f64 = BAR + 32.0;
+pub(super) const HEIGHT: f64 = BAR + ROW;
 /// The side's width while it is open, in points, until the person drags it wider or narrower:
 /// the tabs listed down the window's left.
 pub(super) const SIDE: f64 = 248.0;
@@ -33,6 +35,20 @@ pub(super) const RAIL: f64 = 52.0;
 /// The narrowest and widest the person can drag the side; never more than half the window.
 pub(super) const SIDE_MIN: f64 = 200.0;
 pub(super) const SIDE_MAX: f64 = 480.0;
+
+/// The widest the side may be in a window `window` points wide (none: in any window):
+/// `SIDE_MAX`, held to half the window, never under `SIDE_MIN`.
+pub(super) fn side_widest(window: Option<f64>) -> f64 {
+    window
+        .map_or(SIDE_MAX, |window| SIDE_MAX.min(window / 2.0))
+        .max(SIDE_MIN)
+}
+
+/// A width the side is given (dragged, or kept from another window), held between `SIDE_MIN`
+/// and the widest it may be in `window`.
+pub(super) fn side_held(width: f64, window: Option<f64>) -> f64 {
+    width.clamp(SIDE_MIN, side_widest(window))
+}
 
 /// Panels past this id are boards: board `b1` is panel `BOARD + 1`, a terminal's screen is its
 /// session's id.
@@ -320,13 +336,17 @@ pub(super) const PAGE: &str = include_str!("strip.html");
 const SCRIPT_SHA384: &str = "kY/s3KUe/nLPI3KUjaD1692JEpt7WkEfPkRuyYJI/u1mkLs2PINeTdMj/qLIqQV6";
 
 /// The strip's page: the trusted UI's resize helper inlined, so it opens without external
-/// resources, and the agents' `marks` and those `installed` (JSON) in it as data its script
+/// resources, its bars as tall as the window lays them out (`BAR`, `NAV`, `ROW`: its style, not
+/// its script), and the agents' `marks` and those `installed` (JSON) in it as data its script
 /// reads, never as script.
 pub(super) fn page(marks: &str, installed: &str) -> String {
     // Inside a script element only `</script` ends it: no `<` of the data reaches the parser.
     let data = |json: &str| json.replace('<', "\\u003c");
     PAGE.replacen("/*RESIZE_HANDLES*/", include_str!("resize.js"), 1)
         .replacen("{{hash}}", SCRIPT_SHA384, 1)
+        .replacen("{{bar}}", &BAR.to_string(), 1)
+        .replacen("{{nav}}", &NAV.to_string(), 1)
+        .replacen("{{row}}", &ROW.to_string(), 1)
         .replacen(
             "id=\"marks\">{}<",
             &format!("id=\"marks\">{}<", data(marks)),

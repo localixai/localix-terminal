@@ -11,24 +11,13 @@ use objc2::{class, msg_send, sel};
 use tao::event_loop::EventLoopProxy;
 use tao::window::Window;
 
+use super::appkit::masks::{FLOATING_LEVEL, FULL_SCREEN_PRIMARY, NORMAL_LEVEL};
 use super::appkit::native;
 use super::capture::CGRect;
 use super::host::Cmd;
 use super::placement::Area;
 use super::platform::unseen;
 use super::presence::Event;
-
-/// NSWindowCollectionBehavior the deck never has: on every Space, over a full-screen app.
-#[cfg(test)]
-const CAN_JOIN_ALL_SPACES: usize = 1 << 0;
-#[cfg(test)]
-const FULL_SCREEN_AUXILIARY: usize = 1 << 8;
-/// The deck may go full screen and be tiled: macOS offers its window tiling (the green button's
-/// menu, dragging to an edge or a corner, Option-drag) only to windows that may.
-const FULL_SCREEN_PRIMARY: usize = 1 << 7;
-/// NSWindowLevel: the ordinary windows', and floating, above them.
-const NORMAL: isize = 0;
-const FLOATING: isize = 3;
 
 /// Where the main window's own minimize button goes: the loop, told to put the window away.
 static COLLAPSE: OnceLock<Mutex<Option<EventLoopProxy<Cmd>>>> = OnceLock::new();
@@ -88,7 +77,8 @@ pub(super) fn hook_collapse(window: &Window) {
 }
 
 /// The deck's collection behaviour: an ordinary window among the person's, native in tiling and
-/// full screen.
+/// full screen. It may go full screen and be tiled: macOS offers its window tiling (the green
+/// button's menu, dragging to an edge or a corner, Option-drag) only to windows that may.
 const DECK_SPACES: usize = FULL_SCREEN_PRIMARY;
 
 /// Make `window` the deck's: the app's main window, which a click activates and the green button
@@ -101,7 +91,7 @@ pub(super) fn adopt(window: &Window) {
     // SAFETY: an NSWindow takes an NSWindowCollectionBehavior (an NSUInteger).
     let _: () = unsafe { msg_send![object, setCollectionBehavior: DECK_SPACES] };
     // SAFETY: an NSWindow takes an NSWindowLevel (an NSInteger).
-    let _: () = unsafe { msg_send![object, setLevel: NORMAL] };
+    let _: () = unsafe { msg_send![object, setLevel: NORMAL_LEVEL] };
 }
 
 /// On screen, as it looks: opaque to the eye and the mouse. Under `DESK_WINDOWS=unseen` it stays
@@ -118,7 +108,7 @@ pub(super) fn reveal(window: &Window, rendering: Rendering) {
     // SAFETY: as above.
     let _: () = unsafe { msg_send![object, setHasShadow: Bool::YES] };
     // SAFETY: an NSWindow takes an NSWindowLevel (an NSInteger).
-    let _: () = unsafe { msg_send![object, setLevel: NORMAL] };
+    let _: () = unsafe { msg_send![object, setLevel: NORMAL_LEVEL] };
     // SAFETY: an NSWindow answers a BOOL.
     let here: Bool = unsafe { msg_send![object, isOnActiveSpace] };
     if !here.as_bool() {
@@ -156,9 +146,9 @@ pub(super) fn conceal_object(object: &AnyObject, rendering: Rendering) {
     // SAFETY: as above.
     let _: () = unsafe { msg_send![object, setHasShadow: Bool::NO] };
     let level: isize = if rendering == Rendering::Switched {
-        NORMAL
+        NORMAL_LEVEL
     } else {
-        FLOATING
+        FLOATING_LEVEL
     };
     // SAFETY: an NSWindow takes an NSWindowLevel (an NSInteger).
     let _: () = unsafe { msg_send![object, setLevel: level] };
@@ -266,6 +256,7 @@ pub(super) fn work_area() -> Option<Area> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::appkit::masks::{CAN_JOIN_ALL_SPACES, FULL_SCREEN_AUXILIARY};
     use super::*;
 
     #[test]
