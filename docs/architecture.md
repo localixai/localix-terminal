@@ -20,7 +20,7 @@ idempotent consumers that reconcile from the owner, and clients that are poked a
 | Change feed | The ordered log of notices in the store (`change_events`), one cursor a consumer (`change_cursors`). |
 | Consumer    | A named reader of the feed with its own cursor and thread: a projector or a reactor.      |
 | Projector   | A consumer that keeps derived data: the Event Center, a board's file. It can be deleted and rebuilt. |
-| Reactor     | A consumer that does something about a change: the relay that tells subscribers.          |
+| Reactor     | A consumer that does something about a change: the relay that tells subscribers, the window's consumer that tells the window. |
 | Source      | A part with events for the person: a type in `desk/center/sources.rs`.                    |
 | Tool surface| The one set of calls every agent uses, the `action`s of the `window` tool: `open`, `interact`, `screenshot`, `close`, `show`, `list`. |
 
@@ -47,8 +47,9 @@ idempotent consumers that reconcile from the owner, and clients that are poked a
  │ board        │ ───────────▶ │ boards                             │  ◀──────  │ center   (projector)      │
  │ layout, pane │  its notice  │ change_events {seq, entity, op,    │  pages    │ board-file (projector)    │
  │ terminal, ask│ ───────────▶ │                run}                │  of 100   │ relay    (reactor)        │
- └──────────────┘              │ change_cursors {name, seq}         │  ──────▶  └───────────────────────────┘
-                               └────────────────────────────────────┘  cursor moved after each notice
+ │ ledger,      │              │ change_cursors {name, seq}         │  ──────▶  │ window   (reactor)        │
+ │ projects     │              └────────────────────────────────────┘           └───────────────────────────┘
+ └──────────────┘                                                      cursor moved after each notice
 ```
 
 - **Producing.** A kept owner calls `feed.write(|write| { …its rows…; write.record(&entity, op) })`:
@@ -62,8 +63,18 @@ idempotent consumers that reconcile from the owner, and clients that are poked a
 - **Restarts.** The cursors are in the store, so each consumer goes on from where it was. Every
   notice carries the run of the app that wrote it, and each entity says whether it outlives a
   run (`Entity::outlives_the_run`): a notice of a pane or a terminal of an earlier run names a key
-  given again since, and is passed over. A notice of a board or of the layout (a window, a
-  workspace, a tab) is read.
+  given again since, and is passed over. A notice of a board, a project's ledger, the projects or
+  the layout (a window, a workspace, a tab) is read.
+- **The entities.** `Said` (a note on its way to an agent), `Pane` (a pane's key this run),
+  `Window`, `Workspace` and `Tab` (the layout), `Board`, `Terminal`, `Ask`, `Ledger` (a project's
+  past: its panes' history and the pages they showed) and `Projects` (which projects the desk
+  knows, and which was used last).
+- **The window.** One consumer, `window` (`desk/layout_drawn.rs`), tells the window what it draws
+  from the owners: the layout on a notice of it or of a pane, a project's past (its history menu,
+  its address field) on a notice of its ledger, the project switcher on a notice of the projects.
+  Nothing else tells the window these (`tests/architecture.rs` holds it to that). `Ledger` and
+  `Projects` are the window's alone: the relay tells subscribers nothing of them, and the Event
+  Center does not gather on them.
 - **Retention.** Notices every running consumer read a day ago go, and past 10 000 the oldest go
   anyway; a cursor nobody moved in a month goes. The feed is not an archive: the owners' tables are
   the truth, and the Event Center's journal is the history.

@@ -1,9 +1,16 @@
-//! The layout projected into browser tab keys, with one feed consumer keeping it current.
+//! The layout projected into browser tab keys, and the one feed consumer that keeps the window
+//! current: its layout, each project's past and the projects it lists.
 
 use super::Desk;
+use crate::browser::{Ledger, Past, TabKind, Visited};
 use crate::feed::Entity;
 use crate::layout::{self, Tree, WindowId};
-use crate::ledger::Row;
+use crate::ledger::{self, Kind, Row};
+use crate::projects::{self, ProjectId};
+
+/// How many of a project's panes the history menu lists, and of its pages the address field
+/// suggests.
+const LISTED: usize = 50;
 
 impl Desk {
     /// The window told its projects' tabs as the layout keeps them, by their panes' keys: a pane
@@ -43,13 +50,63 @@ impl Desk {
                     .collect();
                 crate::browser::Arranged {
                     window,
-                    group: crate::projects::key(space.project),
+                    group: projects::key(space.project),
                     tabs,
                     shown,
                 }
             })
             .collect();
         browser.arranged(windows, arranged);
+    }
+
+    /// The window told project `project`'s past: its panes, the latest first, each open one with
+    /// its key; and its pages. Only the window's consumer of the feed calls it.
+    pub(super) fn tell_ledger(&self, project: ProjectId) {
+        let Some(browser) = self.browser.as_ref() else {
+            return;
+        };
+        let read = self.feed.store().read(|db| {
+            Ok((
+                ledger::past(db, project, LISTED)?,
+                ledger::visits(db, project, LISTED)?,
+            ))
+        });
+        let (tabs, visits) = match read {
+            Ok(read) => read,
+            Err(why) => return log::warn!("the ledger could not be read: {why}"),
+        };
+        // The key of each open pane listed, found in one pass over the panes open now.
+        let listed: std::collections::HashSet<Row> = (tabs.iter())
+            .filter(|tab| tab.closed.is_none())
+            .map(|tab| tab.row)
+            .collect();
+        let open: std::collections::HashMap<Row, String> = (crate::lock(&self.ledger).iter())
+            .filter(|(_, (row, _))| listed.contains(row))
+            .map(|(key, (row, _))| (*row, key.clone()))
+            .collect();
+        let key_of = |row: Row| open.get(&row).cloned();
+        let tabs = (tabs.into_iter())
+            .map(|tab| Past {
+                row: tab.row,
+                kind: match tab.kind {
+                    Kind::Page => TabKind::Page,
+                    Kind::Terminal => TabKind::Terminal,
+                    Kind::Board => TabKind::Board,
+                },
+                detail: (tab.url.clone())
+                    .or_else(|| tab.cwd.as_ref().map(|cwd| cwd.display().to_string()))
+                    .unwrap_or_default(),
+                key: key_of(tab.row).filter(|_| tab.closed.is_none()),
+                title: tab.title,
+            })
+            .collect();
+        let visited = (visits.into_iter())
+            .map(|visit| Visited {
+                title: visit.title,
+                url: visit.url,
+            })
+            .collect();
+        browser.ledger(&projects::key(project), Ledger { tabs, visited });
     }
 }
 
@@ -76,9 +133,10 @@ fn arranging(
     })
 }
 
-/// The feed's consumer that keeps the window drawing the layout: each change of a window, a
-/// workspace, a tab or a pane's key, and the window is told the layout again (it pulls; the
-/// notice carries nothing of it).
+/// The feed's consumer that keeps the window current, and the one part that tells it what follows:
+/// each change of a window, a workspace, a tab or a pane's key, and it is told the layout again;
+/// of a project's ledger, that project's past (its history menu, its address field); of the
+/// projects, the switcher's list. It pulls; the notice carries nothing of it.
 pub(super) struct Drawn {
     pub(super) desk: std::sync::Weak<Desk>,
 }
@@ -101,6 +159,8 @@ impl crate::feed::Consumer for Drawn {
             | Entity::Workspace { .. }
             | Entity::Tab { .. }
             | Entity::Pane { .. } => desk.tell_arranged(),
+            Entity::Ledger { project } => desk.tell_ledger(*project),
+            Entity::Projects => desk.tell_places(),
             Entity::Said { .. }
             | Entity::Board { .. }
             | Entity::Terminal { .. }
@@ -112,6 +172,14 @@ impl crate::feed::Consumer for Drawn {
     fn reconcile(&mut self) {
         if let Some(desk) = self.desk.upgrade() {
             desk.tell_arranged();
+            desk.tell_places();
+            for project in desk.known_projects() {
+                desk.tell_ledger(project);
+            }
         }
     }
 }
+
+#[cfg(test)]
+#[path = "layout_drawn_tests.rs"]
+mod tests;

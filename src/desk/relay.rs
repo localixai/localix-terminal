@@ -55,7 +55,9 @@ impl Consumer for Relay {
                 | Entity::Ask { .. }
                 | Entity::Window { .. }
                 | Entity::Workspace { .. }
-                | Entity::Tab { .. },
+                | Entity::Tab { .. }
+                | Entity::Ledger { .. }
+                | Entity::Projects,
                 Op::Upserted | Op::Deleted,
             ) => {}
         }

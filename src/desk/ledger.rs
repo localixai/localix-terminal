@@ -1,17 +1,15 @@
 //! The desk's side of the ledger (ledger.rs): a pane owned is a row of its project's, a pane gone
-//! is closed, what a page showed and a terminal's title are kept; and the window is told each
-//! project's past as it changes, for its history menu and its address field.
+//! is closed, what a page showed and a terminal's title are kept. Each change of a project's past
+//! is a notice of its ledger (`Entity::Ledger`), with which the window's consumer
+//! (layout_drawn.rs) tells the window that past again, for its history menu and its address field.
 
 use std::path::Path;
 
 use super::{Call, Desk};
-use crate::browser::{Ledger, Past, TabKind, Visited, Went};
+use crate::browser::Went;
+use crate::feed::{Entity, Op};
 use crate::ledger::{self, Kind, Opened, Row};
 use crate::projects::{self, ProjectId};
-
-/// How many of a project's panes the history menu lists, and of its pages the address field
-/// suggests.
-const LISTED: usize = 50;
 
 /// How often a terminal's title is written to the ledger at most: a program that animates its
 /// title says it many times a second.
@@ -59,12 +57,12 @@ impl Desk {
             let now = crate::board::now();
             let forgot = self.feed.write(|write| {
                 Self::unplace_pane(write, row, now)?;
-                ledger::forget(write.tx(), row)
+                ledger::forget(write.tx(), row)?;
+                write.record(&Entity::Ledger { project }, Op::Upserted)
             });
             if let Err(why) = forgot {
                 log::warn!("tab {key}'s stray row stays: {why}");
             }
-            self.tell_ledger(project);
         }
         let opened = Opened {
             project: call.project.id,
@@ -105,13 +103,15 @@ impl Desk {
         match kept {
             Ok(row) => {
                 crate::lock(&self.ledger).insert(key.to_string(), (row, opened.project));
-                // The pane has its key now: the window draws it in its tab.
-                let pane = crate::feed::Entity::Pane {
+                // The pane has its key now: the window draws it in its tab, and its project's
+                // past lists it by that key.
+                let pane = Entity::Pane {
                     owner: self.owner_of(key),
                     key: key.to_string(),
                 };
-                self.feed.record(&pane, crate::feed::Op::Upserted);
-                self.tell_ledger(opened.project);
+                self.feed.record(&pane, Op::Upserted);
+                let project = opened.project;
+                self.feed.record(&Entity::Ledger { project }, Op::Upserted);
             }
             Err(why) => log::warn!("tab {key} is not in the ledger: {why}"),
         }
@@ -130,7 +130,7 @@ impl Desk {
                 ledger::close(write.tx(), tab.row, now)?;
                 Self::unplace_pane(write, tab.row, now)?;
             }
-            Ok(())
+            write.record(&Entity::Ledger { project }, Op::Upserted)
         });
         if let Err(why) = closed {
             log::warn!("what the last run left open is not closed: {why}");
@@ -174,11 +174,11 @@ impl Desk {
         let now = crate::board::now();
         let closed = self.feed.write(|write| {
             ledger::close(write.tx(), row, now)?;
+            write.record(&Entity::Ledger { project }, Op::Upserted)?;
             Self::unplace_pane(write, row, now)
         });
-        match closed {
-            Ok(()) => self.tell_ledger(project),
-            Err(why) => log::warn!("tab {key} did not close in the ledger: {why}"),
+        if let Err(why) = closed {
+            log::warn!("tab {key} did not close in the ledger: {why}");
         }
     }
 
@@ -215,11 +215,12 @@ impl Desk {
             }
         };
         let now = crate::board::now();
-        let news = (self.feed.store()).write(|tx| ledger::went(tx, row, went.url, went.title, now));
-        match news {
-            Ok(true) => self.tell_ledger(project),
-            Ok(false) => {}
-            Err(why) => log::warn!("what tab {key} showed is not in the ledger: {why}"),
+        let news = self.feed.write(|write| {
+            ledger::went(write.tx(), row, went.url, went.title, now)
+                .and_then(|news| Self::news_of(write, project, news))
+        });
+        if let Err(why) = news {
+            log::warn!("what tab {key} showed is not in the ledger: {why}");
         }
     }
 
@@ -294,10 +295,25 @@ impl Desk {
         let Some((row, project)) = crate::lock(&self.ledger).get(key).copied() else {
             return;
         };
-        match (self.feed.store()).write(|tx| ledger::titled(tx, row, title)) {
-            Ok(true) => self.tell_ledger(project),
-            Ok(false) => {}
-            Err(why) => log::warn!("tab {key}'s title is not in the ledger: {why}"),
+        let titled = self.feed.write(|write| {
+            ledger::titled(write.tx(), row, title)
+                .and_then(|news| Self::news_of(write, project, news))
+        });
+        if let Err(why) = titled {
+            log::warn!("tab {key}'s title is not in the ledger: {why}");
+        }
+    }
+
+    /// A write of `project`'s ledger that was `news` (it changed what its past lists) is a notice
+    /// of it, in the write's transaction; one that changed nothing is none.
+    fn news_of(
+        write: &crate::feed::Write<'_, '_>,
+        project: ProjectId,
+        news: bool,
+    ) -> Result<(), String> {
+        match news {
+            true => write.record(&Entity::Ledger { project }, Op::Upserted),
+            false => Ok(()),
         }
     }
 
@@ -307,56 +323,6 @@ impl Desk {
         known
             .or_else(|| self.home_project().ok())
             .map(|project| project.id)
-    }
-
-    /// The window told project `project`'s past: its panes, the latest first, each open one with
-    /// its key; and its pages.
-    pub(super) fn tell_ledger(&self, project: ProjectId) {
-        let Some(browser) = self.browser.as_ref() else {
-            return;
-        };
-        let read = self.feed.store().read(|db| {
-            Ok((
-                ledger::past(db, project, LISTED)?,
-                ledger::visits(db, project, LISTED)?,
-            ))
-        });
-        let (tabs, visits) = match read {
-            Ok(read) => read,
-            Err(why) => return log::warn!("the ledger could not be read: {why}"),
-        };
-        // The key of each open pane listed, found in one pass over the panes open now.
-        let listed: std::collections::HashSet<Row> = (tabs.iter())
-            .filter(|tab| tab.closed.is_none())
-            .map(|tab| tab.row)
-            .collect();
-        let open: std::collections::HashMap<Row, String> = (crate::lock(&self.ledger).iter())
-            .filter(|(_, (row, _))| listed.contains(row))
-            .map(|(key, (row, _))| (*row, key.clone()))
-            .collect();
-        let key_of = |row: Row| open.get(&row).cloned();
-        let tabs = (tabs.into_iter())
-            .map(|tab| Past {
-                row: tab.row,
-                kind: match tab.kind {
-                    Kind::Page => TabKind::Page,
-                    Kind::Terminal => TabKind::Terminal,
-                    Kind::Board => TabKind::Board,
-                },
-                detail: (tab.url.clone())
-                    .or_else(|| tab.cwd.as_ref().map(|cwd| cwd.display().to_string()))
-                    .unwrap_or_default(),
-                key: key_of(tab.row).filter(|_| tab.closed.is_none()),
-                title: tab.title,
-            })
-            .collect();
-        let visited = (visits.into_iter())
-            .map(|visit| Visited {
-                title: visit.title,
-                url: visit.url,
-            })
-            .collect();
-        browser.ledger(&projects::key(project), Ledger { tabs, visited });
     }
 }
 

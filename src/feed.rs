@@ -53,15 +53,23 @@ pub enum Entity {
     Terminal { id: u32 },
     /// What an owner's agent asked the person.
     Ask { owner: String },
+    /// A project's ledger: its panes' history and the pages they showed (the history menu, the
+    /// address field's suggestions).
+    Ledger { project: crate::projects::ProjectId },
+    /// The projects the desk knows: which, and which was used last (the project switcher).
+    Projects,
 }
 
 impl Entity {
-    /// Whether what it names outlives the app. A board and the layout (windows, workspaces, tabs) do. A pane's key, a terminal, a
-    /// note on its way and an ask do not, and their ids are given again after a
-    /// restart: a notice of one from an earlier run names something else, and is passed over.
+    /// Whether what it names outlives the app. A board, a ledger, the projects and the layout
+    /// (windows, workspaces, tabs) do. A pane's key, a terminal, a note on its way and an ask do
+    /// not, and their ids are given again after a restart: a notice of one from an earlier run
+    /// names something else, and is passed over.
     pub fn outlives_the_run(&self) -> bool {
         match self {
             Entity::Board { .. }
+            | Entity::Ledger { .. }
+            | Entity::Projects
             | Entity::Window { .. }
             | Entity::Workspace { .. }
             | Entity::Tab { .. } => true,
