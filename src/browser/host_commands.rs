@@ -4,7 +4,8 @@ use std::sync::mpsc::SyncSender;
 
 use crate::WindowTab;
 
-use super::super::strip::Click;
+use super::super::strip::{Click, Key};
+use super::super::windows::Route;
 use super::{Arranged, Clip, Confirm, Dressing, Noted, Shot, Window, panel};
 
 pub(in super::super) enum Cmd {
@@ -125,3 +126,114 @@ pub(in super::super) enum Cmd {
     Confirm(Confirm, SyncSender<bool>),
     Exit(i32),
 }
+
+/// How the window is drawn after a command.
+#[derive(Debug, PartialEq, Eq)]
+pub(in super::super) enum Drawn {
+    /// It tells of a change (a title, a page loaded, the past kept): drawn once per turn of the
+    /// loop, however many came in it.
+    Told,
+    /// The person or an agent did it, and it may change the tab shown or a tab's project: the
+    /// window is kept on the project shown and drawn at once, so the next call sees it. What is
+    /// drawn on the way is held until then.
+    Settles,
+    /// It draws what it changes itself, if anything.
+    Itself,
+}
+
+/// Each command's one declaration beside the enum: every new command is placed here, the
+/// compiler asks for it.
+impl Cmd {
+    /// Which window it is for: what names a pane goes to the window it is in, a press to its
+    /// window; what changes for all is drawn in every one.
+    pub(in super::super) fn route(&self) -> Route {
+        let web = |id: u32| Route::Pane(Key::Web(id).name());
+        let term = |id: u32| Route::Pane(Key::Term(id).name());
+        match self {
+            Cmd::Eval {
+                panel: Some(id), ..
+            }
+            | Cmd::Paint(id)
+            | Cmd::Unpanel(id)
+            | Cmd::PanelMenu(id, ..)
+            | Cmd::Titled(id, _) => term(*id),
+            Cmd::Eval { tab: Some(id), .. }
+            | Cmd::Navigate { tab: Some(id), .. }
+            | Cmd::Reveal(id)
+            | Cmd::SwitchTab { id, .. }
+            | Cmd::CloseTab { id, .. }
+            | Cmd::Frame(Some(id), _)
+            | Cmd::Capture { tab: Some(id), .. } => web(*id),
+            Cmd::Act(Click::Show(key) | Click::Close(key), _) => Route::Pane(key.name()),
+            Cmd::Pressed(window, ..) => Route::Pressed(*window),
+            Cmd::Strip | Cmd::Arranged(..) | Cmd::Restyle | Cmd::Offered(..) => Route::All,
+            Cmd::Eval { .. }
+            | Cmd::Navigate { .. }
+            | Cmd::Frame(..)
+            | Cmd::Capture { .. }
+            | Cmd::Act(..)
+            | Cmd::Open { .. }
+            | Cmd::NewTab { .. }
+            | Cmd::Close
+            | Cmd::Panel(_)
+            | Cmd::Clicked(_)
+            | Cmd::SideClicked(_)
+            | Cmd::NavClicked(_)
+            | Cmd::Noted(_)
+            | Cmd::Go(_)
+            | Cmd::Adopt
+            | Cmd::Dressed(_)
+            | Cmd::Listing(_)
+            | Cmd::Presence(_)
+            | Cmd::NewWindow(_)
+            | Cmd::Opened
+            | Cmd::Presented(_)
+            | Cmd::Confirm(..)
+            | Cmd::Exit(_) => Route::Current,
+        }
+    }
+
+    /// How the window is drawn after it.
+    pub(in super::super) fn drawn(&self) -> Drawn {
+        match self {
+            Cmd::Strip | Cmd::Titled(..) => Drawn::Told,
+            Cmd::Go(_)
+            | Cmd::Arranged(..)
+            | Cmd::Panel(_)
+            | Cmd::Unpanel(_)
+            | Cmd::Act(..)
+            | Cmd::Clicked(_)
+            | Cmd::SideClicked(_)
+            | Cmd::NavClicked(_)
+            | Cmd::Close
+            | Cmd::NewTab { .. }
+            | Cmd::Adopt
+            | Cmd::SwitchTab { .. }
+            | Cmd::CloseTab { .. } => Drawn::Settles,
+            Cmd::Open { .. }
+            | Cmd::Eval { .. }
+            | Cmd::Navigate { .. }
+            | Cmd::Reveal(_)
+            | Cmd::Frame(..)
+            | Cmd::Capture { .. }
+            | Cmd::Paint(_)
+            | Cmd::PanelMenu(..)
+            | Cmd::Restyle
+            | Cmd::Noted(_)
+            | Cmd::Offered(..)
+            | Cmd::NewWindow(_)
+            | Cmd::Dressed(_)
+            | Cmd::Listing(_)
+            | Cmd::Presence(_)
+            | Cmd::Pressed(..)
+            | Cmd::Opened
+            | Cmd::Presented(_)
+            | Cmd::Confirm(..)
+            | Cmd::Exit(_) => Drawn::Itself,
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "host_commands_tests.rs"]
+mod tests;

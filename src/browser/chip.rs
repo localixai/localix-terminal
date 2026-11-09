@@ -13,21 +13,20 @@ use objc2::runtime::{AnyObject, Bool};
 use objc2::{class, msg_send};
 use wry::WebViewExtMacOS;
 
+use super::appkit::masks::{
+    BORDERLESS, CAN_JOIN_ALL_SPACES, FULL_SCREEN_AUXILIARY, HEIGHT_SIZABLE, IGNORES_CYCLE,
+    NONACTIVATING_PANEL, POP_UP_MENU_LEVEL, WIDTH_SIZABLE,
+};
 use super::capture::{CGPoint, CGRect, CGSize};
 
-/// NSWindowStyleMask: no frame, and a panel that never makes the app active.
-const BORDERLESS: usize = 0;
-const NONACTIVATING_PANEL: usize = 1 << 7;
 /// NSBackingStoreBuffered.
 const BUFFERED: usize = 2;
-/// NSPopUpMenuWindowLevel: over the app's windows.
-const OVER_ALL: isize = 101;
 /// NSWindowCollectionBehavior: on every Space, over a full-screen app, out of window cycling.
-const EVERYWHERE: usize = (1 << 0) | (1 << 8) | (1 << 6);
+const EVERYWHERE: usize = CAN_JOIN_ALL_SPACES | FULL_SCREEN_AUXILIARY | IGNORES_CYCLE;
 /// NSImageScaleAxesIndependently: the picture fills the window, which is its size.
 const FILL: usize = 1;
-/// NSViewWidthSizable | NSViewHeightSizable.
-const STRETCH: usize = (1 << 1) | (1 << 4);
+/// The picture's view follows the window's size.
+const STRETCH: usize = WIDTH_SIZABLE | HEIGHT_SIZABLE;
 /// The card's corners, as the list draws them (points).
 const ROUND: f64 = 10.0;
 
@@ -205,7 +204,7 @@ fn panel(frame: CGRect) -> Retained<AnyObject> {
     // that comes and goes with the pointer never fades or zooms in and out.
     let _: () = unsafe { msg_send![&*panel, setAnimationBehavior: 2isize] };
     // SAFETY: a window takes an NSWindowLevel.
-    let _: () = unsafe { msg_send![&*panel, setLevel: OVER_ALL] };
+    let _: () = unsafe { msg_send![&*panel, setLevel: POP_UP_MENU_LEVEL] };
     // SAFETY: a window takes an NSWindowCollectionBehavior.
     let _: () = unsafe { msg_send![&*panel, setCollectionBehavior: EVERYWHERE] };
     panel

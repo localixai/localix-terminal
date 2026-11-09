@@ -186,9 +186,6 @@ fn the_bar_holds_the_projects_and_the_crumbs_and_the_page_its_own_toolbar() {
     assert!(at("browse") < at("bk") && at("bk") < at("addr") && at("addr") < at("fs"));
     assert!(at("fs") < at("tabs"));
     assert!(PAGE.contains("html[data-glass] #bar{padding-left:78px}"));
-    // The bar is a compact toolbar's height, as `BAR` says; the browser's toolbar `NAV`'s.
-    assert!(PAGE.contains("height:38px") && (BAR - 38.0).abs() < f64::EPSILON);
-    assert!(PAGE.contains("height:40px") && (NAV - 40.0).abs() < f64::EPSILON);
 }
 
 #[test]

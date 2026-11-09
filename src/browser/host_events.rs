@@ -13,7 +13,7 @@ use super::super::deck::Deck;
 use super::super::guard::token;
 use super::super::placement::Kept;
 use super::super::platform;
-use super::super::windows::{self, Route, Windows};
+use super::super::windows::{Route, Windows};
 use super::presence::{Presenter, Stage};
 use super::window::on_window;
 use super::{Browser, Cmd, Heard, Shared};
@@ -188,7 +188,7 @@ impl Looping {
         if let Cmd::SideClicked(said) = &mut command {
             *said = tear::plain(said);
         }
-        let route = windows::route(&command);
+        let route = command.route();
         if let Cmd::NewWindow(id) = &command {
             self.windows.open(*id, &self.shared);
         } else if let Cmd::Arranged(ids, _) = &command {

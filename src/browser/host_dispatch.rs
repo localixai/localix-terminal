@@ -9,46 +9,28 @@ use crate::browser::panel::Opening;
 use crate::browser::strip::{Click, Key};
 use crate::browser::{frame, platform, strip};
 
+use super::super::commands::Drawn;
 use super::super::web::on_browser;
 use super::super::{Cmd, Window};
 use super::{On, act};
 
 impl On<'_> {
     pub(super) fn command(&mut self, command: Cmd) {
-        // What may change the tab shown, or a tab's project: after it, the window is kept on the
-        // project shown, and the strip drawn.
-        // What tells of a change (a title, a page loaded, the past kept) is drawn once per turn of
-        // the loop; what the person or an agent did is drawn at once, so the next call sees it.
-        let told = matches!(command, Cmd::Strip | Cmd::Titled(..));
+        // How the window is drawn after it (`Drawn`).
+        let drawn = command.drawn();
         let streamed =
             if let Cmd::Clicked(said) | Cmd::SideClicked(said) | Cmd::NavClicked(said) = &command {
                 Self::streamed(said)
             } else {
                 false
             };
-        let settles = matches!(
-            command,
-            Cmd::Go(_)
-                | Cmd::Arranged(..)
-                | Cmd::Panel(_)
-                | Cmd::Unpanel(_)
-                | Cmd::Act(..)
-                | Cmd::Clicked(_)
-                | Cmd::SideClicked(_)
-                | Cmd::NavClicked(_)
-                | Cmd::Close
-                | Cmd::NewTab { .. }
-                | Cmd::Adopt
-                | Cmd::SwitchTab { .. }
-                | Cmd::CloseTab { .. }
-        );
         // What is drawn on the way (the act, the settle after it) is drawn once, at the end.
-        let held = settles && !streamed;
+        let held = drawn == Drawn::Settles && !streamed;
         if let (true, Some(open)) = (held, self.deck.as_ref()) {
             open.hold();
         }
         self.carry_out(command);
-        if told {
+        if drawn == Drawn::Told {
             *self.stale = true;
         } else if held {
             *self.stale = false;

@@ -57,8 +57,48 @@ fn ask(
         unsafe { msg_send![asking, beginSheetModalForWindow: window, completionHandler: &*block] };
 }
 
+/// Whoever waits for an answer to a question.
+type Waiting = Vec<Box<dyn FnOnce(bool)>>;
+
+/// The questions up, each with whoever waits for its answer: one asked again while it is up (Quit
+/// pressed twice) waits for the one shown, and never stacks a second sheet under it.
+pub(super) struct Up<Q> {
+    asked: Vec<(Q, Waiting)>,
+}
+
+impl<Q> Default for Up<Q> {
+    fn default() -> Self {
+        Self { asked: Vec::new() }
+    }
+}
+
+impl<Q: PartialEq> Up<Q> {
+    /// `done` waits for `question`'s answer; whether it is to be shown (it was not up).
+    pub(super) fn join(&mut self, question: Q, done: Box<dyn FnOnce(bool)>) -> bool {
+        if let Some((_, waiting)) = self.asked.iter_mut().find(|(up, _)| *up == question) {
+            waiting.push(done);
+            return false;
+        }
+        self.asked.push((question, vec![done]));
+        true
+    }
+
+    /// `question` answered: it is no longer up, and whoever waited for it is handed back, to be
+    /// told.
+    pub(super) fn answered(&mut self, question: &Q) -> Waiting {
+        let at = self.asked.iter().position(|(up, _)| up == question);
+        at.map(|at| self.asked.remove(at).1).unwrap_or_default()
+    }
+}
+
+thread_local! {
+    /// The questions up in the app: asked and answered on the main thread alone.
+    static UP: Mutex<Up<super::super::Confirm>> = Mutex::new(Up::default());
+}
+
 /// `question` asked of the person on `window` (or in front of every app, when it is away); `done`
-/// takes whether they chose `yes` over Cancel.
+/// takes whether they chose `yes` over Cancel. Asked again while it is up, it is not shown again:
+/// `done` takes the answer to the one shown.
 pub(in super::super) fn confirm(
     question: &super::super::Confirm,
     window: Option<&tao::window::Window>,
@@ -66,6 +106,9 @@ pub(in super::super) fn confirm(
 ) {
     /// NSAlertFirstButtonReturn: the first button added, `yes`.
     const FIRST: isize = 1000;
+    if !UP.with(|up| crate::lock(up).join(question.clone(), Box::new(done))) {
+        return;
+    }
     // SAFETY: `new` on NSAlert answers a retained alert.
     let alert: Retained<AnyObject> = unsafe { msg_send![class!(NSAlert), new] };
     if let Some(title) = string(&question.title) {
@@ -82,7 +125,14 @@ pub(in super::super) fn confirm(
             let _: *mut AnyObject = unsafe { msg_send![&*alert, addButtonWithTitle: &*title] };
         }
     }
-    ask(&alert, window, move |answer| done(answer == FIRST));
+    let asked = question.clone();
+    ask(&alert, window, move |answer| {
+        // Taken out first: one told may ask again, and is asked anew.
+        let waiting = UP.with(|up| crate::lock(up).answered(&asked));
+        for done in waiting {
+            done(answer == FIRST);
+        }
+    });
 }
 
 /// A folder the person picks, on `window` (or on its own, when it is away), folders only; `done`

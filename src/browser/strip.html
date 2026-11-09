@@ -40,7 +40,8 @@ body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
 #offer button.later:hover{color:var(--ink);background:var(--ov-2)}
 #offer button.later:active{background:var(--ov-3)}
 #offer button.later svg{width:10px;height:10px;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;fill:none}
-/* The bar (38 points, a compact titlebar's): beside the window's buttons, where the shown tab
+/* The bar (`strip::BAR` points, a compact titlebar's; its height and the browser's toolbar's
+   and the tabs' row's are filled in from strip.rs): beside the window's buttons, where the shown tab
    is, as crumbs: its project (a folder), then the tab; each a button whose menu is the system's
    (host_project.rs): every project and Open Folder, or the project's tabs. A dot on the project's
    crumb: something happened in another one, out of sight. Then the window's own buttons. */
@@ -60,7 +61,7 @@ body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
 #cr .b svg{width:14px;height:14px}
 /* The bar: the crumbs, then the window's own buttons at the end. The crumbs give way when the
    window is narrow, and with less room still the buttons go into "»" (fit). */
-#bar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;height:38px;padding:0 8px;box-sizing:border-box}
+#bar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;height:{{bar}}px;padding:0 8px;box-sizing:border-box}
 #lead{display:flex;align-items:center;gap:4px;min-width:0}
 /* A button fit() puts into "»" is hidden. */
 [hidden]{display:none!important}
@@ -102,7 +103,7 @@ html[data-part=line] #line:hover::after,html[data-part=line] #line.held::after,h
 html[data-part=line].held,html[data-part=line].held *{cursor:col-resize!important;user-select:none}
 html[data-part=nav] #bar,html[data-part=nav] #tabs,html[data-part=nav] #offer,html[data-part=nav] #menu,html[data-part=nav] #back{display:none!important}
 /* Three columns, as Safari's toolbar: the address field stays in the middle whatever comes and goes beside it. */
-html[data-part=nav] #browse{display:grid;grid-template-columns:1fr minmax(120px,720px) 1fr;align-items:center;gap:8px;height:40px;padding:0 8px;box-sizing:border-box;box-shadow:inset 0 -.5px 0 var(--ov-3)}
+html[data-part=nav] #browse{display:grid;grid-template-columns:1fr minmax(120px,720px) 1fr;align-items:center;gap:8px;height:{{nav}}px;padding:0 8px;box-sizing:border-box;box-shadow:inset 0 -.5px 0 var(--ov-3)}
 @media (prefers-contrast:more){html[data-part=nav] #browse{box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--fg) 45%,transparent)}}
 html[data-part=nav]:not([data-glass]) #browse{background:var(--ground)}
 #browse #addr{width:100%}
@@ -132,7 +133,7 @@ html[data-part=nav][data-blank] #blank{position:fixed;inset:0;display:flex}
 /* The bar is bare: icons and words on the glass, no capsules. A button lights as the pointer
    comes; only one that is on (comments, a page size) and the field being typed in have a ground. */
 .grp{flex:none;display:flex;align-items:center;gap:2px;height:28px}
-#tabs{display:flex;align-items:center;gap:4px;height:32px;padding:0 12px 4px;box-sizing:border-box;min-width:0;overflow:hidden}
+#tabs{display:flex;align-items:center;gap:4px;height:{{row}}px;padding:0 12px 4px;box-sizing:border-box;min-width:0;overflow:hidden}
 #tabs .t{flex:1 1 0;max-width:none;justify-content:center;position:relative;padding:0 28px;background:color-mix(in srgb,currentColor 3.5%,transparent)}
 #tabs .t .n{flex:0 1 auto}
 #tabs .t .x{position:absolute;left:5px}

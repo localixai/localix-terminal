@@ -160,57 +160,6 @@ pub(super) enum Route {
     Current,
 }
 
-/// Which window `command` is for: what names a pane goes to the window it is in, a press to its
-/// window; what changes for all is drawn in every one.
-pub(super) fn route(command: &super::host::Cmd) -> Route {
-    use super::host::Cmd;
-    use super::strip::{Click, Key};
-    let web = |id: u32| Route::Pane(Key::Web(id).name());
-    let term = |id: u32| Route::Pane(Key::Term(id).name());
-    match command {
-        Cmd::Eval {
-            panel: Some(id), ..
-        }
-        | Cmd::Paint(id)
-        | Cmd::Unpanel(id)
-        | Cmd::PanelMenu(id, ..)
-        | Cmd::Titled(id, _) => term(*id),
-        Cmd::Eval { tab: Some(id), .. }
-        | Cmd::Navigate { tab: Some(id), .. }
-        | Cmd::Reveal(id)
-        | Cmd::SwitchTab { id, .. }
-        | Cmd::CloseTab { id, .. }
-        | Cmd::Frame(Some(id), _)
-        | Cmd::Capture { tab: Some(id), .. } => web(*id),
-        Cmd::Act(Click::Show(key) | Click::Close(key), _) => Route::Pane(key.name()),
-        Cmd::Pressed(window, ..) => Route::Pressed(*window),
-        Cmd::Strip | Cmd::Arranged(..) | Cmd::Restyle | Cmd::Offered(..) => Route::All,
-        Cmd::Eval { .. }
-        | Cmd::Navigate { .. }
-        | Cmd::Frame(..)
-        | Cmd::Capture { .. }
-        | Cmd::Act(..)
-        | Cmd::Open { .. }
-        | Cmd::NewTab { .. }
-        | Cmd::Close
-        | Cmd::Panel(_)
-        | Cmd::Clicked(_)
-        | Cmd::SideClicked(_)
-        | Cmd::NavClicked(_)
-        | Cmd::Noted(_)
-        | Cmd::Go(_)
-        | Cmd::Adopt
-        | Cmd::Dressed(_)
-        | Cmd::Listing(_)
-        | Cmd::Presence(_)
-        | Cmd::NewWindow(_)
-        | Cmd::Opened
-        | Cmd::Presented(_)
-        | Cmd::Confirm(..)
-        | Cmd::Exit(_) => Route::Current,
-    }
-}
-
 impl Windows {
     /// The window in use's row in the layout (0: not named yet).
     pub(super) fn id(&self) -> i64 {
@@ -281,7 +230,3 @@ impl Windows {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "windows_tests.rs"]
-mod tests;

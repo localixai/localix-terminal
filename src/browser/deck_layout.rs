@@ -9,7 +9,7 @@ use super::super::tabs::Tabs;
 
 use super::super::host::Shared;
 
-use super::super::strip::{BAR, HEIGHT, Key, NAV, RAIL, SIDE_MAX, SIDE_MIN};
+use super::super::strip::{BAR, HEIGHT, Key, NAV, RAIL, side_held, side_widest};
 use super::super::tabs::{pin, place};
 use super::{Deck, Shown};
 
@@ -76,16 +76,16 @@ impl Deck {
         super::super::platform::follow(side, super::super::platform::Follow::Side);
     }
 
-    /// How wide the side is in this window: the width it keeps, held to half the window (never
-    /// under `SIDE_MIN`), so a window narrower than the one the width was set in still has room
-    /// for its pages. Its rail is as narrow as it is.
+    /// How wide the side is in this window: the width it keeps, held to the widest it may be
+    /// here (half the window, never under `SIDE_MIN`), so a window narrower than the one the
+    /// width was set in still has room for its pages. Its rail is as narrow as it is.
     pub(in super::super) fn side_wide(&self) -> f64 {
         let native = &self.frame.native;
         let window = native
             .inner_size()
             .to_logical::<f64>(native.scale_factor())
             .width;
-        self.side_now.min((window / 2.0).max(SIDE_MIN))
+        self.side_now.min(side_widest(Some(window)))
     }
 
     /// How much of the window's left the side keeps now: the tabs lie beside it.
@@ -307,8 +307,7 @@ impl Deck {
             .inner_size()
             .to_logical::<f64>(native.scale_factor())
             .width;
-        let widest = SIDE_MAX.min(window / 2.0).max(SIDE_MIN);
-        let width = width.clamp(SIDE_MIN, widest).round();
+        let width = side_held(width, Some(window)).round();
         let moved = (width - self.side_width).abs() >= 0.5 || (width - self.side_now).abs() >= 0.5;
         self.side_width = width;
         self.side_now = width;

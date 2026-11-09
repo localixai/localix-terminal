@@ -14,13 +14,11 @@ use objc2::{class, msg_send};
 use tao::platform::macos::WindowBuilderExtMacOS;
 use tao::window::{Window, WindowBuilder};
 
+use super::super::appkit::masks::{ABOVE, BELOW, HEIGHT_SIZABLE, WIDTH_SIZABLE};
 use super::super::capture::{CGRect, CGSize};
 
-/// NSAutoresizingMaskOptions: width and height follow the frame view.
-const SIZABLE: usize = 2 | 16;
-/// NSWindowOrderingMode.
-const BELOW: isize = -1;
-const ABOVE: isize = 1;
+/// Width and height follow the frame view.
+const SIZABLE: usize = WIDTH_SIZABLE | HEIGHT_SIZABLE;
 
 /// A window that shows what is behind it, with its titlebar clear over the material. The strip
 /// is the titlebar, as in a browser: the pages fill the window from its top, the strip beside the
