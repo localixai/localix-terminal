@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Browser tabs load only local addresses: `localhost` and `*.localhost`, `*.local`, `*.test`,
+  `*.internal`, `*.home.arpa`, and IP literals of the loopback, the unspecified address, the
+  private IPv4 ranges, link-local and unique-local IPv6 (also IPv4-mapped), any port, decided by
+  the host as written and never by DNS. An agent's `open` or `url` of another address is refused
+  with an error naming it, before anything loads. A link, the address field (searches too), a
+  page's new window, script navigation or redirect to one leaves the tab where it was and opens
+  the address in the default browser, at most once a second per page. Subresources and frames are
+  not limited. "+" and an `open` with no `url` start on `about:blank` instead of a search page.
+
 - Sidebar and split-divider resizing use one captured pointer and demand-driven animation frames,
   with Escape/cancellation cleanup and keyboard resizing. Title-only tab updates preserve their
   DOM nodes without remeasuring the list; FLIP is reserved for actual row changes.

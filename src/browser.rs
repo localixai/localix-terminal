@@ -18,9 +18,11 @@ mod comments;
 mod deck;
 mod feedback;
 mod frame;
+mod frames;
 mod guard;
 mod host;
 mod icons;
+mod local;
 #[cfg(target_os = "macos")]
 mod menu;
 #[cfg(not(target_os = "macos"))]
@@ -63,7 +65,8 @@ use crate::view::{Action, Element, ViewResult};
 use serde::{Deserialize, Serialize};
 
 pub use capture::{Clip, Shot};
-pub use guard::loadable;
+pub(crate) use guard::local;
+pub use guard::{for_agent, loadable, not_local};
 pub use host::{
     Answers, Arranged, Arranging, Asked, Browser, CenterDid, Confirm, Dressing, Halves, Heard,
     Ledger, Past, Place, Tab, TabKind, Visited, Went, Window, host,

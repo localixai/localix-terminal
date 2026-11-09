@@ -22,8 +22,8 @@ const MAX_KEY_DELAY_MS: u64 = 2000;
 /// How long `wait_for` waits by default, and at most: a script in the page ends within 20 s.
 const DEFAULT_WAIT_MS: u64 = 10_000;
 const MAX_WAIT_MS: u64 = 15_000;
-/// Where a tab opens when no address is given.
-const SEARCH_PAGE: &str = "https://duckduckgo.com/";
+/// Where a tab opens when no address is given: a blank page.
+const BLANK: &str = "about:blank";
 impl Desk {
     pub(super) fn page(&self) -> Result<&Page, String> {
         self.page.as_ref().ok_or_else(|| {
@@ -41,10 +41,13 @@ impl Desk {
         }
     }
 
-    /// Open a tab on `args["url"]` (the search page without one); its id and first snapshot.
+    /// Open a tab on `args["url"]` (a blank page without one); its id and first snapshot.
     pub(super) fn open_web(&self, call: &Call, args: &Value) -> Result<(u32, Output), String> {
         let page = self.page()?;
-        let url = self.address(call, text(args, "url").unwrap_or(SEARCH_PAGE))?;
+        let url = match text(args, "url") {
+            Some(url) => self.address(call, url)?,
+            None => BLANK.to_string(),
+        };
         let id = {
             // One tab is made at a time, and the window's loop makes it: the lock is held for
             // that, not for the page's load, so tabs opened together load together.
@@ -163,15 +166,12 @@ impl Desk {
     }
 }
 
-/// `url` as the window loads it: http or https only. Without a scheme, https, but http for this
-/// machine: a dev server serves plain http.
+/// `url` as the window loads it: http or https only, and a local address (`browser::for_agent`).
+/// Without a scheme, http for this machine and its network (a dev server serves plain http),
+/// https for another, which is then refused as not local.
 pub(super) fn web_address(url: &str) -> Result<String, String> {
     let Some((scheme, _)) = url.split_once("://") else {
-        let host = url.split(['/', '?', '#']).next().unwrap_or("");
-        let name = host.rsplit_once(':').map_or(host, |(name, _)| name);
-        let local = ["localhost", "0.0.0.0"].contains(&name)
-            || name.starts_with("127.")
-            || host.starts_with("[::1]");
+        let local = crate::browser::local(&format!("http://{url}"));
         let url = format!("{}://{url}", if local { "http" } else { "https" });
         return web_address(&url);
     };
@@ -180,8 +180,12 @@ pub(super) fn web_address(url: &str) -> Result<String, String> {
             "only http and https addresses open in the browser, not {scheme}:"
         ));
     }
-    crate::browser::loadable(url)
-        .ok_or_else(|| format!("`{url}` is not an address: give it whole, with no spaces"))
+    if crate::browser::loadable(url).is_none() {
+        return Err(format!(
+            "`{url}` is not an address: give it whole, with no spaces"
+        ));
+    }
+    crate::browser::for_agent(url)
 }
 
 /// The call's fields carried out on `page`, in order: an address, a size, keys, a script, a wait

@@ -106,11 +106,11 @@ pub(super) fn on_browser(
         }
         // What the agent does in the browser is shown: the window goes back to it, unless it
         // works in a tab of its own beside the one shown.
-        // An address the system cannot read never reaches WebKit: its load would panic here.
+        // An address the system cannot read never reaches WebKit: its load would panic here. Nor
+        // does one that is not local: the agent sending it was refused it (`guard::for_agent`).
         Cmd::Navigate(url, tab) => {
-            if let (Some(url), Some(webview)) =
-                (crate::browser::guard::loadable(&url), tabs.at(tab))
-            {
+            let url = crate::browser::guard::for_agent(&url).ok();
+            if let (Some(url), Some(webview)) = (url, tabs.at(tab)) {
                 let _ = webview.load_url(&url);
             }
             if tab.is_none() {
@@ -166,7 +166,8 @@ pub(super) fn on_browser(
 }
 
 /// A tab opened on `url` and shown: the agent's (`reply`), or a page's own new window, which past
-/// the tab limit opens where the page is, as before tabs.
+/// the tab limit opens where the page is, as before tabs. An address that is not local is refused
+/// an agent, and opens in the person's own browser for a page or the person (a terminal's link).
 fn new_tab(
     open: &mut Deck,
     url: &str,
@@ -178,6 +179,15 @@ fn new_tab(
     let Some(tabs) = open.web.as_mut() else {
         return;
     };
+    if !crate::browser::guard::local(url) {
+        match reply {
+            Some(reply) => {
+                let _ = reply.send(Err(crate::browser::guard::not_local(url)));
+            }
+            None => crate::browser::guard::elsewhere(url, opener),
+        }
+        return;
+    }
     // The project of the tab the app opens (one not shown opens out of sight there); a page's own
     // new window is of its opener's, and never takes the slot a call of the app set.
     let project = match opener {

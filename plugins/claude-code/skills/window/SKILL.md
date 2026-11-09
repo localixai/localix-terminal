@@ -51,6 +51,12 @@ llx-desk window --end                                       # close every tab of
 - A page's size: `size` frames it as a device (`iPhone 15 Pro`, `mobile`, `tablet`, `iPad Mini`,
   `Laptop`, or `393x852`) for that tab alone; `window` fills the window again. Check a layout at a
   phone and a tablet size before calling it done.
+- Tabs open only local addresses: `localhost` and `*.localhost`, `*.local`, `*.test`, `*.internal`,
+  `*.home.arpa`, or a loopback, private or link-local IP (`127.0.0.1`, `192.168.1.5`, `[::1]`), any
+  port, or a file of the project. An external address is refused with an error naming it: read the
+  web with your own tools (`curl`, a fetch), not a tab. A page's own scripts, images, requests and
+  frames still load from anywhere; a link or redirect it follows to an external address opens in
+  the person's own browser, and the tab stays where it was.
 - A field a call does not take is refused with what it takes, and nothing is done: read the error.
 - A page's `confirm` and `prompt` are answered Cancel unless you pass `dialog: "accept"`
   (`dialog_text` for a prompt's answer). What the page said follows the report under "The page

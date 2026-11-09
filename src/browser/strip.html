@@ -1257,7 +1257,7 @@ function suggest(zero) {
   const typed = zero ? "" : field.value.trim(), low = typed.toLowerCase();
   rows = [];
   if (typed && typed !== here.url) {
-    rows.push(addressy(typed) ? { go: typed, name: typed, about: "Go to the website" } : { go: typed, name: typed, about: "Search Google", search: true });
+    rows.push(addressy(typed) ? { go: typed, name: typed, about: "Go to the website" } : { go: typed, name: typed, about: "Search Google in your browser", search: true });
   }
   const matches = seen.filter((page) => page.url !== here.url && (!low || (page.title + " " + page.url).toLowerCase().includes(low)));
   const pages = matches.slice(0, typed ? 8 : 3).map((page) => ({ go: page.url, name: page.title || host(page.url), about: page.url }));
