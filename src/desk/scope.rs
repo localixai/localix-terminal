@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use super::Desk;
+use crate::feed::{Entity, Op};
 use crate::projects::{self, Project, ProjectId};
 
 /// How many projects the switcher lists, the ones used last.
@@ -32,9 +33,20 @@ impl Desk {
         let now = crate::board::now();
         let project = (self.feed.store()).write(|tx| projects::find_or_make(tx, &path, now))?;
         crate::lock(&self.projects).insert(path, project.clone());
-        self.tell_places();
-        self.tell_ledger(project.id);
+        // Known to this run from now: the switcher lists it, and its history menu is its own.
+        self.feed.record(&Entity::Projects, Op::Upserted);
+        let ledger = Entity::Ledger {
+            project: project.id,
+        };
+        self.feed.record(&ledger, Op::Upserted);
         Ok(project)
+    }
+
+    /// The projects this run knows.
+    pub(super) fn known_projects(&self) -> Vec<ProjectId> {
+        (crate::lock(&self.projects).values())
+            .map(|project| project.id)
+            .collect()
     }
 
     /// What each project the desk knows is called, by its key in the window.
@@ -46,8 +58,8 @@ impl Desk {
     }
 
     /// The window told the projects the desk knows, newest first, each called by its folder's
-    /// name (told apart where two share one).
-    fn tell_places(&self) {
+    /// name (told apart where two share one). Only the window's consumer of the feed calls it.
+    pub(super) fn tell_places(&self) {
         let Some(browser) = self.browser.as_ref() else {
             return;
         };
@@ -105,11 +117,11 @@ impl Desk {
         // The project used last, and the window's workspace of it the one it shows.
         let shown = self.feed.write(|write| {
             projects::opened(write.tx(), id, now)?;
+            write.record(&Entity::Projects, Op::Upserted)?;
             Self::show_project(write, (id, window), now)
         });
-        match shown {
-            Ok(()) => self.tell_places(),
-            Err(why) => log::warn!("the project shown was not kept as the last: {why}"),
+        if let Err(why) = shown {
+            log::warn!("the project shown was not kept as the last: {why}");
         }
     }
 

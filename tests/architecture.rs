@@ -82,3 +82,32 @@ fn every_web_view_takes_the_first_click_of_an_inactive_window() {
     }
     assert!(missing.is_empty(), "{missing:?}");
 }
+
+#[test]
+fn the_window_is_told_the_ledgers_and_the_projects_only_by_its_feed_consumer() {
+    // A write of a project's history, or of the projects the desk knows, records a notice of the
+    // feed; the window's consumer alone tells the window. A write that told it by hand could be
+    // forgotten at the next write, and leave the history menu or the switcher stale.
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = vec![];
+    rust_files(&source, &mut files).unwrap();
+    let consumer = source.join("desk").join("layout_drawn.rs");
+    let mut telling = vec![];
+    for path in files.iter().filter(|path| **path != consumer) {
+        let text = std::fs::read_to_string(path).unwrap();
+        for (at, line) in text.lines().enumerate() {
+            let code = line.trim_start();
+            if code.starts_with("//") {
+                continue;
+            }
+            if [".tell_ledger(", ".tell_places("]
+                .iter()
+                .any(|call| code.contains(call))
+            {
+                let name = path.strip_prefix(&source).unwrap().display();
+                telling.push(format!("{name}:{}", at + 1));
+            }
+        }
+    }
+    assert!(telling.is_empty(), "told by hand: {telling:?}");
+}

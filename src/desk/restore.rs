@@ -39,6 +39,8 @@ impl Desk {
                 let now = crate::board::now();
                 let closed = self.feed.write(|write| {
                     ledger::close(write.tx(), tab.row, now)?;
+                    let ledger = crate::feed::Entity::Ledger { project };
+                    write.record(&ledger, crate::feed::Op::Upserted)?;
                     Self::unplace_pane(write, tab.row, now)
                 });
                 if let Err(why) = closed {
@@ -57,7 +59,7 @@ impl Desk {
             again: Some(tab.row),
             ..*call
         };
-        let opened = match tab.kind {
+        match tab.kind {
             Kind::Page => {
                 let url = (tab.url.as_deref())
                     .filter(|url| !url.is_empty())
@@ -79,9 +81,6 @@ impl Desk {
             Kind::Board => (self.board(call, &serde_json::json!({"op": "show"})))
                 .map(|_| ())
                 .map_err(|failure| failure.message().to_string()),
-        };
-        opened?;
-        self.tell_ledger(tab.project);
-        Ok(())
+        }
     }
 }
