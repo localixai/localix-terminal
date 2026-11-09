@@ -25,8 +25,13 @@ pub(in super::super) enum Cmd {
         /// In this browser tab instead of the one acted on.
         tab: Option<u32>,
     },
-    /// Load an address: in this tab, else the one acted on.
-    Navigate(String, Option<u32>),
+    /// Load an address: in this tab, else the one acted on. Answered once the load is asked
+    /// for, or at once with why it cannot be (the window or the tab is closed).
+    Navigate {
+        url: String,
+        tab: Option<u32>,
+        reply: SyncSender<Result<(), String>>,
+    },
     /// Open a tab on `url` and show it. A page's own new window (`target=_blank`, `window.open`)
     /// comes here with no reply.
     NewTab {

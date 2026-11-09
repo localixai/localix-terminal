@@ -275,8 +275,9 @@ impl Tabs {
             return Err(format!("there is no tab {id}"));
         };
         slot.open = false;
-        // Its notices and its armed answer are the page's: the next page of this id has none.
-        shared.notices.forget(id);
+        // Its notices, its armed answer and its project are the page's: the next page of this id
+        // has none of them.
+        shared.forget(&[Key::Web(id)]);
         self.frames.remove(&id);
         popup::free(id);
         let _ = slot.webview.load_url(BLANK);

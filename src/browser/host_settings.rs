@@ -10,6 +10,7 @@ use std::sync::{Arc, Weak};
 use super::super::{Browser, Cmd, Shared};
 use super::On;
 use super::clicks::act;
+use crate::browser::panel::Panel;
 use crate::browser::settings;
 use crate::browser::strip::{Click, Key, SETTINGS};
 
@@ -129,7 +130,9 @@ fn integrations(
             // One reading for both: the bar offers what Settings shows as off, at once.
             shared.offers.read_all(&states);
             let _ = proxy.send_event(Cmd::Strip);
-            if let Some(panel) = crate::lock(&shared.settings).as_ref() {
+            // Painted with the lock let go: the window's loop takes it too.
+            let brush = crate::lock(&shared.settings).as_ref().map(Panel::brush);
+            if let Some(panel) = brush {
                 panel.paint(&format!("I({states})"));
                 match turned {
                     Some(Ok(done)) => drop(panel.paint(&toast(&done, false))),
@@ -171,7 +174,8 @@ fn changed(shared: &Weak<Shared>, proxy: &tao::event_loop::EventLoopProxy<Cmd>, 
             }
             Err(why) => toast(&why, true),
         };
-        if let Some(panel) = crate::lock(&shared.settings).as_ref() {
+        let brush = crate::lock(&shared.settings).as_ref().map(Panel::brush);
+        if let Some(panel) = brush {
             panel.paint(&said);
         }
         return;
@@ -181,7 +185,8 @@ fn changed(shared: &Weak<Shared>, proxy: &tao::event_loop::EventLoopProxy<Cmd>, 
         Ok(now) => (now, None),
         Err(why) => (settings::now(), Some(why)),
     };
-    if let Some(panel) = crate::lock(&shared.settings).as_ref() {
+    let brush = crate::lock(&shared.settings).as_ref().map(Panel::brush);
+    if let Some(panel) = brush {
         panel.paint(&script(&now, error.as_deref()));
     }
     if error.is_none() {

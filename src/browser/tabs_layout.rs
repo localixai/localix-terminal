@@ -53,7 +53,6 @@ impl Tabs {
             let (_, size, left, top) =
                 pane.copied()
                     .unwrap_or((0, LogicalSize::new(0.0, 0.0), 0.0, 0.0));
-            fit(&slot.webview, None);
             let away = |x: f64| {
                 if here {
                     left + x
@@ -65,10 +64,9 @@ impl Tabs {
                 // A size of its own: in the middle, below the strip, nothing of it under it.
                 // Larger than the window, drawn smaller: the page lays out at its size still.
                 let placed = sizes::place(size, top, Some(frame));
-                place(
+                put(
                     &slot.webview,
-                    away(placed.across),
-                    placed.down,
+                    (away(placed.across), placed.down),
                     placed.size,
                     here,
                 );
@@ -77,6 +75,7 @@ impl Tabs {
                 continue;
             }
             slot.zoom(1.0);
+            fit(&slot.webview, None);
             // Below the strip, never under it: the strip is the window's glass over every tab.
             place(&slot.webview, away(0.0), top, size, here);
         }
@@ -96,8 +95,20 @@ pub(in super::super) fn place(
     size: LogicalSize<f64>,
     _shown: bool,
 ) {
-    let _ = webview.set_bounds(super::super::frame::fill(size, x, top));
+    super::super::platform::bound(webview, size, x, top);
     super::super::platform::follow(webview, super::super::platform::Follow::Fill);
+}
+
+/// Where a page of a size of its own stands: placed only, the way it follows the window is
+/// `fit`'s (set once, not as one that fills first and then as one in the middle).
+#[cfg(not(target_os = "linux"))]
+fn put(webview: &WebView, (x, top): (f64, f64), size: LogicalSize<f64>, _shown: bool) {
+    super::super::platform::bound(webview, size, x, top);
+}
+
+#[cfg(target_os = "linux")]
+fn put(webview: &WebView, (x, top): (f64, f64), size: LogicalSize<f64>, shown: bool) {
+    place(webview, x, top, size, shown);
 }
 
 #[cfg(target_os = "linux")]
@@ -139,7 +150,7 @@ fn fit(webview: &WebView, framed: Option<LogicalSize<f64>>) {
 /// told otherwise: the strip is held to its height there, and the pages under it fill the rest.
 #[cfg(not(target_os = "linux"))]
 pub(in super::super) fn pin(strip: &WebView, size: LogicalSize<f64>) {
-    let _ = strip.set_bounds(super::super::frame::fill(size, 0.0, 0.0));
+    super::super::platform::bound(strip, size, 0.0, 0.0);
     super::super::platform::follow(strip, super::super::platform::Follow::Top);
 }
 

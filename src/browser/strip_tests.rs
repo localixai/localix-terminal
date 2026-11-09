@@ -32,11 +32,7 @@ fn the_tabs_reach_the_page_as_data() {
             agent: None,
         },
     ];
-    let visited = [Visited {
-        title: "<i>Habr</i>".into(),
-        url: "https://habr.com/ru/post/210288/".into(),
-    }];
-    let script = script(&items, Key::Term(2), &visited, None, &none());
+    let script = script(&items, Key::Term(2), None, &none());
     assert!(
         script.starts_with("S(") && script.ends_with(')'),
         "{script}"
@@ -54,15 +50,22 @@ fn the_tabs_reach_the_page_as_data() {
         "</script><img src=x onerror=alert(1)>"
     );
     assert_eq!(data["tabs"][1]["kind"], "term");
-    // What the address field shows and suggests: each tab's page, the pages seen.
+    // What the address field shows: each tab's page. The pages seen are the toolbar's alone.
     assert_eq!(data["tabs"][0]["detail"], "https://a.example/\"><b>");
-    assert_eq!(data["visited"][0]["title"], "<i>Habr</i>");
-    assert_eq!(
-        data["visited"][0]["url"],
-        "https://habr.com/ru/post/210288/"
-    );
+    assert!(data.get("visited").is_none(), "{data}");
     // The page sets titles as text, never as markup.
     assert!(PAGE.contains("textContent") && !PAGE.contains("innerHTML"));
+}
+
+#[test]
+fn the_pages_seen_reach_the_toolbar_as_data_of_their_own() {
+    let (title, url) = ("<i>Shop</i>".to_string(), "https://shop.test/a".to_string());
+    let script = visited(&[Visited { title, url }]);
+    let json = (script.strip_prefix("VI(")).and_then(|s| s.strip_suffix(')'));
+    let data: serde_json::Value = serde_json::from_str(json.unwrap()).unwrap();
+    assert_eq!(data[0]["title"], "<i>Shop</i>");
+    assert_eq!(data[0]["url"], "https://shop.test/a");
+    assert!(PAGE.contains("function VI(visited)"));
 }
 
 #[test]
@@ -74,7 +77,7 @@ fn an_empty_title_reads_as_what_the_tab_is() {
         group: String::new(),
         agent: None,
     }];
-    let script = script(&items, Key::Web(1), &[], None, &none());
+    let script = script(&items, Key::Web(1), None, &none());
     assert!(script.contains("\"title\":\"New tab\""), "{script}");
 }
 
@@ -95,8 +98,8 @@ fn one_project_draws_as_it_always_has() {
         item(Key::Term(2), "make", "proj"),
     ];
     assert_eq!(
-        script(&items, Key::Web(1), &[], None, &none()),
-        r#"S({"places":[],"project":"","shown":"w1","side":null,"tabs":[{"detail":"","group":"proj","key":"w1","kind":"web","title":"Docs"},{"detail":"","group":"proj","key":"t2","kind":"term","title":"make"}],"visited":[]})"#
+        script(&items, Key::Web(1), None, &none()),
+        r#"S({"places":[],"project":"","shown":"w1","side":null,"tabs":[{"detail":"","group":"proj","key":"w1","kind":"web","title":"Docs"},{"detail":"","group":"proj","key":"t2","kind":"term","title":"make"}]})"#
     );
 }
 
@@ -123,7 +126,7 @@ fn each_tab_says_its_project_and_the_switcher_names_the_one_shown() {
         shown: "1",
         places: vec![(&shop, false), (&blog, true)],
     };
-    let script = script(&items, Key::Web(1), &[], None, &projects);
+    let script = script(&items, Key::Web(1), None, &projects);
     let json = script
         .strip_prefix("S(")
         .and_then(|s| s.strip_suffix(')'))
@@ -263,7 +266,7 @@ fn a_board_is_a_panel_past_the_terminals_named_b() {
     assert_eq!(Key::parse(&format!("t{}", BOARD + 1)), None);
     let items = [item(Key::Term(BOARD + 1), "", "proj")];
     assert!(
-        script(&items, Key::Term(BOARD + 1), &[], None, &none())
+        script(&items, Key::Term(BOARD + 1), None, &none())
             .contains(r#""kind":"board","title":"Board""#)
     );
 }
@@ -277,7 +280,7 @@ fn a_terminal_running_an_agent_carries_its_mark_and_what_it_does() {
         group: "proj".into(),
         agent: None,
     }];
-    let script = script(&items, Key::Term(3), &[], Some(true), &none());
+    let script = script(&items, Key::Term(3), Some(true), &none());
     let data: serde_json::Value = serde_json::from_str(
         script
             .strip_prefix("S(")
@@ -302,7 +305,7 @@ fn a_shell_running_an_agent_in_front_carries_its_mark() {
         group: "proj".into(),
         agent: Some("codex"),
     }];
-    let drawn = script(&items, Key::Term(4), &[], Some(true), &none());
+    let drawn = script(&items, Key::Term(4), Some(true), &none());
     assert!(drawn.contains(r#""agent":"codex""#), "{drawn}");
     assert!(drawn.contains(r#""name":"Codex""#), "{drawn}");
 }

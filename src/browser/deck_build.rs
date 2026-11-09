@@ -159,6 +159,7 @@ impl Deck {
             side_now: if side_open { side_width } else { strip::RAIL },
             pane,
             said: std::sync::Mutex::default(),
+            held: super::said::Held::default(),
             web: None,
             terms: vec![],
             shown: Shown::Web,

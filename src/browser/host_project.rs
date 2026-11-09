@@ -137,9 +137,13 @@ impl On<'_> {
 
     /// The person picks a folder: the app makes it a project, and the window goes to it.
     pub(super) fn open_folder(&mut self) {
-        if let Some(folder) = platform::pick_folder() {
-            self.shared.heard("", Heard::Folder(&folder));
-        }
+        let shared = std::sync::Arc::clone(self.shared);
+        let window = self.deck.as_ref().map(|open| &open.frame.native);
+        platform::pick_folder(window, move |folder| {
+            if let Some(folder) = folder {
+                shared.heard("", Heard::Folder(&folder));
+            }
+        });
     }
 
     /// Project `project` closed: its tabs; when it was the one shown, the window goes to the

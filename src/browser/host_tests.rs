@@ -33,3 +33,41 @@ fn a_title_is_cut_at_a_character_not_in_the_middle_of_one() {
     let exact = "x".repeat(TITLE);
     assert_eq!(clipped(&exact), exact);
 }
+
+#[test]
+fn a_load_with_the_window_closed_is_refused_at_once() {
+    let shared = events::fresh();
+    let (reply, answer) = std::sync::mpsc::sync_channel(1);
+    let url = "https://a.example/".to_string();
+    web::closed(
+        &Cmd::Navigate {
+            url,
+            tab: Some(3),
+            reply,
+        },
+        &shared,
+    );
+    assert_eq!(answer.try_recv(), Ok(Err(WINDOW_CLOSED.to_string())));
+}
+
+#[test]
+fn a_load_in_a_tab_closed_meanwhile_is_refused_at_once() {
+    let (reply, answer) = std::sync::mpsc::sync_channel(1);
+    web::load(None, "https://a.example/", Some(3), &reply);
+    let refused = answer.try_recv().unwrap().unwrap_err();
+    assert!(refused.starts_with("tab 3 is closed"), "{refused}");
+}
+
+#[test]
+fn a_tab_gone_leaves_no_project_or_detail_behind() {
+    let shared = events::fresh();
+    for key in ["w3", "w4", "t3"] {
+        crate::lock(&shared.groups).insert(key.into(), "proj".into());
+        crate::lock(&shared.details).insert(key.into(), "make".into());
+    }
+    shared.forget(&[Key::Web(3)]);
+    let groups = crate::lock(&shared.groups);
+    assert!(!groups.contains_key("w3") && !crate::lock(&shared.details).contains_key("w3"));
+    // Another page, and a terminal of the same number, are kept.
+    assert!(groups.contains_key("w4") && groups.contains_key("t3"));
+}

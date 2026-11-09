@@ -10,11 +10,33 @@ use super::super::deck::{Deck, Shown};
 use super::super::strip::Key;
 use super::{Cmd, Shared, WINDOW_CLOSED};
 
-/// The browser is closed: a script waiting on it fails now.
-fn closed(command: &Cmd, shared: &Shared) {
+/// The browser is closed: a script or a load waiting on it fails now.
+pub(super) fn closed(command: &Cmd, shared: &Shared) {
     if let Cmd::Eval { id, .. } = command {
         shared.answer(*id, Err(WINDOW_CLOSED.into()));
+    } else if let Cmd::Navigate { reply, .. } = command {
+        let _ = reply.send(Err(WINDOW_CLOSED.into()));
     }
+}
+
+/// `url` loaded in `webview`, tab `tab`'s (the one acted on with none); the caller told at once
+/// when the tab is gone, so it never waits for a load that cannot start.
+pub(super) fn load(
+    webview: Option<&wry::WebView>,
+    url: &str,
+    tab: Option<u32>,
+    reply: &std::sync::mpsc::SyncSender<Result<(), String>>,
+) {
+    // An address the system cannot read never reaches WebKit: its load would panic here.
+    let loaded = match (webview, crate::browser::guard::loadable(url)) {
+        (None, _) => Err(match tab {
+            Some(id) => format!("tab {id} is closed: list shows the tabs open"),
+            None => WINDOW_CLOSED.into(),
+        }),
+        (Some(_), None) => Err(format!("`{url}` is not an address")),
+        (Some(webview), Some(url)) => webview.load_url(&url).map_err(|why| why.to_string()),
+    };
+    let _ = reply.send(loaded);
 }
 
 /// `script` run in `webview`, its call `id` answered by the page; a tab closed answers at once.
@@ -106,13 +128,8 @@ pub(super) fn on_browser(
         }
         // What the agent does in the browser is shown: the window goes back to it, unless it
         // works in a tab of its own beside the one shown.
-        // An address the system cannot read never reaches WebKit: its load would panic here.
-        Cmd::Navigate(url, tab) => {
-            if let (Some(url), Some(webview)) =
-                (crate::browser::guard::loadable(&url), tabs.at(tab))
-            {
-                let _ = webview.load_url(&url);
-            }
+        Cmd::Navigate { url, tab, reply } => {
+            load(tabs.at(tab), &url, tab, &reply);
             if tab.is_none() {
                 open.show(Shown::Web);
             }

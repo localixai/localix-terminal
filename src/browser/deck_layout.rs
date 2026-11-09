@@ -72,7 +72,7 @@ impl Deck {
             return;
         };
         let column = LogicalSize::new(self.side_wide(), tall);
-        let _ = side.set_bounds(super::super::frame::fill(column, 0.0, top));
+        super::super::platform::bound(side, column, 0.0, top);
         super::super::platform::follow(side, super::super::platform::Follow::Side);
     }
 
@@ -179,11 +179,7 @@ impl Deck {
                 NAV
             };
             let wide = if blank { size.width } else { used_width };
-            let _ = nav.set_bounds(super::super::frame::fill(
-                LogicalSize::new(wide, tall),
-                x,
-                top,
-            ));
+            super::super::platform::bound(nav, LogicalSize::new(wide, tall), x, top);
             // Over a whole page it stretches with the window as the window resizes; over one
             // half of a split it keeps its width until the layout that follows.
             if halves.is_none() {
@@ -277,7 +273,7 @@ impl Deck {
                 at + super::super::split::GAP / 2.0 - super::super::split::LINE / 2.0
             });
             let column = LogicalSize::new(super::super::split::LINE, size.height);
-            let _ = line.set_bounds(super::super::frame::fill(column, x, top));
+            super::super::platform::bound(line, column, x, top);
             // Its width and place kept as the window resizes, as tall as the window.
             super::super::platform::follow(line, super::super::platform::Follow::Side);
         }

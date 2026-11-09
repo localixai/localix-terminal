@@ -112,7 +112,13 @@ impl Driver for WebviewDriver {
             .find(|tab| tab.id == self.target())
             .map(|tab| tab.url.clone());
         let same_page = here.is_some_and(|here| fragment_only(&here, &url));
-        self.send(Cmd::Navigate(url, self.tab))?;
+        let (reply, answer) = mpsc::sync_channel(1);
+        let tab = self.tab;
+        self.send(Cmd::Navigate { url, tab, reply })?;
+        // A tab or a window closed meanwhile says so at once: no load is waited for.
+        if let Ok(Err(why)) = answer.recv_timeout(CALL_TIMEOUT) {
+            return Err(ViewError::Unavailable(why));
+        }
         // Another fragment of the same page starts no load: there is nothing to wait to start.
         if !same_page {
             self.load_started_since(before, PROBE_READY);

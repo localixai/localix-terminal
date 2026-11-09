@@ -141,43 +141,17 @@ impl Panel {
     /// Show `frame`, a script the page runs. At most one paint waits in the loop's queue, and it
     /// runs every frame painted since the last, in order. False once the window is closed.
     pub fn paint(&self, frame: &str) -> bool {
-        {
-            let mut frames = crate::lock(&self.slot.frames);
-            if frames.len() + frame.len() > PENDING_MAX {
-                frames.clear();
-                self.slot.dropped.store(true, Ordering::SeqCst);
-            }
-            frames.push_str(frame);
-            frames.push(';');
+        paint(self.id, &self.slot, &self.send, frame)
+    }
+
+    /// What paints this panel, held apart from it: for a caller that finds the panel under a
+    /// lock and paints once it has let the lock go.
+    pub(super) fn brush(&self) -> Brush {
+        Brush {
+            id: self.id,
+            slot: Arc::clone(&self.slot),
+            send: Arc::clone(&self.send),
         }
-        if self.slot.queued.swap(true, Ordering::SeqCst) {
-            return self.slot.alive.load(Ordering::SeqCst);
-        }
-        if self.slot.hidden.load(Ordering::SeqCst) {
-            // Out of sight: what comes meanwhile runs with it, a while later (or as it shows).
-            let (send, id, slot) = (Arc::clone(&self.send), self.id, Arc::clone(&self.slot));
-            let later = std::thread::Builder::new()
-                .name("desk-paint-later".into())
-                .spawn(move || {
-                    #[expect(
-                        clippy::disallowed_methods,
-                        reason = "the wait is the point: out of sight, a panel runs its frames \
-                                  a few times a second"
-                    )]
-                    std::thread::sleep(HIDDEN_EVERY);
-                    // The loop gone, nothing is left to paint for: the caller is told.
-                    if !send(Cmd::Paint(id)) {
-                        slot.alive.store(false, Ordering::SeqCst);
-                    }
-                });
-            if later.is_ok() {
-                return self.slot.alive.load(Ordering::SeqCst);
-            }
-        }
-        if !(self.send)(Cmd::Paint(self.id)) {
-            self.slot.alive.store(false, Ordering::SeqCst);
-        }
-        self.slot.alive.load(Ordering::SeqCst)
     }
 
     /// Whether frames were dropped since this was last asked: the page is behind what was painted.
@@ -199,6 +173,61 @@ impl Panel {
     pub fn keyboard(&self, typed: Typed) {
         *crate::lock(&self.slot.typed) = Some(typed);
     }
+}
+
+/// A panel's painter apart from the panel (`Panel::brush`): it paints as the panel does, and
+/// closes nothing when it is dropped.
+pub(super) struct Brush {
+    id: u32,
+    slot: Arc<Slot>,
+    send: Arc<Post>,
+}
+
+impl Brush {
+    pub(super) fn paint(&self, frame: &str) -> bool {
+        paint(self.id, &self.slot, &self.send, frame)
+    }
+}
+
+/// `frame` queued for panel `id`'s page: at most one paint waits in the loop's queue.
+fn paint(id: u32, slot: &Arc<Slot>, send: &Arc<Post>, frame: &str) -> bool {
+    {
+        let mut frames = crate::lock(&slot.frames);
+        if frames.len() + frame.len() > PENDING_MAX {
+            frames.clear();
+            slot.dropped.store(true, Ordering::SeqCst);
+        }
+        frames.push_str(frame);
+        frames.push(';');
+    }
+    if slot.queued.swap(true, Ordering::SeqCst) {
+        return slot.alive.load(Ordering::SeqCst);
+    }
+    if slot.hidden.load(Ordering::SeqCst) {
+        // Out of sight: what comes meanwhile runs with it, a while later (or as it shows).
+        let (send, later_slot) = (Arc::clone(send), Arc::clone(slot));
+        let later = std::thread::Builder::new()
+            .name("desk-paint-later".into())
+            .spawn(move || {
+                #[expect(
+                    clippy::disallowed_methods,
+                    reason = "the wait is the point: out of sight, a panel runs its frames \
+                              a few times a second"
+                )]
+                std::thread::sleep(HIDDEN_EVERY);
+                // The loop gone, nothing is left to paint for: the caller is told.
+                if !send(Cmd::Paint(id)) {
+                    later_slot.alive.store(false, Ordering::SeqCst);
+                }
+            });
+        if later.is_ok() {
+            return slot.alive.load(Ordering::SeqCst);
+        }
+    }
+    if !send(Cmd::Paint(id)) {
+        slot.alive.store(false, Ordering::SeqCst);
+    }
+    slot.alive.load(Ordering::SeqCst)
 }
 
 impl Drop for Panel {

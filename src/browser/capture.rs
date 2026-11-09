@@ -7,6 +7,8 @@ use std::sync::mpsc::SyncSender;
 
 #[cfg(target_os = "linux")]
 mod gtk;
+#[cfg(target_os = "macos")]
+mod jpeg;
 #[cfg(target_os = "linux")]
 pub(super) use gtk::capture;
 
@@ -113,18 +115,29 @@ pub(super) fn capture(
     // SAFETY: a snapshot configuration takes a BOOL.
     let _: () = unsafe { msg_send![&*configuration, setAfterScreenUpdates: Bool::YES] };
     let done = RcBlock::new(move |image: *mut AnyObject, error: *mut AnyObject| {
-        let shot = if image.is_null() {
+        let picture = if image.is_null() {
             Err(match error.is_null() {
                 true => "WebKit returned no picture".to_string(),
                 // SAFETY: WebKit hands a live NSError for the length of the callback.
                 false => unsafe { describe(error) },
             })
         } else {
-            // SAFETY: WebKit hands a live NSImage for the length of the callback, and what
-            // `encode` reads of it is autoreleased into this pool.
-            objc2::rc::autoreleasepool(|_| unsafe { encode(image) })
+            // SAFETY: WebKit hands a live NSImage for the length of the callback, on the main
+            // thread, and what `take` reads of it is autoreleased into this pool.
+            objc2::rc::autoreleasepool(|_| unsafe { jpeg::take(image) })
         };
-        let _ = reply.send(shot);
+        // Encoded apart: a picture of a long page takes the main thread a while to encode.
+        let encoded = picture.map(|picture| {
+            let reply = reply.clone();
+            std::thread::Builder::new()
+                .name("desk-picture".into())
+                .spawn(move || drop(reply.send(picture.encode())))
+        });
+        match encoded {
+            Ok(Ok(_)) => {}
+            Ok(Err(why)) => drop(reply.send(Err(format!("the picture was not encoded: {why}")))),
+            Err(why) => drop(reply.send(Err(why))),
+        }
     });
     // SAFETY: a WKWebView takes a configuration and a block of (NSImage, NSError), which it
     // copies and calls once on the main thread.
@@ -151,68 +164,6 @@ pub(super) fn capture(
         "screenshots are not supported on this system yet (macOS and Linux only); use `read` or `script`"
             .into(),
     ));
-}
-
-/// The NSImage WebKit drew, as JPEG.
-///
-/// # Safety
-/// `image` is a live NSImage, and an autorelease pool is in place.
-#[cfg(target_os = "macos")]
-unsafe fn encode(image: *mut objc2::runtime::AnyObject) -> Result<Shot, String> {
-    use objc2::runtime::AnyObject;
-    use objc2::{class, msg_send};
-
-    /// NSBitmapImageFileTypeJPEG.
-    const JPEG: usize = 3;
-    // SAFETY: `image` is a live NSImage (the caller's contract); the data is autoreleased.
-    let tiff: *mut AnyObject = unsafe { msg_send![image, TIFFRepresentation] };
-    if tiff.is_null() {
-        return Err("the picture has no bitmap".into());
-    }
-    // SAFETY: `tiff` is a live NSData, checked non-null above.
-    let bitmap: *mut AnyObject =
-        unsafe { msg_send![class!(NSBitmapImageRep), imageRepWithData: tiff] };
-    if bitmap.is_null() {
-        return Err("the picture could not be decoded".into());
-    }
-    let key = super::appkit::text("NSImageCompressionFactor");
-    // SAFETY: NSNumber's class method takes a double and returns a number.
-    let quality: *mut AnyObject = unsafe { msg_send![class!(NSNumber), numberWithDouble: QUALITY] };
-    // SAFETY: `quality` and `key` are live objects, made just above in this pool.
-    let properties: *mut AnyObject = unsafe {
-        msg_send![class!(NSMutableDictionary), dictionaryWithObject: quality, forKey: &*key]
-    };
-    // A page on the window's glass is clear where the glass shows, and a JPEG has no clear: it is
-    // laid on the window's own background, in the appearance in force, not on black.
-    let fallback = super::appkit::text("NSImageFallbackBackgroundColor");
-    // SAFETY: NSColor's class method answers the shared, live system colour.
-    let ground: *mut AnyObject = unsafe { msg_send![class!(NSColor), windowBackgroundColor] };
-    if !properties.is_null() && !ground.is_null() {
-        // SAFETY: `properties` is a live NSMutableDictionary, `ground` and `fallback` live objects.
-        let _: () = unsafe { msg_send![properties, setObject: ground, forKey: &*fallback] };
-    }
-    // SAFETY: `bitmap` is a live NSBitmapImageRep (non-null above), `properties` a dictionary.
-    let data: *mut AnyObject =
-        unsafe { msg_send![bitmap, representationUsingType: JPEG, properties: properties] };
-    if data.is_null() {
-        return Err("the picture could not be encoded as JPEG".into());
-    }
-    // SAFETY: `data` is a live NSData, checked non-null above.
-    let bytes: *const std::ffi::c_void = unsafe { msg_send![data, bytes] };
-    // SAFETY: as above; an NSData answers its length as an NSUInteger.
-    let length: usize = unsafe { msg_send![data, length] };
-    // SAFETY: `bitmap` is a live NSBitmapImageRep; it answers an NSInteger.
-    let width: isize = unsafe { msg_send![bitmap, pixelsWide] };
-    // SAFETY: as above.
-    let height: isize = unsafe { msg_send![bitmap, pixelsHigh] };
-    // SAFETY: `bytes` points at `length` bytes the NSData owns, alive while the pool is; they
-    // are copied out before it drains.
-    let jpeg = unsafe { std::slice::from_raw_parts(bytes.cast::<u8>(), length) }.to_vec();
-    Ok(Shot {
-        jpeg,
-        width: u32::try_from(width.max(0)).unwrap_or(u32::MAX),
-        height: u32::try_from(height.max(0)).unwrap_or(u32::MAX),
-    })
 }
 
 /// An NSError's description.
@@ -262,7 +213,7 @@ pub(super) struct CGRect {
 
 #[cfg(target_os = "macos")]
 mod encoding {
-    use objc2::{Encode, Encoding};
+    use objc2::{Encode, Encoding, RefEncode};
 
     use super::{CGPoint, CGRect, CGSize};
 
@@ -278,6 +229,10 @@ mod encoding {
     unsafe impl Encode for CGRect {
         const ENCODING: Encoding =
             Encoding::Struct("CGRect", &[CGPoint::ENCODING, CGSize::ENCODING]);
+    }
+    // SAFETY: a pointer to a `CGRect`, as the encoding says (an image's proposed rect).
+    unsafe impl RefEncode for CGRect {
+        const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
     }
 }
 

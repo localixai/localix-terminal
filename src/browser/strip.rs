@@ -157,7 +157,6 @@ pub(super) struct Projects<'a> {
 pub(super) fn script(
     items: &[Item],
     shown: Key,
-    visited: &[super::Visited],
     side: Option<bool>,
     projects: &Projects<'_>,
 ) -> String {
@@ -188,10 +187,6 @@ pub(super) fn script(
             tab
         })
         .collect();
-    let visited: Vec<_> = visited
-        .iter()
-        .map(|page| json!({"title": page.title, "url": page.url}))
-        .collect();
     let places: Vec<_> = (projects.places.iter())
         .map(|(place, marked)| {
             json!({"key": place.key, "name": place.name, "marked": marked,
@@ -200,9 +195,18 @@ pub(super) fn script(
         .collect();
     format!(
         "S({})",
-        json!({"tabs": tabs, "shown": shown.name(), "visited": visited, "side": side,
+        json!({"tabs": tabs, "shown": shown.name(), "side": side,
             "project": projects.shown, "places": places})
     )
+}
+
+/// The call that tells the browser's toolbar the pages the project showed, newest first: what
+/// its address field suggests. The toolbar's alone: the strip and the side never read them.
+pub(super) fn visited(visited: &[super::Visited]) -> String {
+    let visited: Vec<_> = (visited.iter())
+        .map(|page| json!({"title": page.title, "url": page.url}))
+        .collect();
+    format!("VI({})", json!(visited))
 }
 
 /// What became of a tab the history menu lists.

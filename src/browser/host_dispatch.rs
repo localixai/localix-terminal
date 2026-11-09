@@ -42,20 +42,30 @@ impl On<'_> {
                 | Cmd::SwitchTab { .. }
                 | Cmd::CloseTab { .. }
         );
+        // What is drawn on the way (the act, the settle after it) is drawn once, at the end.
+        let held = settles && !streamed;
+        if let (true, Some(open)) = (held, self.deck.as_ref()) {
+            open.hold();
+        }
         self.carry_out(command);
         if told {
             *self.stale = true;
-        } else if settles && !streamed {
+        } else if held {
             *self.stale = false;
             self.settled();
         }
     }
 
-    /// The window kept on the project shown, its split kept, and what it shows drawn again.
+    /// The window kept on the project shown, its split kept, and what it shows drawn again:
+    /// once, however many refreshes keeping it asked for on the way.
     pub(super) fn settled(&mut self) {
+        if let Some(open) = self.deck.as_ref() {
+            open.hold();
+        }
         self.settle();
         self.keep_split();
         if let Some(open) = self.deck.as_ref() {
+            open.release();
             open.refresh(self.shared);
         }
     }
@@ -77,7 +87,9 @@ impl On<'_> {
             }
             Cmd::Unpanel(id) => {
                 if let Some(open) = self.deck.as_mut() {
-                    open.end_term(id);
+                    if let Some(gone) = open.end_term(id) {
+                        shared.forget(&[Key::Term(gone)]);
+                    }
                     open.refresh(shared);
                 }
             }
@@ -98,8 +110,12 @@ impl On<'_> {
             Cmd::Presented(reply) => {
                 let _ = reply.send(self.presenter.name());
             }
+            // Asked on the window, which runs on until the answer comes.
             Cmd::Confirm(question, reply) => {
-                let _ = reply.send(platform::confirm(&question));
+                let window = self.deck.as_ref().map(|open| &open.frame.native);
+                platform::confirm(&question, window, move |yes| {
+                    let _ = reply.send(yes);
+                });
             }
             Cmd::Clicked(said) => self.clicked(&said),
             Cmd::Pressed(window, x, y) => self.pressed(window, x, y),
@@ -139,7 +155,7 @@ impl On<'_> {
                 }
             }
             command @ (Cmd::Eval { .. }
-            | Cmd::Navigate(..)
+            | Cmd::Navigate { .. }
             | Cmd::NewTab { .. }
             | Cmd::Adopt
             | Cmd::SwitchTab { .. }
