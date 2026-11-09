@@ -109,8 +109,29 @@ pub(super) fn elsewhere(url: &str, from: Option<u32>) {
     };
     super::debug(|| format!("an address elsewhere, from {from:?}: {url} (sent: {let_through})"));
     if let_through {
-        super::platform::open_outside(url);
+        send(url);
     }
+}
+
+/// The person's default browser given `url`.
+#[cfg(not(feature = "test-server"))]
+fn send(url: &str) {
+    super::platform::open_outside(url);
+}
+
+#[cfg(feature = "test-server")]
+static SENT: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+/// A test build keeps the address instead: its windows never open the person's browser.
+#[cfg(feature = "test-server")]
+fn send(url: &str) {
+    crate::lock(&SENT).push(url.to_string());
+}
+
+/// The addresses a test build's tabs sent to the default browser, oldest first.
+#[cfg(feature = "test-server")]
+pub fn sent_elsewhere() -> Vec<String> {
+    crate::lock(&SENT).clone()
 }
 
 #[cfg(test)]

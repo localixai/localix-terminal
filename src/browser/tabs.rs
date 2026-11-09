@@ -333,7 +333,9 @@ impl Tabs {
             Parent::of(native),
         );
         let builder = share(builder, first);
-        build(builder, native).map_err(|error| error.to_string())
+        let webview = build(builder, native).map_err(|error| error.to_string())?;
+        super::frames::watch(&webview);
+        Ok(webview)
     }
 }
 

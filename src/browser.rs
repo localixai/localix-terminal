@@ -68,6 +68,8 @@ use serde::{Deserialize, Serialize};
 
 pub use capture::{Clip, Shot};
 pub(crate) use guard::local;
+#[cfg(feature = "test-server")]
+pub use guard::sent_elsewhere;
 pub use guard::{for_agent, loadable, not_local};
 pub use host::{
     Answers, Arranged, Arranging, Asked, Browser, CenterDid, Confirm, Dressing, Halves, Heard,

@@ -39,7 +39,6 @@ pub(super) fn builder<'a>(
     let forget = window.headless || super::platform::unseen();
     // A window nobody sees sends the person's browser nothing.
     let headless = window.headless;
-    super::frames::begin();
     let mut builder = WebViewBuilder::new()
         // The first click in a window that is not the key one reaches the page: the person
         // never clicks twice, once to wake the window and once to do what they meant.
@@ -135,7 +134,6 @@ pub(super) fn builder<'a>(
 /// the page itself only to a local one, and anywhere else opens in the person's browser unless
 /// the agent's action moved it there.
 fn navigation(id: u32, url: &str, headless: bool, shared: &Shared) -> bool {
-    super::frames::begin();
     let main = super::frames::main_frame();
     let allow = match main {
         Some(false) => allowed(url),

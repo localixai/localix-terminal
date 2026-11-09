@@ -23,6 +23,8 @@ use llx_desk::view::{Action, ViewError};
 
 #[path = "support/board.rs"]
 mod board;
+#[path = "support/elsewhere.rs"]
+mod elsewhere;
 #[path = "support/panel.rs"]
 mod panel;
 #[cfg(target_os = "macos")]
@@ -70,6 +72,16 @@ fn answer(stream: &std::net::TcpStream) {
         .find_map(|(prefix, ms)| Some((path.strip_prefix(prefix)?, *ms)))
         .unwrap_or((path, 0));
     std::thread::sleep(Duration::from_millis(delay));
+    // A local address the server sends on to an external one.
+    if let Some(away) = path.strip_prefix("away/") {
+        let head = format!(
+            "HTTP/1.1 302 Found\r\nLocation: http://192.0.2.1/{away}\r\n\
+             Content-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        let mut stream = stream;
+        let _ = stream.write_all(head.as_bytes());
+        return;
+    }
     let file = format!("{}/tests/fixtures/{path}", env!("CARGO_MANIFEST_DIR"));
     let (status, body) = match std::fs::read(&file) {
         Ok(body) => ("200 OK", body),
@@ -1229,8 +1241,14 @@ fn main() {
                 waits_for_the_person(&browser, &driver);
                 sizes(&driver);
                 told::scenario(&driver, &origin);
+                elsewhere::scenario(&driver, &origin);
                 scenario(&driver, &origin);
             });
+        let driven = driven
+            && (!driving
+                || run("elsewhere", &|| {
+                    elsewhere::shown(&browser, &window, &origin)
+                }));
         // The driver's scenario ends with its window closed: the panel's opens it again.
         let paneled = !paneling
             || run("panel", &|| {

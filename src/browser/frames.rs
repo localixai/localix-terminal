@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static MAIN: AtomicBool = AtomicBool::new(true);
 
 /// Whether the navigation a tab's handler decides now is the page's own; none where it cannot be
-/// told (elsewhere than macOS, or before the first view was watched).
+/// told (elsewhere than macOS, or before the first view was built).
 pub(super) fn main_frame() -> Option<bool> {
     known().then(|| MAIN.load(Ordering::Relaxed))
 }
@@ -69,15 +69,22 @@ mod watch {
         WATCHED.load(Ordering::Relaxed)
     }
 
-    /// The tabs' delegate's question is looked at from now on, once its class exists (a view
-    /// was built). On the main thread, where WebKit asks.
-    pub(in super::super) fn begin() {
+    /// The tabs' delegate's question is looked at from now on: its class is `view`'s delegate's
+    /// (wry's, named by its module and version, so it is taken from a built view, never by name).
+    /// On the main thread, where WebKit asks; once, as every tab has a delegate of that class.
+    pub(in super::super) fn watch(view: &wry::WebView) {
+        use wry::WebViewExtMacOS;
         if WATCHED.load(Ordering::Relaxed) {
             return;
         }
-        let Some(class) = AnyClass::get(c"WryNavigationDelegate") else {
+        let view = view.webview();
+        // SAFETY: a WKWebView answers its navigation delegate, or nil.
+        let delegate: Option<Retained<AnyObject>> =
+            unsafe { msg_send![&*view, navigationDelegate] };
+        let Some(delegate) = delegate else {
             return;
         };
+        let class: &AnyClass = delegate.class();
         let selector = sel!(webView:decidePolicyForNavigationAction:decisionHandler:);
         let Some(method) = class.instance_method(selector) else {
             return;
@@ -99,10 +106,10 @@ mod watch {
 /// From now on a tab's handler knows which frame it decides for (`main_frame`); elsewhere than
 /// macOS it never does.
 #[cfg(target_os = "macos")]
-pub(super) use watch::{begin, known};
+pub(super) use watch::{known, watch};
 
 #[cfg(not(target_os = "macos"))]
-pub(super) fn begin() {}
+pub(super) fn watch(_view: &wry::WebView) {}
 
 #[cfg(not(target_os = "macos"))]
 fn known() -> bool {
