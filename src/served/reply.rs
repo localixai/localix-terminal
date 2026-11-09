@@ -1,16 +1,18 @@
 //! One request of a served page answered: its head read within a deadline, the file it names
 //! found inside its directory, and sent with its type from the open file, a byte range of it when
-//! asked (a `<video>` needs them), never read whole into memory.
+//! asked (a `<video>` needs them), never read whole into memory. A request that names no root by
+//! its prefix is answered only to a page that knows one: its Referer, or the cookie its first
+//! answer set; another user of the machine reaches the loopback too, but never saw a prefix.
 
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::net::{Shutdown, TcpStream};
-use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use super::Root;
+use super::kinds::kind;
 use super::range::{Slice, slice};
 
 /// How long a request's head may take to arrive in all: a client that sends nothing, or a byte
@@ -42,6 +44,8 @@ struct Reply {
     ranged: bool,
     /// What `Content-Range` says, of a part or of a range refused.
     within: Option<String>,
+    /// The prefix of the root a file was found in by its prefix, kept by the browser as a cookie.
+    root: Option<String>,
 }
 
 impl Reply {
@@ -53,6 +57,7 @@ impl Reply {
             body: Body::Text(words),
             ranged: false,
             within: None,
+            root: None,
         }
     }
 }
@@ -75,7 +80,11 @@ pub(super) fn answer(mut stream: TcpStream, roots: &Mutex<HashMap<String, Root>>
         }
         "GET" | "HEAD" => {
             let range = header(&head, "range").filter(|_| method == "GET");
-            found(target, header(&head, "referer"), range, roots)
+            let from = Asker {
+                referer: header(&head, "referer"),
+                root: root_cookie(header(&head, "cookie")),
+            };
+            found(target, &from, range, roots)
         }
         _ => Reply::text("405 Method Not Allowed", "only GET"),
     };
@@ -131,6 +140,12 @@ fn send(stream: &mut TcpStream, reply: Reply, body: bool) -> std::io::Result<()>
     if let Some(range) = &reply.within {
         let _ = write!(head, "Content-Range: {range}\r\n");
     }
+    if let Some(root) = &reply.root {
+        let _ = write!(
+            head,
+            "Set-Cookie: {COOKIE}={root}; HttpOnly; SameSite=Strict; Path=/\r\n"
+        );
+    }
     head.push_str("\r\n");
     within(stream)?;
     stream.write_all(head.as_bytes())?;
@@ -176,11 +191,30 @@ fn first_segment(address: &str) -> &str {
         .unwrap_or_default()
 }
 
+/// The cookie that names the root a browser's page was served from. A page's own request with no
+/// prefix (a script's `fetch('/api.json')` under a policy that sends no Referer) carries it; a
+/// request from anyone else on this machine, who can reach the loopback but never saw a prefix,
+/// does not.
+const COOKIE: &str = "llx-desk-root";
+
+/// The value of [`COOKIE`] in a request's `Cookie` header.
+fn root_cookie(cookies: Option<&str>) -> Option<&str> {
+    (cookies?.split(';')).find_map(|pair| pair.trim().strip_prefix(COOKIE)?.strip_prefix('='))
+}
+
+/// Where a request with no prefix says it comes from: the page that asked (`Referer`), and the
+/// root its browser was served from ([`COOKIE`]).
+struct Asker<'a> {
+    referer: Option<&'a str>,
+    root: Option<&'a str>,
+}
+
 /// What `target` names. A path with no prefix of a served root (a built site names
-/// `/assets/app.css`) is read in the root its `referer` is of, else in the only root served.
+/// `/assets/app.css`) is read in the root its `referer` is of, else in the only root served when
+/// the request's cookie names it: it knows a prefix, as its page did.
 fn found(
     target: &str,
-    referer: Option<&str>,
+    from: &Asker<'_>,
     range: Option<&str>,
     roots: &Mutex<HashMap<String, Root>>,
 ) -> Reply {
@@ -189,15 +223,16 @@ fn found(
     let path = target.split(['?', '#']).next().unwrap_or_default();
     let mut parts = path.trim_start_matches('/').split('/').peekable();
     let roots = crate::lock(roots);
+    let mut prefixed = None;
     let root = match parts.peek().and_then(|prefix| roots.get(*prefix)) {
         Some(root) => {
-            parts.next();
+            prefixed = parts.next().map(str::to_string);
             Some(root.clone())
         }
-        None => referer
+        None => (from.referer)
             .and_then(|from| roots.get(first_segment(from)))
             .or_else(|| match roots.len() {
-                1 => roots.values().next(),
+                1 => from.root.and_then(|root| roots.get(root)),
                 _ => None,
             })
             .cloned(),
@@ -267,44 +302,7 @@ fn found(
         body: Body::File(open),
         ranged: true,
         within,
-    }
-}
-
-/// A file's type, by its extension, as a browser reads it.
-fn kind(file: &Path) -> &'static str {
-    let extension = file
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or_default();
-    match extension.to_ascii_lowercase().as_str() {
-        "html" | "htm" => "text/html; charset=utf-8",
-        "xhtml" => "application/xhtml+xml",
-        "xml" => "application/xml",
-        "css" => "text/css; charset=utf-8",
-        "js" | "mjs" => "text/javascript; charset=utf-8",
-        "json" | "map" => "application/json",
-        "svg" => "image/svg+xml",
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "avif" => "image/avif",
-        "mp4" => "video/mp4",
-        "webm" => "video/webm",
-        "m4a" => "audio/mp4",
-        "mp3" => "audio/mpeg",
-        "ogg" => "audio/ogg",
-        "wav" => "audio/wav",
-        "ttf" => "font/ttf",
-        "otf" => "font/otf",
-        "pdf" => "application/pdf",
-        "csv" => "text/csv; charset=utf-8",
-        "ico" => "image/x-icon",
-        "woff2" => "font/woff2",
-        "woff" => "font/woff",
-        "wasm" => "application/wasm",
-        "txt" | "md" => "text/plain; charset=utf-8",
-        _ => "application/octet-stream",
+        root: prefixed,
     }
 }
 
