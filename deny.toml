@@ -1,0 +1,46 @@
+# What `cargo deny check` holds the dependency tree to, in CI: no crate with a security advisory
+# against it, only the licences listed here (each one compatible with this crate's MIT), and
+# crates from crates.io alone. Two versions of one crate are reported, not refused: the tree
+# takes them from its dependencies, and they cost build time, not correctness.
+
+[graph]
+# The platforms releases are built for; a crate only another platform takes is not checked.
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "x86_64-unknown-linux-gnu",
+]
+
+[advisories]
+version = 2
+yanked = "deny"
+# An unmaintained crate is refused among this crate's own dependencies; one deeper in the tree
+# (GTK's macros, on Linux) is the dependency's to replace.
+unmaintained = "workspace"
+ignore = [
+  # SQLite before 3.54 reads stale memory from a database whose -wal file another party crafted.
+  # The desk opens only its own database, in its own folder. The fix is rusqlite 0.41, which
+  # needs Rust 1.89, above this crate's rust-version: remove this entry with that upgrade.
+  { id = "RUSTSEC-2026-0459", reason = "only the desk's own database is opened; fixed by the rusqlite 0.41 upgrade" },
+]
+
+[licenses]
+version = 2
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "MIT",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
