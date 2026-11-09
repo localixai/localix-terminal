@@ -186,6 +186,10 @@ impl On<'_> {
     /// What the person typed in the address field: the page shown goes there (a terminal shown,
     /// a new page of theirs does), and whoever works in it is told.
     fn go(&mut self, url: String) {
+        // Only a local address opens in a tab; the person's own browser opens the rest.
+        if !crate::browser::guard::local(&url) {
+            return crate::browser::guard::elsewhere(&url, None);
+        }
         let Some(open) = self.deck.as_ref() else {
             return;
         };

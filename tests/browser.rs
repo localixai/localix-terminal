@@ -227,6 +227,14 @@ fn scenario(driver: &WebviewDriver, origin: &str) {
     assert!(driver.navigate("https:// playsnake.org").is_err());
     assert!(driver.add_tab("https:// playsnake.org").is_err());
 
+    // The tabs open only local addresses: an agent asking for another is told so, and nothing loads.
+    let refused = driver
+        .navigate("https://example.com/")
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("only local addresses"), "{refused}");
+    assert!(driver.add_tab("https://example.com/").is_err());
+
     // A link inside a heading is a control in the outline, not only the heading's words.
     driver.navigate(&format!("{origin}/results.html")).unwrap();
     let page = driver.observe().unwrap();

@@ -239,10 +239,10 @@ impl WebviewDriver {
     }
 }
 
-/// `url` as the window can load it, else refused before it reaches the window (`guard`).
+/// `url` as an agent's tab can load it, a local address, else refused before it reaches the
+/// window (`guard::for_agent`).
 pub(super) fn loadable(url: &str) -> ViewResult<String> {
-    crate::browser::guard::loadable(url)
-        .ok_or_else(|| ViewError::Refused(format!("`{url}` is not an address")))
+    crate::browser::guard::for_agent(url).map_err(ViewError::Refused)
 }
 
 /// Whether going to `to` from the page at `current` only changes the fragment (`to` has one):

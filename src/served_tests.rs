@@ -255,19 +255,6 @@ fn a_root_absolute_request_is_answered_from_the_root_its_page_came_from() {
 }
 
 #[test]
-fn with_one_root_served_a_root_absolute_request_needs_no_referer() {
-    let scratch = site();
-    let served = Served::default();
-    let shop = served
-        .address(scratch.path(), scratch.path(), "demo/shop/index.html")
-        .unwrap()
-        .unwrap();
-    let (status, css) = get_from(&shop, "/style.css", None);
-    assert_eq!(status, "HTTP/1.1 200 OK");
-    assert!(css.contains("red"), "{css}");
-}
-
-#[test]
 fn a_link_inside_the_directory_to_a_dot_file_is_not_followed() {
     let scratch = site();
     scratch.file("demo/shop/.git/config", "url = https://token@example.com");

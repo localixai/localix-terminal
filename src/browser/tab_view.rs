@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tao::event_loop::EventLoopProxy;
 use wry::{NewWindowResponse, PageLoadEvent, WebView, WebViewBuilder};
 
-use super::guard::allowed;
+use super::guard::{allowed, elsewhere, local};
 use super::host::{Cmd, PROBE, Said, Shared, Window};
 use super::platform::user_agent;
 use super::popup::{self, Parent};
@@ -37,6 +37,9 @@ pub(super) fn builder<'a>(
     // store of the app's own (macOS: ~/Library/WebKit and HTTPStorages, under the binary's
     // name). A window nobody sees (headless, CI, the tests' unseen ones) remembers nothing.
     let forget = window.headless || super::platform::unseen();
+    // A window nobody sees sends the person's browser nothing.
+    let headless = window.headless;
+    super::frames::begin();
     let mut builder = WebViewBuilder::new()
         // The first click in a window that is not the key one reaches the page: the person
         // never clicks twice, once to wake the window and once to do what they meant.
@@ -72,8 +75,18 @@ pub(super) fn builder<'a>(
             titles.titled(id, &title);
             let _ = titled.send_event(Cmd::Strip);
         })
+        // The page itself only ever goes to a local address: anywhere else (a link, a script, a
+        // server's redirect) opens in the person's browser, and the tab stays where it was.
         .with_navigation_handler(move |url| {
-            let allow = allowed(&url) || url == BLANK;
+            super::frames::begin();
+            let main = super::frames::main_frame();
+            let allow = match main {
+                Some(false) => allowed(&url),
+                _ => local(&url) || url == BLANK,
+            };
+            if !allow && main.is_some() && !headless {
+                elsewhere(&url, Some(id));
+            }
             super::debug(|| format!("tab {id} navigation requested: {url} (allowed: {allow})"));
             if allow {
                 requests.navigation_requested(id);
@@ -85,7 +98,10 @@ pub(super) fn builder<'a>(
         // opened is what it is about now. Built while WebKit waits, it keeps its opener
         // (popup.rs); where it cannot be, it opens as a tab of its own.
         .with_new_window_req_handler(move |url, features| {
-            if !allowed(&url) {
+            if !local(&url) {
+                if !headless {
+                    elsewhere(&url, Some(id));
+                }
                 return NewWindowResponse::Deny;
             }
             let made = parent

@@ -1,9 +1,12 @@
 //! The window tool's description and each kind's usage guide.
 
-const WEB_GUIDE: &str = "Web pages. `open` with `url` (a site, or a search page with the \
-query in its address: faster than typing into a search box; only http and https; or an HTML file \
-by its path, `demo/index.html` or a directory with an index.html, served as a site with the files \
-beside it, with no server to start). The snapshot is the page's outline, each control in it with \
+const WEB_GUIDE: &str = "Web pages. `open` with `url` (a local site: only http and https on \
+localhost, *.localhost, *.local, *.test, *.internal, *.home.arpa, or a loopback, private or \
+link-local IP, any port; an external address is refused, so fetch the web with your own tools; or \
+an HTML file by its path, `demo/index.html` or a directory with an index.html, served as a site \
+with the files beside it, with no server to start; with no `url`, a blank page). A page's own \
+scripts, images, requests and frames load from anywhere; a link to an external address opens in \
+the person's own browser and the tab stays. The snapshot is the page's outline, each control in it with \
 its ref, `[e12]`. In `interact`: `click` clicks a control by its ref (or several, a list, in \
 order), `fill` types into fields (`{\"e4\": \"ada@example.com\"}`; `{{secret:NAME}}` types a \
 saved secret, shown as its name), `select` picks an option (`{\"e7\": \"Large\"}`): fields are \

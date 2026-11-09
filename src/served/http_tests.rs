@@ -146,3 +146,40 @@ fn media_documents_and_fonts_are_served_with_their_types() {
         );
     }
 }
+
+#[test]
+fn a_request_with_no_prefix_is_answered_only_to_the_page_that_was_served() {
+    let scratch = site();
+    let served = Served::default();
+    let shop = served
+        .address(scratch.path(), scratch.path(), "demo/shop/index.html")
+        .unwrap()
+        .unwrap();
+    let host = host_of(&shop);
+    let unprefixed = |cookie: &str| {
+        raw_text(
+            &shop,
+            &format!("GET /style.css HTTP/1.1\r\nHost: {host}\r\n{cookie}\r\n"),
+        )
+    };
+    // Another user of this machine reaches the loopback too: with no prefix, no Referer and no
+    // cookie, it is told nothing, even with one directory served.
+    let (head, body) = unprefixed("");
+    assert!(head.starts_with("HTTP/1.1 404"), "{head}");
+    assert!(!body.contains("red"));
+    let (head, _) = unprefixed("Cookie: llx-desk-root=desk-0000\r\n");
+    assert!(head.starts_with("HTTP/1.1 404"), "{head}");
+    // The page itself, by its prefix, gives its browser the cookie, for the browser alone.
+    let page = path(&shop);
+    let (head, _) = raw_text(
+        &shop,
+        &format!("GET {page} HTTP/1.1\r\nHost: {host}\r\n\r\n"),
+    );
+    let prefix = page.trim_start_matches('/').split('/').next().unwrap();
+    let cookie = format!("Set-Cookie: llx-desk-root={prefix}; HttpOnly; SameSite=Strict; Path=/");
+    assert!(head.contains(&cookie), "{head}");
+    // With it, a built site's root-absolute names (`/style.css`) are found.
+    let (head, body) = unprefixed(&format!("Cookie: theme=dark; llx-desk-root={prefix}\r\n"));
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    assert!(body.contains("red"), "{body}");
+}

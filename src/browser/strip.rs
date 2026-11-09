@@ -85,14 +85,15 @@ impl Key {
     }
 }
 
-/// Where the search goes: what is typed in the address field that is not an address.
+/// Where the search goes: what is typed in the address field that is not an address. Not a local
+/// address, it opens in the person's own browser.
 pub(super) const SEARCH: &str = "https://www.google.com/search";
 
-/// Where a page the person opens with "+" starts: the search page's home.
-pub const HOME: &str = "https://www.google.com";
+/// Where a page the person opens with "+" starts: a blank page, its address theirs to type.
+pub const HOME: &str = "about:blank";
 
 /// Where `go <typed>`, what the person typed in the address field, goes: a web address as typed
-/// (`https://` put before a bare one), else a search for it. Never a script or a file: only
+/// (`http://` put before a bare local one, `https://` before another), else a search for it. Never a script or a file: only
 /// http and https are gone to.
 pub(super) fn went(body: &str) -> Option<String> {
     let typed = body.strip_prefix("go ")?.trim();
@@ -101,7 +102,7 @@ pub(super) fn went(body: &str) -> Option<String> {
     }
     let web = typed.starts_with("http://") || typed.starts_with("https://");
     let bare = !web && !typed.contains(char::is_whitespace) && !typed.contains("://");
-    let local = typed.starts_with("localhost") || typed.starts_with("127.0.0.1");
+    let local = super::guard::local(&format!("http://{typed}"));
     let address = match (web, bare) {
         (true, _) => Some(typed.to_string()),
         (false, true) if local => Some(format!("http://{typed}")),
