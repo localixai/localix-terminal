@@ -17,6 +17,12 @@ use std::time::Duration;
 use rusqlite::TransactionBehavior;
 pub use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
+/// How long a write waits for another connection to the same database (the CLI's) to let go.
+const BUSY: Duration = Duration::from_secs(5);
+
+/// How many prepared statements the connection keeps for reuse: the queries the desk runs often.
+const STATEMENTS: usize = 64;
+
 /// The database, shared by every part that keeps something in it.
 pub struct Store {
     connection: Mutex<Connection>,
@@ -35,6 +41,9 @@ impl Store {
         let failed = |why: &dyn std::fmt::Display| format!("{}: {why}", path.display());
         Self::private(path).map_err(|why| failed(&why))?;
         let connection = Connection::open(path).map_err(|why| failed(&why))?;
+        // The wait comes first: the CLI may hold the database as the app opens it, and even the
+        // switch to WAL below needs it for a moment.
+        connection.busy_timeout(BUSY).map_err(|why| failed(&why))?;
         connection
             .pragma_update(None, "journal_mode", "WAL")
             .map_err(|why| failed(&why))?;
@@ -103,34 +112,57 @@ impl Store {
 
     fn ready(mut connection: Connection) -> Result<Self, String> {
         let text = |why: rusqlite::Error| why.to_string();
-        connection
-            .busy_timeout(Duration::from_secs(5))
-            .map_err(text)?;
+        connection.busy_timeout(BUSY).map_err(text)?;
         connection
             .pragma_update(None, "foreign_keys", "ON")
             .map_err(text)?;
-        let done: usize = connection
-            .pragma_query_value(None, "user_version", |row| row.get(0))
-            .map_err(text)?;
-        if done > STEPS.len() {
-            return Err(format!(
-                "its schema is at step {done}, past the {} this build knows: a newer llx-desk \
-                 wrote it: update llx-desk, \
-                 or move the file aside",
-                STEPS.len()
-            ));
-        }
-        for (at, step) in STEPS.iter().enumerate().skip(done) {
-            let tx = connection.transaction().map_err(text)?;
+        connection.set_prepared_statement_cache_capacity(STATEMENTS);
+        Self::migrate(&mut connection)?;
+        let store = Self {
+            connection: Mutex::new(connection),
+            instead: None,
+        };
+        store.optimize();
+        Ok(store)
+    }
+
+    /// The schema's steps not done yet, each in a transaction of its own that takes the write lock
+    /// at its start and reads where the schema stands inside it: another process opening the same
+    /// database at the same moment (the CLI, a second app) waits for it, then finds the step done.
+    fn migrate(connection: &mut Connection) -> Result<(), String> {
+        let text = |why: rusqlite::Error| why.to_string();
+        loop {
+            let tx = connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(text)?;
+            let done: usize = tx
+                .pragma_query_value(None, "user_version", |row| row.get(0))
+                .map_err(text)?;
+            if done > STEPS.len() {
+                return Err(format!(
+                    "its schema is at step {done}, past the {} this build knows: a newer llx-desk \
+                     wrote it: update llx-desk, \
+                     or move the file aside",
+                    STEPS.len()
+                ));
+            }
+            let Some(step) = STEPS.get(done) else {
+                return Ok(());
+            };
             tx.execute_batch(step).map_err(text)?;
-            tx.pragma_update(None, "user_version", at + 1)
+            tx.pragma_update(None, "user_version", done + 1)
                 .map_err(text)?;
             tx.commit().map_err(text)?;
         }
-        Ok(Self {
-            connection: Mutex::new(connection),
-            instead: None,
-        })
+    }
+
+    /// SQLite's own upkeep of what it knows of the tables, for its query plans: cheap, and done
+    /// as the store opens and as the app quits.
+    pub fn optimize(&self) {
+        let optimized = self.connection().execute_batch("PRAGMA optimize");
+        if let Err(why) = optimized {
+            log::warn!("store: the database was not optimized: {why}");
+        }
     }
 
     fn connection(&self) -> MutexGuard<'_, Connection> {

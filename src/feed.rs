@@ -151,6 +151,8 @@ struct Inner {
     /// Woken when a notice is recorded, a cursor moves, or the feed stops.
     changed: Condvar,
     retry: Duration,
+    /// A prune runs on its thread.
+    pruning: std::sync::atomic::AtomicBool,
 }
 
 /// What the feed holds in memory: where it stands, and how each consumer is.
@@ -223,6 +225,7 @@ impl Feed {
                 log: Mutex::new(log),
                 changed: Condvar::new(),
                 retry,
+                pruning: std::sync::atomic::AtomicBool::new(false),
             }),
         }
     }
@@ -268,7 +271,7 @@ impl Feed {
             // A write of several notices may step over a thousand: that it crossed one is what
             // counts, not that it ended on it.
             if crossed {
-                self.prune();
+                self.prune_later();
             }
         }
         Ok(answer)
@@ -329,6 +332,26 @@ impl Feed {
             log = crate::wait_timeout(&self.inner.changed, log, left);
         }
         true
+    }
+
+    /// The feed pruned on a thread of its own: the writer that crossed a thousand notices may be
+    /// the window's loop, or hold an owner's lock. One prune at a time; a crossing while one runs
+    /// leaves it to that one.
+    fn prune_later(&self) {
+        if self.inner.pruning.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let feed = self.clone();
+        let started = std::thread::Builder::new()
+            .name("desk-feed-prune".into())
+            .spawn(move || {
+                feed.prune();
+                feed.inner.pruning.store(false, Ordering::SeqCst);
+            });
+        if let Err(why) = started {
+            self.inner.pruning.store(false, Ordering::SeqCst);
+            log::warn!("feed: no thread to prune it on ({why}): it is pruned at the next crossing");
+        }
     }
 
     /// What the feed keeps no longer: the notices every running consumer read a day ago or

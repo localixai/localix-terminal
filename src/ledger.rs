@@ -17,6 +17,9 @@ pub type Row = i64;
 const CLOSED_KEPT: usize = 200;
 const VISITS_KEPT: usize = 1000;
 
+/// How many visits are kept between two trims of a project's oldest.
+const TRIM_EVERY: i64 = 64;
+
 /// What a pane is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -227,11 +230,16 @@ fn remember(
             .map_err(|why| failed(&why))?,
     };
     if retitled == 0 {
-        tx.execute(
+        tx.prepare_cached(
             "INSERT INTO visits (project, pane, url, title, at) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![project, row, url, title, now],
         )
+        .and_then(|mut insert| insert.execute(params![project, row, url, title, now]))
         .map_err(|why| failed(&why))?;
+        // The oldest go now and then, not with every visit: `visits` reads the newest
+        // `VISITS_KEPT` alone, so the few kept past them meanwhile are never suggested.
+        if tx.last_insert_rowid() % TRIM_EVERY != 0 {
+            return Ok(());
+        }
         tx.execute(
             "DELETE FROM visits WHERE project = ?1 AND id NOT IN
              (SELECT id FROM visits WHERE project = ?1 ORDER BY id DESC LIMIT ?2)",
@@ -322,7 +330,7 @@ pub fn get(db: &Connection, row: Row) -> Result<Option<Pane>, String> {
 /// The store could not be read.
 pub fn past(db: &Connection, project: ProjectId, most: usize) -> Result<Vec<Pane>, String> {
     let mut statement = db
-        .prepare(&format!(
+        .prepare_cached(&format!(
             "SELECT {COLUMNS} FROM panes WHERE project = ?1
              ORDER BY COALESCE(closed, shown, opened) DESC, id DESC LIMIT ?2"
         ))
@@ -339,7 +347,7 @@ pub fn past(db: &Connection, project: ProjectId, most: usize) -> Result<Vec<Pane
 /// The store could not be read.
 pub fn left_open(db: &Connection, project: ProjectId) -> Result<Vec<Pane>, String> {
     let mut statement = db
-        .prepare(&format!(
+        .prepare_cached(&format!(
             "SELECT {COLUMNS} FROM panes WHERE project = ?1 AND closed IS NULL ORDER BY place"
         ))
         .map_err(|why| failed(&why))?;
@@ -355,14 +363,15 @@ pub fn left_open(db: &Connection, project: ProjectId) -> Result<Vec<Pane>, Strin
 /// The store could not be read.
 pub fn visits(db: &Connection, project: ProjectId, most: usize) -> Result<Vec<Visit>, String> {
     let mut statement = db
-        .prepare(
+        .prepare_cached(
             "SELECT url, title FROM visits WHERE id IN
-             (SELECT MAX(id) FROM visits WHERE project = ?1 GROUP BY url)
+             (SELECT MAX(id) FROM (SELECT id, url FROM visits WHERE project = ?1
+                 ORDER BY id DESC LIMIT ?3) GROUP BY url)
              ORDER BY id DESC LIMIT ?2",
         )
         .map_err(|why| failed(&why))?;
     let rows = statement
-        .query_map(params![project, most], |row| {
+        .query_map(params![project, most, VISITS_KEPT], |row| {
             Ok(Visit {
                 url: row.get(0)?,
                 title: row.get(1)?,
