@@ -2,16 +2,10 @@
 
 #[path = "strip/input_tests.rs"]
 mod input;
+#[path = "strip/page_tests.rs"]
+mod policy;
 
 use super::*;
-
-#[test]
-fn the_assembled_page_contains_its_resize_helper_and_no_external_script() {
-    let page = page();
-    assert!(page.contains("function resizeHandle("));
-    assert!(!page.contains("/*RESIZE_HANDLES*/"));
-    assert!(!page.contains("<script src="));
-}
 use crate::browser::Visited;
 
 #[test]

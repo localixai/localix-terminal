@@ -7,20 +7,24 @@ const LIMIT: std::time::Duration = std::time::Duration::from_millis(19_500);
 /// Where the last statement may start, tried at most: each try that does not parse costs a call.
 const MAX_CUTS: usize = 6;
 
-/// What comes before a call's id in a form: only this and `Form::tail` are the desk's own, the
-/// caller's source is inside the tail and never read for a placeholder.
-const CALL: &str = "window.__dloop_call ? window.__dloop_call(";
+/// The start of every call to the probe, up to its name: the run's call `key` (without it the
+/// probe does nothing, so a page's own call is no call), the call's `id` as text (a page's number
+/// would not hold it whole) and the `word` its reply must carry back. Only this and `Form::tail`
+/// are the desk's own; a caller's source is inside the tail and never read for a placeholder.
+pub(super) fn head(key: &str, id: u64, word: &str) -> String {
+    format!("window.__dloop_call ? window.__dloop_call({key:?}, \"{id}\", {word:?}")
+}
 
-/// One way to start a caller's script, made once its call's id is known (`at`).
+/// One way to start a caller's script, made once its call is known (`at`).
 pub(super) struct Form {
-    /// Everything after the id.
+    /// Everything after the call's head.
     tail: String,
 }
 
 impl Form {
-    /// The script that starts the caller's, answering call `id`.
-    pub(super) fn at(&self, id: u64) -> String {
-        format!("{CALL}{id}{}", self.tail)
+    /// The script that starts the caller's, answering the call `head` starts.
+    pub(super) fn at(&self, head: &str) -> String {
+        format!("{head}{}", self.tail)
     }
 }
 

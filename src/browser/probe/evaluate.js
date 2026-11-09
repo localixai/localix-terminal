@@ -15,7 +15,7 @@
       // a value is a member of, so the way back up is known; `held` is what stands for a value in
       // the text (a Map as its entries), which is what its members are members of.
       const path = []
-      return cap(JSON.stringify(v, function (_k, x) {
+      return cap(stringify(v, function (_k, x) {
         while (path.length && path[path.length - 1].held !== this) path.pop()
         if (typeof x === 'bigint') return String(x)
         if (typeof x !== 'object' || x === null) return x
@@ -50,14 +50,18 @@
   }
 
   const ready = () => document.readyState
-  const CALLS = { snapshot, epoch, act, settle, read, settled, ready, keys, locate, comment, answer }
+  const CALLS = { __proto__: null, snapshot, epoch, act, settle, read, settled, ready, keys, locate, comment, answer }
+  // The one way in from the native side: a call carries the run's call key (a page's own call to
+  // this function, without it, does nothing), its id, and the word its reply must carry back,
+  // which only the native side and the page it was sent to ever see: a page in another tab never
+  // answers for this one. What the page told since the last reply goes with this one (told.js).
   Object.defineProperty(window, '__dloop_call', {
-    value(id, name, args) {
-      // What the page told since the last reply goes with this one (told.js).
-      const reply = (body) => send({ id, ...body, ...(told.length ? { told: told.splice(0) } : {}) })
-      Promise.resolve()
-        .then(() => CALLS[name](args))
-        .then((ok) => reply({ ok: ok ?? null }), (error) => reply({ err: String(error?.message || error) }))
+    value(key, id, word, name, args) {
+      if (key !== KEY || typeof id !== 'string' || typeof word !== 'string') return false
+      const call = CALLS[name]
+      const reply = (body) => send({ ...body, id, word, ...(told.length ? { told: told.splice(0) } : {}) })
+      const started = apply(then, resolved(), [() => call(args)])
+      apply(then, started, [(ok) => reply({ ok: ok ?? null }), (error) => reply({ err: String(error?.message || error) })])
       return true
     },
   })

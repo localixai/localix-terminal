@@ -7,6 +7,7 @@ mod agents;
 mod app_menu;
 #[cfg(target_os = "macos")]
 mod appkit;
+mod calls;
 mod capture;
 #[cfg(target_os = "macos")]
 mod chip;
@@ -45,6 +46,7 @@ mod presence;
 mod presses;
 mod scope;
 mod script;
+mod secret;
 mod settings;
 mod shortcuts;
 mod sizes;

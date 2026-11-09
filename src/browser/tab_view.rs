@@ -50,10 +50,13 @@ pub(super) fn builder<'a>(
         .with_permission_handler(|_| wry::PermissionResponse::Default)
         .with_incognito(forget)
         .with_initialization_script_for_main_only(
-            PROBE.replace("__TOKEN__", &shared.token).replace(
-                "__HEADLESS__",
-                if window.headless { "true" } else { "false" },
-            ),
+            PROBE
+                .replace("__TOKEN__", &shared.token)
+                .replace("__CALL_KEY__", &shared.key)
+                .replace(
+                    "__HEADLESS__",
+                    if window.headless { "true" } else { "false" },
+                ),
             true,
         )
         .with_on_page_load_handler(move |event, url| {
@@ -77,22 +80,7 @@ pub(super) fn builder<'a>(
         })
         // The page itself only ever goes to a local address: anywhere else (a link, a script, a
         // server's redirect) opens in the person's browser, and the tab stays where it was.
-        .with_navigation_handler(move |url| {
-            super::frames::begin();
-            let main = super::frames::main_frame();
-            let allow = match main {
-                Some(false) => allowed(&url),
-                _ => local(&url) || url == BLANK,
-            };
-            if !allow && main.is_some() && !headless {
-                elsewhere(&url, Some(id));
-            }
-            super::debug(|| format!("tab {id} navigation requested: {url} (allowed: {allow})"));
-            if allow {
-                requests.navigation_requested(id);
-            }
-            allow
-        })
+        .with_navigation_handler(move |url| navigation(id, &url, headless, &requests))
         .with_download_started_handler(|_url, _path| false)
         // A link with target=_blank or `window.open` opens a tab, which is shown: what the page
         // opened is what it is about now. Built while WebKit waits, it keeps its opener
@@ -122,8 +110,10 @@ pub(super) fn builder<'a>(
         builder = builder.with_url(url);
     }
     if with_ipc {
+        // A tab's own handler knows its tab; the one shared by all knows none.
+        let from = (!SHARED).then_some(id);
         builder = builder.with_ipc_handler(move |request| {
-            let command = match ipc.ipc(request.body()) {
+            let command = match ipc.ipc(request.body(), from) {
                 Some(Said::Noted(noted)) => Cmd::Noted(noted),
                 Some(Said::Close(id)) => {
                     // Nobody waits for the answer.
@@ -139,6 +129,25 @@ pub(super) fn builder<'a>(
         builder = builder.with_user_agent(agent);
     }
     builder
+}
+
+/// Whether tab `id` goes to `url`. A frame inside the page goes to any address a tab may load;
+/// the page itself only to a local one, and anywhere else opens in the person's browser.
+fn navigation(id: u32, url: &str, headless: bool, shared: &Shared) -> bool {
+    super::frames::begin();
+    let main = super::frames::main_frame();
+    let allow = match main {
+        Some(false) => allowed(url),
+        _ => local(url) || url == BLANK,
+    };
+    if !allow && main.is_some() && !headless {
+        elsewhere(url, Some(id));
+    }
+    super::debug(|| format!("tab {id} navigation requested: {url} (allowed: {allow})"));
+    if allow {
+        shared.navigation_requested(id);
+    }
+    allow
 }
 
 /// Whether the tabs share one WebKit configuration (see `share`).

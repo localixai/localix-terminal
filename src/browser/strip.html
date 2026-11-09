@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha384-{{hash}}'">
 <title>tabs</title>
 <style>
 :root{--ground:#f7f7f7;font:12px/15px var(--ui-font,var(--ui-sys));color:var(--fg);-webkit-font-smoothing:antialiased}
@@ -397,6 +397,8 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
 <div id="grip" role="separator" aria-orientation="vertical" aria-label="Sidebar width" tabindex="0" title="Drag or use arrow keys to resize; Home resets"></div>
 <div id="gh"></div>
 <div id="line" role="separator" aria-orientation="vertical" aria-label="Split width" tabindex="0" title="Drag or use arrow keys to resize; Home evens the halves"></div>
+<script type="application/json" id="marks">{}</script>
+<script type="application/json" id="agents">[]</script>
 <script>
 "use strict";
 /*RESIZE_HANDLES*/
@@ -643,10 +645,10 @@ const holds = (tab) => {
   return what || "New tab";
 };
 // A coding agent's mark (agents.rs), drawn in the text's colour; the page is given them as
-// SVG at load, as MARKS.
-const MARKS = /*MARKS*/{};
+// SVG at load, as MARKS. Both come as data the page reads, never as script: it runs this one alone.
+const MARKS = JSON.parse(document.getElementById("marks").textContent);
 // The agents installed, by their place in the app's list.
-const AGENTS = /*AGENTS*/[];
+const AGENTS = JSON.parse(document.getElementById("agents").textContent);
 // An empty place, said the same way everywhere: the glyph of the button `glyphOf`, `words`, and
 // rows of what can be done there.
 function emptied(glyphOf, words, rows) {

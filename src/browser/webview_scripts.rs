@@ -30,7 +30,7 @@ impl WebviewDriver {
         let before = self.loads();
         // What the page tells is the tab's the call went to, whichever tab is active by its reply.
         let tab = self.target();
-        let (id, receiver) = self.post(|id| form.at(id), "script_not_started")?;
+        let (id, receiver) = self.post(|head| form.at(head), "script_not_started")?;
         let deadline = Instant::now() + SCRIPT_TIMEOUT;
         let mut left: Option<Instant> = None;
         let reply = loop {
@@ -47,7 +47,7 @@ impl WebviewDriver {
                 left = Some(Instant::now());
             }
         };
-        crate::lock(&self.shared.pending).remove(&id);
+        self.shared.calls.forget(id);
         self.shared.notices.file(id, tab);
         match reply {
             Ok(Ok(value)) => Ok(value),

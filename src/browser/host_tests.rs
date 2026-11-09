@@ -71,3 +71,53 @@ fn a_tab_gone_leaves_no_project_or_detail_behind() {
     // Another page, and a terminal of the same number, are kept.
     assert!(groups.contains_key("w4") && groups.contains_key("t3"));
 }
+
+/// A page's message, sealed with the run's token as the probe seals it.
+fn sealed(shared: &Shared, json: &str) -> String {
+    format!("{}\n{json}", shared.token)
+}
+
+#[test]
+fn a_comment_is_dropped_while_the_person_is_not_commenting() {
+    let shared = events::fresh();
+    let fb = sealed(
+        &shared,
+        r##"{"fb":{"element":{"selector":"#a"},"note":"do it","n":1}}"##,
+    );
+    assert!(
+        shared.ipc(&fb, None).is_none(),
+        "nobody turned commenting on"
+    );
+    shared.turn.commenting(true);
+    assert!(matches!(shared.ipc(&fb, None), Some(Said::Noted(_))));
+}
+
+#[test]
+fn a_reply_that_names_the_call_but_not_its_word_answers_nothing() {
+    let shared = events::fresh();
+    let call = shared.calls.open();
+    let id = call.id;
+    let guessed = format!(r#"{{"id":"{id}","ok":"forged"}}"#);
+    shared.ipc(&sealed(&shared, &guessed), None);
+    let wrong = format!(r#"{{"id":"{id}","word":"0000","ok":"forged"}}"#);
+    shared.ipc(&sealed(&shared, &wrong), None);
+    assert!(
+        call.receiver.try_recv().is_err(),
+        "a page that guessed the id answered"
+    );
+    let own = format!(r#"{{"id":"{id}","word":"{}","ok":"seen"}}"#, call.word);
+    shared.ipc(&sealed(&shared, &own), None);
+    assert_eq!(call.receiver.try_recv(), Ok(Ok(Value::from("seen"))));
+}
+
+#[test]
+fn a_reply_from_a_tab_the_call_did_not_go_to_answers_nothing() {
+    let shared = events::fresh();
+    let call = shared.calls.open();
+    shared.calls.aimed(call.id, 2);
+    let reply = format!(r#"{{"id":"{}","word":"{}","ok":1}}"#, call.id, call.word);
+    shared.ipc(&sealed(&shared, &reply), Some(5));
+    assert!(call.receiver.try_recv().is_err());
+    shared.ipc(&sealed(&shared, &reply), Some(2));
+    assert_eq!(call.receiver.try_recv(), Ok(Ok(Value::from(1))));
+}

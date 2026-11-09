@@ -1,39 +1,4 @@
-// The page side of the browser tool (files concatenated into one script by host.rs): an atomic snapshot of what a person can see and use, and the execution
-// of one action on an element that snapshot observed. Installed before any page script runs, so the
-// IPC post and `JSON.stringify` captured here are the originals, and the token only ever goes out
-// through them (`send`): those are what the page cannot replace. What a caller hands in does reach
-// this file: a screenshot's CSS `selector` (`locate`) and the caller's script (`settled`); an
-// action otherwise names an observed element by its ref.
-;(() => {
-  if (window.top !== window || window.__dloop_call) return
-  const TOKEN = '__TOKEN__'
-  // An invisible window nobody can see must not take what a person types elsewhere: real
-  // (trusted) keys and text input are dropped. The probe's own events are synthetic and pass.
-  if (__HEADLESS__) {
-    for (const type of ['keydown', 'keypress', 'keyup', 'beforeinput', 'input', 'paste', 'compositionstart']) {
-      addEventListener(type, (event) => {
-        if (!event.isTrusted) return
-        event.stopImmediatePropagation()
-        event.preventDefault()
-      }, { capture: true })
-    }
-  }
-  // The native handler itself where there is one: `window.ipc.postMessage` looks it up again on
-  // each call, so a page could put its own in between and read what is sent.
-  const handler = window.webkit?.messageHandlers?.ipc
-  const post = handler
-    ? Function.prototype.call.bind(handler.postMessage, handler)
-    : window.ipc.postMessage.bind(window.ipc)
-  const stringify = JSON.stringify
-  // A string cut in the middle of an emoji ends in half a surrogate pair, which JSON.stringify
-  // writes as an escape the native side cannot parse: the whole reply would be dropped.
-  const wellFormed = (s) => (typeof s.toWellFormed === 'function'
-    ? s.toWellFormed()
-    : s.replace(/[\ud800-\udbff][\udc00-\udfff]|[\ud800-\udfff]/g, (m) => (m.length === 2 ? m : '\ufffd')))
-  // Every message to the native side: the token in front as plain text (an object holding it
-  // could be read by a page's `toJSON`), then the JSON.
-  const send = (message) =>
-    post(`${TOKEN}\n${stringify(message, (_key, v) => (typeof v === 'string' ? wellFormed(v) : v))}`)
+  // The snapshot: what a person can see and use, each control under a ref an action names it by.
   // Characters with no width (zero-width spaces and joiners, soft hyphens) that sites put inside
   // words: a name read with them never matches the word as typed.
   const UNSEEN = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g

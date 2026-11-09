@@ -37,6 +37,11 @@ impl Turn {
         (state.acting, state.waiting)
     }
 
+    /// Whether the person is commenting now, in some window.
+    pub(super) fn is_commenting(&self) -> bool {
+        crate::lock(&self.state).commenting
+    }
+
     /// The person started or stopped commenting; stopping lets every waiting action go.
     pub(super) fn commenting(&self, on: bool) {
         crate::lock(&self.state).commenting = on;

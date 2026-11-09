@@ -2,13 +2,13 @@
 //! exists only once it is needed): the browser's tabs and the terminal sessions' screens are its
 //! tabs (deck.rs), with a `wry` WebView each. The caller's work runs on a worker thread and
 //! reaches the page through [`Cmd`]s on the event loop's proxy; answers come back over the page's
-//! IPC channel, matched by call id and a per-run token the page cannot read. Here, what they
+//! IPC channel, sealed with a per-run token the page cannot read and matched to their call by its
+//! random id and word (calls.rs). Here, what they
 //! share; the loop is host_events.rs (the browser's commands host_web.rs), the work thread's
 //! handle host_handle.rs.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Condvar, Mutex};
 
 use serde_json::Value;
@@ -41,10 +41,12 @@ mod web;
 mod window;
 pub use events::host;
 
-/// One script from eleven files: snapshot, the page's requests, what the page tells (dialogs,
-/// announcements, refused fields), same-origin frames, the outline, refs found again after a
-/// render, actions, typing, keys, the person's comments, then evaluate and the IPC entry point.
+/// One script from twelve files: its start (the secrets, the builtins it keeps, its messages),
+/// snapshot, the page's requests, what the page tells (dialogs, announcements, refused fields),
+/// same-origin frames, the outline, refs found again after a render, actions, typing, keys, the
+/// person's comments, then evaluate and the IPC entry point.
 pub(super) const PROBE: &str = concat!(
+    include_str!("probe/start.js"),
     include_str!("probe/snapshot.js"),
     include_str!("probe/network.js"),
     include_str!("probe/told.js"),
@@ -76,11 +78,14 @@ pub type Dressing = (usize, isize, bool, f64, bool);
 
 /// State the event loop and the worker share.
 pub(super) struct Shared {
+    /// What seals every message of the probe's.
     pub(super) token: String,
+    /// What a call to the probe carries to be the native side's, not a page script's.
+    pub(super) key: String,
     /// Whether the window is open now: the person may close it, and it opens again when needed.
     pub(super) open: AtomicBool,
-    pub(super) next_id: AtomicU64,
-    pub(super) pending: Mutex<HashMap<u64, SyncSender<Reply>>>,
+    /// The calls to the pages waiting for their replies.
+    pub(super) calls: super::calls::Calls,
     /// Each tab's loads, by tab id.
     pub(super) loads: Mutex<HashMap<u32, Loads>>,
     pub(super) loaded: Condvar,
@@ -203,10 +208,7 @@ impl Shared {
     }
 
     fn answer(&self, id: u64, reply: Reply) {
-        let waiting = crate::lock(&self.pending).remove(&id);
-        if let Some(sender) = waiting {
-            let _ = sender.send(reply);
-        }
+        self.calls.answer(id, reply);
     }
 
     /// Window `window`'s browser closed, its pages `ids` with it: what is kept of them goes, and
@@ -230,10 +232,7 @@ impl Shared {
         self.forget(&ids.iter().map(|id| Key::Web(*id)).collect::<Vec<_>>());
         self.open.store(!left.is_empty(), Ordering::SeqCst);
         if left.is_empty() {
-            let waiting = std::mem::take(&mut *crate::lock(&self.pending));
-            for sender in waiting.into_values() {
-                let _ = sender.send(Err(WINDOW_CLOSED.into()));
-            }
+            self.calls.fail_all(WINDOW_CLOSED);
             // No page, no one commenting: actions waiting for the person go (and find it closed).
             self.turn.commenting(false);
         }
@@ -341,10 +340,12 @@ impl Shared {
         self.loaded.notify_all();
     }
 
-    /// A message from the page: `{id, ok}` or `{id, err}`, or `{fb}`, a comment of the person's,
-    /// given back to be pictured and held (the tab it is on is the shown one of the window they
-    /// comment in). Anything else is ignored.
-    pub(super) fn ipc(&self, body: &str) -> Option<Said> {
+    /// A message from the page: `{id, word, ok}` or `{id, word, err}`, or `{fb}`, a comment of
+    /// the person's, given back to be pictured and held (the tab it is on is the shown one of the
+    /// window they comment in). `from` is the tab it came from where its channel says (on macOS
+    /// one channel serves every tab). A reply is its call's only with the call's id and word, a
+    /// comment only while the person is commenting; anything else is ignored.
+    pub(super) fn ipc(&self, body: &str, from: Option<u32>) -> Option<Said> {
         let message = unsealed(&self.token, body)?;
         if let Some(url) = message.get("close").and_then(Value::as_str) {
             // The newest tab at that address: the popup, not its opener (never the first tab).
@@ -353,6 +354,10 @@ impl Shared {
             return tab.map(|tab| Said::Close(tab.id));
         }
         if let Some(fb) = message.get("fb") {
+            if !self.turn.is_commenting() {
+                super::debug(|| "a comment came while nobody was commenting: dropped".into());
+                return None;
+            }
             return super::feedback::said(fb).map(|said| {
                 Said::Noted(Noted {
                     tab: 0,
@@ -361,21 +366,26 @@ impl Shared {
                 })
             });
         }
-        let id = message.get("id").and_then(Value::as_u64)?;
+        // The id goes to the page as text: past 2^53 a page's number would not hold it.
+        let id = message
+            .get("id")
+            .and_then(Value::as_str)?
+            .parse::<u64>()
+            .ok()?;
+        let word = message.get("word").and_then(Value::as_str)?;
         // Held for the call only while it waits: one that gave up never files it. The check and
         // the holding are one step under the lock the call takes to stop waiting, so nothing is
         // held after the call filed what it had.
         if let Some(told) = message.get("told") {
-            let pending = crate::lock(&self.pending);
-            if pending.contains_key(&id) {
-                self.notices.arrived(id, told);
-            }
+            (self.calls).while_waiting(id, word, from, || self.notices.arrived(id, told));
         }
         let reply = match message.get("err").and_then(Value::as_str) {
             Some(error) => Err(error.to_string()),
             None => Ok(message.get("ok").cloned().unwrap_or(Value::Null)),
         };
-        self.answer(id, reply);
+        if !self.calls.replied(id, word, from, reply) {
+            super::debug(|| format!("a reply that is no waiting call's: {id}"));
+        }
         None
     }
 }

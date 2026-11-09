@@ -180,9 +180,9 @@ fn strip_page(
     part: Part,
 ) -> Result<WebView, String> {
     // Every part draws the agents' marks (the side's tabs, the bar's crumbs and offer).
-    let page = frame::dress(&strip::page(), look)
-        .replacen("/*MARKS*/{}", &super::super::agents::marks(), 1)
-        .replacen("/*AGENTS*/[]", &super::super::agents::installed(), 1);
+    let marks = super::super::agents::marks();
+    let installed = super::super::agents::installed();
+    let page = frame::dress(&strip::page(&marks, &installed), look);
     let page = match part {
         Part::Strip => page,
         Part::Side => page.replacen("<html", "<html data-part=\"side\"", 1),

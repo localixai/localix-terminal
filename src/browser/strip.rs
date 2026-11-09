@@ -303,20 +303,40 @@ pub(super) fn turn(turn: Turn) -> String {
     format!("A({})", json!(what))
 }
 
-/// The call that turns commenting on or off in a page; a page whose marks are of an earlier
-/// batch than `sent` drops them.
-pub(super) fn comment(on: bool, sent: u32) -> String {
+/// The call that turns commenting on or off in a page, with the run's call `key`; a page whose
+/// marks are of an earlier batch than `sent` drops them. Nobody waits for its reply: call 0,
+/// whose reply no call takes.
+pub(super) fn comment(key: &str, on: bool, sent: u32) -> String {
     format!(
-        "window.__dloop_call && window.__dloop_call(0, 'comment', {{ on: {on}, sent: {sent} }})"
+        "{}, 'comment', {{ on: {on}, sent: {sent} }}) : false",
+        super::script::head(key, 0, "")
     )
 }
 
 /// The strip's page: dressed in the frame's stylesheet, clear over the window's glass.
 pub(super) const PAGE: &str = include_str!("strip.html");
 
-/// The trusted UI's resize helper, inlined so its page opens without external resources.
-pub(super) fn page() -> String {
+/// The SHA-384 of the page's one script, its resize helper in: the page's policy runs it alone.
+const SCRIPT_SHA384: &str = "kY/s3KUe/nLPI3KUjaD1692JEpt7WkEfPkRuyYJI/u1mkLs2PINeTdMj/qLIqQV6";
+
+/// The strip's page: the trusted UI's resize helper inlined, so it opens without external
+/// resources, and the agents' `marks` and those `installed` (JSON) in it as data its script
+/// reads, never as script.
+pub(super) fn page(marks: &str, installed: &str) -> String {
+    // Inside a script element only `</script` ends it: no `<` of the data reaches the parser.
+    let data = |json: &str| json.replace('<', "\\u003c");
     PAGE.replacen("/*RESIZE_HANDLES*/", include_str!("resize.js"), 1)
+        .replacen("{{hash}}", SCRIPT_SHA384, 1)
+        .replacen(
+            "id=\"marks\">{}<",
+            &format!("id=\"marks\">{}<", data(marks)),
+            1,
+        )
+        .replacen(
+            "id=\"agents\">[]<",
+            &format!("id=\"agents\">{}<", data(installed)),
+            1,
+        )
 }
 
 #[cfg(test)]

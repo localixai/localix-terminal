@@ -90,7 +90,7 @@ impl Deck {
         if let Some(web) = &self.web {
             let id = web.listed().1;
             let loaded = (crate::lock(&shared.loads).get(&id)).map_or(0, |loads| loads.finished);
-            let script = strip::comment(self.commenting, self.sent);
+            let script = strip::comment(&shared.key, self.commenting, self.sent);
             self.tell((None, web.active()), "comment", &script, (id, loaded));
         }
         let Some(strip) = &self.strip else {

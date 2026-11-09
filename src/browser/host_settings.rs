@@ -16,6 +16,13 @@ use crate::browser::strip::{Click, Key, SETTINGS};
 
 /// The page, as settings.html is.
 const PAGE: &str = include_str!("settings.html");
+/// The SHA-384 of the page's one script: the page's policy runs it alone.
+const SCRIPT_SHA384: &str = "56wtuVEtoOmzKnPR5R0MkX1ehs1+TNp+D++cBmibqJjv3zqeiSDRVM2qeufocDAh";
+
+/// The page, its script run by its hash.
+fn page() -> String {
+    PAGE.replacen("{{hash}}", SCRIPT_SHA384, 1)
+}
 
 impl On<'_> {
     /// Settings shown: its tab made the first time, and kept (hidden when the person closes it)
@@ -38,7 +45,7 @@ impl On<'_> {
             proxy: self.proxy.clone(),
             shared: Arc::clone(self.shared),
         };
-        let panel = browser.panel(SETTINGS, "Settings", PAGE.to_string());
+        let panel = browser.panel(SETTINGS, "Settings", page());
         let (shared, proxy) = (Arc::downgrade(self.shared), self.proxy.clone());
         panel.keyboard(Arc::new(move |posted: &str| {
             changed(&shared, &proxy, posted)
@@ -193,3 +200,7 @@ fn changed(shared: &Weak<Shared>, proxy: &tao::event_loop::EventLoopProxy<Cmd>, 
         let _ = proxy.send_event(Cmd::Restyle);
     }
 }
+
+#[cfg(test)]
+#[path = "host_settings_tests.rs"]
+mod tests;

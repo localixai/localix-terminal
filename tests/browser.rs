@@ -691,14 +691,6 @@ fn feedback(browser: &browser::Browser, driver: &WebviewDriver) {
                 .send((tab.to_string(), what.to_string()));
         }
     });
-    // The overlay's root is open, so a check can reach the card.
-    driver
-        .evaluate(
-            "const attach = Element.prototype.attachShadow;
-             Element.prototype.attachShadow = function () { return attach.call(this, { mode: 'open' }) };
-             true",
-        )
-        .unwrap();
     let cursor = |driver: &WebviewDriver| {
         driver
             .evaluate("await sleep(300); document.documentElement.style.cursor")
@@ -710,15 +702,21 @@ fn feedback(browser: &browser::Browser, driver: &WebviewDriver) {
         "crosshair",
         "the strip's button turns it on"
     );
-    let picked = driver
+    let pressed = driver
         .evaluate(
-            "const title = document.title;
-             const button = document.getElementById('veiled');
-             button.click();
+            "window.titled = document.title;
+             document.getElementById('veiled').click();
              const pressed = document.title;
              document.title = 'before';
-             __dloop_call(0, 'comment', { on: true, all: true });
-             await sleep(50);
+             pressed",
+        )
+        .unwrap();
+    // A check's presses count as the person's, and the overlay's root is open to it: only the
+    // native side's call says so, never the page.
+    driver.comment_checked(true).unwrap();
+    let after = driver
+        .evaluate(
+            "const button = document.getElementById('veiled');
              const r = button.getBoundingClientRect();
              const at = { clientX: r.left + 5, clientY: r.top + 5, bubbles: true, composed: true, cancelable: true };
              for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'])
@@ -727,10 +725,11 @@ fn feedback(browser: &browser::Browser, driver: &WebviewDriver) {
              card.querySelector('textarea').value = 'make it red';
              card.querySelector('button.s').click();
              const after = document.title;
-             document.title = title;
-             [pressed, after].join(' | ')",
+             document.title = window.titled;
+             after",
         )
         .unwrap();
+    let picked = format!("{pressed} | {after}");
     assert_eq!(
         picked, "veiled clicked | before",
         "a script presses, the person picks"
@@ -769,16 +768,22 @@ fn feedback(browser: &browser::Browser, driver: &WebviewDriver) {
 
 /// A modal dialog open (a cart) leaves the rest of the page inert and is drawn above it: the
 /// comment card goes inside it, on top, and takes typing; when it closes the overlay comes back.
-/// The overlay's root is open since `feedback`.
+/// The check turns commenting on from the native side, the overlay's root open to it.
 fn feedback_in_a_dialog(driver: &WebviewDriver) {
-    let said = driver
+    driver
         .evaluate(
             "const dialog = document.createElement('dialog');
+             dialog.id = 'cart';
              dialog.innerHTML = '<button id=\"inside\">Checkout</button>';
              document.body.append(dialog);
              dialog.showModal();
-             __dloop_call(0, 'comment', { on: true, all: true });
-             await sleep(50);
+             true",
+        )
+        .unwrap();
+    driver.comment_checked(true).unwrap();
+    let said = driver
+        .evaluate(
+            "const dialog = document.getElementById('cart');
              const host = document.querySelector('desk-feedback');
              const inside = document.getElementById('inside');
              const r = inside.getBoundingClientRect();
@@ -794,10 +799,12 @@ fn feedback_in_a_dialog(driver: &WebviewDriver) {
              dialog.close();
              await sleep(50);
              const back = host.parentNode === document.documentElement;
-             __dloop_call(0, 'comment', { on: false });
-             dialog.remove();
              JSON.stringify({ typed, placed, above, closed, back })",
         )
+        .unwrap();
+    driver.comment_checked(false).unwrap();
+    driver
+        .evaluate("document.getElementById('cart').remove(); true")
         .unwrap();
     assert_eq!(
         said,

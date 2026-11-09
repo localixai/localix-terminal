@@ -281,9 +281,8 @@ impl Browser {
     }
 
     fn peek_in(&self, panel: u32, script: &str) -> Result<Value, String> {
-        let id = self.shared.next_id.fetch_add(1, Ordering::Relaxed);
-        let (sender, receiver) = mpsc::sync_channel(1);
-        crate::lock(&self.shared.pending).insert(id, sender);
+        let call = self.shared.calls.open();
+        let (id, receiver) = (call.id, call.receiver);
         let script = script.to_string();
         let panel = Some(panel);
         let _ = (self.proxy).send_event(Cmd::Eval {
@@ -294,7 +293,7 @@ impl Browser {
             tab: None,
         });
         let reply = receiver.recv_timeout(std::time::Duration::from_secs(5));
-        crate::lock(&self.shared.pending).remove(&id);
+        self.shared.calls.forget(id);
         reply.unwrap_or_else(|error| Err(format!("no answer: {error}")))
     }
 }

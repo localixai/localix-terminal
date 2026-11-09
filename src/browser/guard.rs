@@ -53,9 +53,9 @@ pub fn for_agent(url: &str) -> Result<String, String> {
     }
 }
 
-/// 32 hex characters from the system's random source; unguessable to a page.
+/// 32 hex characters from the system's random source; unguessable to a page in one run.
 pub(super) fn token() -> String {
-    crate::token()
+    super::secret::word()
 }
 
 /// Whether `url` is an address another browser can open: a web page, or a file.

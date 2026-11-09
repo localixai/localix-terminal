@@ -12,6 +12,7 @@ use tao::event_loop::EventLoopProxy;
 
 use super::Driver;
 use super::host::{Cmd, Loads, Reply, Shared, Tab, WINDOW_CLOSED, active_loads};
+use super::script::head;
 
 #[path = "webview_answers.rs"]
 mod answers;
@@ -89,17 +90,17 @@ impl WebviewDriver {
         }
     }
 
-    /// Send the script `form` makes of a fresh call id, its answer awaited on the receiver; the
-    /// caller removes the id from `pending` once it is done waiting.
+    /// Send the script `form` makes of a fresh call's head (`script::head`: its key, id and
+    /// word), its answer awaited on the receiver; the caller forgets the call once it is done
+    /// waiting.
     fn post(
         &self,
-        form: impl FnOnce(u64) -> String,
+        form: impl FnOnce(&str) -> String,
         failed: &'static str,
     ) -> ViewResult<(u64, mpsc::Receiver<Reply>)> {
-        let id = self.shared.next_id.fetch_add(1, Ordering::Relaxed);
-        let (sender, receiver) = mpsc::sync_channel(1);
-        crate::lock(&self.shared.pending).insert(id, sender);
-        let script = form(id);
+        let call = self.shared.calls.open();
+        let id = call.id;
+        let script = form(&head(&self.shared.key, id, &call.word));
         let sent = self.send(Cmd::Eval {
             id,
             script,
@@ -108,22 +109,28 @@ impl WebviewDriver {
             tab: self.tab,
         });
         if sent.is_err() {
-            crate::lock(&self.shared.pending).remove(&id);
+            self.shared.calls.forget(id);
         }
-        sent.map(|()| (id, receiver))
+        sent.map(|()| (id, call.receiver))
+    }
+
+    /// For checks: commenting turned on or off in the tab, taking a script's presses as the
+    /// person's and leaving the overlay open to a check. Only the native side's call can.
+    #[doc(hidden)]
+    pub fn comment_checked(&self, on: bool) -> ViewResult<Value> {
+        let args = serde_json::json!({ "on": on, "all": on });
+        self.call("comment", &args, CALL_TIMEOUT)
     }
 
     /// One probe call, answered over IPC or refused while the page has no probe.
     fn call(&self, name: &'static str, args: &Value, timeout: Duration) -> ViewResult<Value> {
         self.open_or_closed()?;
-        let call = |id| {
-            format!("window.__dloop_call ? window.__dloop_call({id}, {name:?}, {args}) : false")
-        };
+        let call = |head: &str| format!("{head}, {name:?}, {args}) : false");
         // What the page tells is the tab's the call went to, whichever tab is active by its reply.
         let tab = self.target();
         let (id, receiver) = self.post(call, "probe_not_ready")?;
         let reply = receiver.recv_timeout(timeout);
-        crate::lock(&self.shared.pending).remove(&id);
+        self.shared.calls.forget(id);
         self.shared.notices.file(id, tab);
         match reply {
             Ok(Ok(value)) => Ok(value),

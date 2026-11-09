@@ -259,6 +259,11 @@ impl Deck {
         self.stop_commenting(shared);
     }
 
+    /// Whether the person comments on this window's pages now.
+    pub(crate) fn is_commenting(&self) -> bool {
+        self.commenting
+    }
+
     /// The window went out of the person's sight: commenting ends, the pages and the strip say so.
     pub(crate) fn stop_commenting(&mut self, shared: &Shared) {
         if self.commenting {
