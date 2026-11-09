@@ -104,12 +104,14 @@ impl Desk {
         let Some(page) = done.state.take() else {
             return Ok(done);
         };
-        let mut seen = crate::lock(&self.seen);
-        match seen.get_mut(&id).and_then(|before| before.after(&page)) {
+        // The page is diffed under its own lock, not the map's: a diff of a long page takes a
+        // while, and a tab closing (the window's loop) takes the map's.
+        let before = crate::lock(&self.seen).get(&id).cloned();
+        match before.and_then(|before| crate::lock(&before).after(&page)) {
             Some(changed) if done.report.is_empty() => done.report = changed,
             Some(changed) => done.report = format!("{}\n\n{changed}", done.report),
             None => {
-                seen.insert(id, Seen::read(&page));
+                self.read_whole_as(id, &page);
                 done.state = Some(page);
             }
         }
@@ -119,9 +121,15 @@ impl Desk {
     /// Tab `id` read whole: what later changes are told against.
     pub(super) fn read_whole(&self, id: u32, done: Output) -> Output {
         if let Some(page) = &done.state {
-            crate::lock(&self.seen).insert(id, Seen::read(page));
+            self.read_whole_as(id, page);
         }
         done
+    }
+
+    /// Tab `id`'s page read whole as `page`.
+    fn read_whole_as(&self, id: u32, page: &str) {
+        let seen = Arc::new(std::sync::Mutex::new(Seen::read(page)));
+        crate::lock(&self.seen).insert(id, seen);
     }
 
     pub(super) fn shoot_web(&self, id: u32, selector: Option<&str>) -> Result<Output, String> {
@@ -149,17 +157,23 @@ impl Desk {
             Err(e) => Err(format!("w{id} was not closed: {e}")),
         };
         if closed.is_ok() {
-            // The tab is gone for good: its lock too, unless a call still waits on it (the map
-            // holds one handle, this call the other).
-            let mut locks = crate::lock(&self.locks);
-            if locks
-                .get(&id)
-                .is_some_and(|held| Arc::strong_count(held) <= 2)
-            {
-                locks.remove(&id);
-            }
+            // This call holds a handle of the lock besides the map's.
+            self.forget_page(id, 2);
         }
         closed
+    }
+
+    /// Page `id` is gone for good: what was seen of it, and its lock, unless a call still waits
+    /// on it (`held` handles are the map's and the caller's).
+    pub(super) fn forget_page(&self, id: u32, held: usize) {
+        crate::lock(&self.seen).remove(&id);
+        let mut locks = crate::lock(&self.locks);
+        if locks
+            .get(&id)
+            .is_some_and(|lock| Arc::strong_count(lock) <= held)
+        {
+            locks.remove(&id);
+        }
     }
 }
 

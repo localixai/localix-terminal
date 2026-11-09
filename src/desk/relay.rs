@@ -30,9 +30,9 @@ impl Consumer for Relay {
         };
         match (&notice.entity, notice.op) {
             (Entity::Said { owner, id }, Op::Upserted) => {
-                let pending = desk.pending(owner);
-                if let Some(said) = pending.iter().find(|said| said.id == *id) {
-                    (desk.events).publish("comment/added", Some(owner), desk.note(owner, said));
+                let pending = crate::lock(&desk.registry).pending_one(owner, *id);
+                if let Some(said) = pending {
+                    (desk.events).publish("comment/added", Some(owner), desk.note(owner, &said));
                 }
             }
             // A tab of no one's (the person's in no project's own) is told to no one.

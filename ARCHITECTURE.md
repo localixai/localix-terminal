@@ -29,7 +29,7 @@ Public paths stay stable through re-exports; implementation modules stay private
 | Boundary | Modules |
 | --- | --- |
 | Board data and rules | `board/model.rs` is the serializable vocabulary; `board/cards.rs` allocates cards; `board.rs` owns worker transitions. Neither depends on the desk or the UI. |
-| Tool calls and events | `desk/call.rs` renders and masks answers; `tab.rs` validates tab keys and kind-specific fields; `actions.rs` dispatches; `heard.rs` adapts window events. |
+| Tool calls and events | `desk/call.rs` renders and masks answers; `tab.rs` validates tab keys and kind-specific fields; `actions.rs` dispatches; `heard.rs` adapts window events; `writes.rs` writes what they change on one writer thread, in order. |
 | Application flows | `desk/board_ops.rs` applies worker operations; `restore.rs` reopens ledger rows; `layout_moves.rs` mutates tab placement; `layout_drawn.rs` projects the kept layout into browser keys. |
 | Page reads and actions | `desk/web_read.rs` labels untrusted snapshots and slices UTF-16 text; `web_controls.rs` resolves and acts on refs; `web.rs` orchestrates a call. |
 | Native UI | `browser/host_commands.rs` is the event-loop protocol; `host_events.rs` handles native events; `host_dispatch.rs` carries out commands; `host_keys.rs` and `host_newtab.rs` adapt user actions. |

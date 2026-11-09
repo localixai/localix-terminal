@@ -175,6 +175,9 @@ impl Desk {
 
     /// The center gathered again and, if it changed, shown.
     pub(super) fn paint_center(&self) {
+        // One paint at a time, from its gathering to the window: the feed's consumer and the
+        // person's clicks both paint, and an older gathering never paints over a newer one.
+        let _painting = crate::lock(&self.painting);
         if let (Some(events), Some(browser)) = (self.regathered(), &self.browser) {
             // Each says its project by the name the switcher shows.
             let names = self.project_names();
@@ -191,23 +194,27 @@ impl Desk {
     }
 
     /// The events as the center shows them now (numbered, the dismissed left out), when they
-    /// are not what it showed last.
+    /// are not what it showed last. Called while painting: no other gathering runs meanwhile.
     fn regathered(&self) -> Option<Vec<Event>> {
         let gathered: Vec<Event> = (sources::SOURCES.iter())
             .flat_map(|source| source.gather(self))
             .collect();
         let now = board::now();
-        let mut center = crate::lock(&self.center);
-        if gathered == center.gathered && !center.stale {
-            return None;
+        {
+            let mut center = crate::lock(&self.center);
+            if gathered == center.gathered && !center.stale {
+                return None;
+            }
+            center.gathered.clone_from(&gathered);
         }
-        center.gathered.clone_from(&gathered);
+        // Written with the center's lock let go: what the person clicks reads it meanwhile.
         let kept = (self.feed.store())
             .write(|tx| journal::record(tx, &gathered, now))
             .unwrap_or_else(|why| {
                 log::warn!("desk: the Event Center's journal was not written: {why}");
                 HashMap::new()
             });
+        let mut center = crate::lock(&self.center);
         let center = &mut *center;
         let ids: HashSet<&str> = gathered.iter().map(|event| event.id.as_str()).collect();
         center.numbers.retain(|id, _| ids.contains(id.as_str()));
@@ -241,10 +248,13 @@ impl Desk {
 
     /// The events `ids` marked as the person did, in the journal.
     fn mark(&self, ids: &[String], mark: journal::Mark) {
-        crate::lock(&self.center).stale = true;
+        // Not while a paint runs: it would read the journal before the marks, then take the
+        // window as up to date.
+        let _painting = crate::lock(&self.painting);
         if let Err(why) = (self.feed.store()).write(|tx| journal::mark(tx, ids, mark)) {
             log::warn!("desk: the Event Center's journal was not marked: {why}");
         }
+        crate::lock(&self.center).stale = true;
     }
 
     /// What the person did in the center: done on a thread of its own, since the window's loop

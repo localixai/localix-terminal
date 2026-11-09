@@ -95,14 +95,13 @@ impl Desk {
         }
     }
 
-    /// The window shows the project it keys `group` now: it is the one used last, first in the
-    /// switcher.
-    pub(super) fn showing(&self, group: &str) {
+    /// The window shows the project it keys `group` now, in window `window` (the one in use as
+    /// it told it): it is the one used last, first in the switcher.
+    pub(super) fn showing(&self, group: &str, window: Option<crate::layout::WindowId>) {
         let Some(id) = projects::of_key(group) else {
             return;
         };
         let now = crate::board::now();
-        let window = self.in_use();
         // The project used last, and the window's workspace of it the one it shows.
         let shown = self.feed.write(|write| {
             projects::opened(write.tx(), id, now)?;
