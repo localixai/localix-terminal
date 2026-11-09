@@ -64,17 +64,34 @@ impl Deck {
         strip::by_group(out, |tab| tab.group.as_str())
     }
 
-    /// Lay the window out again and tell the strip what it holds now.
+    /// Refreshes held from now on: none is drawn until `release`, and the one after it draws all.
+    pub(in super::super) fn hold(&self) {
+        self.held.hold();
+    }
+
+    /// Refreshes drawn as they are asked for again.
+    pub(in super::super) fn release(&self) {
+        self.held.release();
+    }
+
+    /// Lay the window out again and tell the strip what it holds now; while refreshes are held
+    /// (`hold`), once they are let go.
     pub(in super::super) fn refresh(&self, shared: &Shared) {
+        if !self.held.now() {
+            return;
+        }
         let listed = self.listing(shared);
         let shown_key = (listed.iter().find(|tab| tab.shown)).and_then(|tab| Key::parse(&tab.id));
         let bar = shown_key.and_then(|key| shared.offers.bar(key, &self.proxy));
         crate::lock(&self.offer).clone_from(&bar);
         self.layout();
-        // Again on every refresh: a tab switched to, or a page loaded, comments as the strip says.
+        // The page shown comments as the strip says: told again once another tab is shown, or
+        // its page loaded again (its load finished counts it).
         if let Some(web) = &self.web {
+            let id = web.listed().1;
+            let loaded = (crate::lock(&shared.loads).get(&id)).map_or(0, |loads| loads.finished);
             let script = strip::comment(self.commenting, self.sent);
-            let _ = web.active().evaluate_script(&script);
+            self.tell((None, web.active()), "comment", &script, (id, loaded));
         }
         let Some(strip) = &self.strip else {
             return;
@@ -111,7 +128,7 @@ impl Deck {
                 .map(|place| (place, scope.marked(&place.key)))
                 .collect(),
         };
-        let drawn = strip::script(&items, shown, &self.visited(shared), side, &projects);
+        let drawn = strip::script(&items, shown, side, &projects);
         // The split's two tabs, left and right: the side lists them as one; another tab shown,
         // the project's split still listed so.
         let on = self.pair().map(|(left, right)| [left.name(), right.name()]);
@@ -136,14 +153,7 @@ impl Deck {
             self.say((part, view), "drawn", &drawn);
         }
         self.tell_frame();
-        let rows = (self.menu == Some(Menu::History)).then(|| self.rows(shared));
-        if self.menu != Some(Menu::Events) {
-            let _ = strip.evaluate_script(&strip::menu(rows.as_deref()));
-        }
-        let events = crate::lock(&shared.center).clone();
-        let center = strip::center(&events, self.menu == Some(Menu::Events));
-        // The history and the Event Center draw into one list: each says what it shows, always.
-        let _ = strip.evaluate_script(&center);
+        self.tell_menus(strip, shared);
         let framed = (self.web.as_ref())
             .filter(|_| self.shown == Shown::Web)
             .and_then(|web| web.frame(None));
@@ -151,6 +161,8 @@ impl Deck {
         let Some(nav) = &self.nav else {
             return;
         };
+        let visited = strip::visited(&self.visited(shared));
+        self.say((Part::Nav, nav), "visited", &visited);
         let (size, _, top) = self.content();
         let scale = super::super::sizes::place(size, top, framed).scale;
         self.say(
@@ -167,6 +179,23 @@ impl Deck {
         let (acting, waiting) = shared.turn.now();
         let turn = strip::Turn::of(acting, self.commenting, waiting);
         self.say((Part::Nav, nav), "turn", &strip::turn(turn));
+    }
+
+    /// The strip's open list: the history and the Event Center draw into it, each saying what it
+    /// shows. While the Events show, the history's last word is drawn over, so it is said again
+    /// after; shut, the Event Center draws nothing, and its events are read only while it is open.
+    fn tell_menus(&self, strip: &wry::WebView, shared: &Shared) {
+        let rows = (self.menu == Some(Menu::History)).then(|| self.rows(shared));
+        if self.menu == Some(Menu::Events) {
+            crate::lock(&self.said).forget(&(Some(Part::Strip), "menu"));
+        } else {
+            self.say((Part::Strip, strip), "menu", &strip::menu(rows.as_deref()));
+        }
+        let center = match self.menu == Some(Menu::Events) {
+            true => strip::center(&crate::lock(&shared.center), true),
+            false => strip::center("", false),
+        };
+        self.say((Part::Strip, strip), "center", &center);
     }
 
     /// The pages know the window's state: full screen (`data-full`: it has no buttons of its own
@@ -197,16 +226,21 @@ impl Deck {
     /// with nothing new wakes no page. A part is told apart by what it is, not where its view
     /// lives: windows come and go, and a deck moves.
     fn say(&self, (part, view): (Part, &wry::WebView), kind: &'static str, script: &str) {
-        use std::hash::{Hash as _, Hasher as _};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        script.hash(&mut hasher);
-        let hash = hasher.finish();
+        self.tell((Some(part), view), kind, script, ());
+    }
+
+    /// `script` run in `view` (a part of the strip, or none: the page shown) unless it is what
+    /// that view was last told of `kind` for the same `about` (a page's own load).
+    fn tell(
+        &self,
+        (part, view): (Option<Part>, &wry::WebView),
+        kind: &'static str,
+        script: &str,
+        about: impl std::hash::Hash,
+    ) {
         let loads = super::LOADS.load(std::sync::atomic::Ordering::SeqCst);
-        let mut said = crate::lock(&self.said);
-        if said.0 != loads {
-            *said = (loads, std::collections::HashMap::new());
-        }
-        if said.1.insert((part, kind), hash) != Some(hash) {
+        let news = crate::lock(&self.said).news(loads, (part, kind), script, about);
+        if news {
             let _ = view.evaluate_script(script);
         }
     }

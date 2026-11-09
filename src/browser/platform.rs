@@ -1,8 +1,11 @@
 //! What differs by platform: where a headless window goes, keeping it rendering, the Dock, the user agent.
 
+#[path = "platform_bounds.rs"]
+mod bounds;
 #[path = "platform_views.rs"]
 mod views;
 
+pub(super) use bounds::bound;
 pub(super) use views::{Follow, follow};
 pub(super) use views::{
     Pane, clear, keep_rendering, keep_tab_rendering, reparent, see_through, stack,
@@ -44,7 +47,18 @@ pub(super) fn dock(
 }
 
 #[cfg(not(target_os = "macos"))]
-pub(super) use super::menu_gtk::{confirm, page_shown, quit_through};
+pub(super) use super::menu_gtk::{page_shown, quit_through};
+
+/// `question` asked in GTK's dialog, which holds the loop until it is answered; `done` takes
+/// whether the person went on. One signature with macOS, where the question is a sheet.
+#[cfg(not(target_os = "macos"))]
+pub(super) fn confirm(
+    question: &super::Confirm,
+    _window: Option<&tao::window::Window>,
+    done: impl FnOnce(bool) + 'static,
+) {
+    done(super::menu_gtk::confirm(question));
+}
 /// Quitting from outside the app (the Dock, logging out) comes to the desk as its own Quit does
 /// (macOS; elsewhere the window's close is the way out). A question to the person is asked as
 /// their system asks it.
@@ -196,9 +210,17 @@ pub(super) fn pasted() -> Option<String> {
 #[cfg(target_os = "macos")]
 pub(super) use super::appkit::{open_outside, pick_folder, reveal};
 
-/// A folder the person picks, as GTK asks; none when they cancel.
+/// A folder the person picks, as GTK asks; `done` takes it, or none when they cancel.
 #[cfg(not(target_os = "macos"))]
-pub(super) fn pick_folder() -> Option<std::path::PathBuf> {
+pub(super) fn pick_folder(
+    _window: Option<&tao::window::Window>,
+    done: impl FnOnce(Option<std::path::PathBuf>) + 'static,
+) {
+    done(picked_folder());
+}
+
+#[cfg(not(target_os = "macos"))]
+fn picked_folder() -> Option<std::path::PathBuf> {
     use gtk::prelude::{DialogExt, FileChooserExt, GtkWindowExt, WidgetExt};
     let none: Option<&gtk::Window> = None;
     let dialog = gtk::FileChooserDialog::with_buttons(

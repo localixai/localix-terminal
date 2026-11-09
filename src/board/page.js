@@ -472,13 +472,16 @@ function paint() {
   for (const list of document.querySelectorAll(".list[data-col]")) list.scrollTop = scrolled.get(list.dataset.col) || 0;
   seen = new Set(board.cards.map((card) => card.id));
   if (!motion.matches) {
+    // One curve for every card that moves, read once: a style read per card would lay the
+    // board out again for each.
+    const easing = getComputedStyle(document.documentElement).getPropertyValue("--spring").trim() || "ease-out";
     for (const card of document.querySelectorAll(".card[data-id]")) {
       const was = before.get(card.dataset.id);
       if (!was) continue;
       const is = card.getBoundingClientRect();
       const dx = was.left - is.left, dy = was.top - is.top;
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
-        card.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: "none" }], { duration: 260, easing: getComputedStyle(document.documentElement).getPropertyValue("--spring").trim() || "ease-out" });
+        card.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: "none" }], { duration: 260, easing });
       }
     }
   }

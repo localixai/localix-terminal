@@ -275,7 +275,7 @@ impl Looping {
 }
 
 /// What the loop and the worker share, as it starts.
-fn fresh() -> Arc<Shared> {
+pub(super) fn fresh() -> Arc<Shared> {
     Arc::new(Shared {
         token: token(),
         open: AtomicBool::new(false),

@@ -12,7 +12,12 @@
   page's new window, script navigation or redirect to one leaves the tab where it was and opens
   the address in the default browser, at most once a second per page. Subresources and frames are
   not limited. "+" and an `open` with no `url` start on `about:blank` instead of a search page.
-
+- Open Folder… and the question before quitting are sheets on the window (an alert of their own
+  only while the window is away), so pages, terminals and agents keep running while they wait.
+  Screenshots are encoded off the window's thread. Refreshes during a command are drawn once, the
+  page's scripts are sent only when what they say changed, and views that already stand where a
+  layout puts them are left alone. A load into a closed tab is refused at once, and a closed tab
+  leaves no project or detail entry behind.
 - Sidebar and split-divider resizing use one captured pointer and demand-driven animation frames,
   with Escape/cancellation cleanup and keyboard resizing. Title-only tab updates preserve their
   DOM nodes without remeasuring the list; FLIP is reserved for actual row changes.

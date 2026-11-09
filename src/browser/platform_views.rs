@@ -186,8 +186,13 @@ pub(in super::super) fn follow(webview: &wry::WebView, follow: Follow) {
         Follow::Side => HEIGHT,
     };
     let view = webview.webview();
-    // SAFETY: an NSView takes an NSAutoresizingMaskOptions (an NSUInteger).
-    let _: () = unsafe { msg_send![&*view, setAutoresizingMask: mask] };
+    // SAFETY: an NSView answers its NSAutoresizingMaskOptions (an NSUInteger).
+    let now: usize = unsafe { msg_send![&*view, autoresizingMask] };
+    // Every layout says it again: one already following so is left alone.
+    if now != mask {
+        // SAFETY: an NSView takes an NSAutoresizingMaskOptions (an NSUInteger).
+        let _: () = unsafe { msg_send![&*view, setAutoresizingMask: mask] };
+    }
 }
 
 /// GTK owns its children's layout; elsewhere there is no native autoresizing mask to set.

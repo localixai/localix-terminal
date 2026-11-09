@@ -176,7 +176,7 @@ pub(super) fn route(command: &super::host::Cmd) -> Route {
         | Cmd::PanelMenu(id, ..)
         | Cmd::Titled(id, _) => term(*id),
         Cmd::Eval { tab: Some(id), .. }
-        | Cmd::Navigate(_, Some(id))
+        | Cmd::Navigate { tab: Some(id), .. }
         | Cmd::Reveal(id)
         | Cmd::SwitchTab { id, .. }
         | Cmd::CloseTab { id, .. }
@@ -186,7 +186,7 @@ pub(super) fn route(command: &super::host::Cmd) -> Route {
         Cmd::Pressed(window, ..) => Route::Pressed(*window),
         Cmd::Strip | Cmd::Arranged(..) | Cmd::Restyle | Cmd::Offered(..) => Route::All,
         Cmd::Eval { .. }
-        | Cmd::Navigate(..)
+        | Cmd::Navigate { .. }
         | Cmd::Frame(..)
         | Cmd::Capture { .. }
         | Cmd::Act(..)

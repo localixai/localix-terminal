@@ -153,7 +153,6 @@ fn the_side_says_what_the_strip_says_its_menus_placed_below_the_strip() {
     let drawn = script(
         &[item(Key::Web(1), "Docs", "proj")],
         Key::Web(1),
-        &[],
         Some(false),
         &none(),
     );

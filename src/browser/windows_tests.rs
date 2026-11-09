@@ -12,8 +12,14 @@ fn a_command_goes_to_its_panes_window_a_press_to_its_window_a_change_to_all() {
     let pane = |key: &str| Route::Pane(key.to_string());
     assert_eq!(route(&Cmd::Paint(3)), pane("t3"));
     assert_eq!(route(&Cmd::Titled(2, "zsh".into())), pane("t2"));
+    let (loaded, _) = sync_channel(1);
+    let url = "https://a".to_string();
     assert_eq!(
-        route(&Cmd::Navigate("https://a".into(), Some(4))),
+        route(&Cmd::Navigate {
+            url: url.clone(),
+            tab: Some(4),
+            reply: loaded.clone()
+        }),
         pane("w4")
     );
     assert_eq!(route(&Cmd::Reveal(1)), pane("w1"));
@@ -27,7 +33,11 @@ fn a_command_goes_to_its_panes_window_a_press_to_its_window_a_change_to_all() {
     assert_eq!(route(&Cmd::Arranged(vec![], vec![])), Route::All);
     // No pane named: the window in use.
     assert_eq!(
-        route(&Cmd::Navigate("https://a".into(), None)),
+        route(&Cmd::Navigate {
+            url,
+            tab: None,
+            reply: loaded
+        }),
         Route::Current
     );
     assert_eq!(route(&Cmd::Clicked("show w1".into())), Route::Current);

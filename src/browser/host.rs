@@ -177,6 +177,22 @@ pub(super) struct Loads {
 }
 
 impl Shared {
+    /// Tabs `keys` are gone: what was kept of each by its key goes, so a later tab of the same
+    /// key starts with none of it (its project, what it said it was doing, a page's notices).
+    pub(super) fn forget(&self, keys: &[Key]) {
+        let (mut groups, mut details) = (crate::lock(&self.groups), crate::lock(&self.details));
+        for key in keys {
+            groups.remove(&key.name());
+            details.remove(&key.name());
+        }
+        drop((groups, details));
+        for key in keys {
+            if let Key::Web(id) = key {
+                self.notices.forget(*id);
+            }
+        }
+    }
+
     /// Tell the listener what the person did to `key`.
     pub(super) fn heard(&self, key: &str, what: Heard<'_>) {
         // Cloned out: the app's listener runs with no guard held.
@@ -211,9 +227,7 @@ impl Shared {
                 loads.remove(id);
             }
         }
-        for id in ids {
-            self.notices.forget(*id);
-        }
+        self.forget(&ids.iter().map(|id| Key::Web(*id)).collect::<Vec<_>>());
         self.open.store(!left.is_empty(), Ordering::SeqCst);
         if left.is_empty() {
             let waiting = std::mem::take(&mut *crate::lock(&self.pending));

@@ -437,7 +437,7 @@ function S(data) {
   const part = document.documentElement.dataset.part;
   if (part === "side") return side(data);
   const shown = data.tabs.find((tab) => tab.key === data.shown);
-  if (part === "nav") return address(shown, data.visited || []);
+  if (part === "nav") return address(shown);
   const sided = data.side !== null && data.side !== undefined;
   document.documentElement.toggleAttribute("data-side", sided);
   const project = data.project;
@@ -1241,8 +1241,11 @@ const host = (url) => {
   } catch { return url; }
 };
 const addressy = (text) => /^https?:\/\//.test(text) || (!/\s/.test(text) && /^(localhost|127\.0\.0\.1|[^.\s]+\.[^\s]+)/.test(text));
-function address(shown, visited) {
+// The pages the project showed, newest first (the toolbar's alone): what the field suggests.
+function VI(visited) {
   seen = visited;
+}
+function address(shown) {
   // No tab shown: the start of a new one. What is typed opens a page, as over a terminal.
   document.documentElement.toggleAttribute("data-blank", !shown);
   here = shown ? { url: shown.kind === "web" ? shown.detail || "" : "", web: shown.kind === "web", kind: shown.kind, title: shown.title } : { url: "", web: false, kind: "web", title: "" };

@@ -26,6 +26,8 @@ mod construction;
 mod dropping;
 #[path = "deck_render.rs"]
 mod render;
+#[path = "deck_said.rs"]
+mod said;
 
 #[path = "deck_acts.rs"]
 mod acts;
@@ -95,9 +97,11 @@ pub(super) struct Deck {
     side_now: f64,
     /// The glass under the strip's open list.
     pane: Option<platform::Pane>,
-    /// What each part of the strip was last told, by kind (a hash of the script), and the count
-    /// of page loads it was told since: the same again is not sent (`Deck::say`).
-    said: std::sync::Mutex<Said>,
+    /// What each part of the strip (and the page shown, none) was last told, by kind: the same
+    /// again is not sent (`Deck::say`).
+    said: std::sync::Mutex<said::Said<(Option<Part>, &'static str)>>,
+    /// Refreshes held while a command is carried out, drawn once at its end (`Deck::hold`).
+    held: said::Held,
     pub(super) web: Option<Tabs>,
     terms: Vec<Open>,
     pub(super) shown: Shown,
@@ -163,19 +167,21 @@ impl Deck {
     }
 
     /// Terminal `id`'s caller let it go: its last screen is kept, out of the tabs, the oldest
-    /// such one let go past a few.
-    pub(super) fn end_term(&mut self, id: u32) {
+    /// such one let go past a few (its id, then: the tab is gone).
+    pub(super) fn end_term(&mut self, id: u32) -> Option<u32> {
         if let Some(open) = self.terms.iter_mut().find(|open| open.id == id) {
             open.held = Held::Ended;
             open.slot.alive.store(false, Ordering::SeqCst);
         }
         let ended = |open: &&Open| open.held == Held::Ended;
+        let mut gone = None;
         if self.terms.iter().filter(ended).count() > ENDED_KEPT
             && let Some(at) = self.terms.iter().position(|open| open.held == Held::Ended)
         {
-            self.terms.remove(at);
+            gone = Some(self.terms.remove(at).id);
         }
         self.settle();
+        gone
     }
 
     /// The person closed terminal `id`'s tab: its program runs on, and its screen is painted
@@ -382,10 +388,6 @@ enum Part {
     /// The line between a split window's halves.
     Line,
 }
-
-/// What the parts of the strip were last told: the page loads counted then, and each part's
-/// script of each kind, hashed.
-type Said = (u32, std::collections::HashMap<(Part, &'static str), u64>);
 
 /// How many times a part of the strip loaded its page: one that loads again has lost what it was
 /// told, so the next refresh tells it all again (`Deck::say`).
