@@ -87,7 +87,7 @@ pub(super) fn builder<'a>(
         // (popup.rs); where it cannot be, it opens as a tab of its own.
         .with_new_window_req_handler(move |url, features| {
             if !local(&url) {
-                if !headless {
+                if !headless && !popups.turn.agent_moves() {
                     elsewhere(&url, Some(id));
                 }
                 return NewWindowResponse::Deny;
@@ -132,7 +132,8 @@ pub(super) fn builder<'a>(
 }
 
 /// Whether tab `id` goes to `url`. A frame inside the page goes to any address a tab may load;
-/// the page itself only to a local one, and anywhere else opens in the person's browser.
+/// the page itself only to a local one, and anywhere else opens in the person's browser unless
+/// the agent's action moved it there.
 fn navigation(id: u32, url: &str, headless: bool, shared: &Shared) -> bool {
     super::frames::begin();
     let main = super::frames::main_frame();
@@ -140,7 +141,9 @@ fn navigation(id: u32, url: &str, headless: bool, shared: &Shared) -> bool {
         Some(false) => allowed(url),
         _ => local(url) || url == BLANK,
     };
-    if !allow && main.is_some() && !headless {
+    // What the agent's own action moved to stays out of the person's browser: the agent is
+    // refused such addresses, and the person did not ask for it.
+    if !allow && main.is_some() && !headless && !shared.turn.agent_moves() {
         elsewhere(url, Some(id));
     }
     super::debug(|| format!("tab {id} navigation requested: {url} (allowed: {allow})"));

@@ -23,12 +23,34 @@ struct State {
     waiting: usize,
     /// The agent is acting on a page: the strip says so.
     acting: bool,
+    /// When the agent's last action settled.
+    settled: Option<Instant>,
 }
+
+/// How long after an action settles a page's move is still the agent's: a click's navigation
+/// reaches WebKit's question a moment after the click's answer.
+pub(super) const AFTER_ACTING: Duration = Duration::from_millis(750);
 
 impl Turn {
     /// The agent began an action, or its action settled.
     pub(super) fn acting(&self, on: bool) {
-        crate::lock(&self.state).acting = on;
+        let mut state = crate::lock(&self.state);
+        if state.acting && !on {
+            state.settled = Some(Instant::now());
+        }
+        state.acting = on;
+    }
+
+    /// Whether a page moving now is the agent's doing: it acts, or its action settled a moment
+    /// ago. Such a move never opens the person's browser.
+    pub(super) fn agent_moves(&self) -> bool {
+        self.agent_moves_at(Instant::now())
+    }
+
+    fn agent_moves_at(&self, now: Instant) -> bool {
+        let state = crate::lock(&self.state);
+        state.acting
+            || (state.settled).is_some_and(|at| now.saturating_duration_since(at) < AFTER_ACTING)
     }
 
     /// Whether the agent acts now, and how many of its actions wait for the person.
