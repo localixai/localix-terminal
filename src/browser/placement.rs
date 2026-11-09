@@ -1,5 +1,5 @@
-//! Where the window's two shapes go on a screen: the expanded window on its right, the mini in a
-//! corner, each where the person left it when they moved it. Pure, in points, from the top left.
+//! Where the windows go on a screen: the main one on its right, where the person left it when
+//! they moved it, and each other one a step on from it. Pure, in points, from the top left.
 
 /// The part of a screen windows may use (the menu bar and the Dock left out).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -29,19 +29,14 @@ pub(super) const LEAST: tao::dpi::LogicalSize<f64> = tao::dpi::LogicalSize {
 #[derive(Debug, Default, Clone, Copy)]
 pub(super) struct Kept {
     pub deck: Option<Rect>,
-    pub mini: Option<(f64, f64)>,
     /// The tabs' column was left open or slid shut: a window opened again keeps it so.
     pub side: Option<bool>,
     /// The side's width as the person last dragged it.
     pub side_width: Option<f64>,
 }
 
-/// The mini's size: its picture, 16 by 10.
-pub(super) const MINI: (f64, f64) = (288.0, 180.0);
 /// The gap between the expanded window and the screen's edges.
 const MARGIN: f64 = 12.0;
-/// The gap between the mini and the screen's corner.
-const CORNER: f64 = 16.0;
 
 fn tens(value: f64) -> f64 {
     (value / 10.0).round() * 10.0
@@ -84,22 +79,6 @@ pub(super) fn cascade(area: Area, deck: Rect, steps: usize) -> Rect {
         y: along(deck.y, area.y, area.height - deck.height),
         ..deck
     }
-}
-
-/// The mini's top left: `kept` while it is on the screen, else the bottom right corner.
-pub(super) fn mini(area: Area, kept: Option<(f64, f64)>) -> (f64, f64) {
-    let (width, height) = MINI;
-    let corner = (
-        area.x + area.width - width - CORNER,
-        area.y + area.height - height - CORNER,
-    );
-    let Some((x, y)) = kept else {
-        return corner;
-    };
-    (
-        x.clamp(area.x, (area.x + area.width - width).max(area.x)),
-        y.clamp(area.y, (area.y + area.height - height).max(area.y)),
-    )
 }
 
 #[cfg(test)]

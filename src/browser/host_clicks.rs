@@ -1,40 +1,26 @@
 //! What the loop does with the person's clicks and the window's presence: a tab shown or closed,
-//! the history menu's entry, a page's answer, the mini named, its picture, an event of its state.
+//! the history menu's entry, a page's answer, an event of the window's state.
 
 use std::sync::Arc;
 
 use serde_json::Value;
 
 use super::super::presence::{Presenter, Stage};
-use super::super::{Asked, Cmd, Heard, MINI, Shared, WINDOW_CLOSED};
+use super::super::{Asked, Cmd, Heard, Shared, WINDOW_CLOSED};
 use super::On;
-use crate::browser::capture::Shot;
 use crate::browser::deck::{Deck, Revisit, Shown};
 use crate::browser::presence::Event as Presence;
 use crate::browser::sizes;
 use crate::browser::strip::{Click, Key, Tool, click, went};
 
 impl On<'_> {
-    /// The mini's presenter, and the stage it works on: the window in use.
+    /// The window's presenter, and the stage it works on: the window in use.
     fn staged(&mut self) -> (&mut Presenter, Stage<'_>) {
         let stage = Stage {
             deck: &mut *self.deck,
-            target: self.target,
             shared: self.shared,
-            proxy: self.proxy,
         };
         (&mut *self.presenter, stage)
-    }
-
-    /// The mini names the tab shown again: its project may be known by now.
-    pub(super) fn renamed(&mut self) {
-        let (presenter, stage) = self.staged();
-        presenter.rename(&stage);
-    }
-
-    pub(super) fn pictured(&mut self, shot: &Result<Shot, String>) {
-        let (presenter, mut stage) = self.staged();
-        presenter.pictured(shot, &mut stage);
     }
 
     /// `event` for the window's presence.
@@ -43,7 +29,7 @@ impl On<'_> {
         presenter.event(event, &mut stage);
     }
 
-    /// The person clicked the mini open.
+    /// The person opened the app: the window comes back.
     pub(super) fn opened(&mut self) {
         let (presenter, mut stage) = self.staged();
         presenter.opened(&mut stage);
@@ -231,8 +217,6 @@ impl On<'_> {
         let at = (f64::from(x), f64::from(y));
         match open.choose(at, &labels, None).and_then(|at| tools.get(at)) {
             Some(Tool::History) => self.clicked("history"),
-            Some(Tool::Mini) => self.clicked("collapse"),
-            Some(Tool::Events) => self.clicked("events"),
             None => {}
         }
     }
@@ -325,11 +309,7 @@ impl On<'_> {
             let value = serde_json::from_str(&value).unwrap_or(Value::String(value));
             answer.answer(id, Ok(value));
         };
-        let page = match panel {
-            MINI => self.presenter.page(),
-            panel => self.deck.as_ref().and_then(|open| open.page(panel)),
-        };
-        match page {
+        match self.deck.as_ref().and_then(|open| open.page(panel)) {
             Some(page) => {
                 if let Err(why) = page.evaluate_script_with_callback(script, reply) {
                     self.shared.answer(id, Err(why.to_string()));

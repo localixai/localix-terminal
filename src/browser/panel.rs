@@ -12,7 +12,7 @@ use wry::{PageLoadEvent, WebView, WebViewBuilder};
 use super::choice::Entry;
 use super::frame::{self, Look};
 use super::host::Cmd;
-use super::tab_view::{build, own_page};
+use super::tab_view::{build_own, own_page};
 
 /// What a sender does with a command: false once the loop is gone. Shared, as a painter is
 /// (the loop's proxy is).
@@ -286,7 +286,7 @@ pub(super) fn open(
                 let _ = proxy.send_event(Cmd::Paint(id));
             }
         });
-    let webview = build(webview, native).map_err(|error| error.to_string())?;
+    let webview = build_own(webview, native).map_err(|error| error.to_string())?;
     super::platform::keep_tab_rendering(&webview);
     Ok(Open {
         id,

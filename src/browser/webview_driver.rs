@@ -49,7 +49,7 @@ fn action_args(epoch: &str, action: &Action) -> Value {
     }
 }
 
-/// The agent is acting: the mini spins until this is dropped, and then takes a new picture.
+/// The agent is acting until this is dropped: the strip says so meanwhile.
 struct Acting(tao::event_loop::EventLoopProxy<Cmd>);
 
 impl Drop for Acting {
@@ -215,7 +215,7 @@ impl Driver for WebviewDriver {
         self.send(Cmd::Frame(Some(self.target()), frame.clone()))?;
         // The page reflows on its own resize event; give it the usual settle.
         let _ = self.call("settle", &json!({}), SETTLE_TIMEOUT);
-        // Read with the script path alone: no second settle, and the mini does not spin for it.
+        // Read with the script path alone: no second settle, and no act for the strip to tell.
         let first = script_forms("innerWidth + ' × ' + innerHeight")
             .into_iter()
             .next();

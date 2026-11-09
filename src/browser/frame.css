@@ -15,10 +15,13 @@
 --acc-3:color-mix(in srgb,var(--accent) 40%,transparent);
 --acc-4:color-mix(in srgb,var(--accent) 60%,transparent);
 --acc-sel:color-mix(in srgb,var(--accent) 90%,transparent);
---r-1:4px;--r-2:6px;--r-3:8px;--r-4:10px;--r-pill:999px;
---ease:cubic-bezier(.2,.8,.2,1);--t-out:.12s;--t-move:.2s;
+--on-acc:#fff;
+--on-sel:#fff;
+--r-1:4px;--r-2:6px;--r-3:8px;--r-4:10px;--r-5:12px;--r-pill:999px;
+--ease:cubic-bezier(.2,.8,.2,1);--t-in:.1s;--t-out:.12s;--t-fade:.15s;--t-move:.2s;
 --spring:var(--ease);--spring-b:var(--ease);
 --sh-hair:0 0 0 .5px var(--ov-3);
+--hair-in:inset 0 0 0 .5px var(--ov-3);
 --sh-pop:var(--sh-hair),0 10px 28px rgba(0,0,0,.19);
 --sh-lift:var(--sh-hair),0 12px 30px rgba(0,0,0,.24),0 2px 6px rgba(0,0,0,.10);
 --ui-sys:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
@@ -26,21 +29,35 @@
 /* The system's accent, where the engine knows it: a custom property takes no fallback, so the
    keyword is set only when it is supported. */
 @supports (color:-apple-system-control-accent){:root{--accent:-apple-system-control-accent}}
-/* Springs for what moves (a critically damped one, and one with a little bounce), each played
-   over the duration of its use (about a quarter of a second); an
-   engine without linear() keeps the ease. */
+/* Springs for what moves: a critically damped one (bounce 0) and one with a little bounce (0.15),
+   each a damped spring sampled to within 0.1% of its travel and played over its settling time,
+   which is the duration of its use (about a quarter of a second). An engine without linear()
+   keeps the ease. */
 @supports (transition-timing-function:linear(0,1)){:root{
---spring:linear(0,.162,.421,.634,.781,.873,.929,.96,.978,.988,.994,.997,.998,.999,1);
---spring-b:linear(0,.172,.459,.698,.855,.943,.985,1.002,1.006,1.006,1.004,1.002,1.001,1,1)}}
+--spring:linear(0,.0012 .55%,.0048 1.1%,.0111 1.7%,.0196 2.3%,.0444 3.6%,.0816 5.1%,.116 6.3%,.1597 7.7%,.3642 13.8%,.4159 15.4%,.4624 16.9%,.5109 18.55%,.5564 20.2%,.5976 21.8%,.637 23.45%,.6733 25.1%,.7066 26.75%,.7379 28.45%,.7663 30.15%,.7934 31.95%,.8177 33.75%,.8399 35.6%,.8607 37.55%,.8812 39.75%,.8992 42%,.9155 44.4%,.9299 46.9%,.9426 49.55%,.9536 52.35%,.9632 55.35%,.9714 58.6%,.9834 65.5%,.9914 73.8%,.996 83.2%,1);
+--spring-b:linear(0,.0016 .65%,.0061 1.3%,.0132 1.95%,.0236 2.65%,.0364 3.35%,.0526 4.1%,.0722 4.9%,.0953 5.75%,.1359 7.1%,.1868 8.65%,.4126 15.05%,.4672 16.65%,.5147 18.1%,.5661 19.75%,.6129 21.35%,.6565 22.95%,.6957 24.5%,.7317 26.05%,.7648 27.6%,.7958 29.2%,.8239 30.8%,.8498 32.45%,.8728 34.1%,.8937 35.8%,.9131 37.6%,.9306 39.5%,.9459 41.45%,.9592 43.5%,.9709 45.7%,.9806 48%,.9885 50.4%,.9997 55.85%,1.0047 61.2%,1.0063 67.95%,1)}}
 @media (prefers-color-scheme: dark){:root{
 --fg:#e6e6e6;
 --ink-2:color-mix(in srgb,var(--fg) 60%,transparent);
 --sh-hair:0 0 0 .5px rgba(255,255,255,.12);
+--hair-in:inset 0 0 0 .5px rgba(255,255,255,.12);
 --sh-pop:var(--sh-hair),0 10px 28px rgba(0,0,0,.40);
 --sh-lift:var(--sh-hair),0 12px 30px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.20);
 }}
+/* The window inactive (data-inactive: another window is key, said by the app, as WebKit's
+   :window-inactive never restyles what it drew): the chrome recedes as the system's does. The
+   accent turns the system's grey, and a selection turns grey with the normal ink on it
+   (--on-sel); words on an accent fill (--on-acc) stay white. */
+html[data-inactive]{
+--accent:-apple-system-gray;
+--acc-sel:-apple-system-unemphasized-selected-content-background;
+--on-sel:var(--ink);
+--sh-hair:0 0 0 .5px var(--ov-2);
+--hair-in:inset 0 0 0 .5px var(--ov-2);
+}
 /* Increase Contrast: the secondary inks and the fills one step firmer, the hairlines a full point. */
 @media (prefers-contrast:more){:root{
+--ink:var(--fg);
 --ink-2:color-mix(in srgb,var(--fg) 82%,transparent);
 --ink-3:color-mix(in srgb,var(--fg) 62%,transparent);
 --ov-1:color-mix(in srgb,currentColor 10%,transparent);
@@ -48,26 +65,28 @@
 --ov-3:color-mix(in srgb,currentColor 30%,transparent);
 --ov-4:color-mix(in srgb,currentColor 40%,transparent);
 --sh-hair:0 0 0 1px color-mix(in srgb,var(--fg) 45%,transparent);
+--hair-in:inset 0 0 0 1px color-mix(in srgb,var(--fg) 45%,transparent);
+}}
+/* Increase Contrast keeps its full point in an inactive window too. */
+@media (prefers-contrast:more){html[data-inactive]{
+--sh-hair:0 0 0 1px color-mix(in srgb,var(--fg) 30%,transparent);
+--hair-in:inset 0 0 0 1px color-mix(in srgb,var(--fg) 30%,transparent);
 }}
 /* Reduce Motion: nothing travels, scales or grows; colour, outline and opacity still change, which
    is what tells the person a thing answered. A page's own keyframes say the same in opacity. */
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-iteration-count:1!important;transition-property:color,background-color,border-color,opacity,box-shadow,stroke-dashoffset!important}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-iteration-count:1!important;transition-property:color,background-color,border-color,outline-color,opacity!important}}
 /* The window's ground, painted once. The page names it (--ground). Glass (macOS, data-glass): the
    window's own material and coat show through a clear page, so the titlebar and the page are one
-   sheet. Elsewhere a backdrop drawn from the ground stands in for the desktop, under a coat of
-   it. Reduced transparency (data-reduced: the app says so, as WebKit has no media query for it),
-   or forced colours: the ground, solid. */
+   sheet. Elsewhere, under Reduce Transparency (data-reduced: the app says so, as WebKit has no
+   media query for it) and in forced colours: the ground, solid, and nothing drawn over it. */
 html{background:var(--ground);color-scheme:light dark;-webkit-font-smoothing:antialiased}
 html,body{margin:0;height:100%;overflow:hidden}
-@supports (background:color-mix(in srgb,red 50%,transparent)) and ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
-html:not([data-glass]){background:radial-gradient(ellipse 120% 40% at 10% 40%,color-mix(in srgb,var(--ground) 82%,#7b8cff),transparent 80%),radial-gradient(ellipse 80% 40% at 90% 60%,color-mix(in srgb,var(--ground) 88%,#b07bff),transparent 85%),color-mix(in srgb,var(--ground) 90%,#000)}
-html:not([data-glass]) body{background:color-mix(in srgb,var(--ground) 72%,transparent)}
-}
+/* Type: a face is drawn as it is made, never with a weight or slant faked for it (a font the
+   person chose may lack one), and kerning stays on. Sizes and lines come from the scale in
+   docs/ui.md, in whole points. */
+html{font-synthesis:none;font-kerning:normal}
 html[data-glass],html[data-glass] body{background:transparent}
-@media (prefers-reduced-transparency:reduce),(forced-colors:active){
-html:is([data-glass],:not([data-glass])){background:var(--ground)}
-html:is([data-glass],:not([data-glass])) body{background:transparent}
-}
-html[data-reduced]{background:var(--ground)}
+html[data-reduced],html:not([data-glass]){background:var(--ground)}
 html[data-reduced] body{background:transparent}
-::selection{background:color-mix(in srgb,currentColor 28%,transparent)}
+@media (prefers-reduced-transparency:reduce),(forced-colors:active){html{background:var(--ground)}html body{background:transparent}}
+::selection{background:-apple-system-selected-text-background}

@@ -5,8 +5,11 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>tabs</title>
 <style>
-:root{--ground:#f7f7f7;font:12px/1 var(--ui-font,var(--ui-sys));color:var(--fg);-webkit-font-smoothing:antialiased}
+:root{--ground:#f7f7f7;font:12px/15px var(--ui-font,var(--ui-sys));color:var(--fg);-webkit-font-smoothing:antialiased}
 :root{--card:rgba(252,252,253,.97)}
+/* The system's purple, which WebKit names no keyword for: its light and dark values. */
+:root{--purple:#af52de}
+@media (prefers-color-scheme: dark){:root{--purple:#bf5af2}}
 @media (prefers-color-scheme: dark){:root{--ground:#070707}}
 @media (prefers-color-scheme: dark){:root{--card:rgba(44,44,47,.97)}}
 /* Reduced transparency (data-reduced, said by the app): the card is the ground, solid. */
@@ -17,50 +20,47 @@ body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
 #head{position:relative;z-index:2}
 /* The offer bar (offer.rs): one offer at a time, under the toolbar, at the moment it fits, with
    the button that does it and Not Now. Its height is the window's to lay out (offer::ROW). */
-#offer{display:none;height:36px;padding:0 10px 6px;box-sizing:border-box}
+#offer{display:none;height:36px;padding:0 8px 8px;box-sizing:border-box}
 #offer.on{display:block}
-#offer .card{height:100%;display:flex;align-items:center;gap:12px;padding:0 4px 0 10px;border-radius:8px;font-size:12px;background:color-mix(in srgb,currentColor 6%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 12%,transparent)}
+#offer .card{height:100%;display:flex;align-items:center;gap:12px;padding:0 2px 0 10px;border-radius:var(--r-3);font-size:12px;line-height:15px;background:var(--ov-1);box-shadow:var(--sh-hair)}
 #offer .mk{flex:none;width:14px;height:14px;display:flex}
-#offer .mk svg{width:14px;height:14px;opacity:.85}
+#offer .mk svg{width:14px;height:14px}
 #offer .mk:empty{display:none}
-#offer .says{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.78}
-#offer.busy .says{opacity:.5}
-#offer.failed .says{opacity:1;color:#d70015}
+#offer .says{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+#offer.busy .says{color:var(--ink-2)}
+#offer.failed .says{color:-apple-system-red}
 @keyframes offer-in{from{opacity:0}to{opacity:1}}
-#offer.on .card{animation:offer-in .16s ease-out}
-/* Increase Contrast: the hairlines a full point, firm. */
-@media (prefers-contrast:more){
-#offer .card{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--fg) 45%,transparent)}
-}
-@media (prefers-color-scheme: dark){#offer.failed .says{color:#ff6961}}
-#offer button{flex:none;border:0;color:inherit;cursor:pointer;font:500 11px/22px var(--ui-font,var(--ui-sys));transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+#offer.on .card{animation:offer-in var(--t-out) var(--ease)}
+#offer button{flex:none;border:0;color:inherit;font:500 12px/24px var(--ui-font,var(--ui-sys));transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 #offer button:hover,#offer button:active{transition:none}
-#offer button.take{height:22px;padding:0 10px;border-radius:6px;font-weight:600;background:var(--ov-2)}
-#offer button.take:hover,#offer button.take:active{background:var(--ov-3)}
-#offer button.later{width:22px;height:22px;padding:0;border-radius:6px;background:none;opacity:.45;display:grid;place-items:center}
-#offer button.later:hover{opacity:.9;background:var(--ov-2)}
+#offer button.take{height:24px;padding:0 10px;border-radius:var(--r-2);font-weight:600;background:var(--ov-2)}
+#offer button.take:hover{background:var(--ov-3)}
+#offer button.take:active{background:var(--ov-4)}
+#offer button.later{width:24px;height:24px;padding:0;border-radius:var(--r-2);background:none;color:var(--ink-2);display:grid;place-items:center}
+#offer button.later:hover{color:var(--ink);background:var(--ov-2)}
+#offer button.later:active{background:var(--ov-3)}
 #offer button.later svg{width:10px;height:10px;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;fill:none}
 /* The bar (38 points, a compact titlebar's): beside the window's buttons, where the shown tab
    is, as crumbs: its project (a folder), then the tab; each a button whose menu is the system's
    (host_project.rs): every project and Open Folder, or the project's tabs. A dot on the project's
    crumb: something happened in another one, out of sight. Then the window's own buttons. */
 #cr{display:flex;align-items:center;gap:2px;min-width:0;overflow:hidden;white-space:nowrap}
-#cr .c{flex:0 1 auto;display:flex;align-items:center;gap:5px;min-width:0;height:24px;padding:0 6px;border-radius:6px;font-size:12px;font-weight:400;color:var(--ink-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+#cr .c{flex:0 1 auto;display:flex;align-items:center;gap:5px;min-width:0;height:24px;padding:0 6px;border-radius:6px;font-size:12px;line-height:15px;font-weight:400;color:var(--ink-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 #cr .c:hover{color:var(--ink);background:var(--ov-2);transition:none}
 #cr .c:active{background:var(--ov-3);transition:none}
 #cr .c .n{min-width:0;overflow:hidden;text-overflow:ellipsis}
-#cr .c.here{flex:0 2 auto;font-size:12px;font-weight:500;color:var(--fg)}
+#cr .c.here{flex:0 2 auto;font-size:12px;line-height:15px;font-weight:500;color:var(--fg)}
 #cr .c svg{flex:none;width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
 #cr .c .mk{display:flex}
 #cr .c .mk svg{fill:currentColor;stroke:none}
 #cr .c .dn{width:9px;height:9px;stroke-width:1.6}
 #cr .c .d{flex:none;width:6px;height:6px;border-radius:3px;background:var(--accent)}
-#cr .sep{flex:none;padding:0 1px;font-size:12px;color:var(--ink-3)}
+#cr .sep{flex:none;padding:0 1px;font-size:12px;line-height:15px;color:var(--ink-3)}
 #cr .b{width:24px;min-width:24px;height:24px;border-radius:6px;margin-left:2px}
 #cr .b svg{width:14px;height:14px}
 /* The bar: the crumbs, then the window's own buttons at the end. The crumbs give way when the
    window is narrow, and with less room still the buttons go into "»" (fit). */
-#bar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;height:38px;padding:0 8px 0 10px;box-sizing:border-box}
+#bar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;height:38px;padding:0 8px;box-sizing:border-box}
 #lead{display:flex;align-items:center;gap:4px;min-width:0}
 /* A button fit() puts into "»" is hidden. */
 [hidden]{display:none!important}
@@ -78,17 +78,17 @@ body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
 #gh{position:fixed;inset:0;pointer-events:none;z-index:9}
 #sl .t.held{background:var(--ov-1)!important;box-shadow:none!important;opacity:1}
 /* The row as the card it becomes, the moment its picture is taken. */
-#sl .t.shot{background:var(--card)!important;box-shadow:inset 0 0 0 .5px var(--ov-3)!important;color:var(--fg)!important;opacity:1;transition:none!important}
+#sl .t.shot{background:var(--card)!important;box-shadow:var(--hair-in)!important;color:var(--fg)!important;opacity:1;transition:none!important}
 #sl .t.held>*{visibility:hidden}
-.t.lift{position:fixed;z-index:9;margin:0;pointer-events:none;border-radius:10px;opacity:1;background:var(--card);box-shadow:inset 0 0 0 .5px var(--ov-3);scale:1;will-change:transform;transition:scale var(--t-move) var(--ease),box-shadow var(--t-move),opacity .12s}
+.t.lift{position:fixed;z-index:9;margin:0;pointer-events:none;border-radius:var(--r-4);opacity:1;background:var(--card);box-shadow:var(--hair-in);scale:1;will-change:transform;transition:scale var(--t-move) var(--spring),opacity var(--t-out)}
 .t.lift.up{scale:1.025;box-shadow:var(--sh-lift)}
 .t.lift.out{scale:.98}
-.t.lift.home{transition:transform var(--t-move) var(--ease),scale var(--t-move) var(--ease),box-shadow var(--t-move),opacity .12s}
-/* What a click acts on shows the hand: the tabs, the buttons, the crumbs, what the menus and the
-   Event Center list; the side's edge and the halves' line keep their resize cursor. A new
-   clickable joins this one rule. */
-:where(button,[role=button],a[href],select,summary,.t,.t *,.half,.half *,#cr .c,#cr .c *,.q,.q *,.v,.v *,.ev.go,.ev.go *,.s,.x,.b,.b *,.ic,.empty button){cursor:pointer}
-:where(button:disabled,[aria-disabled=true],.gone){cursor:default}
+.t.lift.home{transition:transform var(--t-move) var(--spring-b),scale var(--t-move) var(--spring-b),opacity var(--t-out)}
+@media (prefers-reduced-motion:reduce){.t.lift.up,.t.lift.out{scale:1}}
+/* The arrow over every control and row, as the system's own; the I-beam only where words are
+   typed, the hand only over a link. The side's edge and the halves' line keep their resize
+   cursor. */
+:where(a[href]){cursor:pointer}
 :where(#url,#sq,#sk,textarea){cursor:text}
 html.dragging,html.dragging *{cursor:grabbing!important;user-select:none}
 #line{display:none}
@@ -97,12 +97,13 @@ html[data-part=line],html[data-part=line] body{background:transparent!important}
 html[data-part=line] #line{display:block;position:fixed;inset:0;cursor:col-resize;touch-action:none;outline:none}
 /* The line between the halves: one point, a quiet fill; hot (under the pointer, held) the
    accent, its width never changing. */
-html[data-part=line] #line::after{content:"";position:absolute;top:0;bottom:0;left:calc(50% - .5px);width:1px;background:var(--ov-3);transition:background-color .1s}
-html[data-part=line] #line:hover::after,html[data-part=line] #line.held::after,html[data-part=line] #line:focus-visible::after{background:var(--accent)}
+html[data-part=line] #line::after{content:"";position:absolute;top:0;bottom:0;left:calc(50% - .5px);width:1px;background:var(--ov-3);transition:background-color var(--t-out) var(--ease)}
+html[data-part=line] #line:hover::after,html[data-part=line] #line.held::after,html[data-part=line] #line:focus-visible::after{background:var(--accent);transition:none}
 html[data-part=line].held,html[data-part=line].held *{cursor:col-resize!important;user-select:none}
 html[data-part=nav] #bar,html[data-part=nav] #tabs,html[data-part=nav] #offer,html[data-part=nav] #menu,html[data-part=nav] #back{display:none!important}
 /* Three columns, as Safari's toolbar: the address field stays in the middle whatever comes and goes beside it. */
-html[data-part=nav] #browse{display:grid;grid-template-columns:1fr minmax(120px,720px) 1fr;align-items:center;gap:10px;height:40px;padding:0 10px;box-sizing:border-box;box-shadow:inset 0 -1px 0 var(--ov-2)}
+html[data-part=nav] #browse{display:grid;grid-template-columns:1fr minmax(120px,720px) 1fr;align-items:center;gap:8px;height:40px;padding:0 8px;box-sizing:border-box;box-shadow:inset 0 -.5px 0 var(--ov-3)}
+@media (prefers-contrast:more){html[data-part=nav] #browse{box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--fg) 45%,transparent)}}
 html[data-part=nav]:not([data-glass]) #browse{background:var(--ground)}
 #browse #addr{width:100%}
 #browse #nav{justify-self:start}
@@ -112,15 +113,16 @@ html[data-part=nav]:not([data-glass]) #browse{background:var(--ground)}
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:26px 16px;box-sizing:border-box}
 .empty .g{box-sizing:border-box;width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:color-mix(in srgb,currentColor 7%,transparent);opacity:.7}
 .empty .g svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
-.empty .w{font-size:13px;color:var(--ink-2)}
+.empty .w{font-size:13px;line-height:16px;color:var(--ink-2)}
 .empty .row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:440px}
-.empty button{font:inherit;font-size:12px;color:var(--ink);border:0;border-radius:8px;height:28px;padding:0 11px;background:color-mix(in srgb,currentColor 6%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 11%,transparent);display:flex;gap:7px;align-items:center;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
-.empty button:hover{background:color-mix(in srgb,currentColor 11%,transparent);transition:none}
+.empty button{font:inherit;font-size:12px;line-height:15px;color:var(--ink);border:0;border-radius:var(--r-3);height:28px;padding:0 12px;background:var(--ov-1);box-shadow:var(--sh-hair);display:flex;gap:8px;align-items:center;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+.empty button:hover{background:var(--ov-2);transition:none}
+.empty button:active{background:var(--ov-3);transition:none}
 .empty button .mk{display:grid;place-items:center}
 .empty button .mk svg{width:13px;height:13px;fill:currentColor}
 #sl .empty{flex:1}
 /* Where a tab carried in from another window would go: an empty place, as the held row's. */
-#sl .slot{flex:none;border-radius:10px;background:var(--ov-1)}
+#sl .slot{flex:none;border-radius:var(--r-4);background:var(--ov-1)}
 /* A tab held: the side covers the window, clear past its column, which keeps its width. */
 #blank{display:none}
 html[data-part=nav][data-blank] #browse{display:none}
@@ -140,42 +142,45 @@ html[data-part=nav][data-blank] #blank{position:fixed;inset:0;display:flex}
 #addr{position:relative;cursor:text;background:var(--ov-1);min-width:0;height:28px;border-radius:14px;display:flex;align-items:center;gap:8px;padding:0 3px 0 12px;box-sizing:border-box;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 #addr:hover{background:var(--ov-2);transition:none}
 #addr:focus-within{background:var(--ov-1);box-shadow:inset 0 0 0 1px var(--accent),0 0 0 3px var(--acc-2);transition:none}
-#ai{flex:none;display:grid;place-items:center;opacity:.45}
+#ai{flex:none;display:grid;place-items:center;color:var(--ink-2)}
 #ai svg,.i svg,.x svg{display:block;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
 #ai svg{width:13px;height:13px}
-#url{flex:1;min-width:0;border:0;outline:0;background:transparent;color:inherit;font:13px/1 var(--ui-font,var(--ui-sys));text-align:center;text-overflow:ellipsis}
+#url{flex:1;min-width:0;border:0;outline:0;background:transparent;color:inherit;font:13px/16px var(--ui-font,var(--ui-sys));text-align:center;text-overflow:ellipsis}
 #url:focus{text-align:left}
-#url::placeholder{color:currentColor;opacity:.45}
-#url::selection{background:color-mix(in srgb,currentColor 22%,transparent)}
+#url::placeholder{color:-apple-system-placeholder-text;opacity:1}
+#url::selection{background:-apple-system-selected-text-background}
 /* The open lists (the suggestions, the history menu), as the system's menus: on its menu glass
    (pane.rs, macOS; elsewhere the ground), compact rows, the accent on the row picked. */
-#sug,#menu{position:absolute;display:none;box-sizing:border-box;padding:5px;border-radius:var(--r-4);z-index:3;overflow-y:auto;font:13px/1.3 var(--ui-font,var(--ui-sys));box-shadow:0 0 0 .5px color-mix(in srgb,currentColor 24%,transparent),0 10px 28px rgba(0,0,0,.22)}
+#sug,#menu{position:absolute;display:none;box-sizing:border-box;padding:5px 4px;border-radius:var(--r-4);z-index:3;overflow-y:auto;font:13px/16px var(--ui-font,var(--ui-sys));box-shadow:var(--sh-pop)}
 html:not([data-glass]) #sug,html:not([data-glass]) #menu{background:var(--ground)}
 #sug{max-height:calc(100vh - 60px)}
 .q{display:flex;align-items:center;gap:8px;height:24px;padding:0 8px;border-radius:var(--r-2);white-space:nowrap}
 .q .i{width:14px;text-align:center;opacity:.6}
 .q .w{min-width:0;display:flex;align-items:baseline;gap:8px;overflow:hidden}
 .q .n{flex:none;max-width:62%;overflow:hidden;text-overflow:ellipsis}
-.q .u{min-width:0;font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis}
-/* The pointer lights a row (hover); the keyboard picks one: the accent, solid, with white words. */
-.q:hover,.v:hover{background:var(--acc-2)}
-.q.on,.q.on:hover,.v.sel{background:var(--acc-sel);color:#fff}
+.q .u{min-width:0;font-size:12px;line-height:15px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis}
+/* As the system's menus: the row under the pointer or the keyboard's pick is the accent, solid,
+   with white words; the light goes out over a moment, never in. */
+.q,.v{transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+.q:hover,.v:hover{background:var(--acc-2);transition:none}
+.q:active,.v:active{background:var(--acc-3);transition:none}
+.q.on,.q.on:hover,.v.sel{background:var(--acc-sel);color:var(--on-sel);transition:none}
 .q.on .i,.v.sel .i{opacity:.85}
 .q.on .u,.v.sel .u{color:inherit;opacity:.85}
-.gh{padding:6px 8px 3px;font-size:11px;font-weight:600;color:var(--ink-2)}
+.gh{padding:6px 8px 3px;font-size:11px;line-height:14px;font-weight:600;color:var(--ink-2)}
 .b{flex:none;width:28px;min-width:28px;height:28px;padding:0;box-sizing:border-box;border-radius:var(--r-2);display:grid;place-items:center;color:var(--ink-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 .b:hover{color:var(--ink);background:var(--ov-2);transition:none}
 .b:active{background:var(--ov-3);transition:none}
 .b.on{color:var(--fg);background:var(--ov-3)}
 .b.on:hover{background:var(--ov-4)}
 .b svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
-.t{display:flex;align-items:center;gap:7px;min-width:0;max-width:220px;height:26px;padding:0 6px 0 10px;border-radius:var(--r-3);font-size:12px;color:var(--ink-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+.t{display:flex;align-items:center;gap:7px;min-width:0;max-width:220px;height:26px;padding:0 6px 0 10px;border-radius:var(--r-3);font-size:12px;line-height:15px;color:var(--ink-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 .t:hover{color:var(--ink);background:color-mix(in srgb,currentColor 6%,transparent);transition:none}
 .t.on{color:var(--fg);background:color-mix(in srgb,currentColor 10%,transparent)}
 .i{flex:none;opacity:.6}
 .i svg{width:12px;height:12px}
 .n{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.x{flex:none;width:18px;height:18px;border-radius:var(--r-1);display:grid;place-items:center;opacity:0;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+.x{flex:none;width:20px;height:20px;border-radius:var(--r-1);display:grid;place-items:center;opacity:0;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 .x svg{width:10px;height:10px;stroke-width:1.5}
 .t:hover .x,.t.on .x{opacity:.6}
 .x:hover{opacity:1!important;background:color-mix(in srgb,currentColor 14%,transparent);transition:none}
@@ -184,54 +189,66 @@ html:not([data-glass]) #sug,html:not([data-glass]) #menu{background:var(--ground
 .v{padding:4px 8px;border-radius:var(--r-2)}
 .v .h{display:flex;align-items:center;gap:7px}
 .v .n{display:block}
-.v.off .h{opacity:.62}
-.v .u{display:block;margin-top:1px;padding-left:17px;font-size:11px;line-height:1.35;color:var(--ink-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-/* The Event Center: the bell's count, and each event with what it is, its words and its buttons. */
-#ev{position:relative}
-#evn{position:absolute;top:2px;right:2px;min-width:14px;height:14px;padding:0 3.5px;box-sizing:border-box;border-radius:7px;background:#ff3b30;color:#fff;font:600 10px/14px var(--ui-font,var(--ui-sys));text-align:center;display:none}
-#evn.on{display:block}
+.v.off .n{color:var(--ink-2)}
+.v.off .i{opacity:.6}
+.v .u{display:block;margin-top:1px;padding-left:17px;font-size:11px;line-height:14px;color:var(--ink-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+/* The Event Center: each event with what it is, its words and its buttons. */
 .ev{display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:center;column-gap:9px;padding:5px 8px;border-radius:var(--r-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
-.ev.go:hover{background:var(--ov-2);transition:none}
-.ev.go.sel{background:var(--ov-3)}
-.ev.go:active{background:var(--ov-3);transition:none}
+.ev.go:hover{background:var(--acc-2);transition:none}
+.ev.go:active{background:var(--acc-3);transition:none}
+.ev.go.sel,.ev.go.sel:hover{background:var(--acc-sel);color:var(--on-sel)}
+.ev.sel .u,.ev.sel .w{color:inherit;opacity:.85}
+.ev.sel .act{box-shadow:inset 0 0 0 1px currentColor}
 .ev .dot{width:7px;height:7px;border-radius:4px;background:var(--hue);opacity:.35}
 .ev.new .dot{opacity:1}
 .ev .tx{min-width:0}
 .ev .n{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ev .u{display:block;margin-top:1px;font-size:11px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev .u{display:block;margin-top:1px;font-size:11px;line-height:14px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ev .side{display:flex;align-items:center;gap:4px}
 /* The time and the × share one place: neither moves the row, the × takes the time's place under the
    pointer or the keyboard's pick. */
 .ev .tm{display:grid;min-width:22px;justify-items:end;align-items:center}
 .ev .tm>*{grid-area:1/1}
-.ev .w{font-size:11px;color:var(--ink-3);text-align:right}
-.ev .x{width:18px;height:18px;border-radius:9px;display:grid;place-items:center;cursor:pointer;opacity:0;pointer-events:none}
+.ev .w{font-size:11px;line-height:14px;color:var(--ink-2);text-align:right}
+.ev .x{width:20px;height:20px;border-radius:var(--r-pill);display:grid;place-items:center;opacity:0;pointer-events:none}
 .ev:hover .x,.ev.sel .x{opacity:.55;pointer-events:auto}
 .ev:hover .w,.ev.sel .w{opacity:0}
 /* An event's button: outlined, so its words read on any ground; filled only in the blue tone. */
-.ev .act{height:20px;padding:0 9px;border:0;border-radius:10px;font:500 11px/20px var(--ui-font,var(--ui-sys));color:inherit;background:transparent;box-shadow:inset 0 0 0 1px var(--ov-4);cursor:pointer;transition:background-color var(--t-out) var(--ease)}
+.ev .act{height:20px;padding:0 8px;border:0;border-radius:var(--r-pill);font:500 11px/20px var(--ui-font,var(--ui-sys));color:inherit;background:transparent;box-shadow:inset 0 0 0 1px var(--ov-4);transition:background-color var(--t-out) var(--ease)}
 .ev .act:hover{background:var(--ov-2);transition:none}
 .ev .act:active{background:var(--ov-3);transition:none}
-.ev[data-tone=blue] .act{color:#fff;background:var(--hue);box-shadow:none}
+.ev[data-tone=blue] .act{color:var(--on-acc);background:var(--hue);box-shadow:none}
 .ev[data-tone=blue] .act:hover{background:color-mix(in srgb,var(--hue) 88%,#fff)}
+.ev[data-tone=blue] .act:active{background:color-mix(in srgb,var(--hue) 80%,#000)}
+.ev.sel[data-tone=blue] .act{background:var(--on-acc);color:var(--accent)}
 .ev .x:hover{opacity:1;background:color-mix(in srgb,currentColor 12%,transparent)}
 .ev .x svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
 .evh{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 4px 8px;font-weight:600}
-.evh .clr{font:inherit;font-size:11px;font-weight:500;color:var(--accent);background:none;border:0;border-radius:5px;padding:2px 6px;cursor:pointer}
-.evh .clr:hover{background:rgba(127,127,127,.16)}
-.evg{padding:8px 8px 2px;font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2)}
+.evh .clr{font:inherit;font-size:11px;line-height:14px;font-weight:500;color:var(--accent);background:none;border:0;border-radius:var(--r-1);height:20px;padding:0 8px;transition:background-color var(--t-out) var(--ease)}
+.evh .clr:hover{background:var(--ov-2);transition:none}
+.evh .clr:active{background:var(--ov-3);transition:none}
+.evg{padding:8px 8px 4px;font-size:11px;line-height:14px;font-weight:600;color:var(--ink-2)}
 /* The Events list: its heading stays, only the events under it scroll. */
 #menu.evs{flex-direction:column;overflow:hidden}
 .evh{flex:none}
 .evl{flex:1;min-height:0;overflow-y:auto}
 
-.s{display:none;flex:none;height:28px;padding:0 13px;border-radius:var(--r-pill);align-items:center;font-weight:500;background:color-mix(in srgb,currentColor 10%,transparent);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+.s{display:none;flex:none;height:28px;padding:0 12px;border-radius:var(--r-pill);align-items:center;font-weight:500;background:var(--ov-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 .s.on{display:flex}
-.s:hover{background:color-mix(in srgb,currentColor 15%,transparent);transition:none}
-.s:active{background:var(--ov-3);transition:none}
+.s:hover{background:var(--ov-3);transition:none}
+.s:active{background:var(--ov-4);transition:none}
 /* Whose turn, in quiet words at the end of the address field: nothing while the agent is idle. */
-#tn{display:none;flex:none;margin-right:9px;font-size:11px;white-space:nowrap;opacity:.5;pointer-events:none}
+#tn{display:none;flex:none;margin-right:8px;font-size:11px;line-height:14px;white-space:nowrap;color:var(--ink-2)}
 #tn.on{display:block}
+/* The keyboard reaches every button, and its focus shows as the system's ring (not the pointer's). */
+:where(.b,#cr .c,.s):focus{outline:0}
+:where(.b,#cr .c,.s):focus-visible{outline:auto 1px -webkit-focus-ring-color;outline-offset:-1px}
+/* The window inactive (data-inactive): the bar recedes as the system's does. Glyphs and the
+   crumbs fade, the address field loses its ring, and its selection turns grey; the picked rows
+   turn grey through the tokens (frame.css). Status colours (events) stay. */
+html[data-inactive] :is(.b,#cr .c,.s,#ai) svg,html[data-inactive] #cr .c .n,html[data-inactive] #cr .sep{opacity:.6}
+html[data-inactive] #addr:focus-within{box-shadow:none}
+html[data-inactive] #url::selection{background:-apple-system-unemphasized-selected-text-background}
 /* Glass (macOS): the strip is the titlebar, its toolbar row clear of the window's buttons (a unified toolbar's: 18 to 80 points). */
 html[data-glass] #bar{padding-left:78px}
 /* Full screen has no window buttons: the crumbs start at the edge, as the rest of the bar does. */
@@ -243,61 +260,71 @@ html[data-part=side] #head,html[data-part=side] #back{display:none}
 #side{display:none}
 html[data-part=side],html[data-part=side] body{height:100%;overflow:hidden}
 html[data-part=side]:not([data-glass]) body{background:var(--ground)}
-html[data-part=side] #side{display:flex;flex-direction:column;gap:8px;height:100%;padding:4px 8px 8px;box-sizing:border-box;box-shadow:inset -1px 0 0 var(--ov-2)}
+html[data-part=side] #side{display:flex;flex-direction:column;gap:8px;height:100%;padding:4px 8px 8px;box-sizing:border-box;box-shadow:inset -.5px 0 0 var(--ov-3)}
 @media (prefers-contrast:more){html[data-part=side] #side{box-shadow:inset -1px 0 0 color-mix(in srgb,var(--fg) 45%,transparent)}}
 /* The side's head: the search as a line of the column, no field drawn around it, and its two
    buttons beside it. */
-#sh{flex:none;display:flex;align-items:center;gap:2px;height:28px;padding-left:4px}
-#sk{flex:1;min-width:0;display:flex;align-items:center;gap:7px;height:100%;cursor:text}
-#si{flex:none;display:grid;opacity:.5;pointer-events:none}
+#sh{flex:none;display:flex;align-items:center;gap:2px;height:28px}
+#sk{flex:1;min-width:0;display:flex;align-items:center;gap:8px;height:100%;padding:0 4px;border-radius:var(--r-2);box-sizing:border-box;cursor:text}
+/* Typed in, the field shows the system's focus ring, as the address field does. */
+#sk:focus-within{box-shadow:inset 0 0 0 1px var(--accent),0 0 0 3px var(--acc-2)}
+html[data-inactive] #sk:focus-within{box-shadow:none}
+#si{flex:none;display:grid;color:var(--ink-2);pointer-events:none}
 #si svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round}
-#sq{flex:1;min-width:0;height:100%;border:0;outline:0;padding:0;background:none;color:inherit;font:12px/1 var(--ui-font,var(--ui-sys))}
-#sq::placeholder{color:currentColor;opacity:.45}
-#sk:focus-within #si{opacity:.8}
+#sq{flex:1;min-width:0;height:100%;border:0;outline:0;padding:0;background:none;color:inherit;font:13px/16px var(--ui-font,var(--ui-sys))}
+#sq::placeholder{color:-apple-system-placeholder-text;opacity:1}
 #sh .b{min-width:28px;height:28px;border-radius:var(--r-2)}
 #sh .b:hover{background:var(--ov-2);color:var(--ink)}
 #sh .b:active,#sh .b.on{background:var(--ov-3)}
 #sl{position:relative;flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
 /* A row rests in the quiet ink, lit under the pointer, filled and framed when it is the one shown;
    only a colour moves, and it goes out over a moment, never in. */
-:is(#sl,#gh) .t{flex:none;max-width:none;height:auto;padding:7px 8px;gap:8px;border-radius:10px}
+:is(#sl,#gh) .t{flex:none;max-width:none;height:auto;padding:6px 8px;gap:8px;border-radius:var(--r-4)}
 #sl .t,#sl .t.pair .half{transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 #sl .t:hover,#sl .t.pair .half:hover{transition:none}
-:is(#sl,#gh) .t:not(.pair){color:var(--ink-2)}
-#sl .t:not(.pair):hover{color:var(--ink);background:var(--ov-1)}
-#sl .t.on:not(.pair){color:var(--fg);background:var(--ov-2);box-shadow:inset 0 0 0 1px var(--ov-3)}
-:is(#sl,#gh) .ic{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;opacity:1;background:color-mix(in srgb,currentColor 9%,transparent)}
-:is(#sl,#gh) .ic svg{width:14px;height:14px}
+:is(#sl,#gh) .t:not(.pair){color:var(--ink)}
+#sl .t:not(.pair):hover{background:var(--ov-1)}
+#sl .t:not(.pair):active,#sl .t.pair .half:active{background:var(--ov-3);transition:none}
+#sl .t.on:not(.pair){color:var(--fg);background:var(--ov-2);box-shadow:var(--hair-in)}
+:is(#sl,#gh) .ic{flex:none;width:28px;height:28px;border-radius:var(--r-3);display:grid;place-items:center;opacity:1;background:var(--ov-2)}
+:is(#sl,#gh) .ic svg{width:16px;height:16px}
 :is(#sl,#gh) .ic .mk{display:grid;place-items:center}
 :is(#sl,#gh) .ic .mk svg{width:16px;height:16px}
-:is(#sl,#gh) .t.on .ic{background:color-mix(in srgb,currentColor 16%,transparent)}
+:is(#sl,#gh) .t.on .ic{background:var(--ov-3)}
 :is(#sl,#gh) .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-:is(#sl,#gh) .n{font-size:13px;font-weight:500;line-height:1.3}
-:is(#sl,#gh) .u{font-size:11px;line-height:1.35;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+:is(#sl,#gh) .n{font-size:13px;font-weight:500;line-height:16px}
+:is(#sl,#gh) .u{font-size:11px;line-height:14px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* The close button takes its place on every row and shows only while the row is under the pointer
    (the one shown, too), and not while a tab is carried; the text never moves for it. */
-:is(#sl,#gh) .x{width:20px;height:20px;border-radius:var(--r-1);opacity:0}
+:is(#sl,#gh) .x{width:20px;height:20px;border-radius:var(--r-1);opacity:0;transition:opacity var(--t-out) var(--ease),background-color var(--t-out) var(--ease)}
 :is(#sl,#gh) .x svg{width:12px;height:12px}
 #sl .t:not(.pair):hover .x,#sl .half:hover .x{opacity:.6}
-#sl .x:hover{opacity:1;background:var(--ov-3)}
+#sl .x:hover{opacity:1;background:var(--ov-2);transition:none}
+#sl .x:active{opacity:1;background:var(--ov-3);transition:none}
 #sl .t.on:not(:hover) .x,#sl .t.pair .half:not(:hover) .x{opacity:0}
 html.dragging #sl .x{opacity:0!important}
+/* The keyboard in the list: the arrows move a pick, Return or Space shows it. The pick is the
+   accent with white words, never the pointer's look; grey in an inactive window (frame.css). */
+#sl:focus{outline:0}
+#sl:focus-visible [data-pick]{background:var(--acc-sel);color:var(--on-sel);box-shadow:none}
+#sl:focus-visible [data-pick] .u{color:inherit;opacity:.85}
+/* The window inactive: the side's glyphs fade with the bar's. */
+html[data-inactive] :is(#sl,#gh) .ic svg,html[data-inactive] #si{opacity:.6}
 /* A split window's two tabs: one group, each its own row as any tab's (stacked, a hairline
    between), in a frame of their own; the one in use lit. */
-:is(#sl,#gh) .t.pair{flex-direction:column;align-items:stretch;gap:0;padding:2px;border-radius:12px;background:color-mix(in srgb,currentColor 4%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 13%,transparent)}
-:is(#sl,#gh) .t.pair.on{background:color-mix(in srgb,currentColor 4%,transparent)}
-:is(#sl,#gh) .t.pair .half{display:flex;align-items:center;gap:8px;min-width:0;padding:5px 6px;border-radius:10px;color:var(--ink-2)}
-#sl .t.pair .half:hover{color:var(--ink);background:var(--ov-1)}
-:is(#sl,#gh) .t.pair .half.on{color:var(--fg);background:var(--ov-2);box-shadow:inset 0 0 0 1px var(--ov-3)}
-:is(#sl,#gh) .t.pair .half:not(.on) .ic{background:color-mix(in srgb,currentColor 9%,transparent);box-shadow:none}
-:is(#sl,#gh) .t.pair .cut{flex:none;height:1px;margin:1px 10px;background:color-mix(in srgb,currentColor 10%,transparent)}
+:is(#sl,#gh) .t.pair{flex-direction:column;align-items:stretch;gap:0;padding:2px;border-radius:var(--r-5);background:var(--ov-1);box-shadow:var(--hair-in)}
+:is(#sl,#gh) .t.pair .half{display:flex;align-items:center;gap:8px;min-width:0;padding:5px 6px;border-radius:var(--r-4);color:var(--ink)}
+#sl .t.pair .half:hover{background:var(--ov-1)}
+:is(#sl,#gh) .t.pair .half.on{color:var(--fg);background:var(--ov-2);box-shadow:var(--hair-in)}
+:is(#sl,#gh) .t.pair .half:not(.on) .ic{background:var(--ov-2);box-shadow:none}
+:is(#sl,#gh) .t.pair .cut{flex:none;height:.5px;margin:1px 10px;background:var(--ov-3)}
+@media (prefers-contrast:more){:is(#sl,#gh) .t.pair .cut{height:1px}}
 #gh .t.lift{opacity:1;color:var(--fg);background:var(--card)}
-#gh .t.lift.up{box-shadow:var(--sh-lift)}
 /* The side's edge: dragged, the side is wider or narrower; a double click sets it back. */
 #grip{display:none;position:fixed;top:0;right:0;bottom:0;width:7px;cursor:col-resize;z-index:4;touch-action:none;outline:none}
 html[data-part=side] #grip{display:block}
-#grip::after{content:"";position:absolute;top:0;bottom:0;right:0;width:2px;background:transparent;transition:background-color .15s}
-#grip:hover::after,html.resizing #grip::after,#grip:focus-visible::after{background:var(--accent)}
+#grip::after{content:"";position:absolute;top:0;bottom:0;right:0;width:2px;background:transparent;transition:background-color var(--t-out) var(--ease)}
+#grip:hover::after,html.resizing #grip::after,#grip:focus-visible::after{background:var(--accent);transition:none}
 html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
 /* Shut, the side is a rail: its button where it was, and each tab's picture, the one shown lit,
    its name as the pointer rests on it. */
@@ -311,21 +338,21 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
   html[data-part=side] #sl .empty{display:none}
   /* One tile for all: the button and each tab the same size, a glyph the same size in each; the
      one shown filled, the one under the pointer lit, a press sinking it. */
-  html[data-part=side] #sh .b,html[data-part=side] :is(#sl,#gh) .ic{width:32px;min-width:32px;height:32px;border-radius:var(--r-3);background:transparent;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease),transform .12s}
+  html[data-part=side] #sh .b,html[data-part=side] :is(#sl,#gh) .ic{width:32px;min-width:32px;height:32px;border-radius:var(--r-3);background:transparent;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
   /* The 52 point rail shows no frame round a tile: the tile alone is lit. */
   html[data-part=side] :is(#sl,#gh) .t:not(.pair):is(:hover,.on),html[data-part=side] :is(#sl,#gh) .t.pair .half:is(:hover,.on){box-shadow:none;background:none}
   html[data-part=side] #sh .b svg,html[data-part=side] :is(#sl,#gh) .ic svg{width:16px;height:16px}
   html[data-part=side] :is(#sl,#gh) .ic .mk svg{width:17px;height:17px}
-  html[data-part=side] :is(#sl,#gh) .t.on .ic{background:color-mix(in srgb,currentColor 15%,transparent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,currentColor 14%,transparent)}
-  html[data-part=side] #sh .b:hover,html[data-part=side] :is(#sl,#gh) .t:hover .ic{color:var(--ink);background:color-mix(in srgb,currentColor 10%,transparent);transition:none}
-  html[data-part=side] :is(#sl,#gh) .t.on:hover .ic{background:color-mix(in srgb,currentColor 19%,transparent)}
-  html[data-part=side] #sh .b:active,html[data-part=side] :is(#sl,#gh) .t:active .ic{transform:scale(.92)}
-  html[data-part=side] :is(#sl,#gh) .t.pair{flex-direction:column;gap:3px;padding:3px;border-radius:12px}
+  html[data-part=side] :is(#sl,#gh) .t.on .ic{background:var(--ov-3);box-shadow:var(--hair-in)}
+  html[data-part=side] #sh .b:hover,html[data-part=side] :is(#sl,#gh) .t:hover .ic{color:var(--ink);background:var(--ov-2);transition:none}
+  html[data-part=side] :is(#sl,#gh) .t.on:hover .ic{background:var(--ov-4)}
+  html[data-part=side] #sh .b:active,html[data-part=side] :is(#sl,#gh) .t:active .ic{background:var(--ov-3);transition:none}
+  html[data-part=side] :is(#sl,#gh) .t.pair{flex-direction:column;gap:3px;padding:3px;border-radius:var(--r-5)}
   html[data-part=side] :is(#sl,#gh) .t.pair .half{flex:none;padding:0;justify-content:center;background:none}
   html[data-part=side] :is(#sl,#gh) .t.pair .half > :not(.ic),html[data-part=side] :is(#sl,#gh) .t.pair .cut{display:none}
-  html[data-part=side] :is(#sl,#gh) .t.pair .half.on .ic{background:color-mix(in srgb,currentColor 15%,transparent)}
+  html[data-part=side] :is(#sl,#gh) .t.pair .half.on .ic{background:var(--ov-3)}
   html[data-part=side] :is(#sl,#gh) .t.pair .half:not(.on) .ic{background:transparent}
-  html[data-part=side] :is(#sl,#gh) .t.pair .half:hover .ic{color:var(--ink);background:color-mix(in srgb,currentColor 10%,transparent);transition:none}
+  html[data-part=side] :is(#sl,#gh) .t.pair .half:hover .ic{color:var(--ink);background:var(--ov-2);transition:none}
   html[data-part=side] #gh .t.lift{background:var(--card)}
 }
 </style>
@@ -338,23 +365,21 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
     </div>
     <div id="end">
     <div class="grp">
-      <span class="b" id="hs" title="History"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.3"/></svg></span>
-      <span class="b" id="mn" title="Mini Player"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.6"/><rect x="8" y="8" width="4.5" height="3.4" rx=".7"/></svg></span>
-      <span class="b" id="ev" title="Events"><svg viewBox="0 0 16 16"><path d="M4.2 11V7.4a3.8 3.8 0 0 1 7.6 0V11l1 1.2H3.2zM6.6 13.4a1.5 1.5 0 0 0 2.8 0"/></svg><span id="evn"></span></span>
-      <span class="b" id="mo" title="More" hidden><svg viewBox="0 0 16 16"><path d="M4.5 4.5 8 8l-3.5 3.5M8.5 4.5 12 8l-3.5 3.5"/></svg></span>
+      <span class="b" id="hs" title="Show history"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.3"/></svg></span>
+      <span class="b" id="mo" title="Show more" hidden><svg viewBox="0 0 16 16"><path d="M4.5 4.5 8 8l-3.5 3.5M8.5 4.5 12 8l-3.5 3.5"/></svg></span>
     </div>
     </div>
   </div>
   <div id="browse">
     <div id="nav">
-      <span class="b" id="bk" title="Back"><svg viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></span>
-      <span class="b" id="fw" title="Forward"><svg viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5"/></svg></span>
-      <span class="b" id="rl" title="Reload"><svg viewBox="0 0 16 16"><path d="M12.6 8.2a4.6 4.6 0 1 1-1.4-3.5M12.6 3.2v2.6H10"/></svg></span>
+      <span class="b" id="bk" title="Go back"><svg viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></span>
+      <span class="b" id="fw" title="Go forward"><svg viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5"/></svg></span>
+      <span class="b" id="rl" title="Reload the page"><svg viewBox="0 0 16 16"><path d="M12.6 8.2a4.6 4.6 0 1 1-1.4-3.5M12.6 3.2v2.6H10"/></svg></span>
     </div>
     <div id="addr"><span id="ai"></span><input id="url" spellcheck="false" autocomplete="off" placeholder="Search or enter website name"><span id="tn"></span></div>
     <div id="tools">
       <span class="s" id="sd" title="Send the comments to the agent"></span>
-      <span class="b" id="fs" title="Page size: the window"></span>
+      <span class="b" id="fs" title="Set the page size: the window"></span>
       <span class="b" id="cm" title="Comment on the page: click what to change"><svg viewBox="0 0 16 16"><path d="M3.5 4.2c0-.7.5-1.2 1.2-1.2h6.6c.7 0 1.2.5 1.2 1.2v5.1c0 .7-.5 1.2-1.2 1.2H7.6L5 12.8v-2.3h-.3c-.7 0-1.2-.5-1.2-1.2z"/></svg></span>
     </div>
   </div>
@@ -366,8 +391,8 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
 </div>
 <div id="back"></div>
 <div id="side">
-  <div id="sh"><label id="sk"><span id="si"></span><input id="sq" spellcheck="false" autocomplete="off" placeholder="Search tabs…"></label><span class="b" id="sg" title="Settings"><svg viewBox="0 0 16 16"><path d="M6.71 3.17 7.02 1.47h1.96l.31 1.7 1.21.5 1.43-.98 1.38 1.38-.98 1.43.5 1.21 1.7.31v1.96l-1.7.31-.5 1.21.98 1.43-1.38 1.38-1.43-.98-1.21.5-.31 1.7H7.02l-.31-1.7-1.21-.5-1.43.98-1.38-1.38.98-1.43-.5-1.21-1.7-.31V7.02l1.7-.31.5-1.21-.98-1.43 1.38-1.38 1.43.98z"/><circle cx="8" cy="8" r="2.1"/></svg></span><span class="b" id="sn" title="New tab"><svg viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9"/></svg></span><span class="b" id="sc" title="Hide the tabs"><svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.6"/><path d="M6.3 3v10"/></svg></span></div>
-  <div id="sl"></div>
+  <div id="sh"><label id="sk"><span id="si"></span><input id="sq" spellcheck="false" autocomplete="off" placeholder="Search tabs"></label><span class="b" id="sg" title="Settings"><svg viewBox="0 0 16 16"><path d="M6.71 3.17 7.02 1.47h1.96l.31 1.7 1.21.5 1.43-.98 1.38 1.38-.98 1.43.5 1.21 1.7.31v1.96l-1.7.31-.5 1.21.98 1.43-1.38 1.38-1.43-.98-1.21.5-.31 1.7H7.02l-.31-1.7-1.21-.5-1.43.98-1.38-1.38.98-1.43-.5-1.21-1.7-.31V7.02l1.7-.31.5-1.21-.98-1.43 1.38-1.38 1.43.98z"/><circle cx="8" cy="8" r="2.1"/></svg></span><span class="b" id="sn" title="New tab"><svg viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9"/></svg></span><span class="b" id="sc" title="Hide the tabs"><svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.6"/><path d="M6.3 3v10"/></svg></span></div>
+  <div id="sl" role="listbox" aria-label="Tabs" tabindex="0"></div>
 </div>
 <div id="grip" role="separator" aria-orientation="vertical" aria-label="Sidebar width" tabindex="0" title="Drag or use arrow keys to resize; Home resets"></div>
 <div id="gh"></div>
@@ -456,6 +481,7 @@ function crumbs(shown, places, project) {
   const crumb = (said, parts, title, here) => {
     const button = document.createElement("span");
     button.className = here ? "c here" : "c";
+    buttoned(button);
     button.title = title;
     const name = document.createElement("span");
     name.className = "n";
@@ -521,12 +547,12 @@ function wire(item, close, key) {
 // button's hint says its key.
 let HINTS = {};
 const HINTED = { bk: "back", fw: "forward", rl: "reload", fs: "page-size", cm: "comment", nt: "new-page",
-  hs: "history", ev: "events", mn: "collapse", sc: "sidebar", sd: "send", sn: "new-page", sg: "settings", url: "address", sq: "find-tab",
+  hs: "history", mn: "collapse", sc: "sidebar", sd: "send", sn: "new-page", sg: "settings", url: "address", sq: "find-tab",
   pj: "projects" };
 function titled(node, base) {
   node.dataset.base = base;
   const key = HINTS[HINTED[node.id]];
-  node.title = key ? base + "  " + key : base;
+  node.title = base ? (key ? base + "  " + key : base) : "";
 }
 function looked(look) {
   HINTS = (look && look.keys) || {};
@@ -589,12 +615,12 @@ const flip = (change) => {
   const css = getComputedStyle(document.documentElement);
   const time = css.getPropertyValue("--t-move").trim();
   const duration = (time.endsWith("ms") ? parseFloat(time) : parseFloat(time) * 1000) || 200;
-  const easing = css.getPropertyValue("--ease").trim() || "ease";
+  const easing = css.getPropertyValue("--spring-b").trim() || css.getPropertyValue("--ease").trim() || "ease";
   for (const [row, dy] of moved) {
     const frames = calm() ? [{ opacity: 0 }, { opacity: 1 }]
       : dy === null ? [{ opacity: 0, transform: "translateY(-4px)" }, { opacity: 1, transform: "none" }]
       : [{ transform: `translateY(${dy}px)` }, { transform: "none" }];
-    const run = row.animate(frames, { duration: calm() ? 120 : duration, easing });
+    const run = row.animate(frames, { duration: calm() ? 150 : duration, easing });
     sliding.set(row, run);
     run.onfinish = run.oncancel = () => {
       if (sliding.get(row) === run) sliding.delete(row);
@@ -602,7 +628,7 @@ const flip = (change) => {
   }
 };
 function side(data) {
-  titled(document.getElementById("sc"), data.side ? "Hide the tabs" : "Show the tabs");
+  titled(document.getElementById("sc"), data.side ? "Hide the sidebar" : "Show the sidebar");
   listed = data.tabs.filter((tab) => ours(tab, data.project));
   listedShown = data.shown;
   drawSide();
@@ -680,6 +706,7 @@ function drawSide() {
   // current, so it is ready when the window comes back.
   drawingTimeout = setTimeout(paintSide, 150);
 }
+let lastTyped = "";
 function paintSide() {
   cancelAnimationFrame(drawing);
   clearTimeout(drawingTimeout);
@@ -689,6 +716,9 @@ function paintSide() {
   // again once it is let go.
   if (lifting || pressed) return void (redraw = true);
   const typed = document.getElementById("sq").value.trim().toLowerCase();
+  // What is typed filters the list at once: frequent things don't move.
+  const typing = typed !== lastTyped;
+  lastTyped = typed;
   const rows = listed.filter((tab) => !typed || (tab.title + " " + (tab.name || "") + " " + holds(tab)).toLowerCase().includes(typed));
   const list = document.getElementById("sl");
   const pair = splitPair && rows.filter((tab) => splitPair.includes(tab.key)).length === 2 ? splitPair : null;
@@ -697,7 +727,9 @@ function paintSide() {
   sig = now;
   if (!rows.length) {
     rowOf.clear();
-    return void list.replaceChildren(emptied("sc", typed ? "No tab matches" : "No tabs"));
+    return void list.replaceChildren(typed
+      ? emptied("sn", "No tab matches")
+      : emptied("sn", "No tabs", [[doing("New Page", "key new page"), doing("New Terminal", "key new terminal")]]));
   }
   const drawn = [];
   for (const tab of rows) {
@@ -714,7 +746,7 @@ function paintSide() {
   // Titles, selection and agent marks are patched in place. Only a structural change needs
   // geometry reads and FLIP; a busy terminal must not measure every other tab on every title.
   if (current.length === drawn.length && current.every((row, at) => row === drawn[at])) return;
-  flip(() => {
+  (typing ? (change) => change() : flip)(() => {
     for (const child of [...list.children]) if (!wanted.has(child) && !child.classList.contains("slot")) child.remove();
     let at = list.firstElementChild;
     for (const row of drawn) {
@@ -800,6 +832,35 @@ if (document.documentElement.dataset.part === "side") {
       const first = document.querySelector("#sl .t");
       const key = first?.dataset.key ?? first?.querySelector("[data-key]")?.dataset.key;
       if (key) window.ipc.postMessage("show " + key);
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      list.focus();
+    }
+  });
+  // The list takes the keyboard: the arrows, Home and End move the pick (an attribute, which the
+  // rows' own classes never wipe), Return or Space shows the tab picked, Esc leaves.
+  const list = document.getElementById("sl");
+  const picks = () => [...list.querySelectorAll("[data-key]")];
+  const pickAt = (row) => {
+    for (const one of picks()) one.toggleAttribute("data-pick", one === row);
+    row?.scrollIntoView({ block: "nearest" });
+  };
+  list.addEventListener("focus", () => {
+    if (!list.querySelector("[data-pick]")) pickAt(list.querySelector("[data-key].on") ?? picks()[0]);
+  });
+  list.addEventListener("blur", () => pickAt(null));
+  list.addEventListener("keydown", (event) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const rows = picks(), at = rows.findIndex((row) => row.hasAttribute("data-pick"));
+    const to = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: rows.length - 1 }[event.key];
+    if (to !== undefined) {
+      event.preventDefault();
+      pickAt(rows[Math.min(rows.length - 1, Math.max(0, to))]);
+    } else if ((event.key === "Enter" || event.key === " ") && rows[at]) {
+      event.preventDefault();
+      window.ipc.postMessage("show " + rows[at].dataset.key);
+    } else if (event.key === "Escape") {
+      list.blur();
     }
   });
   // The edge: the width follows the hand, said once a frame; let go, it is kept. Let go far
@@ -1022,6 +1083,9 @@ if (document.documentElement.dataset.part === "side") {
     }
     row.getAnimations().forEach((one) => one.cancel());
     const to = row.getBoundingClientRect();
+    // The card followed the pointer with no transition; from here it springs to its place.
+    ghost.style.transition = "";
+    void ghost.offsetWidth;
     ghost.classList.add("home");
     ghost.classList.remove("up", "out");
     ghost.style.transform = `translate(0, ${to.top - drag.box.top}px)`;
@@ -1184,6 +1248,8 @@ function address(shown, visited) {
   here = shown ? { url: shown.kind === "web" ? shown.detail || "" : "", web: shown.kind === "web", kind: shown.kind, title: shown.title } : { url: "", web: false, kind: "web", title: "" };
   document.getElementById("ai").replaceChildren(glyph(GLYPHS[here.kind] ? here.kind : "web"));
   if (document.activeElement !== field) field.value = here.web ? host(here.url) : here.title || "";
+  // The whole address, which the field shows only as its host while it rests.
+  titled(field, here.web ? here.url : "");
 }
 // The list under the field: for what is typed, or (`zero`, as the field is entered) the pages seen
 // most lately, none of them picked, so that Enter still takes what the field says.
@@ -1280,6 +1346,8 @@ field.addEventListener("blur", () => {
   field.value = here.web ? host(here.url) : here.title || "";
 });
 field.addEventListener("keydown", (event) => {
+  // A key that composes a character (an input method) is the method's, not the list's.
+  if (event.isComposing) return;
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
     if (rows.length) {
@@ -1404,6 +1472,21 @@ function M(rows) {
 }
 // The keys in an open menu: Up and Down pick a row (round the ends, from the first or the last
 // when none is picked), Home and End the ends, Enter does what a click on it would, Escape closes.
+// The bar's buttons are spans: each takes the keyboard's focus, says what it is, and acts on
+// Return or Space as a button does.
+function buttoned(node) {
+  node.tabIndex = 0;
+  node.setAttribute("role", "button");
+}
+for (const node of document.querySelectorAll(".b,.s")) buttoned(node);
+document.addEventListener("keydown", (event) => {
+  const node = event.target;
+  if (!(node instanceof Element) || !node.matches(".b,#cr .c,.s")) return;
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    node.click();
+  }
+});
 document.addEventListener("keydown", (event) => {
   const menu = document.getElementById("menu");
   if (!opened(menu) || event.metaKey || event.ctrlKey || event.altKey || event.target === field) return;
@@ -1416,21 +1499,25 @@ document.addEventListener("keydown", (event) => {
   else if (event.key === "ArrowUp") go(at < 0 ? rows.length - 1 : (at + rows.length - 1) % rows.length);
   else if (event.key === "Home") go(0);
   else if (event.key === "End") go(rows.length - 1);
-  else if (event.key === "Enter") {
+  else if (event.key === "Enter" || event.key === " ") {
     if (at < 0 || event.target.closest("button")) return;
     event.preventDefault();
     rows[at].click();
   } else if (event.key === "Escape") {
     event.preventDefault();
     window.ipc.postMessage("unmenu");
+    // Focus goes back to the button that opened the history; the Event Center, opened by its
+    // shortcut, has none.
+    if (!menu.classList.contains("evs")) document.getElementById("hs").focus();
   }
 });
-// The Event Center: what waits for the person, newest first, under the bell; the bell counts what
-// wants them and they have not seen. While it is `open` the list is in the menu, each event with its buttons,
-// whose place is said back. Every word is set as text.
-// An event says how it is shown: its section's heading and place, its tone, whether the bell
-// counts it, and what each of its buttons is for. The strip knows no kind of event of its own.
-const TONES = { purple: "#bf5af2", blue: "#0a84ff", orange: "#ff9f0a", red: "#ff453a", green: "#30d158" };
+// The Event Center: what waits for the person, newest first, under the bar's end (it has no button
+// of its own: its shortcut and the Window menu open it). While it is `open` the list is in the menu,
+// each event with its buttons, whose place is said back. Every word is set as text.
+// An event says how it is shown: its section's heading and place, its tone, and what each of its
+// buttons is for. The strip knows no kind of event of its own.
+// The system's own colours, each its light, dark and Increase Contrast value; blue is the accent.
+const TONES = { purple: "var(--purple)", blue: "var(--accent)", orange: "-apple-system-orange", red: "-apple-system-red", green: "-apple-system-green" };
 function ago(at) {
   const s = Math.max(0, Date.now() / 1000 - at);
   return s < 60 ? "now" : s < 3600 ? Math.floor(s / 60) + "m" : s < 86400 ? Math.floor(s / 3600) + "h" : Math.floor(s / 86400) + "d";
@@ -1445,14 +1532,6 @@ setInterval(() => {
   }
 }, 30000);
 function V(events, open) {
-  // The bell counts what wants the person and is new; what ended well is listed, quietly.
-  const unseen = events.filter((event) => event.unseen && event.urgent).length;
-  const count = document.getElementById("evn");
-  count.className = unseen > 0 ? "on" : "";
-  count.textContent = unseen > 9 ? "9+" : String(unseen);
-  const bell = document.getElementById("ev");
-  titled(bell, events.length ? "Events: " + events.length + (unseen ? ", " + unseen + " new" : "") : "Events");
-  bell.classList.toggle("on", open);
   if (!open) {
     if (menuSig?.[0] === "e") menuSig = null;
     return;
@@ -1463,7 +1542,7 @@ function V(events, open) {
   menu.style.display = "flex";
   document.getElementById("back").style.display = "block";
   menu.classList.add("evs");
-  under(menu, "ev");
+  under(menu, "end");
   document.getElementById("hs").className = "b";
   const now = "e" + JSON.stringify(events);
   if (now === menuSig) return glass();
@@ -1481,7 +1560,7 @@ function V(events, open) {
       clear.addEventListener("click", () => window.ipc.postMessage("clear"));
       head.append(clear);
     }
-    if (events.length === 0) return void menu.replaceChildren(head, emptied("ev", "Nothing waits for you"));
+    if (events.length === 0) return void menu.replaceChildren(head, emptied("ev", "No events"));
     const several = new Set(events.map((event) => event.group)).size > 1;
     const list = document.createElement("div");
     list.className = "evl";
@@ -1509,7 +1588,7 @@ function row(event, several) {
   item.dataset.key = event.n;
   item.dataset.when = event.at;
   item.dataset.tone = event.tone || "";
-  item.style.setProperty("--hue", TONES[event.tone] || "#8e8e93");
+  item.style.setProperty("--hue", TONES[event.tone] || "-apple-system-gray");
   const dot = document.createElement("span");
   dot.className = "dot";
   const text = document.createElement("span");
@@ -1560,7 +1639,9 @@ function SP(pair) {
 }
 // The comment button, on while the person comments on the pages, and Send while some are held.
 function C(on, held) {
-  document.getElementById("cm").className = on ? "b on" : "b";
+  const comment = document.getElementById("cm");
+  comment.className = on ? "b on" : "b";
+  titled(comment, on ? "Stop commenting on the page" : "Comment on the page: click what to change");
   const send = document.getElementById("sd");
   send.className = held > 0 ? "s on" : "s";
   send.textContent = "Send " + held;
@@ -1587,7 +1668,7 @@ function F(size) {
   fs.replaceChildren(glyph(kind));
   fs.className = size ? "b on" : "b";
   const shown = size && size.percent < 100 ? ", shown at " + size.percent + "% to fit the window" : "";
-  titled(fs, size ? "Page size: " + size.name + ", " + size.width + " × " + size.height + shown : "Page size: the window");
+  titled(fs, size ? "Set the page size: " + size.name + ", " + size.width + " × " + size.height + shown : "Set the page size: the window");
 }
 F(null);
 // "Page size": the system's menu under the button (frame.rs), the sizes to pick from.
@@ -1598,7 +1679,7 @@ document.getElementById("fs").addEventListener("click", () => {
 // Buttons with no room, as Safari's: the rightmost go first into "»", whose system menu holds
 // them (strip.rs's Tool), until the crumbs have room again. Only the bar's: the browser's
 // toolbar keeps its few, and its address field gives way.
-const TOOLS = ["hs", "mn", "ev"];
+const TOOLS = ["hs"];
 const ROOM = 160;
 let fitting = 0;
 function fit() {
@@ -1634,13 +1715,13 @@ for (const id of ["bar", "lead", "cr", "tabs", "end"]) {
     if (event.target === part) window.ipc.postMessage("zoom");
   });
 }
-for (const [id, what] of [["mn", "collapse"], ["sd", "send"], ["cm", "comment"], ["bk", "back"], ["fw", "forward"], ["hs", "history"], ["ev", "events"], ["back", "unmenu"]]) {
+for (const [id, what] of [["sd", "send"], ["cm", "comment"], ["bk", "back"], ["fw", "forward"], ["hs", "history"], ["back", "unmenu"]]) {
   document.getElementById(id).addEventListener("click", () => window.ipc.postMessage(what));
 }
 // No tab left: the kinds of tab, and the agents installed, each one click.
 function blank() {
   document.getElementById("blank").replaceChildren(emptied("sn", "No tabs open", [
-    [doing("New Page", "key new page"), doing("New Terminal", "key new terminal"), doing("Board", "key new board")],
+    [doing("New Page", "key new page"), doing("New Terminal", "key new terminal"), doing("New Board", "key new board")],
     AGENTS.map((agent) => doing(agent.name, "agent " + agent.at, agentMark(agent.id))),
   ]));
 }

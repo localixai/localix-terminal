@@ -27,7 +27,7 @@ an integration ──▶ llx-desk window --said --follow ══one socket══�
   the same build already runs; when another build runs, it starts nothing and the client reaches
   the running app (and replaces it only through the handoff below).
 - Only the app creates a window and owns its life: open, show, hide, close, the tabs, the
-  mini, the strip. No other process ever makes one.
+  strip. No other process ever makes one.
 - Two clients starting an app at the same moment end with one.
 - `LLX_DESK_HOME` only says where files go (logs, screenshots, comments). Tests get an app with no
   window that exists in test builds alone.

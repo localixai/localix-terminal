@@ -1,7 +1,7 @@
-//! The window's three states, through real windows (unseen, as every test's):
-//! a shown window opens as the window, the mini only when the person asks, the agent's acts never
-//! change which, collapsing never reflows the page nor stops it drawing, and llx-desk is never
-//! the active app.
+//! The window's three states, through real windows (unseen, as every test's): a shown window
+//! opens as the window, it is put away only when the person asks and comes back only when they
+//! open the app, the agent's acts never change which, putting it away never reflows the page nor
+//! stops it drawing, and llx-desk is never the active app.
 
 use std::time::{Duration, Instant};
 
@@ -34,15 +34,6 @@ fn viewport(driver: &WebviewDriver) -> (u32, u32) {
     (size.w, size.h)
 }
 
-/// The mini's picture's mean brightness, 0 to 255; -1 while it has none.
-const BRIGHTNESS: &str = "(() => { const i = document.getElementById('p'); \
-    if (!i.complete || !i.naturalWidth) return -1; \
-    const c = document.createElement('canvas'); c.width = 8; c.height = 8; \
-    const x = c.getContext('2d'); x.drawImage(i, 0, 0, 8, 8); \
-    const d = x.getImageData(0, 0, 8, 8).data; let s = 0; \
-    for (let k = 0; k < d.length; k += 4) s += d[k] + d[k + 1] + d[k + 2]; \
-    return s / (d.length / 4) / 3; })()";
-
 pub(crate) fn scenario(browser: &Browser, window: &Window, origin: &str) {
     let shown = Window {
         url: format!("{origin}/slow/light.html"),
@@ -55,75 +46,42 @@ pub(crate) fn scenario(browser: &Browser, window: &Window, origin: &str) {
     let driver = browser.open(shown).expect("a shown window opens");
     driver.wait_loaded(Duration::from_secs(10)).unwrap();
 
-    // The first tab opens as the window; nothing the agent does makes the mini.
+    // The first tab opens as the window; nothing the agent does puts it away.
     until("the window", || browser.presented() == Some("expanded"));
     browser.act("w1", false).unwrap();
     assert_eq!(browser.presented(), Some("expanded"));
     let size = viewport(&driver);
     assert!(size.0 >= 600 && size.1 >= 400, "{size:?}");
-    // The person asks for the mini (the bar's button): the window behind it keeps drawing.
+    // The person puts it away (the yellow button, ⌘M): out of sight, it keeps drawing.
     browser.click("collapse");
-    until("the mini", || browser.presented() == Some("mini"));
+    until("the window put away", || {
+        browser.presented() == Some("away")
+    });
     let (first, later) = frames(&driver, Duration::from_millis(500));
     assert!(
         later > first + 5,
         "the page stopped drawing: {first} to {later}"
     );
-    assert_eq!(viewport(&driver), size, "collapsing resized the page");
+    assert_eq!(viewport(&driver), size, "putting it away resized the page");
 
-    // The mini has the tab's picture and name, and no spinner once the agent is done.
-    let named = "document.getElementById('i').textContent";
-    until("the tab's id on the mini", || {
-        browser.peek_mini(named) == Ok(json!("w1"))
-    });
-    until("a picture on the mini", || {
-        let src = browser.peek_mini("document.getElementById('p').src");
-        src.is_ok_and(|src| {
-            src.as_str()
-                .is_some_and(|s| s.starts_with("data:image/jpeg"))
-        })
-    });
-
-    // The picture is the loaded page, not the blank tab it was before: light, as the page is.
-    until("the loaded page on the mini", || {
-        browser
-            .peek_mini(BRIGHTNESS)
-            .is_ok_and(|seen| seen.as_f64().is_some_and(|b| b > 200.0))
-    });
-
-    // The agent shows a tab: the mini blinks and stays the mini.
+    // Nothing the agent does brings it back: it shows a tab, it goes to another page.
     browser.act("w1", false).unwrap();
-    assert_eq!(browser.presented(), Some("mini"));
-    // Nor does anything else it does expand it.
+    assert_eq!(browser.presented(), Some("away"));
     driver.navigate(&format!("{origin}/form.html")).unwrap();
-    assert_eq!(browser.presented(), Some("mini"));
+    assert_eq!(browser.presented(), Some("away"));
 
-    // The person's click expands it; the page is as big as it was, and still drawing.
-    browser.click_mini();
-    until("the expanded window", || {
+    // The person opens the app (its Dock icon): the window is back, the page as big as it was.
+    browser.present();
+    until("the window back", || {
         browser.presented() == Some("expanded")
     });
-    assert_eq!(viewport(&driver), size, "expanding resized the page");
-    // The agent shows a tab while expanded: nothing changes.
+    assert_eq!(viewport(&driver), size, "bringing it back resized the page");
     browser.act("w1", false).unwrap();
     assert_eq!(browser.presented(), Some("expanded"));
-    // The strip's collapse button goes back to the mini, the page unchanged.
-    browser.click("collapse");
-    until("the mini again", || browser.presented() == Some("mini"));
-    assert_eq!(viewport(&driver), size, "collapsing resized the page");
-    let (first, later) = frames(&driver, Duration::from_millis(500));
-    assert!(
-        later > first + 5,
-        "collapsed, the page stopped: {first} to {later}"
-    );
-    browser.click_mini();
-    until("expanded once more", || {
-        browser.presented() == Some("expanded")
-    });
-    assert_eq!(viewport(&driver), size, "expanding again resized the page");
 
     // Whose turn: the person comments, the browser's toolbar says the agent is paused; an action
-    // of the agent's waits, and it says so; collapsing ends commenting and lets it go.
+    // of the agent's waits, and it says so; putting the window away ends commenting and lets
+    // it go.
     let turn = "document.getElementById('tn').textContent";
     browser.click("comment");
     until("the strip says the agent is paused", || {
@@ -140,18 +98,22 @@ pub(crate) fn scenario(browser: &Browser, window: &Window, origin: &str) {
     });
     assert!(done.try_recv().is_err(), "the scroll waits for the person");
     browser.click("collapse");
-    until("the mini once more", || browser.presented() == Some("mini"));
+    until("the window away once more", || {
+        browser.presented() == Some("away")
+    });
     let went = done.recv_timeout(Duration::from_secs(5));
     assert!(
         matches!(went, Ok(Ok(()))),
-        "collapsed, commenting ends and the scroll goes: {went:?}"
+        "put away, commenting ends and the scroll goes: {went:?}"
     );
     until("the strip shows no turn", || {
         browser.peek_nav(turn) == Ok(json!(""))
     });
 
     // A screenshot is the same whichever state the window is in.
-    driver.screenshot(None).expect("a picture while collapsed");
+    driver
+        .screenshot(None)
+        .expect("a picture while the window is away");
 
     // The last tab closed, the window stays, with no tab.
     driver.close();
@@ -159,8 +121,8 @@ pub(crate) fn scenario(browser: &Browser, window: &Window, origin: &str) {
         browser.listing().is_some_and(|tabs| tabs.is_empty())
     });
     assert_ne!(browser.presented(), Some("hidden"), "the window stays");
-    // As the person leaves it: the window, not the mini, for the scenarios after.
-    browser.click_mini();
+    // As the person leaves it: the window on screen, for the scenarios after.
+    browser.present();
     until("the window again", || {
         browser.presented() == Some("expanded")
     });

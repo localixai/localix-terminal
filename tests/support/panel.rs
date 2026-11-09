@@ -449,8 +449,8 @@ fn history_menu(browser: &Browser) {
     let menu = "[document.getElementById('menu').style.display, document.querySelector('#menu .v[data-key=\"t8\"]')?.dataset.state ?? null]";
     // Each button's hint says its shortcut (settings.rs `look`), as the person set it.
     said(
-        "[bk.dataset.base, fw.dataset.base, hs.dataset.base, hs.title.startsWith('History  ')]",
-        json!(["Back", "Forward", "History", true]),
+        "[bk.dataset.base, fw.dataset.base, hs.dataset.base, hs.title.startsWith('Show history  ')]",
+        json!(["Go back", "Go forward", "Show history", true]),
     );
     // The terminal that ended is there, its last screen kept.
     browser.click("history");

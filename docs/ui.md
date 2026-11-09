@@ -2,7 +2,7 @@
 
 How every part a person sees is drawn, how it moves and how it reads. This covers the native frame
 and glass (AppKit), the strip, the side, the nav, the menus and suggestions (HTML in WKWebViews),
-Settings, the mini and notices. Every visible change keeps these rules, in every state of
+Settings and notices. Every visible change keeps these rules, in every state of
 [the matrix](#the-matrix).
 
 The rules come from Apple's Human Interface Guidelines and AppKit documentation for macOS 26,
@@ -30,14 +30,18 @@ Safari or System Settings side by side when no number decides.
 
 The window has two layers, and nothing mixes them.
 
-- **Content.** Pages, terminals and the board are opaque. Their colours are their own, and the
-  chrome never tints them. What an agent sees in a screenshot never depends on the glass.
-- **Chrome.** The strip, the side, the nav, the menus and the mini float over the content, on the
+- **Content.** Web pages are opaque. Their colours are their own, and the chrome never tints
+  them: what an agent sees in a screenshot never depends on the glass. The app's own panes (a
+  terminal, the board, Settings) may lie clear on the glass, with their words held to the same
+  contrast as the chrome's.
+- **Chrome.** The strip, the side, the nav and the menus float over the content, on the
   window's glass. Chrome is always in the window's theme, never in a page's colours.
 - No glass on glass. A thing on the chrome (a row, a field, a button) uses a fill, never another
   material or blur.
-- Floating chrome over content (menus, suggestions, the Events list) is solid with a hairline.
-  It does not take a second blur: the page under it would show through as noise.
+- Menus, suggestions and the Events list sit on the system's menu material (`pane.rs`), as the
+  system's own menus do. Under Reduce Transparency they are solid. A notice, an inspector field
+  or anything else floating is solid with a hairline. Nothing takes a CSS blur of its own over
+  the glass.
 
 ## Glass
 
@@ -74,10 +78,16 @@ these from its own events.
 | `data-glass`   | The window is glass: the page is clear, the material shows through.  |
 | `data-reduced` | Reduce Transparency: every ground is solid.                          |
 | `data-full`    | Full screen: no window buttons, so the crumbs take their room.       |
+| `data-inactive`| Another window is key: the chrome recedes (below).                   |
 | `data-part`    | Which part this page is: `strip`, `side` or `nav`.                   |
 
 Add a state here, not as a page's own guess. WebKit's `:window-inactive` matches, but it never
-restyles an element already drawn, so the window's focus must be told the same way.
+restyles an element already drawn, so the window's focus is told the same way
+(`Deck::tell_frame`, on every focus change and refresh).
+
+The app's own pages are built through `tab_view::build_own`, which sets WebKit's system
+appearance (`platform::system_appearance`). Their `-apple-system-*` keywords then answer the
+person's accent and the system's selection and focus colours, never a site's fixed values.
 
 ## The frame
 
@@ -113,6 +123,8 @@ define colours of its own beyond its `--ground`.
 - **Fills** mix `currentColor`, so one rule suits light and dark: `--ov-1` 5% to `--ov-4` 20%.
 - **The accent** is the system's (`-apple-system-control-accent`). It is used sparingly: the
   selected row, the primary action, a focus ring. Never two tinted controls side by side.
+  Words on an accent fill take `--on-acc`; words on a selection take `--on-sel`, which turns to
+  the normal ink when the window is inactive.
 - **Each custom colour** has a light, a dark and an Increase Contrast value. A colour without
   all three is a bug.
 - **Never colour alone.** A state also changes shape, a glyph or words.
@@ -138,7 +150,13 @@ define colours of its own beyond its `--ground`.
   | Subhead  | 11 / 14     | Regular  | a row's second line, captions, tooltips   |
   | Footnote | 10 / 13     | Regular  | the smallest text allowed; badges         |
   | Title 3  | 15 / 20     | Semibold | a Settings section                        |
+  | Title 1  | 22 / 26     | Semibold | a Settings page's title                   |
 
+- **Every size names its line** in whole points, from the table (a control that holds one line
+  may take its box's height). Never a ratio: `1.35` of 13 pt is 17.55 pt, and a column of such
+  lines drifts off the pixel grid. `tests/typography.rs` checks the sizes and lines of every
+  page's styles. Headings and short blocks of words balance their lines (`text-wrap`), and a
+  face is never faked bold or italic (`font-synthesis:none`).
 - Nothing under 10 pt. Avoid Light, Thin and Ultralight. Hierarchy is weight, size and ink,
   together.
 - A long address or path truncates in the middle, and its whole text is in a tooltip.
@@ -150,15 +168,18 @@ define colours of its own beyond its `--ground`.
 - **Control heights** follow macOS 26: small 20, regular 24, large 28 pt. The strip's buttons
   are 28.
 - **Rows**:
-  - side tab rows 32 to 36 pt (13 pt text, a 16 to 18 pt icon, 8 pt inset);
+  - side tab rows are two lines: 44 pt (a 28 pt tile with a 16 pt glyph, a 13/16 name, an
+    11/14 second line, 6 pt above and below), or 32 to 36 pt for a single line;
   - menu and suggestion rows 24 pt, with 5 pt padding above and below the list;
   - a separator is 11 pt tall with a hairline.
 - **The side** is 248 pt by default, 200 to 480 pt when dragged, and never more than half the
   window. Shut, it is a 52 pt rail.
-- **Radii** are tokens (`--r-1` 4, `--r-2` 6, `--r-3` 8, `--r-4` 10, `--r-pill`). Nested shapes are
+- **Radii** are tokens (`--r-1` 4, `--r-2` 6, `--r-3` 8, `--r-4` 10, `--r-5` 12, `--r-pill`). Nested shapes are
   concentric: the inner radius is the outer radius minus the padding between them, never more.
   A capsule's radius is half its height.
-- **Hairlines** are 0.5 pt at 2× (`--sh-hair`), a full point under Increase Contrast.
+- **Hairlines** are 0.5 pt at 2×: `--sh-hair` round a floating surface, `--hair-in` inside a
+  control or a row. Both turn a full point under Increase Contrast and lighten in an inactive
+  window.
 - **Spacing** keeps a 4 pt grid: 8 between related things, 12 to 20 between groups.
 - **Elevation** has three steps, each with the hairline:
   - `--sh-hair` for every floating surface;
@@ -173,15 +194,15 @@ define colours of its own beyond its `--ground`.
   colour moves. Rows in a list don't otherwise move on hover.
 - **Press.** Every custom button has a pressed state (`--ov-3`), shown at once.
 - **Selection:**
-  - The shown tab's row is the accent with white words only while its list has focus and the
-    window is key.
-  - Otherwise the selection is grey (`-apple-system-unemphasized-selected-content-background`)
-    and its words keep the normal ink.
-  - The keyboard's pick and the pointer's hover are never the same look.
-- **The inactive window recedes:**
+  - The shown tab's row is a neutral fill with a hairline, as a browser's tab list is.
+  - The keyboard's pick in a list (the side's arrows) is the accent with white words, while the
+    list has focus. The pointer's hover is a lighter fill: never the same look as the pick.
+  - In an inactive window every selection is grey
+    (`-apple-system-unemphasized-selected-content-background`), with the normal ink.
+- **The inactive window recedes** (`data-inactive`):
   - glyphs drop to about 60% opacity;
-  - selection turns grey;
-  - hairlines lighten.
+  - the accent turns the system's grey, and selection turns grey;
+  - hairlines lighten, and a field loses its focus ring.
 
   The material stays as it is ([Glass](#glass)).
 - **The focus ring** shows for the keyboard only (`:focus-visible`), around text fields and
@@ -200,8 +221,9 @@ define colours of its own beyond its `--ground`.
 
 - **Menus open in place** from what opened them (`transform-origin` at the anchor), with no
   travel. Suggestions appear as the person types, without an entrance animation.
-- **Rows** are 24 pt with 13 pt text. The pointer lights a row in a tint of the accent
-  (`--acc-2`). The keyboard's pick is the accent, solid, with white words (`--acc-sel`).
+- **Rows** are 24 pt with 13 pt text. As in the system's menus, the row under the pointer is the
+  pick: the accent, solid, with white words (`--acc-sel`, `--on-sel`). The arrows move the same
+  pick. A press darkens it a step.
 - **An item that opens more** (a window, a dialog, a question) ends with `…` (U+2026). An item that
   acts at once doesn't.
 - **Groups** are split by separators, at most about three in a context menu. Submenus go one
@@ -255,17 +277,17 @@ The tokens (`frame.css`) set the timings; a component never picks its own durati
 
 | Token          | Use                                              | Timing                              |
 | -------------- | ------------------------------------------------ | ----------------------------------- |
-| `--t-out`      | hover off, a colour going out                    | 120 ms, `--ease`                    |
+| `--t-in`       | an entrance's fade                               | 100 ms                              |
+| `--t-out`      | hover off, a colour going out, an exit's fade    | 120 ms, `--ease`                    |
+| `--t-fade`     | a cross-fade; every move under Reduce Motion     | 150 ms                              |
 | `--t-move`     | short moves                                      | 200 ms                              |
 | `--spring`     | bounce 0: open from an anchor, a side, a layout  | `linear()` of a damped spring       |
 | `--spring-b`   | bounce 0.15: siblings making room, a tab landing | `linear()` of a damped spring       |
 
 - A spring's CSS duration is its settling time: about 1.47 × its perceptual duration at bounce
   0, and 1.39 × at 0.15. Design by the moment it has visibly arrived (90%, at 0.62 ×).
-- Opacity is quicker than the move it goes with:
-  - an entrance's fade takes about 100 ms;
-  - an exit's fade 120 ms;
-  - a cross-fade 150 ms.
+- Opacity is quicker than the move it goes with: an entrance's fade is `--t-in`, an exit's
+  `--t-out`, a cross-fade `--t-fade`.
 - **Reduce Motion**:
   - nothing travels, scales or bounces; each move becomes a cross-fade of about 150 ms;
   - press feedback is colour only;
@@ -290,14 +312,12 @@ The tokens (`frame.css`) set the timings; a component never picks its own durati
 What the code doesn't meet yet. Fix them through the mechanisms above, and remove a line here
 when its gap is closed.
 
-- The pages aren't told whether the window is key. An inactive window's selection stays the
-  accent.
-- The chrome WebViews don't set `_useSystemAppearance`. Without it, WebKit gives
-  `-apple-system-control-accent` as fixed blue, whatever accent the person chose, and the focus
-  ring's colour is fixed too.
-- The springs in `frame.css` are 15 uniform stops, off by 2 to 3%. Regenerate them from the
-  closed-form spring, simplified to within 0.1%, about 36 stops.
-- Pages use hex and mixed colours where a system keyword fits (labels, separators, selection).
+- The side's head has a Settings button. Apple keeps Settings to ⌘, and the app menu, with no
+  toolbar button for it.
+- The terminal's screen-reader tree (xterm's `screenReaderMode`) is on only when VoiceOver ran
+  as the page was told its look (at its start and at each restyle). Turning VoiceOver on or off
+  does not tell the pages by itself.
+- Pages still mix `currentColor` and hex in places where a system keyword fits.
 
 ## Sources
 

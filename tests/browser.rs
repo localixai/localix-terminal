@@ -1184,7 +1184,7 @@ fn main() {
         if paneling && !run("event center", &|| board::center(&browser)) {
             return 1;
         }
-        // The mini is macOS's: elsewhere the window opens expanded and stays so.
+        // Putting the window away is macOS's: elsewhere the button minimizes as the system does.
         #[cfg(target_os = "macos")]
         if paneling
             && !run("presence", &|| {

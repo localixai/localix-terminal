@@ -304,15 +304,19 @@ pub(super) fn change(change: &Value) -> Result<Settings, String> {
 
 /// The script that gives one of the window's own pages the fonts (`--ui-font`, `--mono`,
 /// `--mono-size` on its root), whether transparency is reduced (`data-reduced`, which WebKit's
-/// own media query does not say) and tells it (`desk-look`): at its start and on each change.
+/// own media query does not say) and tells it (`desk-look`): at its start and on each change. The
+/// look also says whether a screen reader runs (`reader`), for a page that builds its own
+/// reading tree only then.
 pub(super) fn look_script(settings: &Settings) -> String {
+    let mut look = settings.look();
+    look["reader"] = super::frame::screen_reader().into();
     format!(
         "(()=>{{const l={look};window.__deskLook=l;const put=()=>{{const r=document.documentElement,s=r.style;\
          s.setProperty('--ui-font',l.ui);s.setProperty('--mono',l.mono);s.setProperty('--mono-size',l.size+'px');\
          r.toggleAttribute('data-reduced',{reduced});\
          dispatchEvent(new CustomEvent('desk-look',{{detail:l}}))}};\
          if(document.documentElement)put();else document.addEventListener('DOMContentLoaded',put,{{once:true}})}})()",
-        look = settings.look(),
+        look = look,
         reduced = super::frame::reduced()
     )
 }

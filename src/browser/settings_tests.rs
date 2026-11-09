@@ -125,6 +125,14 @@ fn the_pages_are_told_the_fonts() {
 }
 
 #[test]
+fn the_pages_are_told_whether_a_screen_reader_is_running() {
+    let script = look_script(&Settings::default());
+    // The terminal builds its reading tree only for a person who uses one: it costs a row of
+    // elements per line, and an agent's read of the page would take them for text.
+    assert!(script.contains(r#""reader":false"#), "{script}");
+}
+
+#[test]
 fn the_page_says_whether_the_window_has_glass_to_make_less_clear() {
     assert_eq!(
         Settings::default().page()["glass"],

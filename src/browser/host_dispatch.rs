@@ -4,9 +4,8 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::SyncSender;
 
-use crate::browser::deck::{Deck, Shown};
+use crate::browser::deck::Deck;
 use crate::browser::panel::Opening;
-use crate::browser::presence::Event as Presence;
 use crate::browser::strip::{Click, Key};
 use crate::browser::{frame, platform, strip};
 
@@ -87,7 +86,8 @@ impl On<'_> {
                     open.titled(id, title);
                 }
             }
-            Cmd::Strip => self.renamed(),
+            // Drawn once the turn is over (`told`).
+            Cmd::Strip => {}
             Cmd::Offered(id, on) => self.offered(id, on),
             Cmd::Go(project) => self.go_project(&project),
             Cmd::Arranged(_, arranged) => self.arranged(arranged),
@@ -95,7 +95,6 @@ impl On<'_> {
             Cmd::NewWindow(_) => {}
             Cmd::Presence(event) => self.presence(event),
             Cmd::Opened => self.opened(),
-            Cmd::Pictured(shot) => self.pictured(&shot),
             Cmd::Presented(reply) => {
                 let _ = reply.send(self.presenter.name());
             }
@@ -153,7 +152,7 @@ impl On<'_> {
     }
 
     /// The agent shows or closes a tab. One of a project not shown stays out of sight there,
-    /// and the project is marked; the mini blinks as for any, and never opens.
+    /// and the project is marked; the window never opens for it.
     fn agent_act(&mut self, said: Click, reply: &SyncSender<Result<(), String>>) {
         if let Click::Show(key) = said
             && self.out_of_sight(&key.name())
@@ -164,30 +163,17 @@ impl On<'_> {
                 open.unhide_term(id);
                 open.refresh(self.shared);
             }
-            self.presence(Presence::Show);
             let _ = reply.send(Ok(()));
             return;
         }
-        let done = act(self.deck, said, self.shared);
-        if done.is_ok() && matches!(said, Click::Show(_)) {
-            self.presence(Presence::Show);
-        }
-        let _ = reply.send(done);
+        let _ = reply.send(act(self.deck, said, self.shared));
     }
 
-    /// Terminal `id`'s newest frame, run in its page. The mini pictures the terminal shown as it
-    /// draws, not only when it is shown: its first picture may come before its first frame.
+    /// Terminal `id`'s newest frame, run in its page.
     fn paint(&mut self, id: u32) {
         let open = self.deck.as_ref().and_then(|open| open.term(id));
         if let Some((open, frame)) = open.and_then(|o| Some((o, o.slot.latest()?))) {
             let _ = open.webview.evaluate_script(&frame);
-        }
-        if self
-            .deck
-            .as_ref()
-            .is_some_and(|deck| deck.shown == Shown::Term(id))
-        {
-            self.presence(Presence::Changed);
         }
     }
 

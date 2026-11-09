@@ -11,7 +11,7 @@ use super::super::frame::{self, Frame, Look};
 use super::super::host::{Cmd, Shared, Window};
 use super::super::panel::Opening;
 use super::super::strip::{self, HEIGHT};
-use super::super::tab_view::{build, own_page};
+use super::super::tab_view::{build_own, own_page};
 use super::super::viewport::Viewport;
 use super::super::{placement, platform};
 use super::{Deck, LOADS, Part, Shown};
@@ -110,8 +110,8 @@ impl Deck {
             true => None,
             false => {
                 let strip = strip_page(&frame.native, look, proxy.clone(), Part::Strip)?;
-                // Only the main window collapses to the mini (the mini follows it): another
-                // window's minimize button is the system's.
+                // Only the main window is put away by its minimize button (it keeps drawing out
+                // of sight): another window's minimize button is the system's.
                 if steps == 0 {
                     platform::collapse_button(&frame.native, proxy);
                 }
@@ -212,5 +212,5 @@ fn strip_page(
             LOADS.fetch_add(1, Ordering::SeqCst);
             let _ = loaded.send_event(Cmd::Strip);
         });
-    build(builder, native).map_err(|error| error.to_string())
+    build_own(builder, native).map_err(|error| error.to_string())
 }

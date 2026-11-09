@@ -1,11 +1,7 @@
-//! The mini as a panel that never activates the app (macOS), in AppKit's own messages. tao
-//! builds an NSWindow; here it becomes a non-activating NSPanel at runtime: a registered NSPanel
-//! subclass, the object's class swapped, the non-activating style, and (a private selector,
-//! asked for first) activation prevented. A panel with that style comes over the Space the
-//! person is in, a full-screen app's too, and becomes the key window only when a click needs it
-//! (a text field), never making llx-desk the active app: the person's keys stay where they
-//! were. The deck stays the window tao made, an ordinary window (`adopt`). Nothing here calls
-//! activate.
+//! The deck's window in AppKit's own messages (macOS): an ordinary window, native in tiling and
+//! full screen, revealed and concealed without ever activating the app for an agent, and its
+//! minimize button put to the window's own way out of sight (presence.rs). Nothing here
+//! activates the app but the person's click.
 
 use std::sync::{Mutex, OnceLock};
 
@@ -22,12 +18,10 @@ use super::placement::Area;
 use super::platform::unseen;
 use super::presence::Event;
 
-/// NSWindowStyleMask.
-const NONACTIVATING_PANEL: usize = 1 << 7;
-/// NSWindowCollectionBehavior: on every Space, over a full-screen app, out of window cycling.
+/// NSWindowCollectionBehavior the deck never has: on every Space, over a full-screen app.
+#[cfg(test)]
 const CAN_JOIN_ALL_SPACES: usize = 1 << 0;
-const STATIONARY: usize = 1 << 4;
-const IGNORES_CYCLE: usize = 1 << 6;
+#[cfg(test)]
 const FULL_SCREEN_AUXILIARY: usize = 1 << 8;
 /// The deck may go full screen and be tiled: macOS offers its window tiling (the green button's
 /// menu, dragging to an edge or a corner, Option-drag) only to windows that may.
@@ -36,73 +30,11 @@ const FULL_SCREEN_PRIMARY: usize = 1 << 7;
 const NORMAL: isize = 0;
 const FLOATING: isize = 3;
 
-/// Which window it is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Role {
-    Deck,
-    Mini,
-}
-
-impl Role {
-    /// The mini floats over every app, on every Space; the deck is an ordinary window among the
-    /// person's, native in tiling and full screen.
-    const fn spaces(self) -> usize {
-        match self {
-            Self::Deck => FULL_SCREEN_PRIMARY,
-            Self::Mini => CAN_JOIN_ALL_SPACES | FULL_SCREEN_AUXILIARY | STATIONARY | IGNORES_CYCLE,
-        }
-    }
-
-    const fn level(self) -> isize {
-        match self {
-            Self::Deck => NORMAL,
-            Self::Mini => FLOATING,
-        }
-    }
-}
-
-extern "C" fn yes(_this: &AnyObject, _sel: Sel) -> Bool {
-    Bool::YES
-}
-
-extern "C" fn no(_this: &AnyObject, _sel: Sel) -> Bool {
-    Bool::NO
-}
-
-/// An observer let go of, as NSPanel does it, but never with an exception. AppKit's own window
-/// frame observes the window from its first moment, while it is still tao's class; once the
-/// class is swapped, KVO looks for that observer under the panel's class, does not find it, and
-/// throws from inside the window's `dealloc`, which then never ends: the window stays in the
-/// window server for the rest of the process, one per window ever closed. Not finding it is
-/// all that went wrong: the observer goes with the window.
-extern "C" fn remove_observer(
-    this: &AnyObject,
-    _sel: Sel,
-    observer: *mut AnyObject,
-    key_path: *mut AnyObject,
-    context: *mut std::ffi::c_void,
-) {
-    let Some(panel) = AnyClass::get(c"NSPanel") else {
-        return;
-    };
-    let call = std::panic::AssertUnwindSafe(|| {
-        // SAFETY: NSPanel's own `removeObserver:forKeyPath:context:`, with the arguments AppKit
-        // gave this override, on the window they were given for.
-        let () = unsafe {
-            msg_send![super(this, panel), removeObserver: observer, forKeyPath: key_path, context: context]
-        };
-    });
-    // An Objective-C exception the message throws is caught here, never unwound through Rust.
-    if let Err(exception) = objc2::exception::catch(call) {
-        super::debug(|| format!("an observer KVO did not find: {exception:?}"));
-    }
-}
-
-/// Where the main window's own minimize button goes: the loop, told to collapse to the mini.
+/// Where the main window's own minimize button goes: the loop, told to put the window away.
 static COLLAPSE: OnceLock<Mutex<Option<EventLoopProxy<Cmd>>>> = OnceLock::new();
 
-/// The minimize button (and its key) collapses the main window to the mini, as the strip did with
-/// a button of its own.
+/// The minimize button (and ⌘M) puts the main window out of sight, still drawing: minimized into
+/// the Dock, WebKit would stop its pages, and an agent's work in them with it.
 extern "C" fn collapse(_this: &AnyObject, _sel: Sel, _sender: *mut AnyObject) {
     let proxy = COLLAPSE.get().and_then(|held| crate::lock(held).clone());
     if let Some(proxy) = proxy {
@@ -127,14 +59,14 @@ fn collapser() -> Option<&'static AnyObject> {
     unsafe { (at as *const AnyObject).as_ref() }
 }
 
-/// The main `window`'s minimize button collapses it to the mini, told to `proxy`. Its green
+/// The main `window`'s minimize button puts it away, told to `proxy`. Its green
 /// button keeps the system's own: full screen, and its tiling menu.
 pub(super) fn collapse_to(window: &Window, proxy: &EventLoopProxy<Cmd>) {
     *crate::lock(COLLAPSE.get_or_init(|| Mutex::new(None))) = Some(proxy.clone());
     hook_collapse(window);
 }
 
-/// The minimize button of `window` calls the collapse again (the system makes its buttons anew
+/// The minimize button of `window` puts it away again (the system makes its buttons anew
 /// when full screen ends).
 pub(super) fn hook_collapse(window: &Window) {
     /// NSWindowButton: the minimize button.
@@ -155,77 +87,26 @@ pub(super) fn hook_collapse(window: &Window) {
     let _: () = unsafe { msg_send![button, setAction: sel!(collapse:)] };
 }
 
-/// An NSPanel that may become the key window (a text field in its page needs it) and never the
-/// main one.
-fn panel_class() -> Option<&'static AnyClass> {
-    static CLASS: OnceLock<Option<&'static AnyClass>> = OnceLock::new();
-    *CLASS.get_or_init(|| {
-        let mut class = ClassBuilder::new(c"LlxPanel", AnyClass::get(c"NSPanel")?)?;
-        // SAFETY: the methods have NSWindow's signatures: no argument, a BOOL result.
-        unsafe { class.add_method(sel!(canBecomeKeyWindow), yes as extern "C" fn(_, _) -> Bool) };
-        // SAFETY: as above.
-        unsafe { class.add_method(sel!(canBecomeMainWindow), no as extern "C" fn(_, _) -> Bool) };
-        // SAFETY: NSObject's `removeObserver:forKeyPath:context:`: an observer, a key path, a
-        // context pointer, no result.
-        unsafe {
-            class.add_method(
-                sel!(removeObserver:forKeyPath:context:),
-                remove_observer as extern "C" fn(_, _, _, _, _),
-            );
-        };
-        Some(class.register())
-    })
-}
+/// The deck's collection behaviour: an ordinary window among the person's, native in tiling and
+/// full screen.
+const DECK_SPACES: usize = FULL_SCREEN_PRIMARY;
 
-/// Whether `object` takes `selector`: private ones are asked for before they are used.
-fn takes(object: &AnyObject, selector: Sel) -> bool {
-    // SAFETY: `respondsToSelector:` takes a selector and answers a BOOL.
-    let yes: Bool = unsafe { msg_send![object, respondsToSelector: selector] };
-    yes.as_bool()
-}
-
-/// Make `window` the window of `role`: the mini a non-activating panel on every Space, the deck
-/// an ordinary window. Where the mini's class cannot be swapped (the new one needs more room than
-/// tao's own window class has) it stays an ordinary window with the same level and spaces.
-pub(super) fn adopt(window: &Window, role: Role) {
+/// Make `window` the deck's: the app's main window, which a click activates and the green button
+/// takes to full screen. Shown by an agent, it still comes to the front without taking the keys
+/// (`reveal`).
+pub(super) fn adopt(window: &Window) {
     let object = native(window);
-    // The deck stays the window tao made: the app's main window, which a click activates and
-    // the green button takes to full screen. Shown by an agent, it still comes to the front
-    // without taking the keys (`reveal`).
-    let swapped = (role == Role::Mini)
-        .then(panel_class)
-        .flatten()
-        .filter(|class| class.instance_size() <= object.class().instance_size());
-    if let Some(class) = swapped {
-        // SAFETY: NSPanel's subclass has no instance variable of its own, and NSPanel is no
-        // larger than tao's window class (checked just above), whose one extra variable lies
-        // past what NSPanel uses and is read only by tao's own overrides, now gone.
-        unsafe { AnyObject::set_class(object, class) };
-        // SAFETY: a window takes and answers an NSWindowStyleMask (an NSUInteger).
-        let mask: usize = unsafe { msg_send![object, styleMask] };
-        // SAFETY: as above; the panel style is only added to what the window has.
-        let _: () = unsafe { msg_send![object, setStyleMask: mask | NONACTIVATING_PANEL] };
-        let prevent = sel!(_setPreventsActivation:);
-        if takes(object, prevent) {
-            // SAFETY: the window answers this private selector (checked just above); a BOOL.
-            let _: () = unsafe { msg_send![object, _setPreventsActivation: Bool::YES] };
-        }
-        // SAFETY: an NSPanel takes a BOOL.
-        let _: () = unsafe { msg_send![object, setFloatingPanel: Bool::YES] };
-        // SAFETY: as above: a click that needs no keyboard (a button) never makes it key.
-        let _: () = unsafe { msg_send![object, setBecomesKeyOnlyIfNeeded: Bool::YES] };
-    }
     // SAFETY: an NSWindow takes a BOOL.
     let _: () = unsafe { msg_send![object, setHidesOnDeactivate: Bool::NO] };
     // SAFETY: an NSWindow takes an NSWindowCollectionBehavior (an NSUInteger).
-    let _: () = unsafe { msg_send![object, setCollectionBehavior: role.spaces()] };
+    let _: () = unsafe { msg_send![object, setCollectionBehavior: DECK_SPACES] };
     // SAFETY: an NSWindow takes an NSWindowLevel (an NSInteger).
-    let _: () = unsafe { msg_send![object, setLevel: role.level()] };
+    let _: () = unsafe { msg_send![object, setLevel: NORMAL] };
 }
 
 /// On screen, as it looks: opaque to the eye and the mouse. Under `DESK_WINDOWS=unseen` it stays
 /// invisible and click-through, as every window of a test run does.
-pub(super) fn reveal(window: &Window, role: Role, rendering: Rendering) {
+pub(super) fn reveal(window: &Window, rendering: Rendering) {
     if unseen() {
         return conceal(window, rendering);
     }
@@ -237,20 +118,11 @@ pub(super) fn reveal(window: &Window, role: Role, rendering: Rendering) {
     // SAFETY: as above.
     let _: () = unsafe { msg_send![object, setHasShadow: Bool::YES] };
     // SAFETY: an NSWindow takes an NSWindowLevel (an NSInteger).
-    let _: () = unsafe { msg_send![object, setLevel: role.level()] };
-    if role == Role::Mini {
-        // On every Space again. A full-screen app that leaves full screen takes the mini off
-        // every Space, and back on the one it comes back to, alone: the window keeps its
-        // behaviour all along, and only setting it anew puts it on the others.
-        // SAFETY: an NSWindow takes an NSWindowCollectionBehavior (an NSUInteger).
-        let _: () = unsafe { msg_send![object, setCollectionBehavior: 0usize] };
-        // SAFETY: as above.
-        let _: () = unsafe { msg_send![object, setCollectionBehavior: role.spaces()] };
-    }
+    let _: () = unsafe { msg_send![object, setLevel: NORMAL] };
     // SAFETY: an NSWindow answers a BOOL.
     let here: Bool = unsafe { msg_send![object, isOnActiveSpace] };
-    if role == Role::Deck && !here.as_bool() {
-        // Collapsed, it stayed on the Space it was on: taken off the screen and put back in the
+    if !here.as_bool() {
+        // Put away, it stayed on the Space it was on: taken off the screen and put back in the
         // same turn, it comes back on the Space the person is on now. On that Space already, it
         // is only brought forward: nothing flickers.
         // SAFETY: `orderOut:` takes a sender, which may be nil, and returns nothing.
@@ -298,14 +170,6 @@ pub(super) fn conceal_object(object: &AnyObject, rendering: Rendering) {
     }
 }
 
-/// Tell `proxy` each time the person goes to another Space, for the rest of the process. An
-/// unseen window (a test's) is never watched.
-pub(super) fn watch_spaces(proxy: &EventLoopProxy<Cmd>) {
-    watch_workspace("NSWorkspaceActiveSpaceDidChangeNotification", proxy, || {
-        Cmd::Presence(Event::Respaced)
-    });
-}
-
 /// Tell `proxy` each time the person changes what Accessibility, Display offers (reduce
 /// transparency, increase contrast, reduce motion), for the rest of the process: the windows are
 /// dressed again, as they are when a setting of the app's changes.
@@ -345,19 +209,22 @@ fn watch_workspace(name: &str, proxy: &EventLoopProxy<Cmd>, tell: fn() -> Cmd) {
     }
 }
 
-/// Take `window` off the screen altogether (the mini, when the window it stands for is open).
-pub(super) fn hide(window: &Window) {
-    // SAFETY: `orderOut:` takes a sender, which may be nil, and returns nothing.
-    let _: () = unsafe { msg_send![native(window), orderOut: std::ptr::null::<AnyObject>()] };
-}
-
-/// llx-desk the active app and the panel its key window, for the person who just clicked it open:
+/// llx-desk the active app and `window` its key window, for the person who just opened it:
 /// their next click and key go to it, as to any app they bring forward. Only their click calls it.
 pub(super) fn focus(window: &Window) {
     if unseen() {
         return;
     }
     super::appkit::activate_and_key(native(window));
+}
+
+/// llx-desk no longer the active app, for the person who just put its window away: the app they
+/// were in before takes their keys again. Only their click calls it.
+pub(super) fn give_up_keys() {
+    if unseen() {
+        return;
+    }
+    super::appkit::deactivate();
 }
 
 /// Whether `window` is the key window: the one the keys go to.
@@ -403,10 +270,9 @@ mod tests {
 
     #[test]
     fn deck_goes_full_screen_and_tiles_as_an_ordinary_window() {
-        let behavior = Role::Deck.spaces();
+        let behavior = DECK_SPACES;
         assert_ne!(behavior & FULL_SCREEN_PRIMARY, 0);
         assert_eq!(behavior & FULL_SCREEN_AUXILIARY, 0);
         assert_eq!(behavior & CAN_JOIN_ALL_SPACES, 0);
-        assert_ne!(Role::Mini.spaces() & FULL_SCREEN_AUXILIARY, 0);
     }
 }

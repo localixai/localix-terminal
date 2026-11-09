@@ -6,7 +6,7 @@
 /// and goes behind every window, as Bun's and WebKit's own test windows do: on screen, so WebKit
 /// sees it shown and the display it is on stays awake, under whatever the person watches. Only
 /// where the switch is missing does it float, so that nothing covers it. (A shown window is
-/// concealed the same way while it is the mini: nspanel.rs.)
+/// concealed the same way while the person has it put away: nspanel.rs.)
 #[cfg(target_os = "macos")]
 pub(in super::super) fn keep_rendering(webview: &wry::WebView) {
     use wry::WebViewExtMacOS;
@@ -71,6 +71,30 @@ pub(in super::super) fn see_through(webview: &wry::WebView, through: bool) {
 
 #[cfg(not(target_os = "macos"))]
 pub(in super::super) fn see_through(_webview: &wry::WebView, _through: bool) {}
+
+/// `webview`, one of the app's own pages, in the system's appearance: WebKit then gives its
+/// pages the person's accent (`-apple-system-control-accent`), the system's selection, link and
+/// focus ring colours, and follows the view's light or dark, where otherwise it answers fixed
+/// values so a site cannot read them. The switch is private, as the system's own web interfaces
+/// use it; a WebKit without it keeps the fixed values. Never for a site's page.
+#[cfg(target_os = "macos")]
+pub(in super::super) fn system_appearance(webview: &wry::WebView) {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyObject, Bool};
+    use wry::WebViewExtMacOS;
+    let view = webview.webview();
+    let object: &AnyObject = &view;
+    let selector = objc2::sel!(_setUseSystemAppearance:);
+    // SAFETY: `respondsToSelector:` takes a selector and answers a BOOL.
+    let takes: Bool = unsafe { msg_send![object, respondsToSelector: selector] };
+    if takes.as_bool() {
+        // SAFETY: the WKWebView answers this private selector (checked just above); a BOOL.
+        let _: () = unsafe { msg_send![object, _setUseSystemAppearance: Bool::YES] };
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(in super::super) fn system_appearance(_webview: &wry::WebView) {}
 
 /// How a view follows its window while the person drags the window's edge. (A GTK box lays its
 /// views out itself.)

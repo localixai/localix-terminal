@@ -122,13 +122,7 @@ pub(in super::super) const SHORTCUTS: [Shortcut; 29] = [
     ),
     at("history", "History", "Window", "cmd+y", "history"),
     at("events", "Event Center", "Window", "cmd+shift+e", "events"),
-    at(
-        "collapse",
-        "Collapse to the Mini",
-        "Window",
-        "cmd+m",
-        "collapse",
-    ),
+    at("collapse", "Minimize", "Window", "cmd+m", "collapse"),
     at("settings", "Settings…", "LLX Desk", "cmd+,", "key settings"),
     at("quit", "Quit LLX Desk", "LLX Desk", "cmd+q", "quit"),
 ];

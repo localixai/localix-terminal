@@ -124,7 +124,7 @@ pub(super) struct Shared {
     pub(super) turn: super::turn::Turn,
     /// What each tab's pages told besides their content, and how it answers a confirm.
     pub(super) notices: super::notices::Notices,
-    /// Where the person put the window and its mini, for the process.
+    /// Where the person put the window, for the process.
     pub(super) kept: Mutex<super::placement::Kept>,
     /// What the offer bar knows: the agents in the terminals, the integrations' states.
     pub(super) offers: super::offer::Offers,
@@ -387,9 +387,6 @@ pub struct Browser {
 
 /// The panel id that names the strip's own page, for checks.
 pub(super) const STRIP: u32 = u32::MAX;
-
-/// The panel id that names the mini's own page, for checks.
-pub(super) const MINI: u32 = u32::MAX - 1;
 
 /// The panel id that names the page the tabs are listed in, for checks: the side, or the strip
 /// where there is none.

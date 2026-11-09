@@ -11,7 +11,7 @@ How every agent works in this repository. These rules hold for every change, sma
 - [docs/architecture.md](docs/architecture.md), [docs/windows.md](docs/windows.md) and
   [docs/projects.md](docs/projects.md): owners, the change feed, and the window's hierarchy.
 - [docs/ui.md](docs/ui.md): how the window looks, moves and reads. It applies to every change a
-  person sees: native AppKit code, the strip, the side, menus, Settings, the mini and notices.
+  person sees: native AppKit code, the strip, the side, menus, Settings and notices.
 
 ## Always
 

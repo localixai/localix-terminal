@@ -11,10 +11,9 @@ use serde_json::Value;
 use crate::WindowTab;
 
 use super::super::panel::Panel;
-use super::super::presence::Event;
 use super::super::strip::{Click, Key};
 use super::super::webview::WebviewDriver;
-use super::{Browser, Cmd, Dressing, Heard, MINI, NAV_PAGE, STRIP, TABS, Window};
+use super::{Browser, Cmd, Dressing, Heard, NAV_PAGE, STRIP, TABS, Window};
 
 impl Browser {
     /// Open the window on `window.url` and wait for its document. One window per process: the
@@ -112,7 +111,7 @@ impl Browser {
             .map_err(gone)?
     }
 
-    /// For checks: the window's state (`hidden`, `mini`, `expanded`); `None` once the loop is gone.
+    /// For checks: the window's state (`hidden`, `away`, `expanded`); `None` once the loop is gone.
     #[doc(hidden)]
     pub fn presented(&self) -> Option<&'static str> {
         let (reply, answer) = mpsc::sync_channel(1);
@@ -134,23 +133,10 @@ impl Browser {
         answer.recv().unwrap_or(false)
     }
 
-    /// The person opened the app: the window expands and takes their keys, as when they click
-    /// the mini open.
+    /// The person opened the app: the window comes back, if they put it away, and takes their
+    /// keys.
     pub fn present(&self) {
         let _ = self.proxy.send_event(Cmd::Opened);
-    }
-
-    /// For checks: the person clicks the mini; it expands, and (a check never takes the keys of
-    /// whoever runs it) the app is not made active.
-    #[doc(hidden)]
-    pub fn click_mini(&self) {
-        let _ = self.proxy.send_event(Cmd::Presence(Event::Expand));
-    }
-
-    /// For checks: what `script` evaluates to in the mini's page.
-    #[doc(hidden)]
-    pub fn peek_mini(&self, script: &str) -> Result<Value, String> {
-        self.peek_in(MINI, script)
     }
 
     /// For checks: what the person's click on the strip says (`show t1`, `close w2`).
@@ -159,7 +145,7 @@ impl Browser {
         let _ = self.proxy.send_event(Cmd::Clicked(said.to_string()));
     }
 
-    /// The Event Center's `events` (a JSON list, newest first), shown under the strip's bell.
+    /// The Event Center's `events` (a JSON list, newest first), shown under the strip's end.
     pub fn center(&self, events: String) {
         *crate::lock(&self.shared.center) = events;
         let _ = self.proxy.send_event(Cmd::Strip);

@@ -68,10 +68,10 @@ Store tests fingerprint existing migrations. These checks run with the normal te
 - **`browser/`** is the window: a `tao` event loop on the main thread, a `wry` WebView per page, a
   probe script injected in each page for observing and acting (`probe/`: the snapshot, the page's own
   requests, what the page tells, frames, the outline, refs found again, actions, typing, keys, comments,
-  evaluate), the strip, the mini preview, comments, screenshots. What a page tells besides its content
+  evaluate), the strip, comments, screenshots. What a page tells besides its content
   (its dialogs, answered Cancel unless a call armed OK, live-region announcements, a field that refused
   a value) comes with the probe's replies and is kept per tab across its documents (`notices.rs`).
-  The window is an ordinary one; the mini (`presence.rs`) is there only when the person asks for it. `host` takes the main thread and runs the server on another; a `Browser` handle sends it
+  The window is an ordinary one, put away only when the person asks (`presence.rs`). `host` takes the main thread and runs the server on another; a `Browser` handle sends it
   commands. Panels are tabs whose page the caller paints (terminals, the board, Settings).
   The window shows one project at a time (`scope.rs`): its tabs are the ones listed, what the person
   opens is of it, its history is the one the menu lists, ⌘1…9 are its tabs. The strip's page is
@@ -96,8 +96,9 @@ Store tests fingerprint existing migrations. These checks run with the normal te
   `desk/lifecycle.rs` decides: a quit asks first (`Browser::confirm`, the system's alert) while
   terminals run a program, then stops the server (`Desk::on_quit`); a reopen brings the window on
   the project used last, as it was left (its ledger), else the person's login shell in it. The
-  main window's minimize button does not minimize: it collapses the window to the mini
-  (`nspanel.rs`; another window's is the system's), and the green button uses the system's zoom on
+  main window's minimize button does not minimize: it puts the window away, out of sight and
+  still drawing, until the person opens the app again (`nspanel.rs`; another window's is the
+  system's), and the green button uses the system's zoom on
   the current desktop rather than a separate full-screen Space. `appkit.rs` holds AppKit's common messages
   once. A split (one tab of two panes, `split.rs`: which tab is beside the shown one, on which
   side, and the halves' share) lays two panes out side by side, the one shown with the toolbar; a
@@ -109,7 +110,7 @@ Store tests fingerprint existing migrations. These checks run with the normal te
   `Heard::Moved`); the layout tells every window its tabs back (`Cmd::Arranged`), and the window draws
   them so, keeping no order or split of its own. A split is listed in the side as a pair.
   The app has several windows (`windows.rs`, docs/windows.md): each a deck with its own panes, the
-  first the main one (the mini follows it). One is the window in use, as the system's key window is:
+  first the main one. One is the window in use, as the system's key window is:
   the loop picks the window an event is for before it acts (a pane's command goes to the window the
   pane is in, a press makes its window the one in use), so a deck's code acts on one window. Pages
   take their ids from the app's places (`popup.rs`) and share the app's first page's WebKit
@@ -118,8 +119,7 @@ Store tests fingerprint existing migrations. These checks run with the normal te
   (`host_tear.rs`, `deck_tear.rs`) is carried in a small window that follows the pointer
   (`chip.rs`): past its window's edge it becomes a window of its own, over another window's list it
   goes into that list. The window's layout (the strip, the side, the pages) is `deck_layout.rs`;
-  the menus a right click opens, a tab's and a panel's, `host_tab_menu.rs`; the mini's native grip
-  for its press and drag, `mini_grip.rs`.
+  the menus a right click opens, a tab's and a panel's, `host_tab_menu.rs`.
 - **`board.rs`, `board/`** are the board: its cards and the rules every move keeps (one card in Doing
   per worker, a worker acts on its own cards, Done is the person's), the person's actions from the
   window (`person.rs`), the board as text for the agent (`text.rs`), where it is kept

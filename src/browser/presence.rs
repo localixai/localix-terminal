@@ -1,42 +1,25 @@
-//! The window's three states on macOS as pure logic: events in, what to do
-//! out. Hidden while no tab is open; the window, an ordinary one, whenever one is; the mini, a
-//! small floating preview, only when the person asks for it (its button in the bar, the yellow
-//! button, ⌘M), as a video's player shrinks to a corner, and their click on it opens the window
-//! again. In the mini the agent's acts spin it and refresh its picture, its `show` blinks it, and
-//! nothing the agent does changes the state. Where there is no mini ([`Support::WindowOnly`])
-//! the window stays the window. The AppKit side
-//! (host_presence.rs) applies what this decides; the timings come in as values.
-
-use std::time::Duration;
+//! The window's three states on macOS as pure logic: events in, what to do out. Hidden while no
+//! tab is open; the window, an ordinary one, whenever one is; away, when the person puts it out
+//! of sight (the yellow button, ⌘M): nothing is on screen, the tabs stay and keep running, and
+//! only they bring the window back (the app's icon, `llx-desk open`). Nothing the agent does
+//! changes the state: its acts only turn the spinner of whose turn it is. Where the window cannot
+//! be put away ([`Support::WindowOnly`]) it stays the window. The AppKit side
+//! (host_presence.rs) applies what this decides.
 
 /// Where the window is, as the person sees it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum State {
     Hidden,
-    Mini,
+    /// The person put the window away: tabs are open, and nothing is on screen.
+    Away,
     Expanded,
 }
 
-/// Whether this system has a mini to collapse to.
+/// Whether this system lets the window be put away and still draw.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Support {
-    Mini,
+    Away,
     WindowOnly,
-}
-
-/// How long things last.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct Timing {
-    /// The mini's highlight when the agent shows a tab.
-    pub blink: Duration,
-}
-
-impl Default for Timing {
-    fn default() -> Self {
-        Self {
-            blink: Duration::from_millis(700),
-        }
-    }
 }
 
 /// What happened.
@@ -46,42 +29,23 @@ pub(super) enum Event {
     Appeared,
     /// The window is gone (no window at all, not one with no tab: that stays).
     Vanished,
-    /// The person clicked the mini.
+    /// The person brought the window back: the app's icon, `llx-desk open`.
     Expand,
-    /// The person asked for the mini: its button in the bar, the yellow button, ⌘M.
+    /// The person put the window away: the yellow button, ⌘M.
     Collapse,
     /// The agent began an action.
     Acting,
     /// The agent's action settled.
     Settled,
-    /// The agent showed a tab.
-    Show,
-    /// What the mini shows changed (the tab shown, a page loaded).
-    Changed,
-    /// A picture asked for has come (or failed).
-    Pictured,
-    /// The person went to another Space.
-    #[cfg_attr(
-        all(not(target_os = "macos"), not(test)),
-        expect(
-            dead_code,
-            reason = "only macOS has Spaces to go to (the tests make it anywhere)"
-        )
-    )]
-    Respaced,
 }
 
 /// What to do about it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Effect {
-    /// Put the windows as this state says.
+    /// Put the window as this state says.
     Enter(State),
-    /// Take the shown tab's picture for the mini.
-    Capture,
-    /// The mini's spinner on or off.
+    /// Whose turn it is: the agent's while it acts.
     Busy(bool),
-    /// The mini's highlight, for this long.
-    Blink(Duration),
 }
 
 /// Whether the agent is in the middle of an action.
@@ -91,30 +55,18 @@ enum Agent {
     Acting,
 }
 
-/// The mini's picture: one is taken at a time, and a change meanwhile asks for one more.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Picture {
-    Idle,
-    Taking,
-    Stale,
-}
-
 pub(super) struct Presence {
     state: State,
     support: Support,
-    timing: Timing,
     agent: Agent,
-    picture: Picture,
 }
 
 impl Presence {
-    pub(super) fn new(support: Support, timing: Timing) -> Self {
+    pub(super) fn new(support: Support) -> Self {
         Self {
             state: State::Hidden,
             support,
-            timing,
             agent: Agent::Idle,
-            picture: Picture::Idle,
         }
     }
 
@@ -127,50 +79,19 @@ impl Presence {
         match event {
             Event::Appeared => self.appear(),
             Event::Vanished => self.vanish(),
-            Event::Expand => self.enter(State::Mini, State::Expanded),
-            Event::Collapse if self.support == Support::Mini => {
-                let mut out = self.enter(State::Expanded, State::Mini);
-                out.extend(self.refresh());
-                out
+            Event::Expand => self.enter(State::Away, State::Expanded),
+            Event::Collapse if self.support == Support::Away => {
+                self.enter(State::Expanded, State::Away)
             }
             Event::Collapse => vec![],
             Event::Acting => self.agent(Agent::Acting),
-            Event::Settled => {
-                let mut out = self.agent(Agent::Idle);
-                out.extend(self.refresh());
-                out
-            }
-            Event::Show if self.state == State::Mini => {
-                let mut out = vec![Effect::Blink(self.timing.blink)];
-                out.extend(self.refresh());
-                out
-            }
-            Event::Show => vec![],
-            // The mini is shown again: macOS may have left it on the Space of a full-screen app
-            // that left full screen and came back, out of every other Space.
-            Event::Respaced if self.state == State::Mini => vec![Effect::Enter(State::Mini)],
-            Event::Respaced => vec![],
-            Event::Changed => self.refresh(),
-            Event::Pictured => match self.picture {
-                Picture::Stale => {
-                    self.picture = Picture::Taking;
-                    vec![Effect::Capture]
-                }
-                Picture::Idle | Picture::Taking => {
-                    self.picture = Picture::Idle;
-                    vec![]
-                }
-            },
+            Event::Settled => self.agent(Agent::Idle),
         }
     }
 
-    /// Tabs came: the window, never the mini (the person asks for that).
+    /// Tabs came: the window, which the person may put away later.
     fn appear(&mut self) -> Vec<Effect> {
-        if self.state != State::Hidden {
-            return vec![];
-        }
-        self.state = State::Expanded;
-        vec![Effect::Enter(State::Expanded)]
+        self.enter(State::Hidden, State::Expanded)
     }
 
     fn vanish(&mut self) -> Vec<Effect> {
@@ -179,7 +100,6 @@ impl Presence {
         }
         self.state = State::Hidden;
         self.agent = Agent::Idle;
-        self.picture = Picture::Idle;
         vec![Effect::Enter(State::Hidden)]
     }
 
@@ -198,24 +118,6 @@ impl Presence {
         }
         self.agent = now;
         vec![Effect::Busy(now == Agent::Acting)]
-    }
-
-    /// A new picture of what the mini shows, when it is the mini that shows it.
-    fn refresh(&mut self) -> Vec<Effect> {
-        if self.state != State::Mini {
-            return vec![];
-        }
-        match self.picture {
-            Picture::Idle => {
-                self.picture = Picture::Taking;
-                vec![Effect::Capture]
-            }
-            Picture::Taking => {
-                self.picture = Picture::Stale;
-                vec![]
-            }
-            Picture::Stale => vec![],
-        }
     }
 }
 

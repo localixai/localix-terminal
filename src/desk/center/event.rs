@@ -1,5 +1,5 @@
 //! What an event of the Event Center is, and how it is shown: its kind (its section, tone, and
-//! whether the bell counts it), its words, and its buttons, each with the role the window places
+//! whether it wants the person), its words, and its buttons, each with the role the window places
 //! it by. The window draws an event as it comes and holds no table of kinds.
 
 use serde::Serialize;
@@ -35,7 +35,7 @@ pub(in crate::desk::center) struct Look {
     pub(in crate::desk::center) section: &'static str,
     pub(in crate::desk::center) rank: u8,
     pub(in crate::desk::center) tone: Tone,
-    /// It wants the person: the bell counts it while unseen. What ended well is listed quietly.
+    /// It wants the person. What ended well is listed quietly.
     pub(in crate::desk::center) urgent: bool,
 }
 
@@ -50,12 +50,12 @@ impl Kind {
 
     pub(in crate::desk::center) fn look(self) -> Look {
         let (section, tone, urgent) = match self {
-            Kind::Ask => ("The agent asks you", Tone::Purple, true),
-            Kind::Waiting => ("Waiting for you", Tone::Purple, true),
-            Kind::Review => ("Ready for review", Tone::Blue, true),
+            Kind::Ask => ("The Agent Asks You", Tone::Purple, true),
+            Kind::Waiting => ("Waiting for You", Tone::Purple, true),
+            Kind::Review => ("Ready for Review", Tone::Blue, true),
             Kind::Blocked => ("Blocked", Tone::Orange, true),
-            Kind::Failed => ("Programs ended", Tone::Red, true),
-            Kind::Finished => ("Programs finished", Tone::Green, false),
+            Kind::Failed => ("Programs Ended", Tone::Red, true),
+            Kind::Finished => ("Programs Finished", Tone::Green, false),
         };
         Look {
             section,

@@ -58,7 +58,6 @@ where
         let _ = refused.send_event(Cmd::Exit(1));
     }
 
-    platform::watch_spaces(&proxy);
     platform::watch_display(&proxy);
     platform::watch_presses(&proxy);
     super::super::agents::learn(&proxy);
@@ -78,8 +77,8 @@ where
     })
 }
 
-/// What the loop keeps from one event to the next: the windows, the mini, and whether what the
-/// person sees is out of date.
+/// What the loop keeps from one event to the next: the windows, whether the main one is on
+/// screen, and whether what the person sees is out of date.
 struct Looping {
     windows: Windows,
     presenter: Presenter,
@@ -129,9 +128,7 @@ impl Looping {
         }
         let mut stage = Stage {
             deck: self.windows.main(),
-            target,
             shared: &self.shared,
-            proxy: &self.proxy,
         };
         self.presenter.sync(&mut stage);
         // The app menu's page-only items follow the window in use, whichever was drawn last.
@@ -221,7 +218,7 @@ impl Looping {
             let here = self.windows.at();
             self.each(target, Some(here), |on| on.arranged_here());
         }
-        // The settings changed: the window in use took them (with the menus and the mini, once);
+        // The settings changed: the window in use took them (with the menus, once);
         // each other window dresses its own pages the same.
         if restyled {
             let here = self.windows.at();

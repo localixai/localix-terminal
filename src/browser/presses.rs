@@ -42,7 +42,7 @@ pub(super) fn watch(proxy: &EventLoopProxy<Cmd>) {
     }
 }
 
-/// NSWindowLevel of the window (the mini floats above it, and has its own way in: its click).
+/// NSWindowLevel of the window.
 const NORMAL: isize = 0;
 
 /// Press `event` in the window, llx-desk not the active app: the app made the active one, and

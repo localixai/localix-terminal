@@ -1,5 +1,5 @@
-//! The app's windows (docs/windows.md): each a deck, the first the main one (the mini follows
-//! it). One of them is the window in use, as the system's key window is: what the person does
+//! The app's windows (docs/windows.md): each a deck, the first the main one (its minimize button
+//! puts it away). One of them is the window in use, as the system's key window is: what the person does
 //! goes to it, and what an agent does goes to the window its pane is in. The loop picks the
 //! window an event is for before it acts on it, so the rest of the window's code acts on one.
 
@@ -205,7 +205,6 @@ pub(super) fn route(command: &super::host::Cmd) -> Route {
         | Cmd::Presence(_)
         | Cmd::NewWindow(_)
         | Cmd::Opened
-        | Cmd::Pictured(_)
         | Cmd::Presented(_)
         | Cmd::Confirm(..)
         | Cmd::Exit(_) => Route::Current,

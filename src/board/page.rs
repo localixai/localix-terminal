@@ -9,7 +9,7 @@ use super::Board;
 
 /// The page's script, and its SHA-384: the page's policy runs it by that hash.
 const SCRIPT: &str = include_str!("page.js");
-const SCRIPT_SHA384: &str = "3W9iQqDu0W4kdC48lTEpENOuvd/klBgNH9vlyxWudfaffgOsLK8v+kH9Ae/rGP75";
+const SCRIPT_SHA384: &str = "/enOzDlRDNXgZBf2htLwsOwk/7OSX3SQ1B16q6nbZDcwkRJww1nkbS23AWB/kRWn";
 
 /// The page, titled `title`.
 pub fn page(title: &str) -> String {

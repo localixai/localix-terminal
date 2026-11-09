@@ -111,11 +111,10 @@ pub(in super::super) enum Cmd {
     /// The person pressed in one of the app's windows (an NSWindow's address), at `x`, `y`
     /// points from its top left (presses.rs).
     Pressed(usize, f64, f64),
-    /// The person clicked the mini open: expanded, and the app they use from then on.
+    /// The person opened the app (its Dock icon, `llx-desk open`): the window back, and the app
+    /// they use from then on.
     Opened,
-    /// The mini's picture, taken or not.
-    Pictured(Result<Shot, String>),
-    /// For checks: the window's state, `hidden`, `mini` or `expanded`.
+    /// For checks: the window's state, `hidden`, `away` or `expanded`.
     Presented(SyncSender<&'static str>),
     /// Ask the person; the reply is whether they went on.
     Confirm(Confirm, SyncSender<bool>),

@@ -103,10 +103,10 @@ memory, keeping nothing.
 A projector (`desk/center.rs`): on every notice it gathers what waits for the person from each
 source, writes the open events to its journal, settles the rest, and shows what the person has not
 dismissed. An event says how it is shown (`Kind::look`: its section, the section's place, its tone,
-whether the bell counts it), and each button says what it is for (`Role`: the row's own click, its
+whether it wants the person), and each button says what it is for (`Role`: the row's own click, its
 one action, its dismissal), so the window draws it as it comes. Its buttons take the paths the
 person's own clicks take (the board's Accept, a tab's x): an event is never a second way to do
-anything. Only what wants the person rings the bell; what ended well is listed quietly, and one
+anything. What wants the person is told apart from what ended well, which is listed quietly, and one
 line an ask, a tab or a session, replaced rather than added to, keeps it from becoming noise.
 
 ## Adding things

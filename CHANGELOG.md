@@ -19,6 +19,27 @@
 - Normal tests now enforce documented, named Rust modules under 300 working lines in `src/`,
   domain-model independence from adapters, and unchanged existing SQL migrations.
 
+- Settings' Theme and Window Transparency are pop-up buttons, as the fonts are, rather than
+  segmented controls. The shortcuts search is a field in the controls' own fill and hairline, no
+  longer a solid, sticky bar. The terminal builds its screen-reader tree when VoiceOver is running.
+
+- Type follows one scale on every page of the app: each size names its own line height in whole
+  points (13/16, 12/15, 11/14, 10/13, 15/20, 22/26), instead of a ratio inherited from the page
+  (`1.35`, `1.3`, `1.38`, `1.4`, `1.45` made lines of 16.2 and 17.55 pt). Settings' title is
+  semibold, headings balance their lines, and fonts are never faked bold or italic.
+  `tests/typography.rs` keeps the scale.
+
+- Every page the app builds takes the first click of a window that is not the key one, so a
+  button acts at once, not on the second press; a test requires it.
+
+### Removed
+
+- The mini player, the small floating preview of the tab. The main window's yellow button and ⌘M
+  (Window ▸ Minimize) put the window away: nothing of it on screen, its pages still drawing, its
+  tabs kept. Only the Dock icon or `llx-desk open` brings it back, never an agent.
+  The bar has no mini button and no Event Center button any more; ⇧⌘E and the Window menu open
+  the Event Center, under the bar's end.
+
 ### Fixed
 
 - Interactive terminals no longer inherit `NO_COLOR`, `FORCE_COLOR` or `CLICOLOR_FORCE` from

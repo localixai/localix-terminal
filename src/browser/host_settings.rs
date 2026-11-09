@@ -53,7 +53,6 @@ impl On<'_> {
         #[cfg(target_os = "macos")]
         crate::browser::app_menu::install(self.proxy);
         self.restyle_deck();
-        self.presenter.restyle(&settings::now());
     }
 
     /// This window's pages take the settings as they are now.

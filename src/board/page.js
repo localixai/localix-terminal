@@ -11,9 +11,9 @@ const TITLES = Object.fromEntries(COLUMNS);
 const EMPTY = {
   backlog: "New cards land here. Nobody works on one until you move it to Todo.",
   todo: "Nothing to do yet. Move a card here from Backlog, or let the agent plan.",
-  doing: "Nobody is working on a card.",
-  review: "Nothing waits for you.",
-  done: "Nothing accepted yet.",
+  doing: "Agents take cards from Todo and work on them here.",
+  review: "Finished work waits here to be accepted or sent back.",
+  done: "Accepted cards collect here.",
   discarded: "Nothing given up. Cards dropped from any column land here.",
 };
 const motion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -140,7 +140,7 @@ function restore(held) {
 function quick(card) {
   if (card.column === "review") return { label: "Accept", glyph: "check", action: { op: "accept", card: card.id } };
   if (card.column === "done") return { label: "Reopen", glyph: "back", plain: true, action: { op: "move", card: card.id, to: "todo" } };
-  if (card.column === "backlog") return { label: "To Todo", glyph: "open", plain: true, action: { op: "move", card: card.id, to: "todo" } };
+  if (card.column === "backlog") return { label: "Move to Todo", glyph: "open", plain: true, action: { op: "move", card: card.id, to: "todo" } };
   if (card.blocked) return { label: "Unblock", glyph: "check", plain: true, action: { op: "unblock", card: card.id } };
   return null;
 }
@@ -188,22 +188,6 @@ function cardView(card) {
   return node;
 }
 
-// The light on a card follows the pointer: where it is, set once a frame on the card under it.
-let pointer = null;
-document.getElementById("lanes").addEventListener("pointermove", (e) => {
-  const card = e.target.closest && e.target.closest(".card");
-  if (!card) return;
-  const first = !pointer;
-  pointer = { card, x: e.clientX, y: e.clientY };
-  if (first) requestAnimationFrame(() => {
-    const { card, x, y } = pointer;
-    pointer = null;
-    const box = card.getBoundingClientRect();
-    card.style.setProperty("--mx", `${x - box.left}px`);
-    card.style.setProperty("--my", `${y - box.top}px`);
-  });
-});
-
 // Keys on a focused card: Enter opens it, ⌥← and ⌥→ move it a column, the arrows walk the board.
 function keyOnCard(e, card) {
   // A key on a button inside the card is the button's own.
@@ -224,9 +208,10 @@ function keyOnCard(e, card) {
     if (next) next.focus();
   } else if (step) {
     e.preventDefault();
+    // The next column that holds a card: an empty one is passed over, never a wall.
     const lanes = [...document.querySelectorAll(".lane")];
-    const lane = lanes[lanes.indexOf(here.closest(".lane")) + step];
-    const next = lane && lane.querySelector(".card");
+    let next = null;
+    for (let at = lanes.indexOf(here.closest(".lane")) + step; lanes[at] && !next; at += step) next = lanes[at].querySelector(".card");
     if (next) next.focus();
   } else if (e.key === "Backspace") {
     e.preventDefault();
@@ -302,7 +287,7 @@ function laneView([column, title]) {
     : cards;
   let pill = null;
   if (column === "doing") {
-    pill = el("button.pill", { text: `${board.limit} each`, title: "The most cards one worker has in Doing. Click to change.",
+    pill = el("button.pill", { text: `${board.limit} each`, title: "Change how many cards a worker may hold in Doing",
       onclick: () => act({ op: "limit", limit: board.limit >= 3 ? 1 : board.limit + 1 }) });
   }
   const list = el("div.list", { "data-col": column }, shown.length ? shown.map(cardView) : el("div.empty", {}, icon(GLYPH[EMPTY_GLYPH[column]], 18), el("span", { text: EMPTY[column] })));
@@ -364,7 +349,7 @@ function inspector(card) {
   text.value = card.note || "";
   text.addEventListener("blur", () => save(card, "note", text.value));
   // Where it is: the status, a click on it the system's menu of the columns.
-  const status = el("button.status", { "data-col": card.column, title: "Status", "aria-haspopup": "menu",
+  const status = el("button.status", { "data-col": card.column, title: "Move the card to another column", "aria-haspopup": "menu",
     onclick: (e) => { const at = e.currentTarget.getBoundingClientRect(); systemMenu(at.left, at.bottom + 4, moves(card)); } },
     el("span.dot"), TITLES[card.column], icon(GLYPH.chevron, 10));
   const trash = removing
@@ -377,10 +362,10 @@ function inspector(card) {
       title,
       card.blocked ? section("Blocked", el("div.box.blocked", { text: card.blocked }),
         el("div.row", { style: "margin-top:6px" }, el("button.btn", { text: "Unblock", onclick: () => act({ op: "unblock", card: card.id }) }))) : null,
-      card.column === "review" ? section("Handed in", card.result ? el("div.box", { text: card.result }) : null,
+      card.column === "review" ? section("Handed In", card.result ? el("div.box", { text: card.result }) : null,
         el("div.row", { style: "margin-top:8px" }, el("button.btn.go", { onclick: () => act({ op: "accept", card: card.id }) }, icon(GLYPH.check, 11), "Accept"),
           returning ? null : el("button.btn", { text: "Send Back…", onclick: () => { returning = true; paint(); } }))) : null,
-      card.column === "review" && returning ? section("What is still wrong", writer("return", card, "return", "The agent reads this; the card goes back to the top of Todo.", "Send Back")) : null,
+      card.column === "review" && returning ? section("What Is Still Wrong", writer("return", card, "return", "The agent reads this; the card goes back to the top of Todo.", "Send Back")) : null,
       section("Note", text),
       card.tab ? section("About", el("div.box", { text: `Tab ${card.tab}` })) : null,
       section("Comment", writer("comment", card, "comment", "The agent reads this.", "Comment")),
@@ -493,7 +478,7 @@ function paint() {
       const is = card.getBoundingClientRect();
       const dx = was.left - is.left, dy = was.top - is.top;
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
-        card.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: "none" }], { duration: 280, easing: "cubic-bezier(.2,.8,.2,1)" });
+        card.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: "none" }], { duration: 260, easing: getComputedStyle(document.documentElement).getPropertyValue("--spring").trim() || "ease-out" });
       }
     }
   }
@@ -527,8 +512,19 @@ function E(why) {
   const toast = document.getElementById("toast");
   toast.textContent = why;
   toast.classList.add("on");
+  later();
+}
+// The notice waits while the pointer is on it, and goes on a click.
+function later() {
+  const toast = document.getElementById("toast");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove("on"), 4000);
+}
+{
+  const toast = document.getElementById("toast");
+  toast.addEventListener("mouseenter", () => clearTimeout(toastTimer));
+  toast.addEventListener("mouseleave", later);
+  toast.addEventListener("click", () => { clearTimeout(toastTimer); toast.classList.remove("on"); });
 }
 document.getElementById("add").addEventListener("keydown", (e) => {
   if (e.key === "Escape") { e.target.value = ""; e.target.blur(); return; }

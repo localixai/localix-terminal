@@ -1,5 +1,5 @@
 //! The Event Center: what in the desk waits for the person, gathered from its owners and shown
-//! under the strip's bell, each with buttons that act on it.
+//! under the strip's end (its shortcut opens it), each with buttons that act on it.
 //!
 //! It is a projection. It keeps nothing the owners do not hold (the boards, the terminals, how
 //! what the agent asked), so it is gathered again whole when a notice says
@@ -8,8 +8,8 @@
 //! paths the person's own clicks take (the board's Accept, a tab's x), so an event is no second
 //! way to do anything.
 //!
-//! What an event is (`Kind`) says how it is shown: its section, its tone, whether the bell counts
-//! it. Its buttons say what they are for (`Role`). So the window draws an event as it comes and
+//! What an event is (`Kind`) says how it is shown: its section, its tone, whether it wants the
+//! person. Its buttons say what they are for (`Role`). So the window draws an event as it comes and
 //! knows no kind of its own; a new source is a type in `sources` and nothing else.
 
 mod event;
@@ -263,7 +263,7 @@ impl Desk {
         }
     }
 
-    /// All the center shows is seen: the bell's count goes.
+    /// All the center shows is seen: its events are no longer new.
     fn center_seen(&self) {
         let ids = self.center_shown();
         self.mark(&ids, journal::Mark::Seen);

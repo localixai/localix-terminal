@@ -25,9 +25,6 @@ mod icons;
 mod menu;
 #[cfg(not(target_os = "macos"))]
 mod menu_gtk;
-mod mini;
-#[cfg(target_os = "macos")]
-mod mini_grip;
 mod notices;
 #[cfg(target_os = "macos")]
 mod nspanel;

@@ -64,7 +64,7 @@ fn a_card_handed_in_waits_for_the_person_who_accepts_it_from_the_center() {
     assert_eq!(review.labels(), ["Accept", "Open Board", "Dismiss"]);
     assert!(review.unseen);
 
-    // Opened: seen, and the bell counts it no more.
+    // Opened: seen, and no longer new.
     desk.center_seen();
     assert!(!shown(&desk)[0].unseen);
 

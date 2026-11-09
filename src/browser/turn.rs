@@ -21,7 +21,7 @@ struct State {
     commenting: bool,
     /// Actions waiting for the person now.
     waiting: usize,
-    /// The agent is acting on a page (the mini spins): the strip says so.
+    /// The agent is acting on a page: the strip says so.
     acting: bool,
 }
 

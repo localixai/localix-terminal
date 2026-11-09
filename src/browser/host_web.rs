@@ -158,7 +158,6 @@ pub(super) fn on_browser(
         | Cmd::Presence(_)
         | Cmd::Pressed(..)
         | Cmd::Opened
-        | Cmd::Pictured(_)
         | Cmd::Presented(_)
         | Cmd::Confirm(..)
         | Cmd::Exit(_) => return,

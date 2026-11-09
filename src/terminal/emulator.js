@@ -6,9 +6,9 @@ const base = document.title;
 const style = () => getComputedStyle(document.documentElement);
 const css = (name) => style().getPropertyValue(name).trim();
 const DARK = ["#484f58", "#ff7b72", "#3fb950", "#d29922", "#58a6ff", "#bc8cff", "#39c5cf",
-  "#b1bac4", "#6e7681", "#ffa198", "#56d364", "#e3b341", "#79c0ff", "#d2a8ff", "#56d4dd", "#f0f6fc"];
-const LIGHT = ["#24292e", "#d73a49", "#28a745", "#b08800", "#0366d6", "#6f42c1", "#1b7c83",
-  "#6a737d", "#959da5", "#cb2431", "#22863a", "#b08800", "#005cc5", "#5a32a3", "#1b7c83", "#24292e"];
+  "#b1bac4", "#8b949e", "#ffa198", "#56d364", "#e3b341", "#79c0ff", "#d2a8ff", "#56d4dd", "#f0f6fc"];
+const LIGHT = ["#24292e", "#d73a49", "#1a7f37", "#8a6500", "#0366d6", "#6f42c1", "#1b7c83",
+  "#6a737d", "#6a737d", "#cb2431", "#22863a", "#8a6500", "#005cc5", "#5a32a3", "#1b7c83", "#24292e"];
 const NAMES = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"];
 // Whether a #rrggbb colour reads as light.
 function light(hex) {
@@ -73,11 +73,14 @@ const term = new Terminal({
   },
   fontFamily: (window.__deskLook && window.__deskLook.mono) || css("--mono"),
   fontSize: (window.__deskLook && window.__deskLook.size) || 13, lineHeight: 1, theme: theme(),
+  // The reading tree for VoiceOver, only when it runs (the app says so): a row of elements per line.
+  screenReaderMode: !!(window.__deskLook && window.__deskLook.reader),
 });
 // The person's code font and size (the window's settings), now and as they change.
 addEventListener("desk-look", (event) => {
   term.options.fontFamily = event.detail.mono;
   term.options.fontSize = event.detail.size;
+  term.options.screenReaderMode = !!event.detail.reader;
   queueFit();
   document.fonts.ready.then(queueFit);
 });

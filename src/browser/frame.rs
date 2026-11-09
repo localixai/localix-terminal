@@ -83,6 +83,14 @@ pub(super) fn reduced() -> bool {
     false
 }
 
+/// Whether the person runs a screen reader (VoiceOver), as a page is told (`reader` in its look).
+pub(super) fn screen_reader() -> bool {
+    #[cfg(target_os = "macos")]
+    return native::screen_reader();
+    #[cfg(not(target_os = "macos"))]
+    false
+}
+
 /// A page's bounds: `size`, `x` points from the window's left edge and `top` from its top.
 pub(super) fn fill(size: LogicalSize<f64>, x: f64, top: f64) -> wry::Rect {
     use wry::dpi::{LogicalPosition as At, LogicalSize as Size};
@@ -240,7 +248,7 @@ impl Frame {
         // window whose class is swapped afterwards fails to remove the observer.
         #[cfg(target_os = "macos")]
         if look != Look::Hidden {
-            super::nspanel::adopt(&native, super::nspanel::Role::Deck);
+            super::nspanel::adopt(&native);
             native::toolbar(&native);
         }
         Ok(Self {
@@ -289,7 +297,7 @@ impl Frame {
         let _ = &self.native;
         #[cfg(target_os = "macos")]
         {
-            super::nspanel::reveal(&self.native, super::nspanel::Role::Deck, self.rendering);
+            super::nspanel::reveal(&self.native, self.rendering);
             crate::lock(&self.screen).remember(&self.native);
         }
     }
@@ -344,7 +352,8 @@ impl Frame {
         if let Some(glass) = &self.glass {
             let dark = self.native.theme() == Theme::Dark;
             let chosen = super::settings::now().transparency;
-            let solid = native::reduced() || native::increased() || self.native.fullscreen().is_some();
+            let solid =
+                native::reduced() || native::increased() || self.native.fullscreen().is_some();
             let (colour, alpha) = coat(dark, glass_level(chosen, solid));
             glass.tint(material(dark), colour, alpha);
         }

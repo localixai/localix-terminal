@@ -1,5 +1,5 @@
-//! What the person does to the window itself: closes it, resizes it, or changes the system's
-//! appearance under it.
+//! What the person does to the window itself: closes it, resizes it, focuses it, or changes the
+//! system's appearance under it.
 
 use tao::event::WindowEvent;
 use tao::window::WindowId;
@@ -18,13 +18,6 @@ pub(super) fn on_window(
     shared: &Shared,
     main: bool,
 ) -> bool {
-    // The mini's own window: where the person moves it is where it stays.
-    if presenter.owns(window_id) {
-        if let WindowEvent::Moved(_) = event {
-            presenter.mini_moved(shared);
-        }
-        return false;
-    }
     let Some(open) = deck.as_mut().filter(|d| d.frame.native.id() == window_id) else {
         return false;
     };
@@ -34,21 +27,21 @@ pub(super) fn on_window(
     )]
     match event {
         // The window is the app's own: closing it is quitting the app, which the desk asks the
-        // person about when programs run, as ⌘Q does. (Its minimize button collapses it to the
-        // mini instead, nspanel.rs.)
+        // person about when programs run, as ⌘Q does. (Its minimize button puts it away
+        // instead, still drawing: nspanel.rs.)
         WindowEvent::CloseRequested if main => shared.heard("", Heard::Quit),
         // Another window closed: it goes, and its tabs with it.
         WindowEvent::CloseRequested => return true,
         event if frame::relayout(event) => {
             // Full screen over: the system made the window's buttons anew, and the main
-            // window's minimize button is the mini's again.
+            // window's minimize button puts it away again.
             #[cfg(target_os = "macos")]
             if open.frame.follow_full_screen() && main {
                 crate::browser::nspanel::hook_collapse(&open.frame.native);
             }
             #[cfg(not(target_os = "macos"))]
             open.frame.follow_full_screen();
-            open.tell_full_screen();
+            open.tell_frame();
             open.layout();
             if main {
                 presenter.deck_moved(open, event, shared);
@@ -60,6 +53,8 @@ pub(super) fn on_window(
         }
         // The system's appearance changed: a glass that follows it is tinted again.
         WindowEvent::ThemeChanged(_) => open.frame.retint(),
+        // Another window took the keys, or this one took them back: the chrome follows.
+        WindowEvent::Focused(_) => open.tell_frame(),
         _ => {}
     }
     false

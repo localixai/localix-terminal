@@ -5,7 +5,8 @@ mod views;
 
 pub(super) use views::{Follow, follow};
 pub(super) use views::{
-    Pane, clear, keep_rendering, keep_tab_rendering, reparent, see_through, stack, to_front,
+    Pane, clear, keep_rendering, keep_tab_rendering, reparent, see_through, stack,
+    system_appearance, to_front,
 };
 
 use tao::event_loop::EventLoopWindowTarget;
@@ -82,13 +83,7 @@ pub(super) fn work_area<T>(target: &EventLoopWindowTarget<T>) -> Option<super::p
     })
 }
 
-/// The mini's window as a floating panel on every Space, never taking the keyboard.
-#[cfg(target_os = "macos")]
-pub(super) fn adopt_mini(window: &tao::window::Window) {
-    super::nspanel::adopt(window, super::nspanel::Role::Mini);
-}
-
-/// The deck's minimize button collapses it to the mini.
+/// The deck's minimize button puts it away, out of sight and still drawing.
 #[cfg(target_os = "macos")]
 pub(super) fn collapse_button(
     window: &tao::window::Window,
@@ -97,41 +92,22 @@ pub(super) fn collapse_button(
     super::nspanel::collapse_to(window, proxy);
 }
 
-/// Elsewhere there is no mini: the button minimizes as the system does.
+/// The keys go back to the app the person was in: llx-desk's window is out of sight.
+#[cfg(target_os = "macos")]
+pub(super) fn give_up_keys() {
+    super::nspanel::give_up_keys();
+}
+
+/// Elsewhere the window is never put away.
+#[cfg(not(target_os = "macos"))]
+pub(super) fn give_up_keys() {}
+
+/// Elsewhere the button minimizes as the system does.
 #[cfg(not(target_os = "macos"))]
 pub(super) fn collapse_button(
     _window: &tao::window::Window,
     _proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>,
 ) {
-}
-
-/// The mini's own grip over its page: a press moves it, a click expands it.
-#[cfg(target_os = "macos")]
-pub(super) fn grip_mini(
-    window: &tao::window::Window,
-    proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>,
-) {
-    super::mini_grip::grip(window, proxy);
-}
-
-#[cfg(target_os = "macos")]
-pub(super) fn show_mini(window: &tao::window::Window) {
-    super::nspanel::reveal(
-        window,
-        super::nspanel::Role::Mini,
-        super::nspanel::Rendering::Switched,
-    );
-}
-
-#[cfg(target_os = "macos")]
-pub(super) fn hide_mini(window: &tao::window::Window) {
-    super::nspanel::hide(window);
-}
-
-/// The person's moves between Spaces, told to the loop: the mini is put on every Space again.
-#[cfg(target_os = "macos")]
-pub(super) fn watch_spaces(proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>) {
-    super::nspanel::watch_spaces(proxy);
 }
 
 /// The person's changes to Accessibility, Display (reduce transparency among them), told to the
@@ -155,30 +131,6 @@ pub(super) fn watch_presses(proxy: &tao::event_loop::EventLoopProxy<super::host:
 /// Elsewhere the window is not split.
 #[cfg(not(target_os = "macos"))]
 pub(super) fn watch_presses(_proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>) {}
-
-/// Elsewhere there are no Spaces to watch.
-#[cfg(not(target_os = "macos"))]
-pub(super) fn watch_spaces(_proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>) {}
-
-#[cfg(not(target_os = "macos"))]
-pub(super) fn adopt_mini(_window: &tao::window::Window) {}
-
-#[cfg(not(target_os = "macos"))]
-pub(super) fn grip_mini(
-    _window: &tao::window::Window,
-    _proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>,
-) {
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(super) fn show_mini(window: &tao::window::Window) {
-    window.set_visible(true);
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(super) fn hide_mini(window: &tao::window::Window) {
-    window.set_visible(false);
-}
 
 /// Where a headless window goes. macOS keeps it on screen and makes it invisible afterwards
 /// ([`keep_rendering`]): WebKit marks an off-screen window hidden and stops its animation frames

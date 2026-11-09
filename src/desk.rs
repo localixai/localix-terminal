@@ -188,9 +188,8 @@ impl Desk {
         desk
     }
 
-    /// The person opened the app (app.rs): the window comes to them, expanded, as their click
-    /// on the mini opens it; with no tab in it yet, their shell in `call.cwd` (their home), a
-    /// terminal of their own.
+    /// The person opened the app (app.rs): the window comes to them, back if they put it away;
+    /// with no tab in it yet, their shell in `call.cwd` (their home), a terminal of their own.
     pub fn present(&self, call: &Call, go: bool) -> Result<String, String> {
         let browser = (self.browser.as_ref()).ok_or("there is no window here: no display")?;
         crate::lock(&self.registry).known(call);

@@ -55,14 +55,19 @@ fn the_toolbar_buttons_are_clicks() {
     assert_eq!(click("new 812 40"), Some(Click::NewTab(812, 40)));
     assert_eq!(click("frame 760 40"), Some(Click::Frame(760, 40)));
     assert_eq!(click("frame 760"), None);
-    let held = Tool::Mini.bit() | Tool::History.bit();
-    assert_eq!(click("more 700 40 mn hs"), Some(Click::More(700, 40, held)));
+    let held = Tool::History.bit();
+    assert_eq!(click("more 700 40 hs"), Some(Click::More(700, 40, held)));
+    // The window is put away by its yellow button and ⌘M: the bar has no button of its own.
+    assert_eq!(click("more 700 40 mn"), None);
     assert_eq!(
         click("more 700 40 fs"),
         None,
         "the page's tools are its toolbar's"
     );
     assert_eq!(click("more 700 40"), None, "nothing held");
+    // The Event Center has no button in the bar: its shortcut and menu item open it.
+    assert_eq!(click("more 700 40 ev"), None);
+    assert_eq!(Tool::ALL, [Tool::History]);
     assert_eq!(
         click("more 700 40 hs xx"),
         None,

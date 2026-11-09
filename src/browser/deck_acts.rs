@@ -122,7 +122,7 @@ impl Deck {
             Click::History => {
                 self.toggle(Menu::History);
             }
-            // Opened: all it shows is seen, and the bell's count goes.
+            // Opened: all it shows is seen.
             Click::Events => {
                 if self.toggle(Menu::Events) {
                     shared.heard("", Heard::Center(CenterDid::Opened));

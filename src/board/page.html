@@ -13,106 +13,103 @@
    transparency (the app says so as data-reduced; WebKit has no media query for it), it is solid. */
 :root{
   --solid:#f5f5f7;--raised:#ffffff;
-  --gray:#8e8e93;--purple:#8e5cd9;--orange:#f08c00;--blue:#0a84ff;--green:#28a745;--red:#e5383b;--go:#1f8a3b;
-  --lift:0 0 0 .5px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.06);
-  --raise:0 0 0 .5px rgba(0,0,0,.1),0 2px 4px -1px rgba(0,0,0,.06),0 10px 22px -8px rgba(0,0,0,.22);
-  --shine:rgba(255,255,255,.75);
-  --sys:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+  --gray:#8e8e93;--purple:#8e5cd9;--orange:#f08c00;--blue:#0a84ff;--green:#28a745;--red:#e5383b;
+  --lift:var(--sh-hair),0 1px 2px rgba(0,0,0,.06);
+  --raise:var(--sh-hair),0 2px 4px -1px rgba(0,0,0,.06),0 10px 22px -8px rgba(0,0,0,.22);
   --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
   --ground:var(--solid);
 }
 @media (prefers-color-scheme: dark){:root{
   --solid:#1c1c1e;--raised:#2c2c2f;
-  --purple:#bf8cff;--orange:#ff9f0a;--blue:#409cff;--green:#32d74b;--red:#ff5d55;--go:#248a3d;
-  --lift:0 0 0 .5px rgba(255,255,255,.08),0 1px 2px rgba(0,0,0,.3);
-  --raise:0 0 0 .5px rgba(255,255,255,.14),0 2px 4px -1px rgba(0,0,0,.3),0 12px 26px -8px rgba(0,0,0,.6);
-  --shine:rgba(255,255,255,.09);
+  --purple:#bf8cff;--orange:#ff9f0a;--blue:#409cff;--green:#32d74b;--red:#ff5d55;
+  --lift:var(--sh-hair),0 1px 2px rgba(0,0,0,.3);
+  --raise:var(--sh-hair),0 2px 4px -1px rgba(0,0,0,.3),0 12px 26px -8px rgba(0,0,0,.6);
 }}
+/* Increase Contrast: each hue a step firmer, so its words and glyphs keep their contrast. */
+@media (prefers-contrast:more){:root{--purple:#6f3fc4;--orange:#a85d00;--green:#1a7f37;--red:#c4161a}}
+@media (prefers-contrast:more) and (prefers-color-scheme: dark){:root{--purple:#d4b0ff;--orange:#ffb340;--green:#5be075;--red:#ff8a84}}
 html:not([data-glass]){background:var(--solid)!important}
 html[data-glass]{--raised:color-mix(in srgb,#fff 74%,transparent)}
 @media (prefers-color-scheme: dark){html[data-glass]{--raised:color-mix(in srgb,#fff 8%,transparent)}}
 html[data-reduced]{background:var(--solid)!important;--raised:#fff}
 @media (prefers-color-scheme: dark){html[data-reduced]{--raised:#2c2c2f}}
 *{box-sizing:border-box}
-body{margin:0;height:100vh;display:flex;flex-direction:column;color:var(--fg);font:13px/1.35 var(--ui-font,var(--sys));
+body{margin:0;height:100vh;display:flex;flex-direction:column;color:var(--fg);font:13px/16px var(--ui-font,var(--ui-sys));
   -webkit-font-smoothing:antialiased;cursor:default;user-select:none;-webkit-user-select:none;overflow:hidden}
 button,input,textarea{font:inherit;color:inherit}
-/* What can be pressed shows the hand; what can be typed in, the caret. */
-button,.card,.rail,label.new{cursor:pointer}
-button:disabled{cursor:default}
-input,textarea{cursor:text}
-.card.dragging{cursor:grabbing}
+/* The arrow over what can be pressed, as the system's own; the caret where words are typed. */
+input,textarea,label.new{cursor:text}
 svg{display:block;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
-:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 45%,transparent)!important}
+:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 45%,transparent)}
+@media (prefers-contrast:more){:focus-visible{box-shadow:0 0 0 3px var(--accent)}}
+/* A card the keyboard is on is lit as its row, never by a ring; the one open keeps its frame. */
+.card:focus-visible{box-shadow:var(--raise);background:color-mix(in srgb,var(--raised),currentColor 10%)}
+.card.sel:focus-visible{box-shadow:0 0 0 2px var(--accent),var(--raise)}
 
 /* The bar: how far the board is, its name, and a field that adds a card to Backlog. */
-.bar{flex:none;display:flex;align-items:center;gap:9px;padding:12px 16px;transition:margin-right .26s var(--spring)}
-.bar h1{margin:0;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{flex:none;display:flex;align-items:center;gap:8px;padding:12px 16px}
+.bar h1{margin:0;font-size:13px;line-height:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ring{flex:none}
 .ring circle{fill:none;stroke-width:2.2}
 .ring .track{stroke:var(--ov-3)}
-.ring .fill{stroke:var(--green);stroke-linecap:round;transition:stroke-dashoffset .4s var(--ease)}
+.ring .fill{stroke:var(--green);stroke-linecap:round;transition:stroke-dashoffset var(--t-move) var(--ease)}
 .count{color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
 .new{flex:1;min-width:140px;max-width:440px;margin-left:auto;display:flex;align-items:center;gap:7px;height:28px;padding:0 6px 0 10px;
-  border-radius:var(--r-3);background:var(--ov-1);color:var(--ink-2);transition:background .15s,box-shadow .15s}
+  border-radius:var(--r-3);background:var(--ov-1);color:var(--ink-2);transition:background var(--t-out)}
 .new:focus-within{background:var(--raised);box-shadow:0 0 0 .5px var(--ov-4),0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent);color:var(--fg)}
 .new input{flex:1;min-width:0;border:0;outline:0;background:transparent;padding:0;box-shadow:none!important}
-.new input::placeholder{color:var(--ink-3)}
-kbd{font:500 10px/1 var(--ui-font,var(--sys));color:var(--ink-2);padding:3px 5px;border-radius:var(--r-1);background:var(--ov-1)}
+.new input::placeholder{color:-apple-system-placeholder-text}
+kbd{font:500 10px/13px var(--ui-font,var(--ui-sys));color:var(--ink-2);padding:3px 5px;border-radius:var(--r-1);background:var(--ov-1)}
 .new:focus-within kbd{opacity:0}
 
 /* The columns: troughs side by side, cards lifted on them; a folded one is a slim rail. */
-main{flex:1;min-height:0;display:flex;gap:10px;padding:0 12px 12px;overflow-x:auto;transition:margin-right .26s var(--spring)}
+main{flex:1;min-height:0;display:flex;gap:10px;padding:0 12px 12px;overflow-x:auto}
 /* With a card open, the board makes room for it rather than going under it. */
 body.inspecting main,body.inspecting .bar{margin-right:min(348px,calc(100vw - 260px))}
 .lane{flex:1 1 0;min-width:196px;display:flex;flex-direction:column;min-height:0;border-radius:var(--r-4);background:var(--ov-1);
-  transition:background .15s,box-shadow .15s}
-.lane.over{background:var(--acc-1);box-shadow:inset 0 0 0 1px var(--acc-3)}
-.lane h2{flex:none;display:flex;align-items:center;gap:7px;margin:0;padding:0 8px 0 12px;font-size:12px;font-weight:600;height:40px;min-width:0;white-space:nowrap}
-.lane h2 .n{min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);display:inline-grid;place-items:center;font-size:11px;
+  transition:background var(--t-out)}
+.lane.over{background:var(--acc-1);box-shadow:inset 0 0 0 1px var(--acc-3);transition:none}
+.lane h2{flex:none;display:flex;align-items:center;gap:7px;margin:0;padding:0 8px 0 12px;font-size:12px;line-height:15px;font-weight:600;height:40px;min-width:0;white-space:nowrap}
+.lane h2 .n{min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);display:inline-grid;place-items:center;font-size:11px;line-height:14px;
   color:var(--ink-2);font-weight:600;font-variant-numeric:tabular-nums;background:var(--ov-1)}
 .lane h2 .end{margin-left:auto;display:flex;align-items:center;gap:4px}
-.fold{width:22px;height:22px;border:0;border-radius:var(--r-2);background:transparent;color:var(--ink-2);display:grid;place-items:center;opacity:0;
-  transition:opacity .15s,background var(--t-out)}
-.lane:hover .fold,.fold:focus-visible{opacity:1}
+.fold{width:24px;height:24px;border:0;border-radius:var(--r-2);background:transparent;color:var(--ink-2);display:grid;place-items:center;opacity:0;
+  transition:opacity var(--t-out),background var(--t-out)}
+.lane:hover .fold,.fold:focus-visible{opacity:1;transition:none}
 .fold:hover{background:var(--ov-2);color:var(--fg);transition:none}
+.fold:active{background:var(--ov-3)}
 .rail{flex:0 0 36px;min-width:36px;border:0;border-radius:var(--r-4);background:var(--ov-1);color:var(--ink-2);display:flex;flex-direction:column;
   align-items:center;gap:9px;padding:13px 0;transition:background var(--t-out),color var(--t-out)}
 .rail:hover{background:var(--ov-2);color:var(--fg);transition:none}
+.rail:active{background:var(--ov-3)}
 .rail.over{background:var(--acc-1)}
-.rail .v{writing-mode:vertical-rl;font-size:12px;font-weight:600}
-.rail .n{font-size:11px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.rail .v{writing-mode:vertical-rl;font-size:12px;line-height:15px;font-weight:600}
+.rail .n{font-size:11px;line-height:14px;color:var(--ink-2);font-variant-numeric:tabular-nums}
 .dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--c,var(--gray))}
 [data-col=backlog]{--c:var(--purple)}[data-col=todo]{--c:var(--gray)}[data-col=doing]{--c:var(--orange)}[data-col=review]{--c:var(--blue)}[data-col=done]{--c:var(--green)}[data-col=discarded]{--c:color-mix(in srgb,var(--red) 70%,var(--gray))}
-.pill{font-size:11px;font-weight:500;color:var(--ink-2);height:20px;padding:0 8px;border-radius:var(--r-pill);
+.pill{font-size:11px;line-height:14px;font-weight:500;color:var(--ink-2);height:20px;padding:0 8px;border-radius:var(--r-pill);
   display:inline-flex;align-items:center;background:var(--ov-1);border:0;white-space:nowrap;transition:background var(--t-out),color var(--t-out)}
 button.pill:hover{background:var(--ov-2);color:var(--fg);transition:none}
-.list{flex:1;min-height:0;overflow-y:auto;padding:2px 8px 10px;display:flex;flex-direction:column;gap:7px;scrollbar-width:thin}
-.list::-webkit-scrollbar,main::-webkit-scrollbar,aside .body::-webkit-scrollbar{width:9px;height:9px}
-.list::-webkit-scrollbar-thumb,main::-webkit-scrollbar-thumb,aside .body::-webkit-scrollbar-thumb{border-radius:9px;border:3px solid transparent;
-  background:var(--ov-4) padding-box}
-.list::-webkit-scrollbar-track,main::-webkit-scrollbar-track{background:transparent}
-.empty{margin:2px 0;padding:18px 12px;border-radius:var(--r-3);border:1px dashed var(--ov-3);color:var(--ink-2);text-align:center;line-height:1.45;font-size:12px;
+button.pill:active{background:var(--ov-3)}
+.list{flex:1;min-height:0;overflow-y:auto;padding:2px 8px 10px;display:flex;flex-direction:column;gap:8px}
+.empty{margin:2px 0;padding:18px 12px;border-radius:var(--r-3);border:1px dashed var(--ov-3);color:var(--ink-2);text-align:center;line-height:15px;font-size:12px;
   display:flex;flex-direction:column;align-items:center;gap:7px}
 .empty svg{opacity:.7}
 /* The one slot a drag keeps, sized to the card it carries; it grows only when it enters a column. */
 .slot{flex:none;height:44px;border-radius:var(--r-3);background:var(--acc-1);box-shadow:inset 0 0 0 1.5px var(--acc-3)}
-.slot.enter{animation:grow .14s var(--ease)}
-@keyframes grow{from{height:0;opacity:0}}
+.slot.enter{animation:grow var(--t-out) var(--ease)}
+@keyframes grow{from{opacity:0}}
 
 /* A card: what it is, what waits on it, who has it since when. */
 .card{position:relative;flex:none;background:var(--raised);border-radius:var(--r-3);box-shadow:var(--lift);padding:9px 10px 8px 11px;isolation:isolate;
-  overflow:hidden;transition:transform .12s var(--ease),box-shadow .2s var(--ease),opacity .15s,background .2s}
-/* Pointed at: its shadow deepens and the light follows the pointer across it, and its column's colour
-   shows at its edge; it never moves from under the pointer. Pressed, it gives. */
-.card::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:0;transition:opacity .25s;
-  background:radial-gradient(240px circle at var(--mx,50%) var(--my,0%),var(--shine),transparent 60%)}
+  overflow:hidden;transition:opacity var(--t-out),background var(--t-out)}
+/* Pointed at: it lifts a step at once, and its column's colour shows at its edge; it never moves
+   from under the pointer. Pressed, its body darkens a step. */
 .card::after{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--c,var(--accent));
-  transform:scaleY(.4);opacity:0;transition:opacity .2s,transform .24s var(--ease)}
+  opacity:0;transition:opacity var(--t-out)}
 .card:hover{box-shadow:var(--raise)}
-.card:hover::before{opacity:1}
-.card:hover::after,.card.sel::after,.card:focus-visible::after{opacity:1;transform:none}
-.card:active{transform:scale(.985);transition-duration:.08s}
+.card:hover::after,.card.sel::after,.card:focus-visible::after{opacity:1;transition:none}
+.card:active{background:color-mix(in srgb,var(--raised),currentColor 15%);transition:none}
 .card.sel{box-shadow:0 0 0 2px var(--accent),var(--raise)}
 /* Dragged, the card it leaves behind is where it was: a ghost, not a hole. */
 .card.dragging{opacity:.5;transform:none;box-shadow:inset 0 0 0 1.5px var(--ov-3);background:transparent}
@@ -123,105 +120,105 @@ button.pill:hover{background:var(--ov-2);color:var(--fg);transition:none}
 .card[data-col=done]:hover .t,.card[data-col=discarded]:hover .t{color:var(--fg)}
 .card[data-col=discarded] .t{text-decoration:line-through;text-decoration-color:color-mix(in srgb,currentColor 45%,transparent)}
 .card .t{font-weight:500;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.card .m{display:flex;align-items:center;gap:7px;margin-top:6px;color:var(--ink-2);font-size:11px;min-width:0;height:16px}
-.card .id{font-family:var(--mono);font-size:10px;color:var(--ink-2)}
+.card .m{display:flex;align-items:center;gap:7px;margin-top:6px;color:var(--ink-2);font-size:11px;line-height:14px;min-width:0;height:16px}
+.card .id{font-family:var(--mono);font-size:10px;line-height:13px;color:var(--ink-2)}
 .card .age{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--ink-2);flex:none}
 .card .edge{position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--red);z-index:1}
-.quick{position:absolute;right:6px;bottom:6px;height:22px;padding:0 8px;border:0;border-radius:var(--r-2);display:inline-flex;align-items:center;gap:4px;
-  font-size:11px;font-weight:600;color:#fff;background:var(--go);box-shadow:0 1px 3px rgba(0,0,0,.18);opacity:0;transform:translateY(2px);
-  transition:opacity .18s,transform .24s var(--spring-b)}
+.quick{position:absolute;right:6px;bottom:6px;height:24px;padding:0 8px;border:0;border-radius:var(--r-1);display:inline-flex;align-items:center;gap:4px;
+  font-size:11px;line-height:14px;font-weight:600;color:var(--on-acc);background:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.18);opacity:0;
+  transition:opacity var(--t-out)}
 .quick.plain{background:var(--solid);color:var(--fg);box-shadow:0 0 0 .5px var(--ov-4),0 1px 3px rgba(0,0,0,.12)}
-.card:hover .quick,.card:focus-visible .quick,.quick:focus-visible{opacity:1;transform:none}
+.card:hover .quick,.card:focus-visible .quick,.quick:focus-visible{opacity:1;transition:none}
 .card.quick-on:hover .age,.card.quick-on:focus-visible .age{opacity:0}
 .who{display:inline-flex;align-items:center;gap:5px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.av{width:15px;height:15px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff;background:var(--h,var(--gray));text-transform:uppercase}
-.note{margin-top:6px;font-size:12px;line-height:1.38;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;color:var(--ink-2)}
+.av{width:15px;height:15px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:10px;line-height:13px;font-weight:700;color:#fff;background:var(--h,var(--gray));text-transform:uppercase}
+.note{margin-top:6px;font-size:12px;line-height:15px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;color:var(--ink-2)}
 .note b{font-weight:600}
 .note.blocked,.note.back{padding:5px 7px;border-radius:var(--r-2);color:var(--fg)}
-.note.blocked{background:color-mix(in srgb,var(--red) 14%,transparent)}.note.blocked b{color:var(--red)}
-.note.back{background:color-mix(in srgb,var(--orange) 14%,transparent)}.note.back b{color:var(--orange)}
-/* A card waiting for the person: two quiet buttons, green to accept and red to send back, side by side
-   at any width; each fills with its colour when pointed at. */
+.note.blocked{background:color-mix(in srgb,var(--red) 14%,transparent)}.note.blocked b{color:color-mix(in srgb,var(--red) 70%,var(--fg))}
+.note.back{background:color-mix(in srgb,var(--orange) 14%,transparent)}.note.back b{color:color-mix(in srgb,var(--orange) 55%,var(--fg))}
+/* A card waiting for the person: two buttons side by side at any width. Accept is the primary
+   action, in the accent; Send Back is a quiet one, as it destroys nothing. */
 .acts{display:flex;gap:6px;margin-top:8px}
-.act{flex:1;min-width:0;height:26px;border:0;border-radius:var(--r-2);display:grid;place-items:center;
-  transition:background var(--t-out),color var(--t-out),transform .12s var(--ease)}
+.act{flex:1;min-width:0;height:28px;border:0;border-radius:var(--r-2);display:grid;place-items:center;
+  transition:background var(--t-out),color var(--t-out)}
 .act svg{stroke-width:1.9}
-.act.ok{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
-.act.ok:hover{background:var(--go);color:#fff;transition:none}
-.act.no{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
-.act.no:hover{background:var(--red);color:#fff;transition:none}
-.act:active{transform:scale(.95)}
+.act.ok{background:var(--acc-2);color:var(--accent)}
+.act.ok:hover{background:var(--accent);color:var(--on-acc);transition:none}
+.act.no{background:var(--ov-1);color:var(--ink-2)}
+.act.no:hover{background:var(--ov-3);color:var(--fg);transition:none}
+.act:active{filter:brightness(.93);transition:none}
 
 /* Push buttons and fields, as the system draws them. */
 /* A push button's body is the raised ground; pointed at it takes the ladder's 10%, pressed 15%, mixed
    into the body so it fades back out. The filled ones (main, go, danger) keep a brightness step. */
-.btn{height:24px;padding:0 11px;border-radius:var(--r-2);border:0;background:var(--raised);box-shadow:0 0 0 .5px var(--ov-4),0 .5px 1px rgba(0,0,0,.08);
-  font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:filter var(--t-out),background var(--t-out)}
+.btn{height:24px;padding:0 12px;border-radius:var(--r-2);border:0;background:var(--raised);box-shadow:0 0 0 .5px var(--ov-4),0 .5px 1px rgba(0,0,0,.08);
+  font-size:12px;line-height:15px;font-weight:500;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:filter var(--t-out),background var(--t-out)}
 .btn:hover{background:color-mix(in srgb,var(--raised),currentColor 10%);transition:none}
-.btn:active{background:color-mix(in srgb,var(--raised),currentColor 15%)}
+.btn:active{background:color-mix(in srgb,var(--raised),currentColor 15%);transition:none}
 .btn.main:hover,.btn.go:hover,.btn.danger:hover{filter:brightness(1.06)}
 .btn.main:active,.btn.go:active,.btn.danger:active{filter:brightness(.93)}
 .quick:hover{filter:brightness(1.08)}
-.btn.main{background:var(--accent);color:#fff;box-shadow:none}
-.btn.go{background:var(--go);color:#fff;box-shadow:none}
+.btn.main{background:var(--accent);color:var(--on-acc);box-shadow:none}
+.btn.go{background:var(--accent);color:var(--on-acc);box-shadow:none}
 .btn.plain{background:transparent;box-shadow:none;color:var(--ink-2)}
 .btn.plain:hover{background:var(--ov-2);color:var(--fg)}
 .btn.plain:active{background:var(--ov-3)}
-.btn.danger{background:var(--red);color:#fff;box-shadow:none;animation:pop .14s var(--ease)}
+.btn.danger{background:var(--red);color:#fff;box-shadow:none;animation:pop var(--t-out) var(--ease)}
 /* An icon alone: a square, quiet until pointed at. */
-.btn.ico{width:26px;height:26px;padding:0;justify-content:center}
+.btn.ico{width:28px;height:28px;padding:0;justify-content:center}
 textarea{width:100%;border:0;border-radius:var(--r-2);padding:7px 9px;background:var(--raised);box-shadow:0 0 0 .5px var(--ov-4);
-  outline:none;resize:none;user-select:text;-webkit-user-select:text;line-height:1.4;transition:box-shadow .15s,background .15s}
+  outline:none;resize:none;user-select:text;-webkit-user-select:text;line-height:16px;transition:background var(--t-out)}
 textarea:focus{box-shadow:0 0 0 .5px var(--ov-4),0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent)!important}
-textarea::placeholder{color:var(--ink-3)}
+textarea::placeholder{color:-apple-system-placeholder-text}
 
 /* The card opened: an inspector at the side, on a veil of its own. */
 aside{position:fixed;top:8px;right:8px;bottom:8px;width:min(340px,calc(100vw - 16px));border-radius:var(--r-4);display:flex;flex-direction:column;z-index:5;
   background:color-mix(in srgb,var(--solid) 93%,transparent);-webkit-backdrop-filter:blur(30px) saturate(1.6);backdrop-filter:blur(30px) saturate(1.6);
-  box-shadow:var(--sh-lift);transform:translateX(calc(100% + 16px));transition:transform .26s var(--ease),visibility 0s .26s;visibility:hidden}
-aside.on{transform:none;visibility:visible;transition:transform .26s var(--ease)}
+  box-shadow:var(--sh-lift);transform:translateX(calc(100% + 16px));transition:transform .26s var(--spring),visibility 0s .26s;visibility:hidden}
+aside.on{transform:none;visibility:visible;transition:transform .26s var(--spring)}
+@media (prefers-reduced-motion:reduce){aside{transform:none;opacity:0;transition:opacity var(--t-fade),visibility 0s var(--t-fade)}aside.on{opacity:1;transition:opacity var(--t-fade)}}
 aside .top{flex:none;display:flex;align-items:center;gap:6px;padding:9px 8px 9px 14px;border-bottom:.5px solid var(--ov-3);min-width:0}
-aside .top .id{font-family:var(--mono);font-size:11px;color:var(--ink-2);flex:none}
-aside .top .who{flex:0 1 auto;font-size:12px;color:var(--ink-2)}
+@media (prefers-contrast:more){aside .top{border-bottom-width:1px}}
+aside .top .id{font-family:var(--mono);font-size:11px;line-height:14px;color:var(--ink-2);flex:none}
+aside .top .who{flex:0 1 auto;font-size:12px;line-height:15px;color:var(--ink-2)}
 aside .top .gap{flex:1}
 /* The status: a pop-up button, as the system's, its colour the column's. */
-.status{flex:none;height:24px;display:inline-flex;align-items:center;gap:6px;padding:0 7px 0 8px;border:0;border-radius:var(--r-2);font-size:12px;font-weight:600;
-  background:color-mix(in srgb,var(--c) 14%,transparent);color:color-mix(in srgb,var(--c) 75%,var(--fg));transition:background var(--t-out)}
+.status{flex:none;height:24px;display:inline-flex;align-items:center;gap:6px;padding:0 7px 0 8px;border:0;border-radius:var(--r-2);font-size:12px;line-height:15px;font-weight:600;
+  background:color-mix(in srgb,var(--c) 14%,transparent);color:color-mix(in srgb,var(--c) 55%,var(--fg));transition:background var(--t-out)}
 .status:hover{background:color-mix(in srgb,var(--c) 22%,transparent);transition:none}
+.status:active{background:color-mix(in srgb,var(--c) 28%,transparent)}
 .status .dot{width:7px;height:7px}
 .status svg{opacity:.7}
 aside .body{flex:1;min-height:0;overflow-y:auto;padding:12px 14px 16px;display:flex;flex-direction:column;gap:16px}
 /* A long card scrolls: nothing in it is squeezed, its title least of all. */
 aside .body>*{flex:none}
-aside .title{font-size:15px;font-weight:600;padding:6px 8px;margin:0 -8px;width:calc(100% + 16px);line-height:1.3;overflow:hidden;background:transparent;box-shadow:none}
+aside .title{font-size:15px;font-weight:600;padding:6px 8px;margin:0 -8px;width:calc(100% + 16px);line-height:20px;overflow:hidden;background:transparent;box-shadow:none}
 aside .title:hover{background:var(--ov-1)}
 aside .title:focus{background:var(--raised)}
-.sec>label{display:block;font-size:11px;font-weight:600;color:var(--ink-2);margin:0 0 6px}
+.sec>label{display:block;font-size:11px;line-height:14px;font-weight:600;color:var(--ink-2);margin:0 0 6px}
 .box{border-radius:var(--r-3);padding:8px 10px;background:var(--ov-1);overflow-wrap:anywhere;white-space:pre-wrap;user-select:text;-webkit-user-select:text}
 .box.blocked{background:color-mix(in srgb,var(--red) 12%,transparent)}
 .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .history{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
-.history li{display:grid;grid-template-columns:15px 1fr;gap:4px 8px;font-size:12px;color:var(--ink-2)}
+.history li{display:grid;grid-template-columns:15px 1fr;gap:4px 8px;font-size:12px;line-height:15px;color:var(--ink-2)}
 .history li .av{margin-top:1px}
 .history li b{color:var(--fg);font-weight:500}
 .history li .said{grid-column:2;color:var(--fg);white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text;
   background:var(--ov-1);border-radius:var(--r-3);padding:6px 9px}
-.hint{color:var(--ink-2);font-size:11px}
+.hint{color:var(--ink-2);font-size:11px;line-height:14px}
 
-@keyframes pop{from{opacity:0;transform:scale(.97)}}
-@keyframes rise{from{opacity:0;transform:translateY(5px) scale(.98)}}
+@keyframes pop{from{opacity:0}}
+@keyframes rise{from{opacity:0;transform:translateY(4px)}}
 /* Reduce Motion: what comes in fades, and nothing scales, slides or grows. */
 @media (prefers-reduced-motion:reduce){
-  @keyframes pop{from{opacity:0}}
   @keyframes rise{from{opacity:0}}
-  @keyframes grow{from{opacity:0}}
 }
-.card.fresh{animation:rise .26s var(--ease)}
+.card.fresh{animation:rise var(--t-move) var(--spring)}
 
-#toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,8px);opacity:0;pointer-events:none;z-index:9;max-width:80vw;
-  padding:8px 13px;border-radius:var(--r-4);background:color-mix(in srgb,var(--solid) 88%,transparent);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
-  box-shadow:var(--sh-pop);transition:opacity .2s,transform .2s var(--ease)}
-#toast.on{opacity:1;transform:translate(-50%,0)}
+#toast{position:fixed;left:50%;top:52px;transform:translateX(-50%);opacity:0;visibility:hidden;z-index:9;max-width:80vw;
+  padding:8px 14px;border-radius:var(--r-4);background:var(--solid);box-shadow:var(--sh-pop);transition:opacity var(--t-out),visibility 0s var(--t-out)}
+#toast.on{opacity:1;visibility:visible;transition:opacity var(--t-in)}
 </style>
 </head>
 <body>
@@ -233,7 +230,7 @@ aside .title:focus{background:var(--raised)}
 </div>
 <main id="lanes"></main>
 <aside id="card" aria-hidden="true"></aside>
-<div id="toast" role="status" aria-live="polite"></div>
+<div id="toast" role="alert"></div>
 <script>{{script}}</script>
 </body>
 </html>

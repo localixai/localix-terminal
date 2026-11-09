@@ -6,20 +6,16 @@ use super::{Key, SIDE};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in super::super) enum Tool {
     History,
-    Mini,
-    Events,
 }
 
 impl Tool {
     /// The buttons, in the toolbar's order (and the menu's).
-    pub(in super::super) const ALL: [Self; 3] = [Self::History, Self::Mini, Self::Events];
+    pub(in super::super) const ALL: [Self; 1] = [Self::History];
 
     /// The button the strip names by its id.
     fn parse(id: &str) -> Option<Self> {
         Some(match id {
             "hs" => Self::History,
-            "mn" => Self::Mini,
-            "ev" => Self::Events,
             _ => return None,
         })
     }
@@ -28,8 +24,6 @@ impl Tool {
     pub(in super::super) fn label(self) -> &'static str {
         match self {
             Self::History => "History",
-            Self::Mini => "Mini Player",
-            Self::Events => "Events",
         }
     }
 
@@ -37,8 +31,6 @@ impl Tool {
     pub(in super::super) fn bit(self) -> u8 {
         match self {
             Self::History => 1,
-            Self::Mini => 2,
-            Self::Events => 4,
         }
     }
 }
@@ -73,7 +65,7 @@ pub(in super::super) enum Click {
     /// The strip's empty part is the titlebar: a press moves the window, a double click zooms it.
     Drag,
     Zoom,
-    /// The expanded window goes back to the mini.
+    /// The window is put away (its yellow button, ⌘M).
     Collapse,
     /// The app quits (asked first while programs run).
     Quit,

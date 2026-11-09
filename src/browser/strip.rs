@@ -251,8 +251,7 @@ pub(super) fn menu(rows: Option<&[Row]>) -> String {
     format!("M({})", json!(shown))
 }
 
-/// The Event Center as the strip shows it: `events` (a JSON list, newest first), its bell's count
-/// of those not seen yet, and the list itself while it is `open`.
+/// The Event Center as the strip shows it: `events` (a JSON list, newest first), and the list itself while it is `open`.
 pub(super) fn center(events: &str, open: bool) -> String {
     let events = if events.is_empty() { "[]" } else { events };
     format!("V({events}, {open})")

@@ -10,7 +10,6 @@ use super::guard::allowed;
 use super::host::{Cmd, PROBE, Said, Shared, Window};
 use super::platform::user_agent;
 use super::popup::{self, Parent};
-use super::presence::Event;
 use super::tabs::BLANK;
 
 pub(super) fn builder<'a>(
@@ -65,10 +64,8 @@ pub(super) fn builder<'a>(
             });
             loads.page_load(id, &event, &url);
             let _ = loaded.send_event(Cmd::Strip);
-            // The mini's picture was taken as the tab appeared, before its page: take it again.
             if matches!(event, PageLoadEvent::Finished) {
                 super::tabs::drawn(&loads, id, &loaded);
-                let _ = loaded.send_event(Cmd::Presence(Event::Changed));
             }
         })
         .with_document_title_changed_handler(move |title| {
@@ -193,7 +190,7 @@ pub(super) fn remember(_first: &WebView) {}
 #[cfg(not(target_os = "macos"))]
 pub(super) fn forget() {}
 
-/// `builder` for one of the app's own pages (the strip's parts, the mini, a panel): remembering
+/// `builder` for one of the app's own pages (the strip's parts, a panel): remembering
 /// nothing, never taking the keyboard, drawing while the person works elsewhere, its own
 /// document only (it goes nowhere else, opens no window, and downloads nothing).
 pub(super) fn own_page(builder: WebViewBuilder) -> WebViewBuilder {
@@ -206,6 +203,18 @@ pub(super) fn own_page(builder: WebViewBuilder) -> WebViewBuilder {
         .with_navigation_handler(move |_| first.swap(false, Ordering::SeqCst))
         .with_new_window_req_handler(|_, _| NewWindowResponse::Deny)
         .with_download_started_handler(|_, _| false)
+}
+
+/// One of the app's own pages (`own_page`), built in `window`: it takes the system's appearance
+/// as the system's own web interfaces do, so its accent, selection and focus colours are the
+/// person's (`platform::system_appearance`).
+pub(super) fn build_own(
+    builder: WebViewBuilder,
+    window: &tao::window::Window,
+) -> wry::Result<WebView> {
+    let webview = build(builder, window)?;
+    super::platform::system_appearance(&webview);
+    Ok(webview)
 }
 
 #[cfg(not(target_os = "linux"))]

@@ -90,6 +90,15 @@ pub(super) fn reduced() -> bool {
     reduced.as_bool()
 }
 
+/// Whether VoiceOver is running.
+pub(super) fn screen_reader() -> bool {
+    // SAFETY: `sharedWorkspace` is NSWorkspace's class method, returning the shared instance.
+    let workspace: Retained<AnyObject> = unsafe { msg_send![class!(NSWorkspace), sharedWorkspace] };
+    // SAFETY: an NSWorkspace answers this property with a BOOL.
+    let on: Bool = unsafe { msg_send![&*workspace, isVoiceOverEnabled] };
+    on.as_bool()
+}
+
 /// Whether the person asked for more contrast (Accessibility, Display).
 pub(super) fn increased() -> bool {
     // SAFETY: `sharedWorkspace` is NSWorkspace's class method, returning the shared instance.
@@ -270,7 +279,10 @@ impl Screen {
         if full {
             return was;
         }
-        if self.until.is_some_and(|until| std::time::Instant::now() < until) {
+        if self
+            .until
+            .is_some_and(|until| std::time::Instant::now() < until)
+        {
             if let Some((at, size)) = self.frame {
                 let now = (window.outer_position().ok(), window.inner_size());
                 if now != (Some(at), size) {

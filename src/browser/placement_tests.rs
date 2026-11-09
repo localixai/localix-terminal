@@ -57,23 +57,6 @@ fn a_frame_the_person_gave_it_is_kept() {
 }
 
 #[test]
-fn the_mini_opens_in_the_bottom_right_corner() {
-    let (x, y) = mini(LAPTOP, None);
-    assert_eq!(x + MINI.0, LAPTOP.width - CORNER);
-    assert_eq!(y + MINI.1, LAPTOP.y + LAPTOP.height - CORNER);
-}
-
-#[test]
-fn where_the_person_put_the_mini_is_kept_while_it_is_on_the_screen() {
-    assert_eq!(mini(LAPTOP, Some((40.0, 100.0))), (40.0, 100.0));
-    // A screen that went away: the corner's edge, not off it.
-    assert_eq!(
-        mini(LAPTOP, Some((5000.0, -300.0))),
-        (LAPTOP.width - MINI.0, LAPTOP.y)
-    );
-}
-
-#[test]
 fn each_window_after_the_main_one_has_a_place_of_its_own_inside_the_screen() {
     let main = Rect {
         x: 100.0,

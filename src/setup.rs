@@ -78,17 +78,17 @@ pub const INTEGRATIONS: [Integration; 7] = [
     Integration {
         id: "command",
         title: "Command line",
-        gives: "`llx-desk` in every terminal, for any agent that runs commands (on Linux, the app among your applications too).",
+        gives: "`llx-desk` in every terminal, for any agent that runs commands (on Linux, the app among the applications too).",
         agent: None,
         offer: None,
     },
     Integration {
         id: "claude-code",
         title: "Claude Code",
-        gives: "The plugin: the window skill, the board, your comments told to Claude.",
+        gives: "The plugin: the window skill, the board, comments told to Claude.",
         agent: Some("claude"),
         offer: Some(offer(
-            "Add the LLX Desk plugin to Claude Code: pages, the board and your comments, in this window.",
+            "Add the LLX Desk plugin to Claude Code: pages, the board and comments, in this window.",
             "Add Plugin",
             "Plugin added. Run /reload-plugins in Claude Code to use it.",
         )),

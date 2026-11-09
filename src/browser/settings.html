@@ -9,66 +9,67 @@
    ladders of ink, fill and accent (frame.css), so light, dark and the glass all hold. */
 :root{
   --solid:#f5f5f7;
-  --warn:#d97706;
+  --warn:#b45309;
   --ground:var(--solid);
-  --ctl:26px;
+  --ctl:24px;
   color:var(--fg);
-  font:13px/1.35 var(--ui-font,var(--ui-sys));
+  font:13px/16px var(--ui-font,var(--ui-sys));
   -webkit-font-smoothing:antialiased;
 }
 @media (prefers-color-scheme: dark){:root{--solid:#161618;--warn:#f0a020}}
+@media (prefers-contrast:more){:root{--warn:#8f3f06}}
+@media (prefers-contrast:more) and (prefers-color-scheme: dark){:root{--warn:#ffb340}}
 html:not([data-glass]) body{background:var(--ground)}
 body{margin:0;cursor:default;user-select:none;-webkit-user-select:none;overflow:auto!important}
 main{max-width:680px;margin:0 auto;padding:26px 28px 48px}
-h1{font-size:23px;font-weight:700;letter-spacing:-.012em;margin:0 0 4px}
-.lead{color:var(--ink-2);margin:0 0 22px}
-h2{font-size:15px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--fg);margin:30px 4px 10px}
-.card{background:var(--ov-1);border-radius:12px;box-shadow:0 0 0 .5px var(--ov-3);overflow:hidden}
-.row{display:flex;align-items:center;gap:14px;min-height:46px;padding:7px 14px;box-sizing:border-box}
+h1{font-size:22px;line-height:26px;font-weight:600;text-wrap:balance;margin:0 0 4px}
+.lead{text-wrap:pretty;color:var(--ink-2);margin:0 0 22px}
+h2{font-size:15px;line-height:20px;font-weight:600;text-wrap:balance;color:var(--fg);margin:28px 4px 8px}
+.card{background:var(--ov-1);border-radius:var(--r-5);box-shadow:var(--sh-hair);overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 14px;box-sizing:border-box}
 .row[hidden]{display:none}
 .row+.row{box-shadow:0 -.5px 0 var(--ov-3)}
+@media (prefers-contrast:more){.row+.row{box-shadow:0 -1px 0 color-mix(in srgb,var(--fg) 45%,transparent)}}
 .row .l{flex:1;min-width:0}
 .row .l b{display:block;font-weight:500}
-.row .l small{display:block;color:var(--ink-2);font-size:12px;margin-top:3px}
-/* A segmented control, as the system's. */
-.seg{display:inline-flex;padding:2px;border-radius:var(--r-3);background:var(--ov-1);box-shadow:inset 0 0 0 .5px var(--ov-3)}
-.seg button{font:inherit;font-size:12px;color:var(--ink-2);border:0;background:none;height:22px;padding:0 11px;border-radius:var(--r-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
-.seg button:hover{color:var(--fg);transition:none}
-.seg button.on{color:var(--fg);background:color-mix(in srgb,var(--ground) 70%,#fff);box-shadow:0 0 0 .5px var(--ov-3),0 1px 2px rgba(0,0,0,.12)}
-@media (prefers-color-scheme: dark){.seg button.on{background:color-mix(in srgb,currentColor 18%,transparent)}}
-select{font:inherit;font-size:12px;color:inherit;background:var(--ov-1);border:0;box-shadow:inset 0 0 0 .5px var(--ov-3);border-radius:7px;height:var(--ctl);padding:0 28px 0 10px;-webkit-appearance:none;appearance:none;
+.row .l small{display:block;color:var(--ink-2);font-size:11px;line-height:14px;margin-top:2px}
+select{font:inherit;font-size:13px;line-height:16px;color:inherit;background:var(--ov-1);border:0;box-shadow:var(--hair-in);border-radius:var(--r-2);height:var(--ctl);padding:0 28px 0 10px;-webkit-appearance:none;appearance:none;
   background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
   background-position:calc(100% - 13px) 52%,calc(100% - 9px) 52%;background-size:4px 4px;background-repeat:no-repeat;min-width:160px;transition:background-color var(--t-out) var(--ease)}
 select:hover{background-color:var(--ov-2);transition:none}
 select:active{background-color:var(--ov-3)}
 :focus-visible{outline:3px solid var(--acc-3);outline-offset:0}
-.step{display:inline-flex;align-items:center;gap:2px;height:var(--ctl);border-radius:var(--r-3);background:var(--ov-1);box-shadow:inset 0 0 0 .5px var(--ov-3)}
-.step button{font:inherit;font-size:15px;line-height:1;width:28px;height:calc(var(--ctl) - 4px);border:0;background:none;color:inherit;border-radius:7px;transition:background-color var(--t-out) var(--ease)}
+.step{display:inline-flex;align-items:center;gap:2px;height:var(--ctl);border-radius:var(--r-3);background:var(--ov-1);box-shadow:var(--hair-in)}
+.step button{font:inherit;font-size:15px;line-height:1;width:28px;height:calc(var(--ctl) - 4px);border:0;background:none;color:inherit;border-radius:var(--r-2);transition:background-color var(--t-out) var(--ease)}
 .step button:hover:not(:disabled){background:var(--ov-2);transition:none}
 .step button:active{background:var(--ov-3)}
 .step span{min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
-.preview{margin:0 14px 12px;padding:10px 12px;border-radius:9px;background:color-mix(in srgb,currentColor 7%,transparent);font-family:var(--mono,ui-monospace,Menlo,monospace);font-size:var(--mono-size,13px);line-height:1.35;white-space:pre;overflow:hidden;user-select:text;-webkit-user-select:text}
+.preview{margin:0 14px 12px;padding:10px 12px;border-radius:var(--r-3);background:var(--ov-1);font-family:var(--mono,ui-monospace,Menlo,monospace);font-size:var(--mono-size,13px);line-height:calc(var(--mono-size,13px) + 5px);white-space:pre;overflow:hidden;user-select:text;-webkit-user-select:text}
 .preview .p{color:#3fb950}.preview .d{color:var(--ink-3)}
 @media (prefers-color-scheme: light){.preview .p{color:#1a7f37}}
 /* Shortcuts. */
-#find{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;margin:0 0 10px;padding:0 10px;height:30px;border-radius:var(--r-3);background:var(--ground);box-shadow:inset 0 0 0 .5px var(--ov-3)}
-html[data-glass] #find{-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);background:color-mix(in srgb,var(--ground) 80%,transparent)}
-html[data-reduced] #find{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--ground)}
-#find:focus-within{background:var(--ground);outline:3px solid var(--acc-2)}
-#find input{flex:1;font:inherit;color:inherit;background:none;border:0;outline:0;user-select:text;-webkit-user-select:text}
+/* The search is a text field as the controls above are: a fill and a hairline on the window's
+   own ground, never a ground of its own. */
+#find{display:flex;align-items:center;gap:8px;margin:0 0 10px;padding:0 10px;height:28px;border-radius:var(--r-3);background:var(--ov-1);box-shadow:var(--hair-in);cursor:text;transition:background-color var(--t-out) var(--ease)}
+#find:hover{background:var(--ov-2);transition:none}
+#find:has(input:focus-visible){outline:3px solid var(--acc-3)}
+html[data-inactive] #find:has(input:focus-visible){outline:0}
+#find input{flex:1;min-width:0;font:inherit;color:inherit;background:none;border:0;outline:0;padding:0;user-select:text;-webkit-user-select:text}
+#find input::placeholder{color:-apple-system-placeholder-text}
 #find svg{width:13px;height:13px;fill:none;stroke:var(--ink-2);stroke-width:1.5}
-.group{font-size:12px;font-weight:600;color:var(--ink-2);padding:12px 14px 4px}
+.group{font-size:12px;line-height:15px;font-weight:600;color:var(--ink-2);padding:12px 14px 4px}
 .k{min-height:38px}
-.row.k{cursor:pointer;transition:background-color var(--t-out) var(--ease)}
-.row.k:hover{background:var(--acc-1);transition:none}
-.row.k:active:not(:has(.ic:active)){background:var(--acc-2)}
-.chip{font:inherit;font-size:12px;color:inherit;min-width:64px;height:24px;padding:0 9px;border-radius:var(--r-2);border:0;background:var(--ov-1);box-shadow:inset 0 0 0 .5px var(--ov-3);letter-spacing:.06em;font-variant-numeric:tabular-nums;transition:box-shadow var(--t-out)}
-.chip:hover{box-shadow:inset 0 0 0 .5px var(--ov-3),0 0 0 3px var(--ov-1)}
-.chip.has,.chip.has:hover{min-width:0;height:auto;padding:0;background:none;box-shadow:none;letter-spacing:0}
-.chip.none{color:var(--ink-3);letter-spacing:0}
-.chip.rec{letter-spacing:0;color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent);animation:pulse 1.2s ease-in-out infinite}
-.chip.rec.short{color:var(--warn);box-shadow:inset 0 0 0 1.5px var(--warn);animation:none}
-@keyframes pulse{50%{box-shadow:inset 0 0 0 1.5px var(--acc-3)}}
+.row.k{transition:background-color var(--t-out) var(--ease)}
+.row.k:hover{background:var(--ov-1);transition:none}
+.row.k:active:not(:has(.ic:active)){background:var(--ov-2);transition:none}
+.chip{font:inherit;font-size:12px;line-height:15px;color:inherit;min-width:64px;height:24px;padding:0 9px;border-radius:var(--r-2);border:0;background:var(--ov-1);box-shadow:var(--hair-in);font-variant-numeric:tabular-nums;transition:background-color var(--t-out) var(--ease)}
+.chip:hover{background:var(--ov-2);transition:none}
+.chip:active{background:var(--ov-3);transition:none}
+.chip.has,.chip.has:hover{min-width:0;height:auto;padding:0;background:none;box-shadow:none}
+.chip.none{color:var(--ink-2)}
+/* Recording keys: the accent ring and the words say so; nothing pulses. */
+.chip.rec{color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.chip.rec.short{color:var(--warn);box-shadow:inset 0 0 0 1.5px var(--warn)}
 .keys{display:inline-flex;align-items:center;gap:3px}
 .cap{box-sizing:border-box;min-width:22px;height:22px;padding:0 6px;display:inline-grid;place-items:center;font-size:12px;line-height:1;border-radius:var(--r-1);background:var(--ov-1);font-variant-numeric:tabular-nums}
 .chip.clash .cap{box-shadow:inset 0 0 0 2px var(--warn)}
@@ -77,27 +78,28 @@ html[data-reduced] #find{-webkit-backdrop-filter:none;backdrop-filter:none;backg
 .ic:active{background:var(--ov-3)}
 .ic svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .ic.gone{visibility:hidden}
-.note{font-size:12px;color:var(--warn);margin-top:2px}
-.ask{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px 10px;font-size:12px}
+.note{font-size:12px;line-height:15px;color:var(--warn);margin-top:2px}
+.ask{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px 10px;font-size:12px;line-height:15px}
 .ask span{flex:1;min-width:200px;color:var(--ink-2)}
-.btn{font:inherit;font-size:12px;font-weight:500;height:24px;padding:0 11px;display:inline-flex;align-items:center;border:0;border-radius:var(--r-2);color:inherit;background:var(--ov-1);box-shadow:inset 0 0 0 .5px var(--ov-3);transition:background-color var(--t-out) var(--ease)}
+.btn{font:inherit;font-size:13px;line-height:16px;font-weight:500;height:24px;padding:0 12px;display:inline-flex;align-items:center;border:0;border-radius:var(--r-2);color:inherit;background:var(--ov-1);box-shadow:var(--hair-in);transition:background-color var(--t-out) var(--ease)}
 .btn:hover:not(:disabled){background:var(--ov-2);transition:none}
-.btn:active:not(:disabled){background:var(--ov-3)}
-.btn.go{background:var(--accent);color:#fff;box-shadow:none}
+.btn:active:not(:disabled){background:var(--ov-3);transition:none}
+.btn.go{background:var(--accent);color:var(--on-acc);box-shadow:none}
 .btn.go:hover:not(:disabled){background:var(--accent);filter:brightness(1.08)}
 .btn.go:active:not(:disabled){background:var(--accent);filter:brightness(.92)}
 button:disabled,select:disabled{opacity:.4;cursor:default;pointer-events:none}
 .foot{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px}
-.foot span{color:var(--ink-2);font-size:12px}
-.empty{padding:14px;color:var(--ink-3);text-align:center}
+.foot span{color:var(--ink-2);font-size:11px;line-height:14px}
+.empty{padding:14px;color:var(--ink-2);text-align:center}
 /* Integrations. */
 .state{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--ink-3)}
-.state.on{background:#34c759}
+.state.on{background:-apple-system-green}
 .state.unavailable{background:transparent;box-shadow:inset 0 0 0 1px var(--ink-3)}
-#err.ok{background:color-mix(in srgb,var(--fg) 82%,transparent);color:var(--ground)}
-#err{position:fixed;left:50%;bottom:18px;transform:translate(-50%,8px);padding:8px 13px;border-radius:var(--r-3);max-width:80vw;background:var(--warn);color:#fff;font-size:12px;opacity:0;transition:opacity .2s,transform .2s var(--ease);pointer-events:none}
-#err.on{opacity:1;transform:translate(-50%,0)}
-button,.chip,.btn,select,label:has(input[type=checkbox]),input[type=checkbox],input[type=range]{cursor:pointer}
+/* A notice of what happened: at the top, away from the window's bottom edge; it fades in and out
+   in place, stays while the pointer is on it, and closes on a click. */
+#err{position:fixed;left:50%;top:16px;transform:translateX(-50%);padding:8px 14px;border-radius:var(--r-3);max-width:80vw;background:#b45309;color:#fff;font-size:13px;line-height:16px;box-shadow:var(--sh-pop);opacity:0;visibility:hidden;transition:opacity var(--t-out) var(--ease),visibility 0s var(--t-out)}
+#err.on{opacity:1;visibility:visible;transition:opacity var(--t-in) var(--ease)}
+#err.ok{background:color-mix(in srgb,var(--fg) 90%,transparent);color:var(--ground)}
 input[type=text],input:not([type]),input[type=search]{cursor:text}
 </style>
 </head>
@@ -110,10 +112,10 @@ input[type=text],input:not([type]),input[type=search]{cursor:text}
   <div class="card">
     <div class="row"><div class="l"><b>Theme</b><small>Light, dark, or as the system is.</small></div>
       <button class="ic gone" data-reset="theme" aria-label="Reset Theme"></button>
-      <div class="seg" id="theme" role="radiogroup" aria-label="Theme"></div></div>
+      <select id="theme" aria-label="Theme"></select></div>
     <div class="row" id="trow"><div class="l"><b>Window transparency</b><small id="tnote">How much of the desktop shows through the glass.</small></div>
       <button class="ic gone" data-reset="transparency" aria-label="Reset Window transparency"></button>
-      <div class="seg" id="transparency" role="radiogroup" aria-label="Window transparency"></div></div>
+      <select id="transparency" aria-label="Window transparency"></select></div>
     <div class="row"><div class="l"><b>Interface font</b><small>The tabs, the bar and these pages.</small></div>
       <button class="ic gone" data-reset="ui_font" aria-label="Reset Interface font"></button>
       <select id="ui_font" aria-label="Interface font"></select></div>
@@ -128,11 +130,11 @@ running 230 tests  <span class="p">ok</span>  0O 1lI {}[]=&gt; -&gt;</div>
   </div>
 
   <h2>Integrations</h2>
-  <div class="card" id="integrations"><div class="empty">Looking for your tools…</div></div>
+  <div class="card" id="integrations"><div class="empty">Looking for tools…</div></div>
   <div class="foot"><span>Another MCP host?</span><button class="btn" id="copy-mcp">Copy MCP Entry</button></div>
 
-  <h2>Keyboard shortcuts</h2>
-  <label id="find"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><input id="q" placeholder="Search by name or keys (ex. &quot;cmd d&quot;)" spellcheck="false" autocomplete="off"></label>
+  <h2>Keyboard Shortcuts</h2>
+  <label id="find"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><input id="q" placeholder="Search by name or keys, such as &quot;cmd d&quot;" spellcheck="false" autocomplete="off"></label>
   <div class="card" id="keys"></div>
   <div class="foot" id="foot"></div>
 </main>
@@ -175,55 +177,23 @@ function change(name, value) {
   post({ [name]: value });
 }
 
-// A segmented control: its buttons made once, then only marked; one is in the tab order, and the
-// arrow keys, Home and End select and focus.
-const segs = new WeakMap();
-function mark(holder, value) {
-  for (const [key, button] of segs.get(holder)) {
-    button.classList.toggle("on", key === value);
-    button.setAttribute("aria-checked", String(key === value));
-    button.tabIndex = key === value ? 0 : -1;
-  }
-}
-function segmented(id, options, value, name) {
-  const holder = document.getElementById(id);
-  if (!segs.has(holder)) {
-    const keys = options.map(([key]) => key);
-    const buttons = new Map(options.map(([key, label]) => {
-      const button = el("button", "", label);
-      button.setAttribute("role", "radio");
-      button.addEventListener("click", () => change(name, key));
-      return [key, button];
-    }));
-    holder.addEventListener("keydown", (event) => {
-      const at = keys.indexOf(cur && cur[name]);
-      const to = { ArrowLeft: at - 1, ArrowUp: at - 1, ArrowRight: at + 1, ArrowDown: at + 1, Home: 0, End: keys.length - 1 }[event.key];
-      if (to === undefined || event.metaKey || event.ctrlKey || event.altKey) return;
-      event.preventDefault();
-      const key = keys[(to + keys.length) % keys.length];
-      change(name, key);
-      buttons.get(key).focus();
-    });
-    holder.replaceChildren(...buttons.values());
-    segs.set(holder, buttons);
-  }
-  mark(holder, value);
-}
-// A choice of fonts: the options made again only when the list is another, else the value set.
-function choices(id, fonts, value) {
+// A pop-up of exclusive choices, each a `[id, name]`: the options made again only when the list
+// is another, else the value set.
+function choices(id, list, value) {
   const select = document.getElementById(id);
-  const ids = fonts.map((font) => font.id).join();
+  const ids = list.map(([key]) => key).join();
   if (select.dataset.ids !== ids) {
     select.dataset.ids = ids;
-    select.replaceChildren(...fonts.map((font) => {
-      const option = el("option", "", font.name);
-      option.value = font.id;
+    select.replaceChildren(...list.map(([key, name]) => {
+      const option = el("option", "", name);
+      option.value = key;
       return option;
     }));
   }
   select.value = value;
 }
-for (const id of ["ui_font", "code_font"]) {
+const fontList = (fonts) => fonts.map((font) => [font.id, font.name]);
+for (const id of ["theme", "transparency", "ui_font", "code_font"]) {
   document.getElementById(id).addEventListener("change", (event) => change(id, event.target.value));
 }
 const step = (by) => cur && data && change("font_size", Math.min(data.sizes[1], Math.max(data.sizes[0], cur.font_size + by)));
@@ -251,17 +221,15 @@ for (const button of document.querySelectorAll("button[data-reset]")) {
 // The Appearance rows as `cur` has them, set in place: nothing is made again, so a hover or a
 // focus is not lost, and the transitions play.
 function show() {
-  segmented("theme", THEMES, cur.theme, "theme");
-  segmented("transparency", LEVELS, cur.transparency, "transparency");
+  choices("theme", THEMES, cur.theme);
+  choices("transparency", LEVELS, cur.transparency);
   // The window's glass is macOS's; and the system's Reduce Transparency wins over this setting.
   document.getElementById("trow").hidden = !data.glass;
   const reduced = document.documentElement.hasAttribute("data-reduced");
-  const level = document.getElementById("transparency");
-  level.setAttribute("aria-disabled", String(reduced));
-  for (const button of segs.get(level).values()) button.disabled = reduced;
+  document.getElementById("transparency").disabled = reduced;
   document.getElementById("tnote").textContent = reduced ? REDUCED : GLASSY;
-  choices("ui_font", data.ui_fonts, cur.ui_font);
-  choices("code_font", data.code_fonts, cur.code_font);
+  choices("ui_font", fontList(data.ui_fonts), cur.ui_font);
+  choices("code_font", fontList(data.code_fonts), cur.code_font);
   document.getElementById("size").textContent = cur.font_size + " pt";
   document.getElementById("smaller").disabled = cur.font_size <= data.sizes[0];
   document.getElementById("larger").disabled = cur.font_size >= data.sizes[1];
@@ -269,7 +237,7 @@ function show() {
     const name = button.dataset.reset;
     const same = cur[name] === data.defaults[RESETS[name]];
     button.classList.toggle("gone", same);
-    if (!same) button.title = "Back to " + defaultLabel(name);
+    if (!same) button.title = "Reset to " + defaultLabel(name);
   }
 }
 
@@ -454,10 +422,10 @@ function patchRow(node, row) {
   }
   chip.setAttribute("aria-label", row.title + ": " + (row.shown || "none") + ". Press to change");
   chip.title = mode === "rec"
-    ? (row.row ? "Press the modifiers with any digit. " : "") + "Esc cancels, ⌫ takes the shortcut off"
+    ? (row.row ? "Press the modifiers with any digit. " : "") + "Press Esc to cancel or ⌫ to remove the shortcut"
     : "Default: " + (row.default || "none");
   node.reset.classList.toggle("gone", !row.changed);
-  node.reset.title = "Back to " + (row.default || "none");
+  node.reset.title = "Reset to " + (row.default || "none");
 }
 // The question of a chord another shortcut has, under the row asked about.
 function askRow(row) {
@@ -534,7 +502,7 @@ function I(list) {
     row.append(label);
     if (one.state !== "unavailable") {
       const on = one.state === "on";
-      const act = el("button", on ? "btn" : "btn go", on ? "Remove" : "Add");
+      const act = el("button", "btn", on ? "Remove" : "Add");
       act.addEventListener("click", () => {
         act.disabled = true;
         act.textContent = on ? "Removing…" : "Adding…";
@@ -548,9 +516,21 @@ function I(list) {
 function T(text, error) {
   const toast = document.getElementById("err");
   toast.textContent = text;
+  toast.setAttribute("role", error ? "alert" : "status");
   toast.className = error ? "on" : "on ok";
+  T.wait = error ? 5000 : 3500;
+  T.later();
+}
+// The notice waits while the pointer is on it, and goes on a click.
+T.later = () => {
   clearTimeout(T.hide);
-  T.hide = setTimeout(() => { toast.className = ""; }, error ? 5000 : 3500);
+  T.hide = setTimeout(() => { document.getElementById("err").className = ""; }, T.wait);
+};
+{
+  const toast = document.getElementById("err");
+  toast.addEventListener("mouseenter", () => clearTimeout(T.hide));
+  toast.addEventListener("mouseleave", () => T.later());
+  toast.addEventListener("click", () => { clearTimeout(T.hide); toast.className = ""; });
 }
 document.getElementById("copy-mcp").addEventListener("click", () => post({ copy: "mcp" }));
 

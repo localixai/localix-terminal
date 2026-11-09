@@ -135,7 +135,7 @@ impl Deck {
             self.say((part, view), "agents", &super::super::agents::script());
             self.say((part, view), "drawn", &drawn);
         }
-        self.tell_full_screen();
+        self.tell_frame();
         let rows = (self.menu == Some(Menu::History)).then(|| self.rows(shared));
         if self.menu != Some(Menu::Events) {
             let _ = strip.evaluate_script(&strip::menu(rows.as_deref()));
@@ -169,12 +169,17 @@ impl Deck {
         self.say((Part::Nav, nav), "turn", &strip::turn(turn));
     }
 
-    /// The pages know whether the window is full screen (`data-full`): it has no buttons of its
-    /// own then, and the crumbs give up the room kept for them. Told on every refresh too, so a
-    /// page loaded again has it back.
-    pub(in super::super) fn tell_full_screen(&self) {
+    /// The pages know the window's state: full screen (`data-full`: it has no buttons of its own
+    /// then, and the crumbs give up the room kept for them) and inactive (`data-inactive`: another
+    /// window is key, and the chrome recedes). Told on every refresh too, so a page loaded again
+    /// has it back; WebKit's `:window-inactive` never restyles what it has drawn.
+    pub(in super::super) fn tell_frame(&self) {
         let full = self.frame.native.fullscreen().is_some();
-        let script = format!("document.documentElement.toggleAttribute('data-full',{full})");
+        let inactive = !self.frame.is_key();
+        let script = format!(
+            "document.documentElement.toggleAttribute('data-full',{full});\
+             document.documentElement.toggleAttribute('data-inactive',{inactive})"
+        );
         let views = [
             (Part::Strip, self.strip.as_ref()),
             (Part::Side, self.side.as_ref()),
@@ -182,7 +187,7 @@ impl Deck {
         ];
         for (part, view) in views {
             if let Some(view) = view {
-                self.say((part, view), "full", &script);
+                self.say((part, view), "frame", &script);
             }
         }
     }

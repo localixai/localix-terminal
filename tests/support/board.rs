@@ -144,8 +144,8 @@ pub(crate) fn reopened(browser: &Browser) {
     let _ = std::fs::remove_dir_all(&home);
 }
 
-/// A card handed in is news under the strip's bell; the person opens the Event Center, sees it,
-/// and accepts the card from there, which moves it to Done on the board.
+/// A card handed in is news in the Event Center; the person opens it (its shortcut: the bar has no
+/// button for it), sees it, and accepts the card from there, which moves it to Done on the board.
 #[cfg(target_os = "macos")]
 pub(crate) fn center(browser: &Browser) {
     let home = std::env::temp_dir().join(format!("llx-desk-center-{}", std::process::id()));
@@ -177,18 +177,16 @@ pub(crate) fn center(browser: &Browser) {
     act(
         json!({"action": "interact", "tab": "b1", "op": "review", "card": "c1", "note": "fixed it"}),
     );
-    let count = "document.getElementById('evn').className + ':' + document.getElementById('evn').textContent";
-    until("the bell counts the card handed in", || {
-        browser.peek_strip(count) == Ok(json!("on:1"))
-    });
-    browser.click("events");
-    until(
-        "the center lists it, and the bell's count goes once it is seen",
-        || {
-            let read = "[document.querySelectorAll('#menu .ev').length, document.querySelector('#menu .ev .n')?.textContent, document.getElementById('evn').className]";
-            browser.peek_strip(read) == Ok(json!([1, "Cart", ""]))
-        },
+    // The bar has no button for the center: its shortcut opens it.
+    assert_eq!(
+        browser.peek_strip("document.getElementById('ev') === null"),
+        Ok(json!(true))
     );
+    browser.click("events");
+    until("the center lists it, new until it is seen", || {
+        let read = "[document.querySelectorAll('#menu .ev').length, document.querySelector('#menu .ev .n')?.textContent]";
+        browser.peek_strip(read) == Ok(json!([1, "Cart"]))
+    });
     let accepted = browser.peek_strip("document.querySelector('#menu .ev .act').click(); 1");
     assert_eq!(accepted, Ok(json!(1)));
     until("the card is accepted from the center", || {

@@ -20,7 +20,7 @@ const BORDERLESS: usize = 0;
 const NONACTIVATING_PANEL: usize = 1 << 7;
 /// NSBackingStoreBuffered.
 const BUFFERED: usize = 2;
-/// NSPopUpMenuWindowLevel: over the app's windows and the mini.
+/// NSPopUpMenuWindowLevel: over the app's windows.
 const OVER_ALL: isize = 101;
 /// NSWindowCollectionBehavior: on every Space, over a full-screen app, out of window cycling.
 const EVERYWHERE: usize = (1 << 0) | (1 << 8) | (1 << 6);

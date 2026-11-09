@@ -39,11 +39,18 @@ pub(super) fn app() -> Retained<AnyObject> {
     unsafe { msg_send![class!(NSApplication), sharedApplication] }
 }
 
-/// The app made the one the person uses: only ever for what they did themselves (a click on
-/// the mini, the Dock, quitting), never for what an agent does.
+/// The app made the one the person uses: only ever for what they did themselves (the Dock's
+/// icon, quitting), never for what an agent does.
 pub(super) fn activate() {
     // SAFETY: the app takes a BOOL: whether to take over from the app active now.
     let _: () = unsafe { msg_send![&*app(), activateIgnoringOtherApps: Bool::YES] };
+}
+
+/// The app no longer the one the person uses: the system activates the one they were in. Only
+/// ever for what they did themselves (putting the window away).
+pub(super) fn deactivate() {
+    // SAFETY: `deactivate` takes no argument and returns nothing.
+    let _: () = unsafe { msg_send![&*app(), deactivate] };
 }
 
 /// Whether one wait for the app to become active is set, so a second press never stacks another.

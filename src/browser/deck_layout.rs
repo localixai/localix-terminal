@@ -2,11 +2,8 @@
 //! it, what is shown beside that, the rest out of sight, and the strip and the side told what the
 //! window holds. While the history menu is open the strip takes the whole window.
 
-use std::sync::mpsc::SyncSender;
-
 use tao::dpi::LogicalSize;
 
-use super::super::capture::{Shot, capture};
 use super::super::host::Cmd;
 use super::super::tabs::Tabs;
 
@@ -17,18 +14,6 @@ use super::super::tabs::{pin, place};
 use super::{Deck, Shown};
 
 impl Deck {
-    /// What the mini shows: the tab shown, and which of the browser's tabs it is.
-    pub(in super::super) fn signature(&self) -> (Shown, u32) {
-        (self.shown, self.web.as_ref().map_or(0, Tabs::active_id))
-    }
-
-    /// The tab shown, as the mini names it: its key and its project.
-    pub(in super::super) fn shown_tab(&self, shared: &Shared) -> Option<(String, String)> {
-        let listed = self.listing(shared);
-        let tab = listed.into_iter().find(|tab| tab.shown)?;
-        Some((tab.id, tab.group))
-    }
-
     /// The keys go to the tab shown, after the person switched to it themselves: never while
     /// the window is not the key window (an agent's switch, or another app in front), while the
     /// person types in the strip, or while a menu is open.
@@ -42,20 +27,6 @@ impl Deck {
         };
         if let Some(view) = view {
             let _ = view.focus();
-        }
-    }
-
-    /// A picture of the tab shown, for the mini; the reply says why when there is none.
-    pub(in super::super) fn capture_shown(&self, reply: SyncSender<Result<Shot, String>>) {
-        let view = match self.shown {
-            Shown::Web => self.web.as_ref().map(Tabs::active),
-            Shown::Term(id) => self.term(id).map(|open| &open.webview),
-        };
-        match view {
-            Some(view) => capture(view, None, reply),
-            None => {
-                let _ = reply.send(Err("no tab is shown".into()));
-            }
         }
     }
 

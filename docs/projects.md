@@ -91,7 +91,7 @@ change_events, change_cursors                          -- the feed, as now
   folder) are the project's. The Event Center shows every project's events, each named by its
   project.
 - **An agent in another project** never moves the window: its project's dot lights in the
-  switcher, the mini blinks, its events wait in the Event Center.
+  switcher, its events wait in the Event Center.
 - **Close Project** (⌃⌘W) closes its tabs as the person's close does (a terminal's program runs on
   out of sight, in its history as any closed terminal); its history, board and events stay. The
   window goes to the project used last with tabs open, else Home.

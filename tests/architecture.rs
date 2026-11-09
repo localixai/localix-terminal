@@ -63,3 +63,22 @@ fn domain_models_do_not_depend_on_application_or_ui_adapters() {
         }
     }
 }
+
+#[test]
+fn every_web_view_takes_the_first_click_of_an_inactive_window() {
+    // A window that is not the key one (a panel, a window behind another app) would
+    // spend its first click on waking up, and the person would click twice. Every page the app
+    // builds says it takes that click.
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = vec![];
+    rust_files(&source, &mut files).unwrap();
+    let mut missing = vec![];
+    for path in files {
+        let text = std::fs::read_to_string(&path).unwrap();
+        if text.contains("WebViewBuilder::new()") && !text.contains("with_accept_first_mouse(true)")
+        {
+            missing.push(path.strip_prefix(&source).unwrap().display().to_string());
+        }
+    }
+    assert!(missing.is_empty(), "{missing:?}");
+}
