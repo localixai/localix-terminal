@@ -17,12 +17,7 @@ yanked = "deny"
 # An unmaintained crate is refused among this crate's own dependencies; one deeper in the tree
 # (GTK's macros, on Linux) is the dependency's to replace.
 unmaintained = "workspace"
-ignore = [
-  # SQLite before 3.54 reads stale memory from a database whose -wal file another party crafted.
-  # The desk opens only its own database, in its own folder. The fix is rusqlite 0.41, which
-  # needs Rust 1.89, above this crate's rust-version: remove this entry with that upgrade.
-  { id = "RUSTSEC-2026-0459", reason = "only the desk's own database is opened; fixed by the rusqlite 0.41 upgrade" },
-]
+ignore = []
 
 [licenses]
 version = 2

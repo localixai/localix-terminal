@@ -2,7 +2,7 @@
 name = "llx-desk"
 version = "0.1.5"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.89"
 description = "A project-first development environment, built for working with agents: terminals, browser tabs and a task board per project"
 license = "MIT"
 publish = false
@@ -25,7 +25,7 @@ libc = "0.2"
 vt100 = "0.16.2"
 # What the desk keeps across restarts: the change feed, the boards, the Event Center's journal. Built
 # in, so the binary needs no SQLite of the system.
-rusqlite = { version = "0.40.2", features = ["bundled", "fallible_uint"] }
+rusqlite = { version = "0.41.1", features = ["bundled", "fallible_uint"] }
 
 # Messages to the WKWebView behind the window, and the block its screenshot answers through.
 [target.'cfg(target_os = "macos")'.dependencies]

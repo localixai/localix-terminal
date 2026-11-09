@@ -11,7 +11,7 @@ REPO=rsaryev/llx-desk
 # The Apple Developer team that signs the Mac app (ten letters and digits). When set, the app must
 # carry a Developer ID certificate of this team, not only a valid signature; empty, any signed app
 # Apple notarized passes. The release workflow checks that it names the team that signs releases.
-TEAM_ID=
+TEAM_ID=64V3JT9A64
 
 say() { printf 'llx-desk: %s\n' "$*" >&2; }
 

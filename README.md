@@ -69,7 +69,7 @@ until you add it back. Any other MCP host takes the entry *Copy MCP Entry* gives
 - The script checks `SHA256SUMS` before it writes anything. Run it again to update; `LLX_DESK_VERSION=0.1.0` picks another release.
 - **Linux**: the program goes to `~/.local/share/llx-desk`, and `llx-desk setup command` puts the command on your `PATH` and LLX Desk among your applications (`llx-desk open`). Pages need WebKitGTK 4.1 and GTK 3 (`sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0`), glibc 2.35+ (Ubuntu 22.04+), and a display (X or Wayland). Without one, terminals still work.
 - **The app from source** (macOS): `cargo build --release && scripts/bundle-macos.sh` makes `target/release/bundle/macos/LLX Desk.app`, signed ad hoc for this Mac.
-- **From source**, Rust 1.88+ (on Linux also `libwebkit2gtk-4.1-dev` and `libgtk-3-dev`):
+- **From source**, Rust 1.89+ (on Linux also `libwebkit2gtk-4.1-dev` and `libgtk-3-dev`):
 
   ```sh
   cargo install --locked --git https://github.com/rsaryev/llx-desk && llx-desk setup command
