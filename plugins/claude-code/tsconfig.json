@@ -1,0 +1,23 @@
+// The hooks module's type check, and the JSX that `bun test` compiles it with. The module runs
+// with no DOM, Node or Bun, so no ambient types are taken in. The `claude-code` module's
+// declarations are not in the repository: Claude Code writes them to .claude-plugin/types/ when it
+// loads the plugin from this folder (`claude --plugin-dir plugins/claude-code`).
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023"],
+    "types": [],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "jsx": "react",
+    "jsxFactory": "h",
+    "jsxFragmentFactory": "Fragment"
+  },
+  "include": [".claude-plugin/types", "hooks", "types"],
+  "exclude": ["hooks/*.test.ts"]
+}

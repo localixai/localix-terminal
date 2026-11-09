@@ -1,3 +1,6 @@
+//! The plugin's hooks: the line above the prompt and `/tabs`, the person's comments as turns,
+//! and the board's workers held to their cards.
+
 import { atom, read, update } from 'claude-code'
 import type { Events, Register } from 'claude-code'
 
@@ -75,7 +78,11 @@ async function leftOver($: Api, worker: string | undefined): Promise<string> {
 }
 
 /** How the session reaches the desk, once it has started: a `llx-desk` call. */
-let deskRun: ((argv: string[]) => Promise<{ exitCode: number; stdout: string } | undefined>) | undefined
+let deskRun: ((argv: string[], timeoutMs?: number) => Promise<{ exitCode: number; stdout: string } | undefined>) | undefined
+/** How long a call of the desk may take before it is given up. */
+const CALL_MS = 5000
+/** The call that closes the tabs as the session ends: short, so a hung app never holds the exit. */
+const END_MS = 1500
 /** The desk runs: telling it something then starts nothing. */
 let deskUp = false
 /** The session told the Event Center it waits for the person. */
@@ -115,16 +122,23 @@ export const register: Register = (on, options) => {
       `${home ?? ''}/Applications/LLX Desk.app/Contents/MacOS/llx-desk`,
       '/Applications/LLX Desk.app/Contents/MacOS/llx-desk',
     ]
-    // Resolved at each call, from the first: a program that failed once (not installed yet, a
-    // slow moment) is tried again. `found` is the one that last ran.
+    // Resolved at each call, from the one that last ran (`found`), then the rest in order: a
+    // program that could not start once (not installed yet) is tried again, and one missing from
+    // the PATH costs no failed start on every look. Only a program that cannot start is passed
+    // over: one that started and outlasted its time is the app, slow or hung, and every other
+    // candidate is the same app, so it is not asked again.
     let found = 0
-    const run = async (argv: string[]) => {
-      for (let i = 0; i < candidates.length; i++) {
-        const ran = await $.process.run([candidates[i], ...argv], { timeoutMs: 5000 }).catch(() => undefined)
+    const run = async (argv: string[], timeoutMs = CALL_MS) => {
+      const from = found
+      const order = [...candidates.slice(from), ...candidates.slice(0, from)]
+      for (const [step, program] of order.entries()) {
+        const started = Date.now()
+        const ran = await $.process.run([program, ...argv], { timeoutMs }).catch(() => undefined)
         if (ran) {
-          found = i
+          found = (from + step) % candidates.length
           return ran
         }
+        if (Date.now() - started >= timeoutMs) return undefined
       }
       return undefined
     }
@@ -146,14 +160,24 @@ export const register: Register = (on, options) => {
     // What the app holds, every few seconds. `status` never starts the app, and the tabs are
     // listed only while one runs, so the pane never opens a window by itself. The board is read
     // from its file, so it shows with the app not running.
+    // Each look writes only what changed since the last: a quiet desk redraws nothing.
+    const wrote = new Map<string, string>()
+    const changed = (key: string, value: unknown) => {
+      const text = JSON.stringify(value)
+      if (wrote.get(key) === text) return false
+      wrote.set(key, text)
+      return true
+    }
     const look = async () => {
       const list = await cards($)
-      await update($, board, () => (list && list.length ? summary(list) : null))
+      const brief = list && list.length ? summary(list) : null
+      if (changed('board', brief)) await update($, board, () => brief)
       const status = await run(['status'])
       if (!status || status.exitCode !== 0) {
         deskUp = false
         waiting = false
-        await update($, desk, d => ({ ...d, app: 'not running', window: '-', terminals: '0', tabs: [] }))
+        const gone = { app: 'not running', window: '-', terminals: '0', tabs: [] }
+        if (changed('desk', gone)) await update($, desk, d => ({ ...d, ...gone }))
         return
       }
       const lines = status.stdout.split('\n')
@@ -162,13 +186,8 @@ export const register: Register = (on, options) => {
       // A look for the pane: `--peek` leaves the person's notes for Claude's own next call.
       const listed = await run(['window', ...project, '--peek', '{"action":"list"}'])
       const tabs = (listed?.stdout ?? '').split('\n').filter(l => /^[wtb]\d+ /.test(l))
-      await update($, desk, d => ({
-        ...d,
-        app: lines[0] ?? 'running',
-        window: field('window'),
-        terminals: field('terminals'),
-        tabs,
-      }))
+      const held = { app: lines[0] ?? 'running', window: field('window'), terminals: field('terminals'), tabs }
+      if (changed('desk', held)) await update($, desk, d => ({ ...d, ...held }))
     }
     // One look at a time: a slow call does not pile ticks up behind it.
     let looking = false
@@ -214,7 +233,7 @@ export const register: Register = (on, options) => {
           // Each note is one JSON string on a line of its own (`--json`): what the pipe hands over
           // comes in pieces of any size, so the lines are put together again before one is read, and
           // a note's own lines (its picture's path last) never come as a turn of their own.
-          const follow = $.process.spawn({ argv: [candidates[found], 'window', ...project, '--said', '--follow', '--json'] })
+          const follow = $.process.spawn({ argv: [candidates[found] ?? 'llx-desk', 'window', ...project, '--said', '--follow', '--json'] })
           let held = ''
           for await (const piece of follow) {
             if (piece.stream !== 'stdout') continue
@@ -338,7 +357,7 @@ export const register: Register = (on, options) => {
   // the app's program is run, and `--end` starts nothing).
   on('session.end', async ($, e, next) => {
     ended = true
-    if (deskRun && deskUp) await deskRun(['window', ...project, '--end']).catch(() => undefined)
+    if (deskRun && deskUp) await deskRun(['window', ...project, '--end'], END_MS).catch(() => undefined)
     return next(e)
   })
 

@@ -3,3 +3,5 @@ target/
 .llx/
 dist/
 .localix/
+# The plugin API declarations Claude Code writes beside a plugin it loads from a folder.
+plugins/claude-code/.claude-plugin/types/
