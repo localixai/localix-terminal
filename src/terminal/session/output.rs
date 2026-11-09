@@ -21,6 +21,7 @@ const TITLE_EVERY: Duration = Duration::from_millis(250);
 pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: u32) {
     let mut reader = reader;
     let mut buffer = [0u8; 8192];
+    let mut queries = Queries::default();
     loop {
         let mut gone = false;
         // Output waiting for the pace (or a title held back) is sent within a frame; with none,
@@ -36,7 +37,7 @@ pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: 
                 Ok(0) => gone = true,
                 Ok(n) => {
                     let chunk = buffer.get(..n).unwrap_or_default();
-                    take_in(shared, input, chunk);
+                    take_in(shared, input, chunk, queries.asked(chunk));
                     fronted(shared, reader.as_raw_fd());
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
@@ -70,8 +71,31 @@ pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: 
 /// again in one breath is not reading what it is told.
 const MOST_CURSOR_REPLIES: usize = 8;
 
-fn take_in(shared: &Shared, input: &Input, chunk: &[u8]) {
-    let asked = chunk.windows(4).filter(|w| w == b"\x1b[6n").count();
+/// A program's cursor-position query.
+const QUERY: &[u8] = b"\x1b[6n";
+
+/// The cursor queries in the program's output, read by read: a query split across two reads is
+/// found whole, the end of one read kept for the start of the next.
+#[derive(Default)]
+struct Queries {
+    /// The last bytes of the output so far, fewer than a query.
+    carried: Vec<u8>,
+}
+
+impl Queries {
+    /// How many queries end in `chunk`, the output read next.
+    fn asked(&mut self, chunk: &[u8]) -> usize {
+        self.carried.extend_from_slice(chunk);
+        let asked = (self.carried.windows(QUERY.len()))
+            .filter(|window| *window == QUERY)
+            .count();
+        let kept = self.carried.len().saturating_sub(QUERY.len() - 1);
+        self.carried.drain(..kept);
+        asked
+    }
+}
+
+fn take_in(shared: &Shared, input: &Input, chunk: &[u8], asked: usize) {
     let mut state = shared.lock();
     state.screen.feed(chunk);
     state.version += 1;
@@ -236,3 +260,7 @@ fn exit_status(pid: u32) -> Option<i32> {
         nap(5);
     }
 }
+
+#[cfg(test)]
+#[path = "output_tests.rs"]
+mod tests;
