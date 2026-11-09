@@ -106,22 +106,62 @@ pub(crate) fn backoff(slice: Duration) {
 /// The usual pause of a [`backoff`].
 pub(crate) const BACKOFF: Duration = Duration::from_millis(50);
 
-/// 32 hex characters from the clock and the address space; unguessable to a page in one run: the
-/// probe's messages carry it, so a page cannot speak as the probe.
+/// 32 hex characters (16 random bytes) from the system's random source; unguessable: the probe's
+/// messages carry one, so a page cannot speak as the probe, and a served site's prefix is one, so
+/// nobody else on the machine can name it.
 pub(crate) fn token() -> String {
-    use std::collections::hash_map::RandomState;
     use std::fmt::Write as _;
-    use std::hash::{BuildHasher, Hasher};
-    let mut out = String::new();
-    for _ in 0..2 {
-        let mut hasher = RandomState::new().build_hasher();
-        hasher.write_u128(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        );
-        let _ = write!(out, "{:016x}", hasher.finish());
+    let mut out = String::with_capacity(32);
+    for byte in random_bytes::<16>() {
+        let _ = write!(out, "{byte:02x}");
     }
     out
 }
+
+/// `N` bytes from the system's cryptographic random source: the crate's one way to them.
+pub(crate) fn random_bytes<const N: usize>() -> [u8; N] {
+    let mut bytes = [0u8; N];
+    fill_random(&mut bytes);
+    bytes
+}
+
+/// `bytes` filled by the kernel's generator, which never fails here.
+#[cfg(target_vendor = "apple")]
+fn fill_random(bytes: &mut [u8]) {
+    // SAFETY: the buffer is valid for writes of its whole length.
+    unsafe { libc::arc4random_buf(bytes.as_mut_ptr().cast(), bytes.len()) };
+}
+
+/// `bytes` filled by the kernel's generator, asked again when a signal cuts it short. Should it
+/// ever refuse (a kernel without the call), the bytes come from std's own seeding, itself taken
+/// from the system: weaker, never a panic.
+#[cfg(not(target_vendor = "apple"))]
+fn fill_random(bytes: &mut [u8]) {
+    let mut filled = 0;
+    while let Some(rest) = bytes.get_mut(filled..).filter(|rest| !rest.is_empty()) {
+        // SAFETY: the rest of the buffer is valid for writes of its length.
+        let got = unsafe { libc::getrandom(rest.as_mut_ptr().cast(), rest.len(), 0) };
+        match usize::try_from(got) {
+            Ok(got) => filled += got,
+            Err(_) if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted => {
+            }
+            Err(_) => return seeded(rest),
+        }
+    }
+}
+
+#[cfg(not(target_vendor = "apple"))]
+fn seeded(bytes: &mut [u8]) {
+    use std::hash::{BuildHasher, Hasher};
+    for chunk in bytes.chunks_mut(8) {
+        let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+        hasher.write_usize(chunk.as_ptr() as usize);
+        for (to, from) in chunk.iter_mut().zip(hasher.finish().to_le_bytes()) {
+            *to = from;
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "lib_tests.rs"]
+mod tests;
