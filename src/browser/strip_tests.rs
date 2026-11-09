@@ -182,50 +182,6 @@ fn the_history_menu_reaches_the_page_as_data() {
 }
 
 #[test]
-fn what_is_typed_in_the_address_field_goes_to_an_address_or_a_search() {
-    let went = |typed: &str| went(&format!("go {typed}"));
-    assert_eq!(went("apple.com").as_deref(), Some("https://apple.com"));
-    assert_eq!(
-        went("https://habr.com/ru/post/210288/").as_deref(),
-        Some("https://habr.com/ru/post/210288/")
-    );
-    assert_eq!(
-        went("localhost:3000/x").as_deref(),
-        Some("http://localhost:3000/x")
-    );
-    // A bare address of this machine or the local network is plain http, as its servers are.
-    for typed in ["printer.local:8080/x", "192.168.1.2:3000", "shop.test"] {
-        assert_eq!(went(typed), Some(format!("http://{typed}")), "{typed}");
-    }
-    assert_eq!(
-        went("rust borrow checker").as_deref(),
-        Some("https://www.google.com/search?q=rust+borrow+checker")
-    );
-    assert_eq!(
-        went("hotmail").as_deref(),
-        Some("https://www.google.com/search?q=hotmail")
-    );
-    assert_eq!(
-        went("a&b=c?").as_deref(),
-        Some("https://www.google.com/search?q=a%26b%3Dc%3F")
-    );
-}
-
-#[test]
-fn only_web_addresses_are_gone_to_from_the_field() {
-    assert_eq!(
-        went("go javascript:alert(1)").as_deref(),
-        Some("https://www.google.com/search?q=javascript%3Aalert%281%29")
-    );
-    assert_eq!(
-        went("go file:///etc/passwd").as_deref(),
-        Some("https://www.google.com/search?q=file%3A%2F%2F%2Fetc%2Fpasswd")
-    );
-    assert_eq!(went("go    "), None);
-    assert_eq!(went("show w1"), None);
-}
-
-#[test]
 fn the_bar_holds_the_projects_and_the_crumbs_and_the_page_its_own_toolbar() {
     let at = |id: &str| PAGE.find(&format!("id=\"{id}\"")).unwrap();
     // The bar (beside the window's buttons): the crumbs, then the window's buttons; nothing

@@ -44,15 +44,35 @@ impl Store {
         // The wait comes first: the CLI may hold the database as the app opens it, and even the
         // switch to WAL below needs it for a moment.
         connection.busy_timeout(BUSY).map_err(|why| failed(&why))?;
-        connection
-            .pragma_update(None, "journal_mode", "WAL")
-            .map_err(|why| failed(&why))?;
+        Self::wal(&connection).map_err(|why| failed(&why))?;
         // In WAL a commit then waits for no disk sync: the database stays whole on any crash; a
         // power cut may lose the last moment's commits.
         connection
             .pragma_update(None, "synchronous", "NORMAL")
             .map_err(|why| failed(&why))?;
         Self::ready(connection).map_err(|why| failed(&why))
+    }
+
+    /// The database in WAL, which it keeps once any connection set it. On a new database the
+    /// switch needs the file to itself: two processes switching at once each find the other's
+    /// hold, and SQLite answers "locked" at once instead of waiting (waiting would never end for
+    /// either). So the switch is tried again, briefly, until the busy wait has passed.
+    fn wal(connection: &Connection) -> rusqlite::Result<()> {
+        let start = std::time::Instant::now();
+        loop {
+            match connection.pragma_update(None, "journal_mode", "WAL") {
+                Err(rusqlite::Error::SqliteFailure(why, _))
+                    if why.code == rusqlite::ErrorCode::DatabaseBusy && start.elapsed() < BUSY =>
+                {
+                    #[expect(
+                        clippy::disallowed_methods,
+                        reason = "a backoff: SQLite gives no event to wait on"
+                    )]
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                done => return done,
+            }
+        }
     }
 
     /// The file at `path` made for its owner only, as is the directory when this makes it: what
