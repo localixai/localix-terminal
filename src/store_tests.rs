@@ -186,3 +186,29 @@ fn a_store_in_memory_in_place_of_the_database_says_why() {
     let instead = Store::memory_instead("read-only").unwrap();
     assert_eq!(instead.kept_in_memory(), Some("read-only"));
 }
+
+#[test]
+fn processes_that_open_a_new_database_at_once_each_open_it() {
+    // The app and the CLI open the same file as the app starts: neither may fail for the
+    // other's hold on it, nor run a step of the schema the other ran.
+    for _ in 0..10 {
+        let scratch = Scratch::new();
+        let path = scratch.path().join("desk.db");
+        let start = std::sync::Arc::new(std::sync::Barrier::new(8));
+        let opening: Vec<_> = (0..8)
+            .map(|_| {
+                let (path, start) = (path.clone(), std::sync::Arc::clone(&start));
+                std::thread::Builder::new()
+                    .name("opening".into())
+                    .spawn(move || {
+                        start.wait();
+                        Store::open(&path).map(|store| steps(&store))
+                    })
+                    .unwrap()
+            })
+            .collect();
+        for opened in opening {
+            assert_eq!(opened.join().unwrap(), Ok(STEPS.len()));
+        }
+    }
+}

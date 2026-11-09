@@ -37,8 +37,8 @@ pub(super) fn record(
     now: u64,
 ) -> Result<HashMap<String, Kept>, String> {
     let text = |why: rusqlite::Error| why.to_string();
-    for event in events {
-        tx.execute(
+    let mut upsert = tx
+        .prepare_cached(
             "INSERT INTO center_events (id, kind, project, tab, title, detail, at, first)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, project = excluded.project,
@@ -56,7 +56,11 @@ pub(super) fn record(
                      AND center_events.project IS excluded.project
                      THEN center_events.dismissed ELSE 0 END,
                  settled = NULL",
-            params![
+        )
+        .map_err(text)?;
+    for event in events {
+        upsert
+            .execute(params![
                 event.id,
                 event.kind.name(),
                 crate::projects::of_key(&event.group),
@@ -65,10 +69,10 @@ pub(super) fn record(
                 event.detail,
                 event.at,
                 now
-            ],
-        )
-        .map_err(text)?;
+            ])
+            .map_err(text)?;
     }
+    drop(upsert);
     let open: HashSet<&str> = events.iter().map(|event| event.id.as_str()).collect();
     let mut kept = HashMap::new();
     let mut settle = vec![];
@@ -99,13 +103,13 @@ pub(super) fn record(
             }
         }
     }
-    for id in settle {
-        tx.execute(
-            "UPDATE center_events SET settled = ?2 WHERE id = ?1",
-            params![id, now],
-        )
+    let mut settling = tx
+        .prepare_cached("UPDATE center_events SET settled = ?2 WHERE id = ?1")
         .map_err(text)?;
+    for id in settle {
+        settling.execute(params![id, now]).map_err(text)?;
     }
+    drop(settling);
     tx.execute(
         "DELETE FROM center_events WHERE settled IS NOT NULL AND settled <= ?1",
         params![now.saturating_sub(KEPT)],

@@ -119,3 +119,34 @@ fn a_project_keeps_its_newest_closed_tabs_and_forgetting_it_takes_them() {
     store.write(|tx| projects::forget(tx, shop.id)).unwrap();
     assert!(store.read(|db| past(db, shop.id, 10)).unwrap().is_empty());
 }
+
+#[test]
+fn a_page_shown_before_the_newest_kept_visits_is_suggested_no_more() {
+    let store = Store::memory().unwrap();
+    let shop = project(&store, "/work/shop");
+    let row = store
+        .write(|tx| open(tx, &page(shop.id, "about:blank"), 1))
+        .unwrap();
+    let went_to = |url: &str| store.write(|tx| went(tx, row, url, "", 2)).unwrap();
+    went_to("https://old.example/");
+    for at in 0..VISITS_KEPT {
+        went_to(["https://a.example/", "https://b.example/"][at % 2]);
+    }
+    let urls: Vec<String> = (store
+        .read(|db| visits(db, shop.id, 10))
+        .unwrap()
+        .into_iter())
+    .map(|visit| visit.url)
+    .collect();
+    assert_eq!(urls, ["https://b.example/", "https://a.example/"]);
+    let kept: usize = store
+        .read(|db| {
+            db.query_row("SELECT COUNT(*) FROM visits", [], |found| found.get(0))
+                .map_err(|why| why.to_string())
+        })
+        .unwrap();
+    assert!(
+        kept <= VISITS_KEPT + usize::try_from(TRIM_EVERY).unwrap(),
+        "{kept} kept"
+    );
+}

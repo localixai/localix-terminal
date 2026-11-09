@@ -32,6 +32,7 @@ mod tab;
 mod term;
 mod told;
 mod web;
+mod writes;
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
@@ -72,10 +73,13 @@ pub struct Desk {
     feed: crate::feed::Feed,
     /// The Event Center: what the person has seen and dismissed of it.
     center: Mutex<center::Center>,
+    /// Held from the Event Center's gathering to its painting, and while the person's marks are
+    /// kept: a paint is never of an older gathering than the one before it.
+    painting: Mutex<()>,
     /// What the agent asked the person to do, by tab, for the Event Center.
     asks: Mutex<HashMap<center::Subject, center::Ask>>,
     /// Each web tab's page as the caller last read it whole.
-    seen: Mutex<HashMap<u32, changes::Seen>>,
+    seen: Mutex<HashMap<u32, Arc<Mutex<changes::Seen>>>>,
     /// One lock per web tab: work in one never waits on another's.
     locks: Mutex<HashMap<u32, Arc<Mutex<()>>>>,
     /// Opening and closing tabs, one at a time.
@@ -94,7 +98,7 @@ pub struct Desk {
     me: Weak<Self>,
     /// What the window told that is written to the store, in order, on a thread of its own:
     /// the window's loop never waits on the disk.
-    writes: OnceLock<std::sync::mpsc::SyncSender<Box<dyn FnOnce() + Send>>>,
+    writes: OnceLock<writes::Writes>,
     /// Each open tab's row in the ledger, and its project, by key.
     ledger: Mutex<HashMap<String, (crate::ledger::Row, ProjectId)>>,
     /// Each terminal's title writes, so a title said often is written once in a while.
@@ -138,6 +142,7 @@ impl Desk {
                 events,
                 feed: crate::feed::Feed::new(store, std::time::Duration::from_millis(500)),
                 center: Mutex::default(),
+                painting: Mutex::new(()),
                 asks: Mutex::default(),
                 seen: Mutex::default(),
                 locks: Mutex::default(),
@@ -294,7 +299,7 @@ impl Desk {
         };
         for (key, owner) in gone {
             if let Some(id) = key.get(1..).and_then(|n| n.parse::<u32>().ok()) {
-                crate::lock(&self.seen).remove(&id);
+                self.forget_page(id, 1);
             }
             self.gone(owner, &key);
         }
@@ -316,6 +321,9 @@ impl Desk {
         tabs.len()
     }
 
+    /// How long the app's quit waits for the writes the window told last.
+    const LAST_WRITES: std::time::Duration = std::time::Duration::from_secs(5);
+
     /// Every terminal ends; the window stays the process's to close.
     pub fn shutdown(&self) {
         // The tabs open now stay open in the ledger, their screens kept: the app opens them
@@ -324,6 +332,11 @@ impl Desk {
         self.keep_screens();
         crate::lock(&self.ledger).clear();
         crate::lock(&self.session_groups).clear();
+        // What the window told last is written before the feed stops taking notices.
+        if !self.writes_done(Self::LAST_WRITES) {
+            log::warn!("desk: the last writes were not done as the app quit");
+        }
+        self.feed.store().optimize();
         self.feed.stop();
         let sessions = std::mem::take(&mut *crate::lock(&self.sessions));
         sessions.values().for_each(|session| session.close());

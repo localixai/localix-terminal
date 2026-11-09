@@ -137,3 +137,29 @@ fn a_call_that_changed_nothing_says_so_though_the_page_moved_since_it_was_read_w
     );
     assert_eq!(seen.after(&read).as_deref(), Some(UNCHANGED));
 }
+
+#[test]
+fn a_diff_that_sets_aside_the_lines_both_pages_share_tells_what_the_whole_one_does() {
+    // Pages of few distinct lines, where equal lines meet often: a xorshift picks them.
+    let mut state: u64 = 0x9e37_79b9_7f4a_7c15;
+    let mut next = move |most: u64| {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state % most
+    };
+    let words = ["a", "b", "c"];
+    for _ in 0..20_000 {
+        let mut lines = |most: u64| -> Vec<&str> {
+            (0..next(most))
+                .map(|_| words[usize::try_from(next(3)).unwrap()])
+                .collect()
+        };
+        let (old, new) = (lines(9), lines(9));
+        assert_eq!(
+            diff(&old, &new),
+            Some(walk(&old, &new)),
+            "{old:?} to {new:?}"
+        );
+    }
+}

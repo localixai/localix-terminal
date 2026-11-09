@@ -245,16 +245,22 @@ fn a_write_that_steps_over_a_thousand_prunes() {
         write.record(&card("c2"), Op::Upserted)
     })
     .unwrap();
-    let old: u64 = feed
-        .store()
-        .read(|db| {
-            db.query_row(
-                "SELECT COUNT(*) FROM change_events WHERE at = 0",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|why| why.to_string())
-        })
-        .unwrap();
-    assert_eq!(old, 0);
+    // The prune runs on a thread of its own: the writer does not wait for it.
+    let old = || -> u64 {
+        feed.store()
+            .read(|db| {
+                db.query_row(
+                    "SELECT COUNT(*) FROM change_events WHERE at = 0",
+                    [],
+                    |row| row.get(0),
+                )
+                .map_err(|why| why.to_string())
+            })
+            .unwrap()
+    };
+    let deadline = Instant::now() + SOON;
+    while old() > 0 && Instant::now() < deadline {
+        crate::backoff(Duration::from_millis(5));
+    }
+    assert_eq!(old(), 0);
 }

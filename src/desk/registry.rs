@@ -154,6 +154,13 @@ impl Registry {
         self.said.get(owner).cloned().unwrap_or_default()
     }
 
+    /// `owner`'s note `id`, while it has not been given yet.
+    pub(super) fn pending_one(&self, owner: &str, id: u64) -> Option<Said> {
+        (self.said.get(owner)?.iter())
+            .find(|said| said.id == id)
+            .cloned()
+    }
+
     /// `owner` has what `ids` name: they are not kept any more.
     pub(super) fn acknowledge(&mut self, owner: &str, ids: &[u64]) {
         if let Some(kept) = self.said.get_mut(owner) {

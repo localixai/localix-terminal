@@ -185,4 +185,6 @@ pub(super) const STEPS: &[&str] = &[
     UPDATE windows SET shown = (
         SELECT workspaces.id FROM workspaces JOIN projects ON projects.id = workspaces.project
         WHERE workspaces.window = windows.id ORDER BY projects.opened DESC LIMIT 1);",
+    // 3: a pane's visits found by their page, as each title a page says finds its visit.
+    "CREATE INDEX IF NOT EXISTS visits_of_pane ON visits (pane, url);",
 ];

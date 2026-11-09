@@ -116,7 +116,7 @@ fn window_of(row: &rusqlite::Row<'_>) -> rusqlite::Result<Window> {
 /// The store refused it.
 pub fn windows(db: &Connection) -> Result<Vec<Window>, String> {
     let mut query = db
-        .prepare(&format!(
+        .prepare_cached(&format!(
             "SELECT {WINDOW} FROM windows WHERE closed IS NULL ORDER BY id"
         ))
         .map_err(|why| failed(&why))?;
@@ -198,7 +198,9 @@ fn workspace_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Workspace> {
 /// The store refused it.
 pub fn workspaces(db: &Connection, window: WindowId) -> Result<Vec<Workspace>, String> {
     let mut query = db
-        .prepare("SELECT id, window, project, shown FROM workspaces WHERE window = ?1 ORDER BY id")
+        .prepare_cached(
+            "SELECT id, window, project, shown FROM workspaces WHERE window = ?1 ORDER BY id",
+        )
         .map_err(|why| failed(&why))?;
     let found = query
         .query_map([window], workspace_row)
@@ -225,7 +227,9 @@ pub fn workspace(db: &Connection, id: WorkspaceId) -> Result<Option<Workspace>, 
 /// The open tabs of workspace `workspace`, in their places.
 fn open_ids(db: &Connection, workspace: WorkspaceId) -> Result<Vec<TabId>, String> {
     let mut query = db
-        .prepare("SELECT id FROM tabs WHERE workspace = ?1 AND closed IS NULL ORDER BY place, id")
+        .prepare_cached(
+            "SELECT id FROM tabs WHERE workspace = ?1 AND closed IS NULL ORDER BY place, id",
+        )
         .map_err(|why| failed(&why))?;
     let ids = query
         .query_map([workspace], |row| row.get(0))
@@ -237,12 +241,13 @@ fn open_ids(db: &Connection, workspace: WorkspaceId) -> Result<Vec<TabId>, Strin
 
 /// Workspace `workspace`'s open tabs placed in the order of `ids`, from 0.
 fn renumber(tx: &Transaction<'_>, ids: &[TabId]) -> Result<(), String> {
-    for (place, id) in ids.iter().enumerate() {
-        tx.execute(
-            "UPDATE tabs SET place = ?2 WHERE id = ?1 AND place <> ?2",
-            params![id, place],
-        )
+    let mut place_at = tx
+        .prepare_cached("UPDATE tabs SET place = ?2 WHERE id = ?1 AND place <> ?2")
         .map_err(|why| failed(&why))?;
+    for (place, id) in ids.iter().enumerate() {
+        place_at
+            .execute(params![id, place])
+            .map_err(|why| failed(&why))?;
     }
     Ok(())
 }

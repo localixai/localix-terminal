@@ -41,7 +41,7 @@ impl Seen {
 }
 
 /// One line of the diff.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Line<'a> {
     Kept(&'a str),
     Gone(&'a str),
@@ -95,12 +95,48 @@ fn told(lines: &[Line<'_>]) -> Vec<String> {
     out
 }
 
-/// The longest common subsequence's diff, gone lines before new ones; None past `PAIRS`.
+/// The longest common subsequence's diff, gone lines before new ones; None past `PAIRS` (of the
+/// whole pages, so the same pages are told by their changes however much they share).
+///
+/// The lines both pages begin with are kept as they are, and so are the lines both end with, as
+/// long as the first of those is no line of what lies between: then the walk over the lines
+/// between, alone, tells what the walk over the whole would.
 fn diff<'a>(old: &[&'a str], new: &[&'a str]) -> Option<Vec<Line<'a>>> {
-    let (n, m) = (old.len(), new.len());
-    if n.saturating_mul(m) > PAIRS {
+    if old.len().saturating_mul(new.len()) > PAIRS {
         return None;
     }
+    let head = (old.iter().zip(new)).take_while(|(a, b)| a == b).count();
+    let (old_rest, new_rest) = (old.get(head..)?, new.get(head..)?);
+    let mut tail = (old_rest.iter().rev().zip(new_rest.iter().rev()))
+        .take_while(|(a, b)| a == b)
+        .count();
+    let between: std::collections::HashSet<&str> = (old_rest.iter())
+        .take(old_rest.len() - tail)
+        .chain(new_rest.iter().take(new_rest.len() - tail))
+        .copied()
+        .collect();
+    // A first line of the end that is also a line between could be matched earlier by the walk
+    // over the whole: it goes between (whose lines it is among already), and the end begins a
+    // line later.
+    while tail > 0
+        && (old_rest.get(old_rest.len() - tail)).is_some_and(|first| between.contains(first))
+    {
+        tail -= 1;
+    }
+    let (old_between, new_between) = (
+        old_rest.get(..old_rest.len() - tail)?,
+        new_rest.get(..new_rest.len() - tail)?,
+    );
+    let mut lines: Vec<Line<'a>> = old.iter().take(head).map(|line| Line::Kept(line)).collect();
+    lines.extend(walk(old_between, new_between));
+    lines.extend((old_rest.iter().skip(old_between.len())).map(|line| Line::Kept(line)));
+    Some(lines)
+}
+
+/// The longest common subsequence's diff of `old` and `new` whole, equal lines matched as soon
+/// as they meet, gone lines before new ones.
+fn walk<'a>(old: &[&'a str], new: &[&'a str]) -> Vec<Line<'a>> {
+    let (n, m) = (old.len(), new.len());
     // common[i * (m + 1) + j]: the longest common run of old[i..] and new[j..].
     let width = m + 1;
     let mut common = vec![0u32; (n + 1) * width];
@@ -126,7 +162,7 @@ fn diff<'a>(old: &[&'a str], new: &[&'a str]) -> Option<Vec<Line<'a>>> {
             j += 1;
         }
     }
-    Some(lines)
+    lines
 }
 
 #[cfg(test)]

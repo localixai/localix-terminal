@@ -23,14 +23,14 @@ impl Desk {
                     self.hear(key, words, false);
                 }
                 if key.starts_with('b') {
-                    return self.unkeep(key);
+                    return self.closed_later(key, None, false);
                 }
                 let owner = self.owner_of(key).filter(|_| !person);
                 if let Some(id) = key.strip_prefix('w').and_then(|n| n.parse::<u32>().ok()) {
                     crate::lock(&self.registry).release(key);
-                    crate::lock(&self.seen).remove(&id);
+                    self.forget_page(id, 1);
                 }
-                self.gone(owner, key);
+                self.closed_later(key, owner, true);
             }
             Heard::Went(went) => {
                 let (desk, key) = (Arc::clone(self), key.to_string());
@@ -49,8 +49,16 @@ impl Desk {
                 });
             }
             Heard::Folder(folder) => self.open_folder(folder),
-            Heard::Showing => self.showing(key),
-            Heard::Split(halves) => self.split_told(key, halves),
+            Heard::Showing => {
+                let (desk, group, window) = (Arc::clone(self), key.to_string(), self.in_use());
+                self.write_later(move || desk.showing(&group, window));
+            }
+            Heard::Split(halves) => {
+                if let Some(split) = self.split_of(key, halves) {
+                    let (desk, group) = (Arc::clone(self), key.to_string());
+                    self.write_later(move || desk.split_kept(&group, split));
+                }
+            }
             Heard::SplitResized(portion) => {
                 let key = key.to_string();
                 let desk = Arc::clone(self);
@@ -60,9 +68,24 @@ impl Desk {
                     }
                 });
             }
-            Heard::Moved { before, window } => self.moved(key, before, window),
-            Heard::Detached => self.detached(key),
-            Heard::WindowClosed(window) => self.window_closed(window),
+            // The panes are found by their rows as the window tells it; the layout is written
+            // after what the window told before.
+            Heard::Moved { before, window } => {
+                if let Some(rows) = self.rows_moved(key, before) {
+                    let (desk, key) = (Arc::clone(self), key.to_string());
+                    self.write_later(move || desk.move_kept(&key, rows, window));
+                }
+            }
+            Heard::Detached => {
+                if let Some((pane, _)) = self.rows_moved(key, None) {
+                    let (desk, key) = (Arc::clone(self), key.to_string());
+                    self.write_later(move || desk.detach_kept(&key, pane));
+                }
+            }
+            Heard::WindowClosed(window) => {
+                let desk = Arc::clone(self);
+                self.write_later(move || desk.window_closed(window));
+            }
             Heard::Quit => self.quit_asked(),
             Heard::Reopened => self.reopened(),
             Heard::Asked(asked) => self.person_asked(key, asked),
@@ -70,39 +93,9 @@ impl Desk {
         }
     }
 
-    /// How many writes wait for the writer thread at most.
-    const WRITES: usize = 256;
-
-    /// `write` done on the desk's writer thread, after what was handed it before: the window's
-    /// loop goes on at once. With no thread to be had, it is done here.
-    fn write_later(&self, write: impl FnOnce() + Send + 'static) {
-        let writes = self.writes.get_or_init(|| {
-            let (send, take) =
-                std::sync::mpsc::sync_channel::<Box<dyn FnOnce() + Send>>(Self::WRITES);
-            let started = std::thread::Builder::new()
-                .name("desk-writes".into())
-                .spawn(move || {
-                    for write in take {
-                        // A write that panics is a bug of its own: the ones after it still go.
-                        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(write)).is_err() {
-                            log::warn!("desk: a write panicked: the writer goes on");
-                        }
-                    }
-                });
-            if let Err(why) = started {
-                log::warn!("desk: no writer thread ({why}): writes are done in place");
-            }
-            send
-        });
-        // A queue full (the disk far behind) or gone: done here, rather than waiting on it.
-        match writes.try_send(Box::new(write)) {
-            Ok(()) => {}
-            Err(
-                std::sync::mpsc::TrySendError::Full(write)
-                | std::sync::mpsc::TrySendError::Disconnected(write),
-            ) => write(),
-        }
-    }
+    /// How long what the person asks for waits for the writes the window told before it: a tab
+    /// they closed a moment ago is closed in the ledger before they open it again.
+    const ASKED_AFTER: std::time::Duration = std::time::Duration::from_secs(5);
 
     /// The person asked for a tab of theirs with "+", in the project of group `group`: opened on
     /// a thread of its own, since the window's loop calls this and must never wait on the work.
@@ -119,6 +112,9 @@ impl Desk {
         let started = std::thread::Builder::new()
             .name("desk-person-asked".into())
             .spawn(move || {
+                if !desk.writes_done(Self::ASKED_AFTER) {
+                    log::warn!("desk: the writes before what the person asked are not done yet");
+                }
                 let call = Call {
                     owner: &person.owner,
                     project: &person.project,

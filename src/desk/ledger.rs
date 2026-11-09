@@ -24,6 +24,16 @@ pub(super) struct Titled {
     pending: Option<String>,
 }
 
+/// What a closing pane's row is closed with, taken from memory as it closes.
+pub(super) struct Closing {
+    row: Row,
+    project: ProjectId,
+    /// The latest title not written yet.
+    title: Option<String>,
+    /// A terminal's session, whose screen is kept.
+    session: Option<std::sync::Arc<crate::terminal::Session>>,
+}
+
 /// What is known of a pane as it opens.
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct Facts<'a> {
@@ -130,11 +140,37 @@ impl Desk {
     /// Pane `key` closed: its row closed (a terminal's screen kept), its project's past told
     /// again.
     pub(super) fn unkeep(&self, key: &str) {
-        self.flush_title(key);
-        self.keep_screen(key);
-        let Some((row, project)) = crate::lock(&self.ledger).remove(key) else {
-            return;
-        };
+        if let Some(closing) = self.closing(key) {
+            self.close_row(key, &closing);
+        }
+    }
+
+    /// Pane `key` let go of in memory as it closes: what its row's close writes, taken now, so
+    /// the write may come later (`close_row`). None when it had no row.
+    pub(super) fn closing(&self, key: &str) -> Option<Closing> {
+        let title = (crate::lock(&self.titled).remove(key)).and_then(|titled| titled.pending);
+        let session = self.session_of(key);
+        let (row, project) = crate::lock(&self.ledger).remove(key)?;
+        Some(Closing {
+            row,
+            project,
+            title,
+            session,
+        })
+    }
+
+    /// The row of pane `key` closed as `closing` says: its last title and screen kept, out of its
+    /// tab, its project's past told again.
+    pub(super) fn close_row(&self, key: &str, closing: &Closing) {
+        let Closing { row, project, .. } = *closing;
+        if let Some(title) = &closing.title
+            && let Err(why) = (self.feed.store()).write(|tx| ledger::titled(tx, row, title))
+        {
+            log::warn!("tab {key}'s title is not in the ledger: {why}");
+        }
+        if let Some(session) = &closing.session {
+            self.keep_screen_of(key, row, session);
+        }
         let now = crate::board::now();
         let closed = self.feed.write(|write| {
             ledger::close(write.tx(), row, now)?;
@@ -189,14 +225,22 @@ impl Desk {
 
     /// Terminal `key`'s screen kept, for when it is restored.
     fn keep_screen(&self, key: &str) {
-        let Some(id) = key.strip_prefix('t').and_then(|id| id.parse::<u32>().ok()) else {
-            return;
-        };
         let row = crate::lock(&self.ledger).get(key).map(|(row, _)| *row);
-        let session = crate::lock(&self.sessions).get(&id).cloned();
-        let (Some(row), Some(session)) = (row, session) else {
-            return;
-        };
+        if let (Some(row), Some(session)) = (row, self.session_of(key)) {
+            self.keep_screen_of(key, row, &session);
+        }
+    }
+
+    /// The session of terminal `key`, while it has one.
+    fn session_of(&self, key: &str) -> Option<std::sync::Arc<crate::terminal::Session>> {
+        let id = key
+            .strip_prefix('t')
+            .and_then(|id| id.parse::<u32>().ok())?;
+        crate::lock(&self.sessions).get(&id).cloned()
+    }
+
+    /// Terminal `key`'s screen, as `session` shows it now, kept in row `row`.
+    fn keep_screen_of(&self, key: &str, row: Row, session: &crate::terminal::Session) {
         // Masked: a secret a call typed in is on the screen as typed, and no value outlives the run.
         let (text, now) = (self.vault.mask(&session.text()), crate::board::now());
         if let Err(why) = (self.feed.store()).write(|tx| ledger::keep_screen(tx, row, &text, now)) {
@@ -281,12 +325,16 @@ impl Desk {
             Ok(read) => read,
             Err(why) => return log::warn!("the ledger could not be read: {why}"),
         };
-        let open = crate::lock(&self.ledger).clone();
-        let key_of = |row: Row| {
-            (open.iter())
-                .find(|(_, (kept, _))| *kept == row)
-                .map(|(key, _)| key.clone())
-        };
+        // The key of each open pane listed, found in one pass over the panes open now.
+        let listed: std::collections::HashSet<Row> = (tabs.iter())
+            .filter(|tab| tab.closed.is_none())
+            .map(|tab| tab.row)
+            .collect();
+        let open: std::collections::HashMap<Row, String> = (crate::lock(&self.ledger).iter())
+            .filter(|(_, (row, _))| listed.contains(row))
+            .map(|(key, (row, _))| (*row, key.clone()))
+            .collect();
+        let key_of = |row: Row| open.get(&row).cloned();
         let tabs = (tabs.into_iter())
             .map(|tab| Past {
                 row: tab.row,

@@ -59,6 +59,15 @@
 
 ### Fixed
 
+- The app and the command line opening the database at the same moment no longer leave the app
+  keeping nothing for its whole run: the second waits for the first, and a schema step is never
+  run twice.
+- What the window tells as the app quits (a tab closed, a project shown) is written before it
+  ends, and the window never waits on the disk to close a tab, show a project or move a tab.
+- A program's cursor-position query split across two reads of its output is answered.
+- The Event Center no longer shows an older list over a newer one when a change and a click
+  arrive together, and a page's changes are worked out without holding up other tabs.
+
 - Interactive terminals no longer inherit `NO_COLOR`, `FORCE_COLOR` or `CLICOLOR_FORCE` from
   automation clients. They advertise their own terminal identity, 256-color/truecolor support
   and `CLICOLOR=1`, including for macOS tools such as `ls`. Shell profiles and explicit per-command

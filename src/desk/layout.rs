@@ -276,58 +276,6 @@ impl Desk {
         }
         Ok(panes)
     }
-
-    /// The person split the window in project `group` (`halves`, by its panes' keys), or made it
-    /// whole there: the layout's tab of the pane in use made of the two, or each split tab of
-    /// the project made whole, the pane in focus staying.
-    pub(super) fn split_told(&self, group: &str, halves: Option<crate::browser::Halves<'_>>) {
-        // The app ending, its panes go: the layout stays as it is for when they open again.
-        if self.ending.load(std::sync::atomic::Ordering::SeqCst) {
-            return;
-        }
-        let row = |key: &str| crate::lock(&self.ledger).get(key).map(|(row, _)| *row);
-        let done = match halves {
-            Some(halves) => match (row(halves.shown), row(halves.beside)) {
-                (Some(shown), Some(beside)) => self.split_panes(shown, beside, halves.right),
-                _ => Ok(()),
-            },
-            None => match crate::projects::of_key(group) {
-                Some(project) => self.unsplit_project(project),
-                None => Ok(()),
-            },
-        };
-        if let Err(why) = done {
-            log::warn!("the split of {group} is not in the layout: {why}");
-        }
-    }
-
-    /// Every split tab of project `project` in the window in use made whole, its pane in focus
-    /// staying.
-    fn unsplit_project(&self, project: ProjectId) -> Result<(), String> {
-        let now = crate::board::now();
-        let wanted = self.in_use();
-        self.feed.write(|write| {
-            let open = layout::windows(write.tx())?;
-            let window = (wanted.filter(|wanted| open.iter().any(|window| window.id == *wanted)))
-                .or_else(|| open.first().map(|window| window.id));
-            let Some(window) = window else {
-                return Ok(());
-            };
-            let space = (layout::workspaces(write.tx(), window)?.into_iter())
-                .find(|space| space.project == project);
-            let Some(space) = space else {
-                return Ok(());
-            };
-            for tab in layout::tabs(write.tx(), space.id)? {
-                let panes = tab.tree.panes();
-                if panes.len() > 1 {
-                    let kept = tab.focused.unwrap_or(panes[0]);
-                    Self::unsplit_tab(write, tab.id, kept, now)?;
-                }
-            }
-            Ok(())
-        })
-    }
 }
 
 #[cfg(test)]
