@@ -60,8 +60,8 @@ fn last_child(pid: libc::pid_t) -> Option<libc::pid_t> {
     let children = std::fs::read_to_string(format!("/proc/{pid}/task/{pid}/children")).ok()?;
     children
         .split_whitespace()
-        .filter_map(|child| child.parse().ok())
-        .last()
+        .rev()
+        .find_map(|child| child.parse().ok())
 }
 
 /// macOS's `sh -c` becomes its command: it has no shell left to look past.
