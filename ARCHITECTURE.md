@@ -140,7 +140,9 @@ normal tests in CI.
   window (`person.rs`), the board as text for the agent (`text.rs`), where it is kept
   (`store.rs`: the project's row in the desk's database, written out to the project's
   `.localix/board.json` by `desk/board_file.rs`) and its page (`page.html`, `page.js`), painted whole into a panel. `desk/board.rs` acts on a board's tab (`interact` with an `op`);
-  `desk/board_told.rs` gathers what the person does into one note, told as a comment is.
+  `desk/board_told.rs` gathers what the person does into one note, told as a comment is. A card the
+  person runs by an agent (`desk/board_run.rs`) is handed to its worker and the agent started as a
+  terminal of theirs, as "+" starts one.
 - **`terminal/`** is a session: a program on a PTY, its screen kept by `vt100`, painted into a panel
   when a window shows it. What is typed is queued and written by a thread of its own, so a
   program that reads nothing never holds the window. Output is untrusted. The model (`vt100`, what agents read) gets only

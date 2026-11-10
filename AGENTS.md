@@ -36,6 +36,25 @@ How every agent works in this repository. These rules hold for every change, sma
 - **Behaviour changes** update `README.md` and `CHANGELOG.md` (under `## Unreleased`).
 - **Commit only when asked.** Never push without being asked.
 
+## Style: quiet, native, nothing loud
+
+The window is a calm macOS tool, not a web app. Every control earns its place by being quiet.
+
+- **A secondary action is an icon alone**: a line glyph in `--ink-2`, no fill, no border, no
+  shadow at rest; pointed at, a grey fill (`--ov-2`) and the text colour; pressed, `--ov-3`. Its
+  words are its tooltip and `aria-label`. A column's fold button and a card's hover move are the
+  model.
+- **A control that is only for pointing shows when its card or row is pointed at**, and takes the
+  place of what it covers (a card's age); it never sits over the content.
+- **The accent is for the one primary action of a place** (Accept, a sheet's default button) and
+  for selection and focus. Never for a hover button, a decoration or a second action.
+- **No round blobs, pills with text, drop shadows or brand colours** on controls. One shape: the
+  token radius (`--r-1`, `--r-2`). One glyph style: the line icons the strip and board draw.
+- **Words in a control are for push buttons** (Accept, Send Back, Comment) and menus, in title
+  case. A menu that the button opens says so with `aria-haspopup`.
+- **One look per kind of control**: a new button reuses an existing class (`.fold`, `.quick`,
+  `.btn.plain.ico`, `.btn.go`) rather than a variant of its own.
+
 ## Seeing a change
 
 The person watches the window on their own screen.

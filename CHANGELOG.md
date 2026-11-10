@@ -2,8 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- A card waiting in Backlog or Todo is run by an agent the person picks among those installed
+  (Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode, Hermes): ▶ on a Todo card or on the
+  open card, or Run With in a card's menu. The card goes to Doing as that agent's worker
+  (`codex-c3`), past the limit, and the agent starts in a terminal of the project, titled
+  `c3 · codex`, on a first prompt that names its card, its name on the board and how to hand it in.
+
 ### Changed
 
+- A card's hover move (Move to Todo, Reopen, Unblock, Run) is a quiet grey icon with its words as a
+  tooltip, in the age's place, instead of a filled button with text and a shadow.
 - Open Folder… and the question before quitting are sheets on the window (an alert of their own
   only while the window is away), so pages, terminals and agents keep running while they wait.
   Quitting again while the question is up keeps that one question; its answer goes to both.

@@ -42,9 +42,10 @@ pub(super) struct Kept {
 }
 
 impl Kept {
-    /// The frame that shows the board as it is now.
+    /// The frame that shows the board as it is now, with the agents installed to run a card by.
     pub(super) fn frame(&self) -> String {
-        board::frame(&self.board, &self.key, &self.project, board::now())
+        let agents = serde_json::from_str(&crate::browser::installed_agents()).unwrap_or_default();
+        board::frame(&self.board, &self.key, &self.project, board::now(), &agents)
     }
 }
 

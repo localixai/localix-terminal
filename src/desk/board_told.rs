@@ -12,6 +12,7 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::board::{self, Did, Urgency};
+use crate::browser::Asked;
 
 use crate::projects::ProjectId;
 
@@ -32,6 +33,7 @@ impl Desk {
     pub(super) fn person_on_board(&self, project: ProjectId, posted: &str) {
         let action: Result<Value, String> =
             serde_json::from_str(posted).map_err(|why| format!("the board sent no action: {why}"));
+        let mut started = None;
         let paint = {
             let mut boards = crate::lock(&self.boards);
             let Some(kept) = boards.get_mut(&project) else {
@@ -39,8 +41,15 @@ impl Desk {
             };
             let before = kept.board.clone();
             let mut changed = false;
-            let done = action
-                .and_then(|action| kept.board.person(&action))
+            // A card run by an agent: the board takes it as its worker's, then its terminal starts.
+            let prepared = action.and_then(|action| {
+                super::board_run::prepared(action, &kept.key, crate::browser::agent_started_on)
+            });
+            let done = prepared
+                .and_then(|(action, run)| {
+                    started = run;
+                    kept.board.person(&action)
+                })
                 .and_then(|did| {
                     changed = kept.board != before;
                     if changed {
@@ -49,8 +58,9 @@ impl Desk {
                     Ok(did)
                 });
             if done.is_err() {
-                // Refused, or not saved: the board stays as it was kept.
+                // Refused, or not saved: the board stays as it was kept, and nothing starts.
                 kept.board = before;
+                started = None;
             }
             let refused = match done {
                 // What changed nothing (a card dropped where it was) is news to no agent.
@@ -65,6 +75,13 @@ impl Desk {
             let frame = kept.frame();
             kept.panel.clone().map(|panel| (panel, frame, refused))
         };
+        if let (Some(run), Some(desk)) = (started, self.me.upgrade()) {
+            let asked = Asked::Worker {
+                command: run.command,
+                title: run.title,
+            };
+            desk.person_asked(&crate::projects::key(project), asked);
+        }
         if let Some((panel, frame, refused)) = paint {
             panel.paint(&frame);
             if let Some(refused) = refused {

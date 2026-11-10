@@ -17,7 +17,7 @@ const EMPTY = {
   discarded: "Nothing given up. Cards dropped from any column land here.",
 };
 const motion = matchMedia("(prefers-reduced-motion: reduce)");
-let board = { key: "", project: "", limit: 1, now: 0, cards: [] };
+let board = { key: "", project: "", limit: 1, now: 0, cards: [], agents: [] };
 let paintedAt = Date.now();
 let opened = null;
 let returning = false;
@@ -64,7 +64,7 @@ const GLYPH = {
   seal: "M6 1.3l1.3 1 1.6-.1.5 1.5 1.3.9-.5 1.5.5 1.5-1.3.9-.5 1.5-1.6-.1L6 10.7l-1.3-1-1.6.1-.5-1.5-1.3-.9.5-1.5-.5-1.5 1.3-.9.5-1.5 1.6.1zM4.3 6.1l1.2 1.1 2.2-2.3",
   trash: "M2.3 3.4h7.4M4.7 3.4V2.3h2.6v1.1M3.3 3.4l.5 6.3h4.4l.5-6.3M5 5.2v2.8M7 5.2v2.8",
   shelf: "M2 4h8v5.7H2zM1.6 2.3h8.8V4H1.6zM4.6 6h2.8",
-  chevron: "M3.5 4.8 6 7.2l2.5-2.4",
+  chevron: "M3.5 4.8 6 7.2l2.5-2.4", play: "M4 2.8v6.4L9.2 6z",
 };
 const EMPTY_GLYPH = { backlog: "idea", todo: "list", doing: "work", review: "eye", done: "seal", discarded: "shelf" };
 
@@ -136,13 +136,26 @@ function restore(held) {
   try { field.setSelectionRange(held.start, held.end); } catch {}
 }
 
-// The one move a card asks of the person, shown as it is pointed at.
+// The one move a card asks of the person, shown as it is pointed at: an action, or a menu.
 function quick(card) {
   if (card.column === "review") return { label: "Accept", glyph: "check", action: { op: "accept", card: card.id } };
-  if (card.column === "done") return { label: "Reopen", glyph: "back", plain: true, action: { op: "move", card: card.id, to: "todo" } };
-  if (card.column === "backlog") return { label: "Move to Todo", glyph: "open", plain: true, action: { op: "move", card: card.id, to: "todo" } };
-  if (card.blocked) return { label: "Unblock", glyph: "check", plain: true, action: { op: "unblock", card: card.id } };
+  if (card.column === "done") return { label: "Reopen", glyph: "back", action: { op: "move", card: card.id, to: "todo" } };
+  if (card.column === "backlog") return { label: "Move to Todo", glyph: "open", action: { op: "move", card: card.id, to: "todo" } };
+  if (card.blocked) return { label: "Unblock", glyph: "check", action: { op: "unblock", card: card.id } };
+  if (card.column === "todo") return { label: "Run with an agent…", glyph: "play", menu: (at) => runWith(card, at) };
   return null;
+}
+
+// A card that waits (in Backlog or Todo) is run by a coding agent the person picks: the desk
+// hands it to the agent's worker in Doing and starts the agent in a terminal on it.
+const runnable = (card) => card.column === "backlog" || card.column === "todo";
+const agentItems = (card) => (board.agents || []).length
+  ? board.agents.map((agent) => ({ label: agent.name, run: () => { folds.set("doing", false); act({ op: "run", card: card.id, agent: agent.id }); } }))
+  : [{ label: "No Agents Installed", off: true }];
+// The agents' menu under the control `at` was clicked on.
+function runWith(card, at) {
+  const box = at.getBoundingClientRect();
+  systemMenu(box.left, box.bottom + 4, agentItems(card));
 }
 
 function cardView(card) {
@@ -168,8 +181,10 @@ function cardView(card) {
     el("button.act.no", { title: "Send back…", "aria-label": `Send ${card.id} back`,
       onclick: (e) => { e.stopPropagation(); open(card.id, true); } }, icon(GLYPH.back, 13))) : null,
   el("div.m", {}, el("span.id", { text: card.id }), owner(card), el("span.age", { text: age(moved), "data-at": moved })),
-  offer && card.column !== "review" ? el(`button.quick${offer.plain ? ".plain" : ""}`, {
-    tabindex: "-1", onclick: (e) => { e.stopPropagation(); act(offer.action); } }, icon(GLYPH[offer.glyph], 10), offer.label) : null);
+  // Its picture alone, its words a tooltip.
+  offer && card.column !== "review" ? el("button.quick", {
+    tabindex: "-1", "aria-haspopup": offer.menu ? "menu" : null, title: offer.label, "aria-label": `${offer.label} (${card.id})`,
+    onclick: (e) => { e.stopPropagation(); offer.menu ? offer.menu(e.currentTarget) : act(offer.action); } }, icon(GLYPH[offer.glyph], 11)) : null);
   node.addEventListener("dragstart", (e) => {
     dragged = card.id;
     slotEl = el("div.slot");
@@ -355,8 +370,10 @@ function inspector(card) {
   const trash = removing
     ? el("button.btn.danger", { onclick: () => { act({ op: "remove", card: card.id }); close(); } }, icon(GLYPH.trash, 12), "Delete")
     : el("button.btn.plain.ico", { title: "Delete card", "aria-label": `Delete ${card.id}`, onclick: arm }, icon(GLYPH.trash, 13));
+  const run = runnable(card) ? el("button.btn.plain.ico", { title: "Run with an agent…", "aria-label": `Run ${card.id} with an agent`,
+    "aria-haspopup": "menu", onclick: (e) => runWith(card, e.currentTarget) }, icon(GLYPH.play, 13)) : null;
   return [
-    el("div.top", {}, el("span.id", { text: card.id }), status, owner(card), el("span.gap"), trash,
+    el("div.top", {}, el("span.id", { text: card.id }), status, owner(card), el("span.gap"), run, trash,
       el("button.btn.plain.ico", { "aria-label": "Close", title: "Close (Esc)", onclick: close }, icon(GLYPH.close))),
     el("div.body", {},
       title,
@@ -403,6 +420,7 @@ function menu(card, x, y) {
     card.column === "review" ? { label: "Accept", run: () => act({ op: "accept", card: card.id }) } : null,
     card.column === "review" ? { label: "Send Back…", run: () => open(card.id, true) } : null,
     card.blocked ? { label: "Unblock", run: () => act({ op: "unblock", card: card.id }) } : null,
+    runnable(card) ? { label: "Run With", items: agentItems(card) } : null,
     { line: true },
     { label: "Move To", items: moves(card) },
     closed ? null : { label: "Discard", run: () => { folds.set("discarded", false); act({ op: "move", card: card.id, to: "discarded" }); } },
@@ -504,7 +522,7 @@ function paint() {
 function B(state) {
   board = state;
   paintedAt = Date.now();
-  const next = JSON.stringify([state.key, state.project, state.limit, state.cards]);
+  const next = JSON.stringify([state.key, state.project, state.limit, state.cards, state.agents]);
   if (next === boardSig) return;
   boardSig = next;
   queuePaint();

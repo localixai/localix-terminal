@@ -48,13 +48,23 @@ pub(crate) fn scenario(browser: &Browser) {
         "b1",
         "shop",
         llx_desk::board::now(),
+        &json!([{"id": "codex", "name": "Codex"}]),
     ));
+    // A card waiting in Todo offers to be run by an agent.
     let read = "[document.querySelectorAll('.card').length, \
         document.querySelector('.lane[data-col=review] .card .t').textContent, \
         document.querySelector('.card[data-id=c3] .t').textContent, \
-        document.querySelectorAll('.card .t b').length]";
+        document.querySelectorAll('.card .t b').length, \
+        document.querySelector('.card[data-id=c1] .quick').title]";
     until("the board was never painted", || {
-        browser.peek(&panel, read) == Ok(json!([3, "Cart on mobile", "<b>not markup</b>", 0]))
+        browser.peek(&panel, read)
+            == Ok(json!([
+                3,
+                "Cart on mobile",
+                "<b>not markup</b>",
+                0,
+                "Run with an agent…"
+            ]))
     });
 
     // The window lists it as the board it is.

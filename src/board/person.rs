@@ -1,7 +1,7 @@
 //! What the person does on the board from the window: what a worker may, and what only they may:
 //! accept a card into Done, send one back with what is wrong, move any card anywhere (past the
-//! limit too), and set the limit. Each action comes to words for the agent, and whether they
-//! should hear them now or with their next call.
+//! limit too), run a waiting card by a worker they started on it, and set the limit. Each action
+//! comes to words for the agent, and whether they should hear them now or with their next call.
 
 use serde_json::Value;
 
@@ -85,6 +85,7 @@ impl Board {
                 said(&mut self.cards[at], PERSON, &text);
                 Ok(self.did(id, "commented on", &format!(": \"{text}\""), Urgency::Now))
             }
+            "run" => self.person_run(needed(action, "card")?, field(action, "who")),
             "edit" => self.person_edit(needed(action, "card")?, action),
             "unblock" => {
                 let id = needed(action, "card")?;
@@ -193,6 +194,27 @@ impl Board {
             &format!(" to Todo: \"{text}\""),
             Urgency::Now,
         ))
+    }
+
+    /// Card `id`, waiting in Backlog or Todo, handed to worker `who` in Doing, past the limit: the
+    /// person started that worker on it (an agent in a terminal of theirs), and its `take` of
+    /// it is then nothing new.
+    fn person_run(&mut self, id: &str, who: Option<&str>) -> Result<Did, String> {
+        let who = super::worker_name(who)?.ok_or("`who` names the worker that runs it")?;
+        let at = self.at(id)?;
+        let card = &mut self.cards[at];
+        if !matches!(card.column, Column::Backlog | Column::Todo) {
+            return Err(format!(
+                "{} is in {}: only a card waiting in Backlog or Todo is run",
+                card.id,
+                card.column.title()
+            ));
+        }
+        card.who = Some(who.to_string());
+        card.blocked = None;
+        let id = card.id.clone();
+        self.moved(at, Column::Doing, PERSON, None);
+        Ok(self.did(&id, "ran", " by a worker of its own", Urgency::Later))
     }
 
     /// A new title or note for card `id`, wherever it is.

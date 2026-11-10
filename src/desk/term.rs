@@ -280,6 +280,17 @@ impl Desk {
         self.person_terminal_after(call, group, command, "")
     }
 
+    /// `person_terminal`, titled `title` rather than by its command line (a long one).
+    pub(super) fn person_terminal_titled(
+        &self,
+        call: &Call,
+        group: &str,
+        command: &str,
+        title: &str,
+    ) -> Result<(), String> {
+        self.terminal_of_person(call, group, command, title, "")
+    }
+
     /// `person_terminal`, its screen showing `before` first, dimmed: a terminal restored.
     pub(super) fn person_terminal_after(
         &self,
@@ -288,9 +299,20 @@ impl Desk {
         command: &str,
         before: &str,
     ) -> Result<(), String> {
+        self.terminal_of_person(call, group, command, command, before)
+    }
+
+    fn terminal_of_person(
+        &self,
+        call: &Call,
+        group: &str,
+        command: &str,
+        title: &str,
+        before: &str,
+    ) -> Result<(), String> {
         let (id, _) = self.start_session(command, call.cwd, call.vars, group, before)?;
         let facts = Facts {
-            title: command,
+            title,
             cwd: Some(call.cwd),
             command: Some(command).filter(|command| !command.is_empty()),
             ..Facts::default()

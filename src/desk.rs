@@ -11,6 +11,7 @@ mod args;
 mod board;
 mod board_file;
 mod board_ops;
+mod board_run;
 mod board_told;
 mod call;
 mod center;

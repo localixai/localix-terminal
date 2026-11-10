@@ -77,3 +77,31 @@ fn the_logins_path_comes_first_and_the_process_keeps_what_it_added() {
         ["/home/me/.local/bin", "/usr/bin", "/opt/dev"].map(std::path::PathBuf::from)
     );
 }
+
+#[test]
+fn an_agent_starts_on_a_first_prompt_quoted_for_the_shell_where_its_command_takes_one() {
+    let (claude, gemini, copilot) = (&AGENTS[0], &AGENTS[2], &AGENTS[3]);
+    assert_eq!(
+        claude.seeded("claude", "take c3; it's yours").as_deref(),
+        Some(r"claude 'take c3; it'\''s yours'")
+    );
+    assert_eq!(
+        gemini.seeded("gemini", "take c3").as_deref(),
+        Some("gemini -i 'take c3'")
+    );
+    // The older command of an agent takes no first prompt, nor a command not its own.
+    assert_eq!(copilot.seeded("ghcs", "take c3"), None);
+    assert_eq!(claude.seeded("codex", "take c3"), None);
+    for agent in &AGENTS {
+        assert!(
+            (agent.seeds.iter()).all(|(command, _)| agent.commands.contains(command)),
+            "{}",
+            agent.id
+        );
+    }
+    assert!(
+        started_on("nope", "take c3")
+            .unwrap_err()
+            .contains("no agent `nope`")
+    );
+}

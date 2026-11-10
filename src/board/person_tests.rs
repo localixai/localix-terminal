@@ -210,3 +210,40 @@ fn the_persons_moves_and_send_backs_keep_a_cards_history_within_its_cap() {
     assert_eq!(card.history.len(), super::super::MAX_STEPS);
     assert_eq!(card.history.last().unwrap().text.as_deref(), Some("again"));
 }
+
+#[test]
+fn the_person_runs_a_waiting_card_by_a_worker_of_its_own_past_the_limit() {
+    let mut board = board();
+    board.take(Some("c3"), Worker(Some("codex-c3"))).unwrap();
+    board
+        .person(&json!({"op": "move", "card": "c2", "to": "backlog"}))
+        .unwrap();
+    // An idea in Backlog is run too: the person said so.
+    let did = (board.person(&json!({"op": "run", "card": "c2", "who": "codex-c3"}))).unwrap();
+    assert_eq!(
+        did.words,
+        "ran c2 \"two\" (codex-c3) by a worker of its own"
+    );
+    assert_eq!(did.urgent, Urgency::Later);
+    let card = board.card("c2").unwrap();
+    assert_eq!(
+        (card.column, card.who.as_deref()),
+        (Column::Doing, Some("codex-c3"))
+    );
+    let last = card.history.last().unwrap();
+    assert_eq!((last.by.as_str(), last.to), ("person", Some(Column::Doing)));
+    // The worker's own take of it is then nothing new.
+    assert_eq!(
+        board.take(Some("c2"), Worker(Some("codex-c3"))).unwrap(),
+        "c2"
+    );
+    // Only a card that waits is run, by a worker with a name.
+    let refused = board.person(&json!({"op": "run", "card": "c1", "who": "codex-c1"}));
+    assert!(refused.unwrap_err().contains("in Review"));
+    assert!(board.person(&json!({"op": "run", "card": "c2"})).is_err());
+    assert!(
+        board
+            .person(&json!({"op": "run", "card": "c2", "who": "agent"}))
+            .is_err()
+    );
+}

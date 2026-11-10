@@ -3,13 +3,13 @@
 //! a page that was altered never runs one; the desk paints the board into it whole (`B`), and
 //! what it refused (`E`).
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::Board;
 
 /// The page's script, and its SHA-384: the page's policy runs it by that hash.
 const SCRIPT: &str = include_str!("page.js");
-const SCRIPT_SHA384: &str = "8p2i3HdshJlb1/1zNdAVBBTtT0NZ7PNHeXKkj+ca0lAVCU5qvix/4IXZhIKVqSAJ";
+const SCRIPT_SHA384: &str = "uUtTAvPXmPFhw5k2FyN+AUS4JpOOZinwX34DZ/irNW3XY0njBAuVGtCYXKolIoy0";
 
 /// The page, titled `title`.
 pub fn page(title: &str) -> String {
@@ -24,14 +24,16 @@ pub fn page(title: &str) -> String {
         .replacen("{{title}}", &title, 1)
 }
 
-/// The frame that shows `board` whole: its tab `key`, the project it is `project`'s, and now.
-pub fn frame(board: &Board, key: &str, project: &str, now: u64) -> String {
+/// The frame that shows `board` whole: its tab `key`, the project it is `project`'s, now, and
+/// the coding agents installed that a card can be run by (`[{"id", "name"}]`).
+pub fn frame(board: &Board, key: &str, project: &str, now: u64, agents: &Value) -> String {
     let state = json!({
         "key": key,
         "project": project,
         "limit": board.limit,
         "now": now,
         "cards": board.cards,
+        "agents": agents,
     });
     format!("B({state})")
 }

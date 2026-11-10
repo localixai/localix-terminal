@@ -64,6 +64,7 @@ use std::time::Duration;
 use crate::view::{Action, Element, ViewResult};
 use serde::{Deserialize, Serialize};
 
+pub use agents::{known as installed_agents, started_on as agent_started_on};
 pub use capture::{Clip, Shot};
 pub use guard::loadable;
 pub use host::{

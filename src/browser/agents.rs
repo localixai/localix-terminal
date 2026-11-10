@@ -20,6 +20,9 @@ pub(super) struct Agent {
     pub commands: &'static [&'static str],
     /// Its mark, an SVG drawn in one colour: the menu tints it as its text.
     pub mark: &'static str,
+    /// How a command of its starts on a first prompt and stays to talk: the words before the
+    /// prompt (none: the prompt is its first word). A command not here takes none.
+    pub seeds: &'static [(&'static str, &'static str)],
 }
 
 /// Brand marks (but Hermes's): see NOTICE.md.
@@ -29,36 +32,42 @@ pub(super) const AGENTS: [Agent; 6] = [
         name: "Claude Code",
         commands: &["claude"],
         mark: include_str!("marks/claude.svg"),
+        seeds: &[("claude", "")],
     },
     Agent {
         id: "codex",
         name: "Codex",
         commands: &["codex"],
         mark: include_str!("marks/codex.svg"),
+        seeds: &[("codex", "")],
     },
     Agent {
         id: "gemini",
         name: "Gemini CLI",
         commands: &["gemini"],
         mark: include_str!("marks/gemini.svg"),
+        seeds: &[("gemini", "-i")],
     },
     Agent {
         id: "copilot",
         name: "GitHub Copilot",
         commands: &["copilot", "ghcs"],
         mark: include_str!("marks/copilot.svg"),
+        seeds: &[("copilot", "-i")],
     },
     Agent {
         id: "opencode",
         name: "OpenCode",
         commands: &["opencode"],
         mark: include_str!("marks/opencode.svg"),
+        seeds: &[("opencode", "--prompt")],
     },
     Agent {
         id: "hermes",
         name: "Hermes",
         commands: &["hermes", "hermes-agent"],
         mark: include_str!("marks/hermes.svg"),
+        seeds: &[("hermes", "chat -q")],
     },
 ];
 
@@ -71,6 +80,32 @@ impl Agent {
             .copied()
             .find(|command| dirs.iter().any(|dir| runnable(&dir.join(command))))
     }
+
+    /// The command line of `command` (one of its own) started on `prompt`, quoted for `sh`:
+    /// none where that command takes no first prompt.
+    pub(super) fn seeded(&self, command: &str, prompt: &str) -> Option<String> {
+        let (_, before) = self.seeds.iter().find(|(seeded, _)| *seeded == command)?;
+        let quoted = format!("'{}'", prompt.replace('\'', r"'\''"));
+        Some(
+            [command, before, &quoted]
+                .into_iter()
+                .filter(|word| !word.is_empty())
+                .collect::<Vec<_>>()
+                .join(" "),
+        )
+    }
+}
+
+/// Agent `id` started on `prompt`, where it is installed and takes a first prompt: its command
+/// line, for a terminal of the person's. Said why not, as the person reads it.
+pub fn started_on(id: &str, prompt: &str) -> Result<String, String> {
+    let agent = (AGENTS.iter())
+        .find(|agent| agent.id == id)
+        .ok_or_else(|| format!("there is no agent `{id}`"))?;
+    let command =
+        (agent.command_on(&path())).ok_or_else(|| format!("{} is not installed", agent.name))?;
+    (agent.seeded(command, prompt))
+        .ok_or_else(|| format!("{} (`{command}`) takes no first prompt", agent.name))
 }
 
 /// The agents' marks for a page, as a JSON object of SVG by id, each drawn in the text's colour.
@@ -165,9 +200,15 @@ pub(super) fn installed() -> String {
 /// The call that gives a page that is up the agents installed, as it last looked: said on a
 /// refresh, so a page built before the login shell answered learns it too.
 pub(super) fn script() -> String {
+    format!("agentsInstalled({})", known())
+}
+
+/// The agents installed, as it last looked: a JSON array of their place in [`AGENTS`], id and
+/// name, for a page the desk paints (the board's agents to run a card with).
+pub fn known() -> String {
     let mut known = crate::lock(&KNOWN);
     let known = known.get_or_insert_with(|| Known::on(process_path()));
-    format!("agentsInstalled({})", known.installed)
+    known.installed.clone()
 }
 
 /// The agent a terminal's command line starts, read as a shell would start it: past variables

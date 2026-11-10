@@ -33,13 +33,15 @@ fn a_frame_carries_the_board_whole_as_data() {
     board
         .add("say </script> \"hi\"", "", None, "agent")
         .unwrap();
-    let frame = frame(&board, "b1", "shop", 42);
-    let state: serde_json::Value =
+    let agents = serde_json::json!([{"id": "codex", "name": "Codex"}]);
+    let frame = frame(&board, "b1", "shop", 42, &agents);
+    let state: Value =
         serde_json::from_str(frame.strip_prefix("B(").unwrap().strip_suffix(')').unwrap()).unwrap();
     assert_eq!(state["cards"][0]["title"], "say </script> \"hi\"");
     assert_eq!(
         (state["key"].as_str(), state["now"].as_u64()),
         (Some("b1"), Some(42))
     );
+    assert_eq!(state["agents"][0]["id"], "codex");
     assert_eq!(refused("no \"card\""), r#"E("no \"card\"")"#);
 }

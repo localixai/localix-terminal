@@ -134,7 +134,7 @@ fn board(browser: &Browser) {
     browser.go("ui");
     browser.act("b72", false).unwrap();
     wait(|| browser.peek(&panel, "typeof B") == Ok(json!("function")));
-    panel.paint(&llx_desk::board::frame(&state, "b72", "UI", 1));
+    panel.paint(&llx_desk::board::frame(&state, "b72", "UI", 1, &json!([])));
     wait(|| {
         browser
             .peek(&panel, "document.querySelectorAll('.card').length === 1")
@@ -156,7 +156,7 @@ fn board(browser: &Browser) {
         )
         .unwrap();
     state.cards[0].title = "Changed elsewhere".to_string();
-    panel.paint(&llx_desk::board::frame(&state, "b72", "UI", 2));
+    panel.paint(&llx_desk::board::frame(&state, "b72", "UI", 2, &json!([])));
     wait(|| browser.peek(&panel, "board.now === 2").unwrap() == json!(true));
     assert_eq!(
         browser
@@ -193,7 +193,7 @@ fn board(browser: &Browser) {
             "window.__same = document.querySelector('.card'); true",
         )
         .unwrap();
-    panel.paint(&llx_desk::board::frame(&state, "b72", "UI", 3));
+    panel.paint(&llx_desk::board::frame(&state, "b72", "UI", 3, &json!([])));
     wait(|| browser.peek(&panel, "board.now === 3").unwrap() == json!(true));
     assert_eq!(
         browser

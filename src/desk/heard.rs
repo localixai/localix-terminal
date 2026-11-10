@@ -146,6 +146,9 @@ impl Desk {
                         desk.person_terminal(&Call { cwd, ..call }, &group, "")
                     }
                     Asked::Agent(command) => desk.person_terminal(&call, &group, command),
+                    Asked::Worker { command, title } => {
+                        desk.person_terminal_titled(&call, &group, command, title)
+                    }
                     Asked::Board => (desk.board(&call, &json!({"op": "show"})))
                         .map(|_| ())
                         .map_err(|failure| failure.message().to_string()),

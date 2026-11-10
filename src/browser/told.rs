@@ -176,6 +176,9 @@ pub enum Asked {
     Board,
     /// A coding agent's program, in a terminal of theirs in the project's folder: its command.
     Agent(&'static str),
+    /// A coding agent started on a card of the board, in a terminal of theirs in the project's
+    /// folder: its command line (its first prompt in it) and the terminal's title (`c3 · codex`).
+    Worker { command: String, title: String },
     /// A closed tab of the project's history, opened again: its row in the ledger.
     Again(i64),
     /// They went to the project, which has no tab open: what it had open when the app quit, or
