@@ -101,13 +101,14 @@ fn the_theme_is_the_persons_else_the_systems() {
 #[test]
 fn a_page_is_dressed_in_the_frames_stylesheet() {
     let page = "<!doctype html>\n<html>\n<head>\n<title>t</title></head><body></body></html>";
-    let glass = dress(page, Look::Glass);
+    // Transparency as the person left it on: the machine's own setting is the next test's.
+    let glass = dressed_as(page, Look::Glass, false);
     assert!(glass.contains("<html data-glass>"), "{glass}");
     assert!(
         glass.contains(&format!("<head><style>{CSS}</style>")),
         "{glass}"
     );
-    let opaque = dress(page, Look::Opaque);
+    let opaque = dressed_as(page, Look::Opaque, false);
     assert!(opaque.contains("<html>") && opaque.contains(CSS));
     assert_eq!(opaque.matches("<style>").count(), 1);
     assert!(CSS.contains("prefers-reduced-transparency"));

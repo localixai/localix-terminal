@@ -21,7 +21,7 @@ pub(crate) fn peer_uid(stream: &UnixStream) -> Option<u32> {
         uid: 0,
         gid: 0,
     };
-    let mut size = libc::socklen_t::try_from(std::mem::size_of::<libc::ucred>()).ok()?;
+    let mut size = libc::socklen_t::try_from(size_of::<libc::ucred>()).ok()?;
     // SAFETY: getsockopt writes at most `size` bytes of the peer's credentials into `cred`.
     let got = unsafe {
         libc::getsockopt(
