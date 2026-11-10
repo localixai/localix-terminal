@@ -31,3 +31,13 @@ fn this_process_has_arguments() {
     let read = arguments(pid).expect("this process's arguments");
     assert!(!read.is_empty());
 }
+
+#[test]
+fn a_shell_that_only_runs_a_command_is_looked_past() {
+    assert!(runs_a_command(&args("sh -c claude")));
+    assert!(runs_a_command(&args("/bin/dash -c x")));
+    // A person's shell, or a shell running a script, is the program in front.
+    assert!(!runs_a_command(&args("-zsh")));
+    assert!(!runs_a_command(&args("bash script.sh")));
+    assert!(!runs_a_command(&args("node -c x")));
+}

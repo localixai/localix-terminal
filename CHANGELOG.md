@@ -70,6 +70,8 @@
 
 ### Fixed
 
+- On Linux, a terminal opened with a command (an agent from "+") names that program in front, not
+  `sh`: the shell that only runs the command is looked past, as macOS's replaces itself.
 - The app and the command line opening the database at the same moment no longer leave the app
   keeping nothing for its whole run: the second waits for the first, and a schema step is never
   run twice.

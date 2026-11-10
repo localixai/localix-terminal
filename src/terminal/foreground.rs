@@ -1,5 +1,5 @@
-//! The program in front in a terminal: the leader of its foreground process group, by the name
-//! it was started as (`claude`, `codex`), so a program the person typed in a shell is known as
+//! The program in front in a terminal: the leader of its foreground process group (or the
+//! command a shell that only runs one waits for), by the name it was started as (`claude`, `codex`), so a program the person typed in a shell is known as
 //! well as one the terminal was opened with. A script run by its runtime (`node …/claude`) is
 //! known by the script. The reader asks for the group with each output (one cheap call) and for
 //! the name only when the group changed: a program started, or ended, in front.
@@ -23,9 +23,51 @@ pub(super) fn group(master: RawFd) -> Option<libc::pid_t> {
     (group > 0).then_some(group)
 }
 
-/// The name group `group`'s leader was started as.
+/// The name of the program in front of group `group`: its leader's, or past a shell that only
+/// runs a command (`sh -c …`, as a terminal opened with one starts) and waits for it, that
+/// command's. macOS's `sh` becomes the command itself; Linux's `dash` stays and waits.
 pub(super) fn name(group: libc::pid_t) -> Option<String> {
-    named(&arguments(group)?)
+    let mut args = arguments(group)?;
+    let mut pid = group;
+    // A few levels at most: a shell that runs a shell that runs the program.
+    for _ in 0..4 {
+        if !runs_a_command(&args) {
+            break;
+        }
+        let Some(child) = last_child(pid) else {
+            break;
+        };
+        let Some(next) = arguments(child) else {
+            break;
+        };
+        (pid, args) = (child, next);
+    }
+    named(&args)
+}
+
+/// Whether `args` are a shell's that runs one command string (`sh -c …`) rather than a person's.
+pub(super) fn runs_a_command(args: &[String]) -> bool {
+    let shell = args
+        .first()
+        .map(|arg| arg.rsplit('/').next().unwrap_or(arg));
+    matches!(shell, Some("sh" | "dash" | "bash" | "zsh"))
+        && args.get(1).is_some_and(|arg| arg == "-c")
+}
+
+/// Process `pid`'s newest child (Linux: from `/proc`); none where it cannot be told.
+#[cfg(not(target_os = "macos"))]
+fn last_child(pid: libc::pid_t) -> Option<libc::pid_t> {
+    let children = std::fs::read_to_string(format!("/proc/{pid}/task/{pid}/children")).ok()?;
+    children
+        .split_whitespace()
+        .filter_map(|child| child.parse().ok())
+        .last()
+}
+
+/// macOS's `sh -c` becomes its command: it has no shell left to look past.
+#[cfg(target_os = "macos")]
+const fn last_child(_pid: libc::pid_t) -> Option<libc::pid_t> {
+    None
 }
 
 /// The name a program was started as, from its arguments.
