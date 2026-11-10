@@ -16,6 +16,7 @@ use super::host::Cmd;
 use super::platform::{conceal, keep_rendering, keep_tab_rendering};
 
 /// A colour as red, green and blue.
+#[cfg(any(target_os = "macos", test))]
 pub(super) type Rgb = [u8; 3];
 
 /// The stylesheet a panel's page is dressed in: its ground, painted once, for each look.
