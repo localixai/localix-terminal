@@ -3,11 +3,14 @@
 
 use tao::dpi::LogicalSize;
 
+// macOS keeps each view's place; elsewhere only the tests read these.
 /// A view's place, in points from the window's top left: across, down, wide, tall.
+#[cfg(any(target_os = "macos", test))]
 type Spot = [f64; 4];
 
 /// What a view was last given (`asked`), and where it stood just after (`stood`, as the system
 /// reads it back: whole points, in its window's terms).
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Placed {
     asked: Spot,
@@ -17,6 +20,7 @@ struct Placed {
 /// Whether a view that stands at `now` and is asked for `asked` stands there already: it was
 /// given that place last (`last`), and nothing has moved it since (the window resized under it,
 /// another view at its address).
+#[cfg(any(target_os = "macos", test))]
 fn stands(last: Option<&Placed>, asked: Spot, now: Spot) -> bool {
     last.is_some_and(|last| last.asked == asked && last.stood == now)
 }

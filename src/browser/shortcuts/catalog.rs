@@ -7,6 +7,10 @@ pub(in super::super) struct Shortcut {
     pub title: &'static str,
     pub group: &'static str,
     pub keys: &'static str,
+    #[cfg_attr(
+        all(not(target_os = "macos"), not(test)),
+        expect(dead_code, reason = "only macOS's menus send what a shortcut does")
+    )]
     pub does: &'static str,
 }
 

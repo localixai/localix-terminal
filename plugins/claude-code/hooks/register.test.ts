@@ -10,6 +10,12 @@ mock.module('claude-code', () => ({
   },
 }))
 
+// Bun compiles the hooks' JSX to React's runtime, which only the host provides: the line is never
+// drawn here, so an element is nothing.
+const runtime = () => ({ jsx: () => null, jsxs: () => null, jsxDEV: () => null, Fragment: 'fragment' })
+mock.module('react/jsx-dev-runtime', runtime)
+mock.module('react/jsx-runtime', runtime)
+
 const { register } = await import('./register')
 
 type Ran = { exitCode: number; stdout: string }

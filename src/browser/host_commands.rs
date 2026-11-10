@@ -116,6 +116,10 @@ pub(in super::super) enum Cmd {
     Presence(super::super::presence::Event),
     /// The person pressed in one of the app's windows (an NSWindow's address), at `x`, `y`
     /// points from its top left (presses.rs).
+    #[cfg_attr(
+        all(not(target_os = "macos"), not(test)),
+        expect(dead_code, reason = "only macOS tells of presses in its windows")
+    )]
     Pressed(usize, f64, f64),
     /// The person opened the app (its Dock icon, `llx-desk open`): the window back, and the app
     /// they use from then on.

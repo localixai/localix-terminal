@@ -351,6 +351,10 @@ impl Deck {
 
     /// Elsewhere no press is told of.
     #[cfg(not(target_os = "macos"))]
+    #[expect(
+        clippy::unused_self,
+        reason = "the deck's question on macOS, where it reads the window"
+    )]
     pub(super) fn is_window(&self, _window: usize) -> bool {
         false
     }

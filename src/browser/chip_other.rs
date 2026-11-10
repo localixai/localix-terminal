@@ -13,10 +13,22 @@ impl Chip {
         Self
     }
 
+    #[expect(
+        clippy::unused_self,
+        reason = "the calls of macOS's chip, which draws in its own view"
+    )]
     pub(super) fn follow(&self, _x: f64, _y: f64) {}
 
+    #[expect(
+        clippy::unused_self,
+        reason = "the calls of macOS's chip, which draws in its own view"
+    )]
     pub(super) fn show(&self, _shown: bool) {}
 
+    #[expect(
+        clippy::unused_self,
+        reason = "the calls of macOS's chip, which draws in its own view"
+    )]
     pub(super) fn height(&self) -> f64 {
         44.0
     }

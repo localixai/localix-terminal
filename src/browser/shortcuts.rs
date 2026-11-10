@@ -133,6 +133,10 @@ impl Chord {
     /// The key a menu item is given for it, and whether shift goes in the item's modifiers.
     /// A shifted symbol is the symbol shift makes on a US layout (`⇧⌘[` is `{`), as the
     /// system's own menus name it; a shifted letter is the letter, shift in the modifiers.
+    #[cfg_attr(
+        all(not(target_os = "macos"), not(test)),
+        expect(dead_code, reason = "only macOS's menus show the chords")
+    )]
     pub(super) fn menu_key(&self) -> (String, bool) {
         const SHIFTED: [(char, char); 21] = [
             ('[', '{'),

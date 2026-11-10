@@ -221,7 +221,7 @@ pub(super) fn pick_folder(
 
 #[cfg(not(target_os = "macos"))]
 fn picked_folder() -> Option<std::path::PathBuf> {
-    use gtk::prelude::{DialogExt, FileChooserExt, GtkWindowExt, WidgetExt};
+    use gtk::prelude::{DialogExt, FileChooserExt, GtkWindowExt};
     let none: Option<&gtk::Window> = None;
     let dialog = gtk::FileChooserDialog::with_buttons(
         Some("Open Folder"),

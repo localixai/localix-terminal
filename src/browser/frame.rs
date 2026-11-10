@@ -21,21 +21,9 @@ pub(super) type Rgb = [u8; 3];
 /// The stylesheet a panel's page is dressed in: its ground, painted once, for each look.
 pub(super) const CSS: &str = include_str!("frame.css");
 /// The system's grounds, when a page has none of its own.
-#[cfg_attr(
-    not(any(target_os = "macos", test)),
-    expect(
-        dead_code,
-        reason = "the glass under a window is macOS's only; its tests use it everywhere"
-    )
-)]
+#[cfg(any(target_os = "macos", test))]
 pub(super) const DARK: Rgb = [0x07, 0x07, 0x07];
-#[cfg_attr(
-    not(any(target_os = "macos", test)),
-    expect(
-        dead_code,
-        reason = "the glass under a window is macOS's only; its tests use it everywhere"
-    )
-)]
+#[cfg(any(target_os = "macos", test))]
 pub(super) const LIGHT: Rgb = [0xf7, 0xf7, 0xf7];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,13 +99,7 @@ pub(super) fn relayout(event: &WindowEvent) -> bool {
 /// The material for an appearance (NSVisualEffectMaterial): HUD, which is dark, in the dark
 /// one; sidebar, as a Finder sidebar's, in the light one: it keeps the desktop's colour where the
 /// milky under-window background washed it out.
-#[cfg_attr(
-    not(any(target_os = "macos", test)),
-    expect(
-        dead_code,
-        reason = "the glass under a window is macOS's only; its tests use it everywhere"
-    )
-)]
+#[cfg(any(target_os = "macos", test))]
 pub(super) fn material(dark: bool) -> isize {
     if dark { 13 } else { 7 }
 }
@@ -128,13 +110,7 @@ pub(super) fn material(dark: bool) -> isize {
 /// only takes the desktop back for who wants less of it. White over a light blur hides the
 /// desktop far sooner than black over a dark one, so the light ladder falls faster: its standard
 /// is nearly the bare material.
-#[cfg_attr(
-    not(any(target_os = "macos", test)),
-    expect(
-        dead_code,
-        reason = "the glass under a window is macOS's only; its tests use it everywhere"
-    )
-)]
+#[cfg(any(target_os = "macos", test))]
 pub(super) fn coat(dark: bool, level: super::settings::Transparency) -> (Rgb, f64) {
     use super::settings::Transparency as Level;
     let step = match level {
@@ -303,6 +279,13 @@ impl Frame {
     }
 
     /// Full screen draws no toolbar over the strip (macOS), and leaving it gives the toolbar back.
+    #[cfg_attr(
+        not(target_os = "macos"),
+        expect(
+            clippy::unused_self,
+            reason = "only macOS draws a toolbar to give back"
+        )
+    )]
     pub(super) fn follow_full_screen(&self) -> bool {
         #[cfg(target_os = "macos")]
         if self.look != Look::Hidden {
@@ -347,6 +330,10 @@ impl Frame {
     /// Tint the glass for the window's appearance now (the person's theme, or the system's).
     /// Solid, as the person's Off is, while they reduce transparency or increase contrast, and in
     /// full screen (`glass_level`).
+    #[cfg_attr(
+        not(target_os = "macos"),
+        expect(clippy::unused_self, reason = "macOS only")
+    )]
     pub(super) fn retint(&self) {
         #[cfg(target_os = "macos")]
         if let Some(glass) = &self.glass {
