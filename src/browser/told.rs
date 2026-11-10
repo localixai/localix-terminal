@@ -167,7 +167,7 @@ pub enum CenterDid {
 /// A tab the person asked for: with "+", its keys, the history, the address field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Asked {
-    /// A page of theirs, at this address, or with none on a blank page. The browser opens
+    /// A page of theirs, at this address, or with none on the search page. The browser opens
     /// for it when none is open.
     Page(Option<String>),
     /// A terminal of theirs, in this folder of the project, else in the project's.

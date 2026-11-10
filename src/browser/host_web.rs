@@ -27,15 +27,14 @@ pub(super) fn load(
     tab: Option<u32>,
     reply: &std::sync::mpsc::SyncSender<Result<(), String>>,
 ) {
-    // An address the system cannot read never reaches WebKit: its load would panic here. Nor
-    // does one that is not local: the agent asking for it is told so (`guard::for_agent`).
-    let loaded = match (webview, crate::browser::guard::for_agent(url)) {
+    // An address the system cannot read never reaches WebKit: its load would panic here.
+    let loaded = match (webview, crate::browser::guard::loadable(url)) {
         (None, _) => Err(match tab {
             Some(id) => format!("tab {id} is closed: list shows the tabs open"),
             None => WINDOW_CLOSED.into(),
         }),
-        (Some(_), Err(why)) => Err(why),
-        (Some(webview), Ok(url)) => webview.load_url(&url).map_err(|why| why.to_string()),
+        (Some(_), None) => Err(format!("`{url}` is not an address")),
+        (Some(webview), Some(url)) => webview.load_url(&url).map_err(|why| why.to_string()),
     };
     let _ = reply.send(loaded);
 }
@@ -193,8 +192,7 @@ pub(super) fn on_browser(
 }
 
 /// A tab opened on `url` and shown: the agent's (`reply`), or a page's own new window, which past
-/// the tab limit opens where the page is, as before tabs. An address that is not local is refused
-/// an agent, and opens in the person's own browser for a page or the person (a terminal's link).
+/// the tab limit opens where the page is, as before tabs.
 fn new_tab(
     open: &mut Deck,
     url: &str,
@@ -206,15 +204,6 @@ fn new_tab(
     let Some(tabs) = open.web.as_mut() else {
         return;
     };
-    if !crate::browser::guard::local(url) {
-        match reply {
-            Some(reply) => {
-                let _ = reply.send(Err(crate::browser::guard::not_local(url)));
-            }
-            None => crate::browser::guard::elsewhere(url, opener),
-        }
-        return;
-    }
     // The project of the tab the app opens (one not shown opens out of sight there); a page's own
     // new window is of its opener's, and never takes the slot a call of the app set.
     let project = match opener {

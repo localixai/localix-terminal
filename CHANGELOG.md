@@ -4,15 +4,6 @@
 
 ### Changed
 
-- Browser tabs load only local addresses: `localhost` and `*.localhost`, `*.local`, `*.test`,
-  `*.internal`, `*.home.arpa`, and IP literals of the loopback, the unspecified address, the
-  private IPv4 ranges, link-local and unique-local IPv6 (also IPv4-mapped), any port, decided by
-  the host as written and never by DNS. An agent's `open` or `url` of another address is refused
-  with an error naming it, before anything loads. A link, the address field (searches too), a
-  page's new window, script navigation or redirect to one leaves the tab where it was and opens
-  the address in the default browser, at most once a second per page; one an agent's own action
-  leads to opens nowhere. Subresources and frames are not limited. "+" and an `open` with no
-  `url` start on `about:blank` instead of a search page.
 - Open Folder… and the question before quitting are sheets on the window (an alert of their own
   only while the window is away), so pages, terminals and agents keep running while they wait.
   Quitting again while the question is up keeps that one question; its answer goes to both.

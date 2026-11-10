@@ -215,10 +215,6 @@ fn what_is_typed_in_the_address_field_goes_to_an_address_or_a_search() {
         went("localhost:3000/x").as_deref(),
         Some("http://localhost:3000/x")
     );
-    // A bare address of this machine or the local network is plain http, as its servers are.
-    for typed in ["printer.local:8080/x", "192.168.1.2:3000", "shop.test"] {
-        assert_eq!(went(typed), Some(format!("http://{typed}")), "{typed}");
-    }
     assert_eq!(
         went("rust borrow checker").as_deref(),
         Some("https://www.google.com/search?q=rust+borrow+checker")

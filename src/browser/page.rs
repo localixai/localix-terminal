@@ -67,8 +67,6 @@ impl Page {
     /// pinned to the tab waits: `wait_new`): a new tab of the window open, else the window opened
     /// on it.
     pub fn start(&self, url: &str) -> ViewResult<u32> {
-        // Refused before a window opens for it.
-        let url = &super::webview::loadable(url)?;
         match self.claim() {
             Claim::Open(open) => open.add_tab(url),
             Claim::Make => self.make(url).map(|made| made.1),

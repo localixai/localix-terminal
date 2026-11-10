@@ -122,7 +122,7 @@ fn a_page_needs_a_window_and_a_bad_action_says_what_is_known() {
     let me = mine.call();
     let no_window = desk.window(
         &me,
-        &json!({"action": "open", "kind": "browser", "url": "http://localhost:3000"}),
+        &json!({"action": "open", "kind": "browser", "url": "https://example.com"}),
     );
     assert!(no_window.unwrap().contains("no window here"));
     let Err(Failure::Failed(why)) = desk.window(&me, &json!({"action": "dance"})) else {

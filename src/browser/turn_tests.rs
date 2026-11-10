@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
-use super::{AFTER_ACTING, Turn, refused};
+use super::{Turn, refused};
 
 #[test]
 fn an_action_goes_at_once_while_the_person_is_not_commenting() {
@@ -78,22 +78,4 @@ fn the_strip_knows_when_the_agent_acts() {
     assert_eq!(turn.now(), (true, 0));
     turn.acting(false);
     assert_eq!(turn.now(), (false, 0));
-}
-
-#[test]
-fn a_page_moves_by_the_agent_while_it_acts_and_a_moment_after() {
-    // A click's navigation reaches WebKit's question after the action has settled: the moment
-    // after still counts as the agent's, so the person's browser never opens for it.
-    let turn = Turn::default();
-    let now = Instant::now();
-    assert!(!turn.agent_moves_at(now), "nobody acted yet");
-    turn.acting(true);
-    assert!(turn.agent_moves_at(now + Duration::from_secs(30)));
-    turn.acting(false);
-    let settled = Instant::now();
-    assert!(turn.agent_moves_at(settled + AFTER_ACTING / 2));
-    assert!(
-        !turn.agent_moves_at(settled + AFTER_ACTING * 2),
-        "the person's own again"
-    );
 }

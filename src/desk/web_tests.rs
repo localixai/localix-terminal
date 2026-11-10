@@ -7,16 +7,8 @@ use super::*;
 #[test]
 fn an_address_without_a_scheme_is_https_but_this_machine_is_http() {
     assert_eq!(
-        web_address("example.com/a").unwrap_err(),
-        crate::browser::not_local("https://example.com/a")
-    );
-    assert_eq!(
-        web_address("printer.local:631/").unwrap(),
-        "http://printer.local:631/"
-    );
-    assert_eq!(
-        web_address("192.168.1.2:8000").unwrap(),
-        "http://192.168.1.2:8000"
+        web_address("example.com/a").unwrap(),
+        "https://example.com/a"
     );
     assert_eq!(
         web_address("localhost:3000").unwrap(),
@@ -37,22 +29,6 @@ fn only_the_web_opens_in_the_window() {
     );
     assert!(web_address("javascript:alert(1)").is_err());
     assert!(web_address("http://a b").is_err());
-}
-
-#[test]
-fn an_agent_is_refused_an_external_address_before_anything_loads() {
-    for external in [
-        "https://example.com",
-        "http://localhost.evil.com:3000/",
-        "http://localhost@evil.com/",
-        "http://8.8.8.8/",
-    ] {
-        let refused = web_address(external).unwrap_err();
-        assert!(
-            refused.starts_with("llx-desk's tabs open only local addresses"),
-            "{external}: {refused}"
-        );
-    }
 }
 
 #[test]

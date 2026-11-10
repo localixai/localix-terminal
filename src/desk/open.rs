@@ -38,7 +38,7 @@ fn kind_of(spec: &Value) -> Result<Kind, String> {
 }
 
 /// `spec` is a tab `open` can make: an object, naming a kind of tab. A field no call has (a typo
-/// in a terminal's `command` inside `tabs`) is refused, never dropped: it opened a blank page,
+/// in a terminal's `command` inside `tabs`) is refused, never dropped: it opened the search page,
 /// and read as a page that would not do as told. A field of the tool that `open` does not read
 /// (`size`, `ask`) is let be, as it always was.
 fn opened_as_asked(spec: &Value) -> Result<(), String> {

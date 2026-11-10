@@ -101,15 +101,14 @@ impl Key {
     }
 }
 
-/// Where the search goes: what is typed in the address field that is not an address. Not a local
-/// address, it opens in the person's own browser.
+/// Where the search goes: what is typed in the address field that is not an address.
 pub(super) const SEARCH: &str = "https://www.google.com/search";
 
-/// Where a page the person opens with "+" starts: a blank page, its address theirs to type.
-pub const HOME: &str = "about:blank";
+/// Where a page the person opens with "+" starts: the search page's home.
+pub const HOME: &str = "https://www.google.com";
 
 /// Where `go <typed>`, what the person typed in the address field, goes: a web address as typed
-/// (`http://` put before a bare local one, `https://` before another), else a search for it. Never a script or a file: only
+/// (`https://` put before a bare one), else a search for it. Never a script or a file: only
 /// http and https are gone to.
 pub(super) fn went(body: &str) -> Option<String> {
     let typed = body.strip_prefix("go ")?.trim();
@@ -118,7 +117,7 @@ pub(super) fn went(body: &str) -> Option<String> {
     }
     let web = typed.starts_with("http://") || typed.starts_with("https://");
     let bare = !web && !typed.contains(char::is_whitespace) && !typed.contains("://");
-    let local = super::guard::local(&format!("http://{typed}"));
+    let local = typed.starts_with("localhost") || typed.starts_with("127.0.0.1");
     let address = match (web, bare) {
         (true, _) => Some(typed.to_string()),
         (false, true) if local => Some(format!("http://{typed}")),
@@ -333,7 +332,7 @@ pub(super) fn comment(key: &str, on: bool, sent: u32) -> String {
 pub(super) const PAGE: &str = include_str!("strip.html");
 
 /// The SHA-384 of the page's one script, its resize helper in: the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "kY/s3KUe/nLPI3KUjaD1692JEpt7WkEfPkRuyYJI/u1mkLs2PINeTdMj/qLIqQV6";
+const SCRIPT_SHA384: &str = "iXdr/0FnFKCSpEiGmOAhDPtLldm5L7fZOGIzZhfwbcPfpsXN94Nl4AYxSx2BmBWX";
 
 /// The strip's page: the trusted UI's resize helper inlined, so it opens without external
 /// resources, its bars as tall as the window lays them out (`BAR`, `NAV`, `ROW`: its style, not

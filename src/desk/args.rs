@@ -43,7 +43,7 @@ pub fn schema() -> Value {
     );
     put(
         "url",
-        json!({"type": "string", "description": "browser: a local address to open (localhost, *.local, *.test, a LAN or loopback IP; an external one is refused), or an HTML file's path."}),
+        json!({"type": "string", "description": "browser: an address to open, or an HTML file's path."}),
     );
     put(
         "click",
