@@ -99,7 +99,7 @@ pub(in super::super) enum Cmd {
     NewWindow(i64),
     /// Take in the popups pages opened (popup.rs), and show the last.
     #[cfg_attr(
-        not(target_os = "macos"),
+        all(not(target_os = "macos"), not(test)),
         expect(
             dead_code,
             reason = "elsewhere a page's window opens as a tab of its own"
