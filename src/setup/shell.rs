@@ -28,10 +28,26 @@ const ASK_WITHIN: Duration = Duration::from_secs(10);
 /// How long a caller waits for another's question while it has a PATH read before to go on with.
 const STALE_WAIT: Duration = Duration::from_secs(1);
 
-/// What the PATH reads have come to.
+/// What each of the agents' own variables is printed between, as `NAME=value`.
+const VAR_MARK: &str = "__LLX_VAR__";
+
+/// The variables of the login shell kept beside its PATH: where the person's agents keep their
+/// configuration when they moved it from its place under the home directory. An agent's own
+/// command is run with them, so it writes where the agent in their terminal reads.
+const HOMES: [&str; 5] = [
+    "CODEX_HOME",
+    "GEMINI_CLI_HOME",
+    "COPILOT_HOME",
+    "XDG_CONFIG_HOME",
+    "HERMES_HOME",
+];
+
+/// What the login shell's reads have come to.
 struct Known {
-    /// The last read: when it was made, and what it said (none when the shell did not).
+    /// The last read: when it was made, and the PATH it said (none when the shell did not).
     read: Option<(Instant, Option<String>)>,
+    /// The agents' variables the shell had set, when it last said.
+    vars: Vec<(String, String)>,
     /// A caller is asking the shell now.
     asking: bool,
 }
@@ -48,6 +64,13 @@ impl Known {
     }
 }
 
+static KNOWN: std::sync::Mutex<Known> = std::sync::Mutex::new(Known {
+    read: None,
+    vars: vec![],
+    asking: false,
+});
+static ANSWERED: std::sync::Condvar = std::sync::Condvar::new();
+
 /// The PATH a new terminal of the person's has: their login shell's. None when the shell does
 /// not answer within a few seconds.
 pub(super) fn login_path() -> Option<String> {
@@ -55,11 +78,6 @@ pub(super) fn login_path() -> Option<String> {
     // integration's state asks for it, several at once: one asks, the others wait for its answer
     // (the PATH read before, when there is one, once they have waited a moment). The lock is held
     // for the bookkeeping only, never while the shell runs.
-    static KNOWN: std::sync::Mutex<Known> = std::sync::Mutex::new(Known {
-        read: None,
-        asking: false,
-    });
-    static ANSWERED: std::sync::Condvar = std::sync::Condvar::new();
     let mut known = crate::lock(&KNOWN);
     let began = Instant::now();
     loop {
@@ -84,25 +102,63 @@ pub(super) fn login_path() -> Option<String> {
     drop(known);
     let asked = ask_login_shell();
     let mut known = crate::lock(&KNOWN);
-    // A read that fails keeps the PATH read before.
+    // A read that fails keeps what was read before.
     let before = known.path();
-    known.read = Some((Instant::now(), asked.or(before)));
+    let path = match asked {
+        Some((path, vars)) => {
+            known.vars = vars;
+            Some(path)
+        }
+        None => before,
+    };
+    known.read = Some((Instant::now(), path));
     known.asking = false;
     ANSWERED.notify_all();
     known.path()
 }
 
-fn ask_login_shell() -> Option<String> {
+/// One of the agents' variables as a new terminal of the person's has it: their login shell's,
+/// else this process's own (the app started from a terminal). None when it is not set.
+pub(super) fn login_var(name: &str) -> Option<String> {
+    let _ = login_path();
+    let said = (crate::lock(&KNOWN).vars.iter())
+        .find(|(known, _)| known == name)
+        .map(|(_, value)| value.clone());
+    said.or_else(|| std::env::var(name).ok())
+        .filter(|value| !value.is_empty())
+}
+
+fn ask_login_shell() -> Option<(String, Vec<(String, String)>)> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
     let mut asked = Command::new(&shell);
+    // `printf` goes through its format once for each pair it is given: a line for each variable.
+    let pairs: Vec<String> = (HOMES.iter())
+        .map(|name| format!("{name} \"${name}\""))
+        .collect();
     asked.args([
         "-l",
         "-i",
         "-c",
-        &format!("printf '\\n{MARK}%s{MARK}\\n' \"$PATH\""),
+        &format!(
+            "printf '\\n{MARK}%s{MARK}\\n' \"$PATH\"; printf '{VAR_MARK}%s=%s{VAR_MARK}\\n' {}",
+            pairs.join(" ")
+        ),
     ]);
     let ran = within(asked, ASK_WITHIN).ok()?;
-    ran.ok.then(|| path_in(&ran.out)).flatten()
+    let path = ran.ok.then(|| path_in(&ran.out)).flatten()?;
+    Some((path, vars_in(&ran.out)))
+}
+
+/// The agents' variables a shell said it has set, each on a line of its own between its marks.
+fn vars_in(said: &str) -> Vec<(String, String)> {
+    (said.lines())
+        .filter_map(|line| {
+            let pair = line.trim().strip_prefix(VAR_MARK)?.strip_suffix(VAR_MARK)?;
+            let (name, value) = pair.split_once('=')?;
+            (HOMES.contains(&name) && !value.is_empty())
+                .then(|| (name.to_string(), value.to_string()))
+        })
+        .collect()
 }
 
 /// The text between the last pair of marks in what a shell said.
@@ -159,7 +215,8 @@ pub(super) fn run_with(
     input: Option<&str>,
 ) -> Result<Ran, String> {
     let mut command = Command::new(program);
-    command.args(args).env("PATH", path);
+    let vars = crate::lock(&KNOWN).vars.clone();
+    command.args(args).env("PATH", path).envs(vars);
     within_given(command, most, input)
         .map_err(|why| format!("{} {} {why}", program.display(), args.join(" ")))
 }

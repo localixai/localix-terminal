@@ -51,7 +51,7 @@ pub(super) const AGENTS: [Agent; 6] = [
     Agent {
         id: "copilot",
         name: "GitHub Copilot",
-        commands: &["copilot", "ghcs"],
+        commands: &["copilot"],
         mark: include_str!("marks/copilot.svg"),
         seeds: &[("copilot", "-i")],
     },
@@ -65,7 +65,7 @@ pub(super) const AGENTS: [Agent; 6] = [
     Agent {
         id: "hermes",
         name: "Hermes",
-        commands: &["hermes", "hermes-agent"],
+        commands: &["hermes"],
         mark: include_str!("marks/hermes.svg"),
         seeds: &[("hermes", "chat -q")],
     },

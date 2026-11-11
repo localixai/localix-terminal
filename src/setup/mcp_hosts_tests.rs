@@ -15,10 +15,23 @@ fn every_agent_is_read_as_its_own_command_writes_it() {
         "model = \"o3\"\n\n[mcp_servers.llx-desk]\ncommand = \"{EXE}\"\nargs = [\"mcp\"]\n\n[mcp_servers.other]\ncommand = \"x\"\n"
     );
     assert_eq!(read("codex", &codex).as_deref(), Some(EXE));
+    // A path with a quote or a backslash in it is kept as a literal, in single quotes, and a
+    // comment may follow either.
+    let literal =
+        "[mcp_servers.llx-desk]\ncommand = 'C:\\a \"b\"\\llx-desk' # ours\nargs = [\"mcp\"]\n";
+    assert_eq!(
+        read("codex", literal).as_deref(),
+        Some("C:\\a \"b\"\\llx-desk")
+    );
+    let noted = format!("[mcp_servers.llx-desk]\ncommand = \"{EXE}\" # ours\n");
+    assert_eq!(read("codex", &noted).as_deref(), Some(EXE));
     let json =
         format!(r#"{{"mcpServers": {{"llx-desk": {{"command": "{EXE}", "args": ["mcp"]}}}}}}"#);
     assert_eq!(read("gemini", &json).as_deref(), Some(EXE));
     assert_eq!(read("copilot", &json).as_deref(), Some(EXE));
+    // Gemini CLI keeps the comments a person wrote in its settings.
+    let noted = format!("// mine\n{json}");
+    assert_eq!(read("gemini", &noted).as_deref(), Some(EXE));
     let yaml = format!(
         "mcp_servers:\n  other:\n    command: npx\n  llx-desk:\n    command: {EXE}\n    args:\n      - mcp\n    enabled: true\nmodel: x\n"
     );
@@ -77,4 +90,24 @@ fn a_configuration_is_written_over_whole_and_through_a_link() {
         std::fs::read_dir(real.parent().unwrap()).unwrap().count(),
         1
     );
+}
+
+#[test]
+fn an_entry_an_older_app_added_without_its_timeout_is_not_whole() {
+    let copilot = host("copilot").unwrap();
+    let old =
+        format!(r#"{{"mcpServers": {{"llx-desk": {{"command": "{EXE}", "args": ["mcp"]}}}}}}"#);
+    assert_eq!(copilot.entry(&old).as_deref(), Some(EXE));
+    assert!(!copilot.whole(&old));
+    // Any timeout is whole: the person's own number is theirs to keep.
+    let new = format!(
+        r#"{{"mcpServers": {{"llx-desk": {{"command": "{EXE}", "args": ["mcp"], "timeout": 45000}}}}}}"#
+    );
+    assert!(copilot.whole(&new));
+    // The agents whose calls wait long enough by themselves need nothing beside the command.
+    assert!(host("gemini").unwrap().whole(&old));
+    // Its own command is told the time a call may take.
+    let add = copilot.add.unwrap();
+    let at = add.iter().position(|arg| *arg == "--timeout").unwrap();
+    assert!(add[at + 1].parse::<u64>().unwrap() >= 60_000);
 }

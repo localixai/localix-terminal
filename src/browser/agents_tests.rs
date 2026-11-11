@@ -6,7 +6,7 @@ use super::*;
 use crate::testing::Scratch;
 
 #[test]
-fn an_agent_is_offered_by_the_first_of_its_commands_on_the_path() {
+fn an_agent_is_offered_where_its_command_can_run_on_the_path() {
     let scratch = Scratch::new();
     let (bin, other) = (scratch.path().join("bin"), scratch.path().join("other"));
     std::fs::create_dir_all(&bin).unwrap();
@@ -15,13 +15,20 @@ fn an_agent_is_offered_by_the_first_of_its_commands_on_the_path() {
     let copilot = &AGENTS[3];
     assert_eq!(copilot.command_on(&path), None);
     // A file that cannot run is no command.
-    std::fs::write(other.join("ghcs"), "#!/bin/sh\n").unwrap();
+    std::fs::write(other.join("copilot"), "#!/bin/sh\n").unwrap();
     assert_eq!(copilot.command_on(&path), None);
-    std::fs::set_permissions(other.join("ghcs"), std::fs::Permissions::from_mode(0o755)).unwrap();
-    assert_eq!(copilot.command_on(&path), Some("ghcs"));
-    std::fs::write(bin.join("copilot"), "#!/bin/sh\n").unwrap();
-    std::fs::set_permissions(bin.join("copilot"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let run = std::fs::Permissions::from_mode(0o755);
+    std::fs::set_permissions(other.join("copilot"), run.clone()).unwrap();
     assert_eq!(copilot.command_on(&path), Some("copilot"));
+    // A program that only shares the agent's name is not its interface: the shell helper that
+    // suggests one command, the runner that does one task and leaves.
+    for (agent, not_it) in [(copilot, "ghcs"), (&AGENTS[5], "hermes-agent")] {
+        let alone = scratch.path().join(not_it);
+        std::fs::create_dir_all(&alone).unwrap();
+        std::fs::write(alone.join(not_it), "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(alone.join(not_it), run.clone()).unwrap();
+        assert_eq!(agent.command_on(alone.as_os_str()), None, "{not_it}");
+    }
 }
 
 #[test]
@@ -41,8 +48,10 @@ fn the_agent_a_command_line_starts_is_read_as_a_shell_would() {
     let id = |line: &str| of_command(line).map(|agent| agent.id);
     assert_eq!(id("claude"), Some("claude"));
     assert_eq!(id("/opt/homebrew/bin/codex --full-auto"), Some("codex"));
-    assert_eq!(id("FOO=1 env -i nohup ghcs"), Some("copilot"));
-    assert_eq!(id("exec hermes-agent chat"), Some("hermes"));
+    assert_eq!(id("FOO=1 env -i nohup copilot"), Some("copilot"));
+    assert_eq!(id("exec hermes chat"), Some("hermes"));
+    assert_eq!(id("ghcs 'list files'"), None);
+    assert_eq!(id("hermes-agent --query x"), None);
     // Its name further on is no agent: the program is what runs.
     assert_eq!(id("vim claude.md"), None);
     assert_eq!(id("zsh"), None);
@@ -89,8 +98,11 @@ fn an_agent_starts_on_a_first_prompt_quoted_for_the_shell_where_its_command_take
         gemini.seeded("gemini", "take c3").as_deref(),
         Some("gemini -i 'take c3'")
     );
-    // The older command of an agent takes no first prompt, nor a command not its own.
-    assert_eq!(copilot.seeded("ghcs", "take c3"), None);
+    assert_eq!(
+        copilot.seeded("copilot", "take c3").as_deref(),
+        Some("copilot -i 'take c3'")
+    );
+    // A command not its own takes no first prompt.
     assert_eq!(claude.seeded("codex", "take c3"), None);
     for agent in &AGENTS {
         assert!(

@@ -1,6 +1,9 @@
-//! Tests of `shell`: the person's login shell as the app runs it, and the PATH it reads.
+//! Tests of `shell`: the person's login shell as the app runs it, and the PATH and the agents'
+//! variables it reads.
 
-use super::{MARK, Ran, failure, on_path, path_in, private_file, within, within_given};
+use super::{
+    MARK, Ran, VAR_MARK, failure, on_path, path_in, private_file, vars_in, within, within_given,
+};
 use std::path::Path;
 use std::time::Duration;
 
@@ -80,4 +83,38 @@ fn a_directory_is_on_a_path_by_its_whole_name() {
         Path::new("/Users/me/.local/bin")
     ));
     assert!(!on_path("/usr/bin", Path::new("/Users/me/.local/bin")));
+}
+
+#[test]
+fn the_agents_variables_are_the_ones_the_shell_has_set_between_their_marks() {
+    let said = format!(
+        "welcome\n{MARK}/usr/bin{MARK}\n{VAR_MARK}CODEX_HOME=/work/codex home{VAR_MARK}\n\
+         {VAR_MARK}GEMINI_CLI_HOME={VAR_MARK}\n{VAR_MARK}HERMES_HOME=/a=b{VAR_MARK}\r\n\
+         {VAR_MARK}SECRET=1{VAR_MARK}\nCOPILOT_HOME=/not/marked\n"
+    );
+    // One not set says nothing, one that is no agent's home is not kept, and a value keeps
+    // its spaces and its own `=`.
+    assert_eq!(
+        vars_in(&said),
+        [
+            ("CODEX_HOME".to_string(), "/work/codex home".to_string()),
+            ("HERMES_HOME".to_string(), "/a=b".to_string()),
+        ]
+    );
+    assert!(vars_in("").is_empty());
+}
+
+#[test]
+fn a_real_shell_prints_each_variable_on_its_own_line() {
+    // As the login shell is asked: `printf` goes through its format once for each pair.
+    let mut shell = std::process::Command::new("/bin/sh");
+    shell.env("CODEX_HOME", "/work/c x").env_remove("HERMES_HOME").args([
+        "-c",
+        &format!("printf '{VAR_MARK}%s=%s{VAR_MARK}\\n' CODEX_HOME \"$CODEX_HOME\" HERMES_HOME \"$HERMES_HOME\""),
+    ]);
+    let ran = within(shell, Duration::from_secs(5)).unwrap();
+    assert_eq!(
+        vars_in(&ran.out),
+        [("CODEX_HOME".to_string(), "/work/c x".to_string())]
+    );
 }

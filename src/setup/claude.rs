@@ -41,11 +41,18 @@ fn installed(claude: &(PathBuf, String)) -> Result<Option<(String, bool)>, Strin
         ));
     }
     let plugins: Value = serde_json::from_str(listed.out.trim()).map_err(|why| why.to_string())?;
-    let mine = (plugins.as_array().into_iter().flatten()).find(|plugin| plugin["id"] == PLUGIN);
-    Ok(mine.map(|plugin| {
-        let version = plugin["version"].as_str().unwrap_or_default().to_string();
-        (version, plugin["enabled"] == true)
-    }))
+    Ok(plugin_in(&plugins))
+}
+
+/// The plugin in `plugins` (Claude Code's list): the version a session loads, and whether it is
+/// enabled. Read from a folder, as from the app's bundle, that is the folder's version, which
+/// Claude Code names beside the one it recorded at the install.
+fn plugin_in(plugins: &Value) -> Option<(String, bool)> {
+    let mine = (plugins.as_array()?.iter()).find(|plugin| plugin["id"] == PLUGIN)?;
+    let version = (mine["folderVersion"].as_str())
+        .or_else(|| mine["version"].as_str())
+        .unwrap_or_default();
+    Some((version.to_string(), mine["enabled"] == true))
 }
 
 pub(super) fn state() -> State {

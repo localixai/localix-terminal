@@ -2,34 +2,26 @@
 //! OpenCode, Hermes): an `llx-desk` server in each one's own configuration, run as
 //! `<this program> mcp`. Each is put in and taken out with the agent's own commands
 //! (`<agent> mcp add` / `remove`), where it has them for a local server; OpenCode has none, and its
-//! JSON is written. Whether it is there is read from the agent's configuration file, which is
-//! quick and needs none of its programs to start. Any other host is given the entry to paste
-//! (`snippet`).
+//! JSON is written. Whether it is there is read from the agent's configuration file (read.rs),
+//! where the agent itself looks for it (place.rs), which is quick and needs none of its
+//! programs to start. Any other host is given the entry to paste (`snippet`).
 
-use std::path::Path;
+mod place;
+mod read;
+
+use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
 use super::State;
-use super::shell::{failure, find, run_with};
+use super::shell::{failure, find, login_var, run_with};
+use place::{Place, shown};
+use read::Kept;
 
 /// The name of the server in an agent's configuration.
 pub(super) const NAME: &str = "llx-desk";
 /// How long an agent's `mcp` command may take (Hermes connects to the server to list its tools).
 const MOST: std::time::Duration = std::time::Duration::from_secs(60);
-
-/// How an agent's configuration names the server's command.
-#[derive(Debug, Clone, Copy)]
-enum Kept {
-    /// JSON: the command (a string) at this path.
-    Json(&'static [&'static str]),
-    /// JSON: the command line (an array, the program first) at this path.
-    JsonLine(&'static [&'static str]),
-    /// TOML: `command` in the `[mcp_servers.llx-desk]` table.
-    Toml,
-    /// YAML: `command:` under `llx-desk:`.
-    Yaml,
-}
 
 /// A coding agent that takes MCP servers.
 #[derive(Debug, Clone, Copy)]
@@ -38,8 +30,8 @@ pub(super) struct Host {
     pub(super) id: &'static str,
     /// Its program, on the person's PATH.
     program: &'static str,
-    /// Its configuration, under the home directory, and how it keeps the server.
-    config: &'static str,
+    /// Where its configuration is, and how it keeps the server there.
+    place: Place,
     kept: Kept,
     /// Its command that adds the server (`{exe}`: this program), none when it has none; what it
     /// is answered when it asks.
@@ -47,6 +39,9 @@ pub(super) struct Host {
     answer: Option<&'static str>,
     /// Its command that takes the server out.
     remove: Option<&'static [&'static str]>,
+    /// What its entry holds beside the command when this app added it (a path in its JSON):
+    /// one without it is of an older app, and is added again.
+    with: Option<&'static [&'static str]>,
     /// What to do after, in words.
     after: &'static str,
 }
@@ -56,55 +51,84 @@ pub(super) const HOSTS: [Host; 5] = [
     Host {
         id: "codex",
         program: "codex",
-        config: ".codex/config.toml",
+        place: place(".codex", "CODEX_HOME", "config.toml", false),
         kept: Kept::Toml,
         add: Some(&["mcp", "add", NAME, "--", "{exe}", "mcp"]),
         answer: None,
         remove: Some(&["mcp", "remove", NAME]),
+        with: None,
         after: "start Codex again to use it",
     },
     Host {
         id: "gemini",
         program: "gemini",
-        config: ".gemini/settings.json",
+        place: place("", "GEMINI_CLI_HOME", ".gemini/settings.json", false),
         kept: Kept::Json(&["mcpServers", NAME, "command"]),
         add: Some(&["mcp", "add", "--scope", "user", NAME, "{exe}", "mcp"]),
         answer: None,
         remove: Some(&["mcp", "remove", "--scope", "user", NAME]),
-        after: "start Gemini CLI again to use it",
+        with: None,
+        after: "run /mcp reload in Gemini CLI, or start it again",
     },
     Host {
         id: "copilot",
         program: "copilot",
-        config: ".copilot/mcp-config.json",
+        place: place(".copilot", "COPILOT_HOME", "mcp-config.json", false),
         kept: Kept::Json(&["mcpServers", NAME, "command"]),
-        add: Some(&["mcp", "add", NAME, "--", "{exe}", "mcp"]),
+        // Copilot gives a call 30 s unless told, and a terminal may be waited on that long.
+        add: Some(&[
+            "mcp",
+            "add",
+            "--timeout",
+            "120000",
+            NAME,
+            "--",
+            "{exe}",
+            "mcp",
+        ]),
         answer: None,
         remove: Some(&["mcp", "remove", NAME]),
-        after: "start Copilot again to use it",
+        with: Some(&["mcpServers", NAME, "timeout"]),
+        after: "run /mcp reload in Copilot, or start it again",
     },
     Host {
         id: "opencode",
         program: "opencode",
-        config: ".config/opencode/opencode.json",
+        place: place(
+            ".config",
+            "XDG_CONFIG_HOME",
+            "opencode/opencode.json",
+            false,
+        ),
         kept: Kept::JsonLine(&["mcp", NAME, "command"]),
         add: None,
         answer: None,
         remove: None,
+        with: None,
         after: "start OpenCode again to use it",
     },
     Host {
         id: "hermes",
         program: "hermes",
-        config: ".hermes/config.yaml",
+        place: place(".hermes", "HERMES_HOME", "config.yaml", true),
         kept: Kept::Yaml,
         add: Some(&["mcp", "add", NAME, "--command", "{exe}", "--args", "mcp"]),
         // It lists the server's tools and asks whether to enable them all.
         answer: Some("Y\n"),
         remove: Some(&["mcp", "remove", NAME]),
+        with: None,
         after: "run /reload-mcp in Hermes, or start it again",
     },
 ];
+
+const fn place(dir: &'static str, var: &'static str, file: &'static str, profiles: bool) -> Place {
+    Place {
+        dir,
+        var,
+        file,
+        profiles,
+    }
+}
 
 /// The agent of integration `id`, when it takes MCP servers.
 pub(super) fn host(id: &str) -> Option<&'static Host> {
@@ -112,33 +136,35 @@ pub(super) fn host(id: &str) -> Option<&'static Host> {
 }
 
 impl Host {
+    /// Its configuration file: where the person's login shell says the agent keeps it.
+    fn config(&self, home: &Path) -> PathBuf {
+        self.place.config(home, login_var)
+    }
+
     pub(super) fn state(&self, home: &Path, exe: &Path) -> State {
         if let Err(why) = find(self.program) {
             return State::Unavailable(why);
         }
-        let text = std::fs::read_to_string(home.join(self.config)).unwrap_or_default();
+        let file = self.config(home);
+        let text = std::fs::read_to_string(&file).unwrap_or_default();
         match self.entry(&text) {
-            Some(command) if command == exe.display().to_string() => {
-                State::On(format!("in ~/{}", self.config))
+            Some(command) if command != exe.display().to_string() => {
+                State::Off("another program is named there".into())
             }
-            Some(_) => State::Off("another program is named there".into()),
+            Some(_) if !self.whole(&text) => State::Off("added by an older app".into()),
+            Some(_) => State::On(format!("in {}", shown(&file, home))),
             None => State::Off("not added".into()),
         }
     }
 
     /// The command its configuration runs for the server, if it has one.
     fn entry(&self, text: &str) -> Option<String> {
-        match self.kept {
-            Kept::Json(at) => at_path(&serde_json::from_str(text).ok()?, at)?
-                .as_str()
-                .map(String::from),
-            Kept::JsonLine(at) => at_path(&serde_json::from_str(text).ok()?, at)?
-                .get(0)?
-                .as_str()
-                .map(String::from),
-            Kept::Toml => toml_command(text),
-            Kept::Yaml => yaml_command(text),
-        }
+        self.kept.entry(text)
+    }
+
+    /// Whether its entry in `text` holds all this app adds with it.
+    fn whole(&self, text: &str) -> bool {
+        self.with.is_none_or(|at| read::has(text, at))
     }
 
     pub(super) fn turn(&self, home: &Path, exe: &Path, on: bool) -> Result<String, String> {
@@ -151,13 +177,20 @@ impl Host {
         let Some(args) = asked else {
             return self.write(home, exe, on);
         };
-        // One that names another program goes first: `add` keeps an entry it has.
-        let had = std::fs::read_to_string(home.join(self.config)).unwrap_or_default();
-        if on
-            && self.entry(&had).is_some()
-            && let Some(remove) = self.remove
-        {
-            let _ = run_with(&program, remove, &path, MOST, None);
+        let had = std::fs::read_to_string(self.config(home)).unwrap_or_default();
+        match self.entry(&had) {
+            // There as it would be added: left alone, with what the person set beside it (an
+            // agent's `add` writes the entry anew, without their timeouts and tool lists).
+            Some(command) if on && command == exe_text && self.whole(&had) => {
+                return Ok(format!("already added: {}", self.after));
+            }
+            // One that names another program goes first: `add` keeps an entry it has.
+            Some(_) if on => {
+                if let Some(remove) = self.remove {
+                    let _ = run_with(&program, remove, &path, MOST, None);
+                }
+            }
+            _ => {}
         }
         let args: Vec<&str> = (args.iter())
             .map(|arg| {
@@ -183,7 +216,7 @@ impl Host {
 
     /// The server put in or taken out of the agent's JSON, the rest as it was (OpenCode's).
     fn write(&self, home: &Path, exe: &Path, on: bool) -> Result<String, String> {
-        let file = home.join(self.config);
+        let file = self.config(home);
         let text = std::fs::read_to_string(&file).unwrap_or_default();
         let written = opencode(&text, exe, on)?;
         // Nothing to take out of a configuration that has no server: not even a file is made.
@@ -229,11 +262,6 @@ fn write_over(file: &Path, text: &str) -> std::io::Result<()> {
     written
 }
 
-/// The value at `path` in `config`.
-fn at_path<'a>(config: &'a Value, path: &[&str]) -> Option<&'a Value> {
-    path.iter().try_fold(config, |value, key| value.get(*key))
-}
-
 /// The server's entry, as every MCP host's JSON has it.
 pub(super) fn snippet(exe: &Path) -> Value {
     json!({"mcpServers": {NAME: {"command": exe.display().to_string(), "args": ["mcp"]}}})
@@ -270,35 +298,6 @@ fn opencode(text: &str, exe: &Path, on: bool) -> Result<String, String> {
     serde_json::to_string_pretty(&config)
         .map(|text| text + "\n")
         .map_err(|why| why.to_string())
-}
-
-/// The heading of the server's table in Codex's TOML.
-const TOML_TABLE: &str = "[mcp_servers.llx-desk]";
-
-/// `command` in the server's TOML table (from its heading to the next table).
-fn toml_command(text: &str) -> Option<String> {
-    let (_, rest) = text.split_once(TOML_TABLE)?;
-    let table = rest.split_once("\n[").map_or(rest, |(table, _)| table);
-    let line = table
-        .lines()
-        .find(|line| line.trim_start().starts_with("command"))?;
-    let value = line.split_once('=')?.1.trim();
-    serde_json::from_str::<String>(value).ok()
-}
-
-/// `command:` under the server's key in YAML: the first one more indented than the key, before
-/// the next key as indented as it.
-fn yaml_command(text: &str) -> Option<String> {
-    let mut lines = text.lines();
-    let indent = |line: &str| line.len() - line.trim_start().len();
-    let key = lines.find(|line| line.trim() == format!("{NAME}:"))?;
-    let depth = indent(key);
-    let value = lines
-        .take_while(|line| line.trim().is_empty() || indent(line) > depth)
-        .find_map(|line| line.trim().strip_prefix("command:"))?
-        .trim();
-    let unquoted = value.trim_matches(|c| c == '"' || c == '\'');
-    (!unquoted.is_empty()).then(|| unquoted.to_string())
 }
 
 #[cfg(test)]

@@ -112,7 +112,7 @@ pub const INTEGRATIONS: [Integration; 7] = [
         offer: Some(offer(
             "Add LLX Desk's window tool to Gemini CLI: pages and what you point at, in this window.",
             "Add to Gemini",
-            "Added to Gemini CLI. Start it again to use it.",
+            "Added to Gemini CLI. Run /mcp reload in it to use it.",
         )),
     },
     Integration {
@@ -123,7 +123,7 @@ pub const INTEGRATIONS: [Integration; 7] = [
         offer: Some(offer(
             "Add LLX Desk's window tool to Copilot: pages and what you point at, in this window.",
             "Add to Copilot",
-            "Added to Copilot. Start it again to use it.",
+            "Added to Copilot. Run /mcp reload in it to use it.",
         )),
     },
     Integration {
