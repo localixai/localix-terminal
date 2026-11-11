@@ -20,10 +20,12 @@ mod chip;
 mod choice;
 mod comments;
 mod deck;
+mod dialog;
 mod feedback;
 mod frame;
 mod guard;
 mod host;
+mod hush;
 mod icons;
 #[cfg(target_os = "macos")]
 mod menu;
@@ -69,7 +71,7 @@ use crate::view::{Action, Element, ViewResult};
 use serde::{Deserialize, Serialize};
 
 pub use agents::{
-    continued as agent_continued, known as installed_agents, runs as agent_runs,
+    commands_path, continued as agent_continued, known as installed_agents, runs as agent_runs,
     started_on as agent_started_on,
 };
 pub use capture::{Clip, Shot};

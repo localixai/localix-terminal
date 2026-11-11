@@ -41,8 +41,7 @@ pub(super) fn run(args: &[String]) -> u8 {
         }
         [id] if id.as_str() == "all" => {
             // As the app does when it opens: the command, then every agent's.
-            let mut said = crate::setup::opened();
-            said.extend(crate::setup::auto());
+            let said = crate::setup::doctor();
             if said.is_empty() {
                 say("everything is in place");
             }

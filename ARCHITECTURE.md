@@ -246,8 +246,9 @@ normal tests in CI.
   `remove`, OpenCode's JSON written as it has none; whether it is there read from its
   configuration file, `mcp_hosts/place.rs` saying where the agent keeps it (its own variable,
   as the login shell has it, or the profile in use) and `mcp_hosts/read.rs` reading the
-  server's command out of its JSON, TOML or YAML). The app puts every one in place itself when it opens (`opened`, `auto`),
-  for each agent installed; what the person takes out is remembered in the store's `state`
+  server's command out of its JSON, TOML or YAML). The app puts every one in
+  place itself (`doctor.rs`: a round of `opened` and `auto` when the server starts, opened or
+  started by a call, and one every hour while it runs), for each agent installed; what the person takes out is remembered in the store's `state`
   (`integration.declined.<id>`) and left out. The person's programs run as their terminal would
   (`shell.rs`: their login shell's PATH, a deadline each, an answer for one that asks). An
   integration names the agent it is for and what to offer.
@@ -263,6 +264,12 @@ normal tests in CI.
   front in the terminal shown (`terminal/foreground.rs`: the terminal's foreground process, by the
   name it was started as, read when another group comes in front) whose integration is off. Another offer is
   a source there and an id of its own; the bar, the answers and the waits are shared.
+- **`browser/dialog.rs`** is the window's dialog: the one look of everything the app asks or
+  announces in its window (a question, an update that is ready). It holds what a dialog says and
+  the dialogs up, one shown at a time; the strip's page draws it over the whole window
+  (`dialog.js`, `dialog.css`), and `host_dialog.rs` asks, announces and carries the answer back.
+  A new dialog is a `Dialog` asked there, never a page's own markup. With the window away a
+  question is the system's alert (`appkit/sheet.rs`).
 - **`paths.rs`** is where the server lives: its lock and socket at one fixed place per user
   (`llx-desk-<uid>` in the user's temporary directory), its files in the home (`LLX_DESK_HOME`, which
   moves nothing else). A test build (feature `test-server`, turned on only by the crate's own dev-dependency)

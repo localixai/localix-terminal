@@ -1,9 +1,9 @@
 //! The deck's current state rendered as data for its strip, side and page toolbar.
 
-use super::super::alerts;
 use super::super::host::Shared;
 use super::super::panel::Held;
 use super::super::strip::{self, Item, Key};
+use super::super::{agents, alerts};
 use super::{Deck, Menu, Part, Shown};
 use crate::WindowTab;
 
@@ -156,6 +156,7 @@ impl Deck {
         }
         self.tell_frame();
         self.tell_menus(strip, shared);
+        self.tell_dialog(strip);
         let framed = (self.web.as_ref())
             .filter(|_| self.shown == Shown::Web)
             .and_then(|web| web.frame(None));
@@ -178,9 +179,18 @@ impl Deck {
             "commenting",
             &strip::commenting(self.commenting, held),
         );
-        let (acting, waiting) = shared.turn.now();
-        let turn = strip::Turn::of(acting, self.commenting, waiting);
-        self.say((Part::Nav, nav), "turn", &strip::turn(turn));
+        self.say_turn(shared, nav);
+    }
+
+    /// The dialog up (dialog.rs), drawn over the whole window; one the person asked for takes
+    /// the keys.
+    fn tell_dialog(&self, strip: &wry::WebView) {
+        let dialog = super::super::dialog::shown();
+        let drawn = super::super::dialog::script(dialog.as_ref());
+        self.say((Part::Strip, strip), "dialog", &drawn);
+        if dialog.is_some_and(|dialog| dialog.asked) && self.frame.is_key() {
+            let _ = strip.focus();
+        }
     }
 
     /// The strip's open list: the history and the Event Center draw into it, each saying what it
@@ -219,6 +229,16 @@ impl Deck {
                 self.say((part, view), "frame", &script);
             }
         }
+    }
+
+    /// Whose turn it is, and the agents installed (their marks where no tab is left), said to
+    /// the navigation's view.
+    fn say_turn(&self, shared: &Shared, nav: &wry::WebView) {
+        let (acting, waiting) = shared.turn.now();
+        let turn = strip::Turn::of(acting, self.commenting, waiting);
+        self.say((Part::Nav, nav), "turn", &strip::turn(turn));
+        let starts = strip::starts(&agents::listed());
+        self.say((Part::Nav, nav), "starts", &starts);
     }
 
     /// `script`, of `kind`, run in `view`, which is `part` of the strip, unless it is what that

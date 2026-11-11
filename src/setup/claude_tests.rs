@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde_json::json;
 
-use super::{Market, marketplace_in, plugin_in};
+use super::{Market, marketplace_in, on_record, plugin_in};
 
 #[test]
 fn a_marketplace_is_removed_only_when_it_is_listed_at_another_folder() {
@@ -43,4 +43,54 @@ fn the_plugins_version_is_the_one_claude_code_loads() {
         None
     );
     assert_eq!(plugin_in(&json!({"plugins": []})), None);
+}
+
+#[test]
+fn the_plugin_is_known_in_place_from_claude_codes_own_records() {
+    let dir = Path::new("/Applications/LLX Desk.app/Contents/Resources/claude-code");
+    let installed =
+        |version: &str| json!({"plugins": {"llx-desk@llx-desk": [{"version": version}]}});
+    let markets =
+        |path: &str| json!({"llx-desk": {"source": {"source": "directory", "path": path}}});
+    let settings = |on: bool| json!({"enabledPlugins": {"llx-desk@llx-desk": on}});
+    let here = dir.display().to_string();
+    let now = env!("CARGO_PKG_VERSION");
+    assert!(on_record(
+        &installed(now),
+        &markets(&here),
+        &settings(true),
+        dir
+    ));
+    // Anything else is for Claude Code itself to say: an older version, a marketplace at
+    // another folder, the plugin disabled or not recorded at all.
+    assert!(!on_record(
+        &installed("0.0.1"),
+        &markets(&here),
+        &settings(true),
+        dir
+    ));
+    assert!(!on_record(
+        &installed(now),
+        &markets("/old/claude-code"),
+        &settings(true),
+        dir
+    ));
+    assert!(!on_record(
+        &installed(now),
+        &markets(&here),
+        &settings(false),
+        dir
+    ));
+    assert!(!on_record(
+        &installed(now),
+        &markets(&here),
+        &json!({}),
+        dir
+    ));
+    assert!(!on_record(
+        &json!({"plugins": {}}),
+        &markets(&here),
+        &settings(true),
+        dir
+    ));
 }

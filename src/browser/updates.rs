@@ -129,6 +129,33 @@ pub(super) fn offer(told: &Told) -> Option<(String, String)> {
     ))
 }
 
+/// The announcement of an update that is ready: its offer's id, and the dialog that names both
+/// versions and lists what the release says is new. Its own id is of the version, so the next
+/// version is announced anew.
+pub(super) fn announcement(told: &Told) -> Option<(String, super::dialog::Dialog)> {
+    let (offered, _) = offer(told)?;
+    let Stage::Ready { release } = &told.stage else {
+        return None;
+    };
+    let dialog = super::dialog::Dialog {
+        id: format!("announced:{}", release.version),
+        mark: "app",
+        tone: "accent",
+        versions: Some((told.current.clone(), release.version.to_string())),
+        title: format!("LLX Desk {} is ready", release.version),
+        detail: format!(
+            "You have {}. Restarting installs the update; if a terminal still runs a program, \
+             you are asked first.",
+            told.current
+        ),
+        notes: super::dialog::notes(&release.notes),
+        yes: "Restart to Update".into(),
+        no: "Later".into(),
+        asked: false,
+    };
+    Some((offered, dialog))
+}
+
 /// The page of a release's notes.
 pub(super) fn notes(version: &str) -> String {
     let repo = crate::update::REPO;

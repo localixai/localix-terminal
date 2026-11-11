@@ -32,17 +32,8 @@ pub(super) fn run() -> u8 {
             note(&said);
             // The person's own programs run (`claude`, their login shell, which may take
             // seconds): not before the window.
-            let setting_up =
-                std::thread::Builder::new()
-                    .name("desk-setup".into())
-                    .spawn(move || {
-                        if in_place {
-                            note(&crate::setup::opened());
-                            note(&crate::setup::auto());
-                        }
-                    });
-            if let Err(why) = setting_up {
-                note(&[format!("the agents were not set up (no thread: {why})")]);
+            if in_place {
+                keep_well();
             }
             let serve = Serving {
                 headless: false,
@@ -53,8 +44,8 @@ pub(super) fn run() -> u8 {
         }
         Ok(crate::server::Binding::Running) => {
             let code = present(&mut said, home.as_deref());
-            // After the window: the command may wait for the person's login shell. A server a
-            // client started never set it up.
+            // After the window: the command may wait for the person's login shell. The server
+            // that runs looks after the rest (its doctor).
             if in_place {
                 said.extend(crate::setup::opened());
             }
@@ -217,6 +208,16 @@ pub(super) fn open_in(dir: &str) -> u8 {
             super::UNREACHABLE
         }
         Err(Trouble::None) => super::UNREACHABLE,
+    }
+}
+
+/// The doctor started (setup/doctor.rs): the integrations put right now and every hour, what
+/// it did written to the log.
+pub(super) fn keep_well() {
+    if let Err(why) = crate::setup::keep_well(note) {
+        note(&[format!(
+            "the agents are not looked after (no thread: {why})"
+        )]);
     }
 }
 

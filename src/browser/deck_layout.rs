@@ -18,7 +18,7 @@ impl Deck {
     /// the window is not the key window (an agent's switch, or another app in front), while the
     /// person types in the strip, or while a menu is open.
     pub(in super::super) fn focus_shown(&self) {
-        if self.typing || self.menu.is_some() || !self.frame.is_key() {
+        if self.typing || self.covered() || !self.frame.is_key() {
             return;
         }
         let view = match self.shown {
@@ -28,6 +28,33 @@ impl Deck {
         if let Some(view) = view {
             let _ = view.focus();
         }
+    }
+
+    /// Whether the window can show a dialog (dialog.rs): it has a strip to draw it, and is on
+    /// screen. Away, a question is asked as the system asks.
+    pub(in super::super) fn dialogs(&self) -> bool {
+        let native = &self.frame.native;
+        self.strip.is_some() && native.is_visible() && !native.is_minimized()
+    }
+
+    /// The views under a dialog kept still while it is up (hush.rs), and let go after.
+    fn hush(&self) {
+        let on = self.strip.is_some() && super::super::dialog::up();
+        let pages = self.web.as_ref().map(Tabs::active);
+        let terms = self.terms.iter().map(|open| &open.webview);
+        for view in pages
+            .into_iter()
+            .chain(terms)
+            .chain(&self.side)
+            .chain(&self.nav)
+        {
+            super::super::hush::set(view, on);
+        }
+    }
+
+    /// Whether the strip has the whole window: a menu is open, or a dialog is up.
+    fn covered(&self) -> bool {
+        self.menu.is_some() || (self.strip.is_some() && super::super::dialog::up())
     }
 
     /// How tall the strip is: its bar, the tabs' row where there is no side, and an offer.
@@ -146,7 +173,7 @@ impl Deck {
         let width = size.width + left;
         // The open menu has the whole window, the address field's suggestions the pages' part:
         // the pages stand aside, still rendering.
-        let over = self.menu.is_some() || self.typing;
+        let over = self.covered() || self.typing;
         // Split, the window shows two tabs, each in its half; the one in use has the toolbar.
         let halves = if over {
             None
@@ -155,7 +182,7 @@ impl Deck {
         };
         let raised = self.stack(halves.is_some());
         if let Some(strip) = &self.strip {
-            let height = if self.menu.is_some() {
+            let height = if self.covered() {
                 top + size.height
             } else {
                 top
@@ -234,6 +261,7 @@ impl Deck {
             }
         }
         self.place_line(halves, (size, left, top), width);
+        self.hush();
     }
 
     /// The views over the pages, the last on top: the toolbar while its suggestions are open, the

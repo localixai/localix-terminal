@@ -63,3 +63,14 @@ fn a_command_can_explicitly_choose_its_own_color_preference() {
     );
     assert_eq!(text, "1\n0\n0");
 }
+
+#[test]
+fn a_command_the_app_starts_finds_what_the_persons_own_terminal_finds() {
+    let person = || Some(std::ffi::OsString::from("/home/me/.local/bin:/usr/bin"));
+    // The app's own environment (started from the Finder or the Dock, it has the system's PATH
+    // alone): the command is looked for where the person's shell looks.
+    assert_eq!(super::command_path(None, person), person());
+    // A caller's environment is the caller's: its PATH stays.
+    let theirs = [("PATH".to_string(), "/opt/tools".to_string())];
+    assert_eq!(super::command_path(Some(&theirs), person), None);
+}

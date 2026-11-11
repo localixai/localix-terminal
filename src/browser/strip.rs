@@ -221,6 +221,15 @@ pub(super) fn script(
     )
 }
 
+/// The agents installed (`installed`: agents.rs `known`), for the marks shown where no tab is
+/// left. Read as data: what is not a list is none.
+pub(super) fn starts(installed: &str) -> String {
+    let agents = (serde_json::from_str::<serde_json::Value>(installed).ok())
+        .filter(serde_json::Value::is_array)
+        .unwrap_or_else(|| json!([]));
+    format!("AG({agents})")
+}
+
 /// The call that tells the browser's toolbar the pages the project showed, newest first: what
 /// its address field suggests. The toolbar's alone: the strip and the side never read them.
 pub(super) fn visited(visited: &[super::Visited]) -> String {
@@ -336,15 +345,17 @@ pub(super) fn comment(key: &str, on: bool, sent: u32) -> String {
 /// The strip's page: dressed in the frame's stylesheet, clear over the window's glass.
 pub(super) const PAGE: &str = include_str!("strip.html");
 
-/// The SHA-384 of the page's one script, its resize helper in: the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "QAxCF/Da5bjnJM5aqFPgFTelvCtd/jPIUUGCcV0YmIASPNrMUqIFxi1uObjvM3So";
+/// The SHA-384 of the page's one script, its resize helper and the dialog's script in: the page's policy runs it alone.
+const SCRIPT_SHA384: &str = "9KcmdsTU199WLOQfy6Se3aM53jweZap8ZLvVI+8Hgb2Ee11txcWDj6iUow/EBQ/m";
 
-/// The strip's page: the trusted UI's resize helper inlined, so it opens without external
+/// The strip's page: the trusted UI's resize helper and the window's dialog (dialog.rs) inlined, so it opens without external
 /// resources, its bars as tall as the window lays them out (`BAR`, `NAV`, `ROW`: its style, not
 /// its script), and the agents' `marks` (JSON) in it as data its script reads, never as script.
 pub(super) fn page(marks: &str) -> String {
     // Inside a script element only `</script` ends it: no `<` of the data reaches the parser.
     PAGE.replacen("/*RESIZE_HANDLES*/", include_str!("resize.js"), 1)
+        .replacen("/*DIALOG_JS*/", include_str!("dialog.js"), 1)
+        .replacen("/*DIALOG_CSS*/", include_str!("dialog.css"), 1)
         .replacen("{{hash}}", SCRIPT_SHA384, 1)
         .replacen("{{bar}}", &BAR.to_string(), 1)
         .replacen("{{nav}}", &NAV.to_string(), 1)

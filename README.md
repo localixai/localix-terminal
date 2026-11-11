@@ -54,10 +54,13 @@ On macOS that is **LLX Desk.app** in `~/Applications`; or take
 open it and drag the app to Applications (it is signed and notarized by Apple). It is a regular
 Mac app: Dock icon, menu bar, ⌘Q. Opened, it links `llx-desk` into `~/.local/bin` and brings the
 window to you: what the project had open, or, with nothing left open, New Page, New Terminal,
-Board and Open Folder… with their keys (no terminal opens unasked). `llx-desk open .` opens the current
+Board and Open Folder… with their keys, and under them the mark of each coding agent you have
+installed, which starts it in a terminal (no terminal opens unasked). `llx-desk open .` opens the current
 folder as a project.
 
-The app connects your agents by itself, each time it opens, for whichever is installed: the Claude
+The app connects your agents by itself and keeps them connected: when it starts, however it
+was started, and every hour while it runs, for whichever is installed (one you install later,
+or an entry another program rewrote, is put right without opening the app again): the Claude
 Code plugin on macOS (skills, a worker subagent, a mod that follows your comments), and the window tool as
 an MCP server in Codex, Gemini CLI, GitHub Copilot, OpenCode and Hermes, each put in with the
 agent's own `mcp add`. **Settings → Integrations** (⌘,) shows them; one you remove stays removed
@@ -72,7 +75,7 @@ in it: trust the project's folder there (`/permissions trust`) and the tool appe
 <summary>More install options</summary>
 
 - The script checks `SHA256SUMS` before it writes anything; `LLX_DESK_VERSION=0.1.0` picks another release.
-- **Updates**: an app installed from a release updates itself. It downloads a newer release while you work, checks it as the script does (the checksum, and on macOS the Developer ID signature and the notarization), and installs it when you choose Restart to Update. Settings → Updates shows how far it is and can turn the looking off; a build from source is updated the way it was made.
+- **Updates**: an app installed from a release updates itself. It downloads a newer release while you work, checks it as the script does (the checksum, and on macOS the Developer ID signature and the notarization), and installs it when you choose Restart to Update. A version that is ready is announced once, in a dialog that names both versions and lists what is new; Later puts it off, and its row under the toolbar comes back another day. Settings → Updates shows how far it is and can turn the looking off; a build from source is updated the way it was made.
 - **Linux**: the program goes to `~/.local/share/llx-desk`, and `llx-desk setup command` puts the command on your `PATH` and LLX Desk among your applications (`llx-desk open`). Pages need WebKitGTK 4.1 and GTK 3 (`sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0`), glibc 2.35+ (Ubuntu 22.04+), and a display (X or Wayland). Without one, terminals still work.
 - **The app from source** (macOS): `cargo build --release && scripts/bundle-macos.sh` makes `target/release/bundle/macos/LLX Desk.app`, signed ad hoc for this Mac.
 - **From source**, Rust 1.89+ (on Linux also `libwebkit2gtk-4.1-dev` and `libgtk-3-dev`):

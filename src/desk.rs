@@ -128,6 +128,8 @@ impl Desk {
         events: Arc<dyn Events>,
         store: Arc<crate::store::Store>,
     ) -> Arc<Self> {
+        // A command the app starts in a terminal is looked for where its agents are found.
+        crate::terminal::look_for_commands_on(crate::browser::commands_path);
         let desk = Arc::new_cyclic(|weak: &Weak<Self>| {
             if let Some(browser) = &browser {
                 let weak = Weak::clone(weak);

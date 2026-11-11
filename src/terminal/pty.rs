@@ -1,14 +1,36 @@
 //! A program in a pseudo-terminal of its own: the shell leads a new session whose controlling
 //! terminal is the PTY, so Ctrl-C reaches its foreground group as a terminal's would.
 
+use std::ffi::OsString;
 use std::fs::File;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
+use std::sync::OnceLock;
 
 use super::{COLUMNS, ROWS, environment, hooks};
+
+/// Who says the person's `PATH` (their login shell's): given once by the app, which can ask
+/// their shell; without it a command has the environment's own.
+static PERSON_PATH: OnceLock<fn() -> Option<OsString>> = OnceLock::new();
+
+/// Commands the app starts with its own environment are looked for on the `PATH` `ask` says.
+pub fn look_for_commands_on(ask: fn() -> Option<OsString>) {
+    let _ = PERSON_PATH.set(ask);
+}
+
+/// The `PATH` a command is looked for on, when it is not the environment's own: a command the
+/// app starts with its own environment (`vars` none) has the person's, as their login shell
+/// sets it, since no profile is read for it as one is for their shell. A caller's environment
+/// keeps its own.
+fn command_path(
+    vars: Option<&[(String, String)]>,
+    person: impl FnOnce() -> Option<OsString>,
+) -> Option<OsString> {
+    vars.is_none().then(person).flatten()
+}
 
 /// The program started and the master end of its terminal.
 pub(super) struct Pty {
@@ -18,7 +40,7 @@ pub(super) struct Pty {
 
 /// Start `command` (the user's shell when empty, as a login shell, as a terminal app starts it:
 /// it reads the person's profile, so an app started from the Finder still gives them their
-/// PATH) in `dir`. The environment comes from `vars`, else this process, with the terminal's own
+/// PATH; a command is given that PATH, [`command_path`]) in `dir`. The environment comes from `vars`, else this process, with the terminal's own
 /// identity and color capabilities applied before the shell reads the person's profile.
 pub(super) fn spawn(
     command: &str,
@@ -50,8 +72,13 @@ pub(super) fn spawn(
         }
     };
     environment::apply(&mut program, vars);
-    if let Some(name) = &own {
-        hooks::apply(&mut program, name, vars);
+    match &own {
+        Some(name) => hooks::apply(&mut program, name, vars),
+        None => {
+            if let Some(path) = command_path(vars, || PERSON_PATH.get().and_then(|ask| ask())) {
+                program.env("PATH", path);
+            }
+        }
     }
     program
         .current_dir(dir)

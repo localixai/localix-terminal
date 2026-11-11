@@ -4,6 +4,14 @@
 
 ### Added
 
+- The window with no tab left shows the mark of each coding agent you have installed, under
+  its first commands: a click starts that agent in a terminal of the project.
+- **Dialogs.** Everything the app asks or announces in its window has one look: a card over
+  the window with a mark that draws itself, a title, a sentence and two buttons. Quit and
+  Restart to Update are asked in it (with the window away, as the system asks).
+- **An update is announced once a version**, in that dialog: both versions, what the release
+  says is new, Restart to Update and Later. Later puts the update's row off as Not Now does.
+
 - An event leads to what it is about even where that has no tab. A coding agent's session that
   runs outside the window (in another terminal app or an editor) and waits for you has
   **Continue Here**: its row's click, or its system notice's, opens a terminal of its project
@@ -182,6 +190,18 @@
 
 ### Fixed
 
+- An agent started in a tab (Claude Code, Codex) is found when the app was opened from the
+  Finder or the Dock: its command is looked for where your own shell looks, not on the system's
+  `PATH` alone (`sh: claude: command not found`).
+- The app no longer starts `claude` each time it opens to check its plugin: it reads Claude
+  Code's own records, so macOS stops asking for folders other plugins are kept in.
+- The app looks after its integrations by itself, as a doctor: the command, the Claude Code
+  plugin and the window tool in every other agent are checked and put right when the app
+  starts, however it was started, and every hour while it runs. An agent installed after the
+  app opened, or an entry another program rewrote, is connected without opening the app
+  again, where only opening the app from the Finder or the Dock did this before (a server a
+  call started set nothing up). What you took out stays out. The log (`app.log`) says what
+  each round changed, not the same lines every hour.
 - A card's worker, run from the board (Run), is that worker by the terminal it runs in: its
   session acts on the board under its name with nothing passed (`who`), what you say of its
   card (a comment, a card sent back) is told to it alone while its terminal runs, and to the

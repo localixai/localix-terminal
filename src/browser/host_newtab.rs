@@ -69,6 +69,16 @@ impl On<'_> {
         self.ask(asked);
     }
 
+    /// An agent's mark where no tab is left: a terminal of the project shown that runs it, when
+    /// it is installed.
+    pub(super) fn start_agent(&self, id: &str) {
+        let path = crate::browser::agents::path();
+        let agent = AGENTS.iter().find(|agent| agent.id == id);
+        if let Some(command) = agent.and_then(|agent| agent.command_on(&path)) {
+            self.ask(Asked::Agent(command));
+        }
+    }
+
     /// The person asks for a new tab of the project shown.
     fn ask(&self, asked: Asked) {
         let Some(open) = self.deck.as_ref() else {

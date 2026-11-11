@@ -246,3 +246,12 @@ fn only_web_addresses_are_gone_to_from_the_field() {
     assert_eq!(went("go    "), None);
     assert_eq!(went("show w1"), None);
 }
+
+#[test]
+fn an_agents_mark_where_no_tab_is_left_asks_for_that_agent() {
+    let first = agents::AGENTS[0].id;
+    assert_eq!(click(&format!("agent {first}")), Some(Click::Agent(first)));
+    // Only an agent the app knows: the page's word is never a command.
+    assert_eq!(click("agent rm"), None);
+    assert_eq!(click("agent"), None);
+}

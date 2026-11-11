@@ -81,7 +81,10 @@ impl On<'_> {
                 }
             }
             // Drawn once the turn is over (`told`); what waits is said outside the window too.
-            Cmd::Strip => crate::browser::alerts::told(&crate::lock(&shared.center), proxy),
+            Cmd::Strip => {
+                crate::browser::alerts::told(&crate::lock(&shared.center), proxy);
+                self.announce();
+            }
             Cmd::Offered(id, on) => self.offered(id, on),
             Cmd::Go(project) => self.go_project(&project),
             Cmd::Arranged(_, arranged) => self.arranged(arranged),
@@ -93,12 +96,7 @@ impl On<'_> {
                 let _ = reply.send(self.presenter.name());
             }
             // Asked on the window, which runs on until the answer comes.
-            Cmd::Confirm(question, reply) => {
-                let window = self.deck.as_ref().map(|open| &open.frame.native);
-                platform::confirm(&question, window, move |yes| {
-                    let _ = reply.send(yes);
-                });
-            }
+            Cmd::Confirm(question, reply) => self.confirm(&question, reply),
             Cmd::Clicked(said) => self.clicked(&said),
             Cmd::Pressed(window, x, y) => self.pressed(window, x, y),
             // The side's points are the strip's, once moved down by the strip's height: the

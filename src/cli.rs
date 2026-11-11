@@ -117,6 +117,11 @@ fn serve(args: &[String]) -> ExitCode {
         Ok(crate::server::Binding::Running) => return ExitCode::SUCCESS,
         Err(why) => return ExitCode::from(call::usage(&format!("cannot serve: {why}"))),
     };
+    // The server a call started looks after the agents as the app opened does. A build for
+    // development does not: what it would write names a program that is gone with the next build.
+    if crate::bundle::in_place() && !cfg!(debug_assertions) {
+        app::keep_well();
+    }
     let serve = Serving {
         headless: flags.contains(&"--headless"),
         windowless: flags.contains(&"--no-window"),

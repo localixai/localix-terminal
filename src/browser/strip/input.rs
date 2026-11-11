@@ -1,6 +1,7 @@
 //! Strict readers of trusted UI messages: clicks, shortcuts, dragging and coordinates.
 
 use super::{Key, SIDE};
+use crate::browser::agents::AGENTS;
 
 /// A toolbar button the strip had no room for: it waits in the "»" menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,6 +115,8 @@ pub(in super::super) enum Click {
     Typing(bool),
     /// A shortcut's doing that no button of the strip does (shortcuts.rs).
     Key(Keyed),
+    /// A coding agent's mark where no tab is left: a terminal that runs it (its id, agents.rs).
+    Agent(&'static str),
 }
 
 /// What a shortcut does that has no button of its own.
@@ -190,6 +193,12 @@ fn dragged(rest: &str) -> Option<(&str, bool)> {
     }
 }
 
+/// The click on the mark of the agent `id`: only one the app knows.
+fn agent(id: &str) -> Option<Click> {
+    let known = AGENTS.iter().find(|agent| agent.id == id)?;
+    Some(Click::Agent(known.id))
+}
+
 /// A message from the strip's page: `show w3`, `close t1`, `back`, `forward`, `history`,
 /// `visit 2`, `comment`, `send`, `drag`, `zoom`, `collapse`. Anything else is nothing.
 pub(in super::super) fn click(body: &str) -> Option<Click> {
@@ -224,6 +233,7 @@ pub(in super::super) fn click(body: &str) -> Option<Click> {
             by.parse().ok().map(|by| Click::SplitMove(by, done))
         }
         ("key", Some(words)) => Keyed::parse(words).map(Click::Key),
+        ("agent", Some(id)) => agent(id),
         ("side-width", Some(rest)) => {
             let (width, done) = dragged(rest)?;
             // `usual`: the width the side has until the person drags it.

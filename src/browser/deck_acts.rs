@@ -44,6 +44,7 @@ impl Deck {
             | Click::Tabs(..)
             | Click::Menu(..)
             | Click::Key(_)
+            | Click::Agent(_)
             | Click::Glass(_) => {
                 return Ok(());
             }
@@ -174,6 +175,7 @@ impl Deck {
             | Click::Menu(..)
             | Click::Typing(_)
             | Click::Key(_)
+            | Click::Agent(_)
             | Click::Glass(_) => {}
         }
     }

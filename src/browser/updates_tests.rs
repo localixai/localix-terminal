@@ -157,3 +157,43 @@ fn only_an_update_that_is_ready_is_offered_under_its_version() {
         "https://github.com/rsaryev/llx-desk/releases/tag/v0.2.0"
     );
 }
+
+#[test]
+fn an_update_that_is_ready_is_announced_with_both_versions_and_what_is_new() {
+    let told = Told {
+        current: "0.1.5".into(),
+        stage: Stage::Ready {
+            release: Release {
+                version: Version(0, 2, 0),
+                notes: "### Added\n\n- **Dialogs**: one look.".into(),
+                files: vec![],
+            },
+        },
+        checked: None,
+        unable: None,
+    };
+    let (offered, dialog) = announcement(&told).expect("an announcement");
+    assert_eq!(offered, "update:0.2.0", "Later puts this offer off");
+    assert_eq!(
+        dialog.id, "announced:0.2.0",
+        "the next version is announced anew"
+    );
+    assert_eq!(dialog.versions, Some(("0.1.5".into(), "0.2.0".into())));
+    assert_eq!(
+        (dialog.yes.as_str(), dialog.no.as_str()),
+        ("Restart to Update", "Later")
+    );
+    assert!(
+        !dialog.asked,
+        "raised by the app: it leaves the keys where they are"
+    );
+    assert_eq!(dialog.notes.len(), 2, "{:?}", dialog.notes);
+    let idle = Told {
+        stage: Stage::Idle,
+        ..told
+    };
+    assert!(
+        announcement(&idle).is_none(),
+        "nothing ready: nothing announced"
+    );
+}

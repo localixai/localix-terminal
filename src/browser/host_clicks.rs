@@ -67,6 +67,9 @@ impl On<'_> {
         if let Some(url) = went(said) {
             return self.go(url);
         }
+        if let Some(yes) = crate::browser::dialog::said(said) {
+            return self.dialog_answered(yes);
+        }
         if said == crate::browser::updates::CHECK {
             return self.check_for_updates();
         }
@@ -136,6 +139,7 @@ impl On<'_> {
             Some(Click::History) => return self.history_menu(),
             Some(Click::Menu(key, x, y)) => return self.tab_menu(key, (x, y)),
             Some(Click::Key(keyed)) => return self.keyed(keyed),
+            Some(Click::Agent(id)) => return self.start_agent(id),
             // The strip says it on its own refreshes: answered without one.
             Some(Click::Glass(rect)) => {
                 if let Some(open) = self.deck.as_ref() {

@@ -69,7 +69,7 @@ impl Offers {
     }
 
     /// Whether offer `id` may be shown now: never before the answers are known.
-    fn due(&self, id: &str) -> bool {
+    pub(super) fn due(&self, id: &str) -> bool {
         let answers = crate::lock(&self.answers).clone();
         let Some(answers) = answers else {
             return false;
@@ -83,6 +83,15 @@ impl Offers {
         let due = answers.due(id);
         crate::lock(&self.dues).insert(id.to_string(), (Instant::now(), due));
         due
+    }
+
+    /// The person answered the announcement `id` of what `offer` offers: it is not made again,
+    /// and put off (not `taken`), the offer waits as one answered Not Now does.
+    pub(super) fn announced(&self, id: &str, offer: &str, taken: bool) {
+        self.answered(id, true);
+        if !taken {
+            self.answered(offer, false);
+        }
     }
 
     /// The person answered offer `id`: kept, on a thread (the store may be busy with another
@@ -140,6 +149,8 @@ impl Offers {
         // An update that is ready is offered on any tab, before what the tab itself offers.
         if let Some((id, says)) = super::updates::offer(&crate::update::app().told())
             && self.due(&id)
+            // Announced in a dialog, it is not said twice at once.
+            && !super::dialog::up()
         {
             return Some(Bar {
                 id,

@@ -310,3 +310,11 @@ fn none() -> Projects<'static> {
         places: vec![],
     }
 }
+
+#[test]
+fn the_page_is_told_the_agents_installed_as_data() {
+    let told = starts(r#"[{"at":0,"id":"claude","name":"Claude Code"}]"#);
+    assert_eq!(told, r#"AG([{"at":0,"id":"claude","name":"Claude Code"}])"#);
+    // What is not a list of agents is none of them, never script.
+    assert_eq!(starts("alert(1)"), "AG([])");
+}

@@ -127,6 +127,12 @@ html[data-part=nav][data-blank] #blank{position:fixed;inset:0;display:flex;overf
 #blank .start button:active{background:var(--ov-3);transition:none}
 #blank .start button:focus-visible{outline:auto 1px -webkit-focus-ring-color;outline-offset:-1px}
 #blank .start kbd{font:inherit;color:var(--ink-3);font-variant-numeric:tabular-nums}
+/* Under them, the agents installed, centred under the column: each its mark alone, an icon button
+   as any other; its name is its tooltip. */
+#blank .start .agents{display:flex;justify-content:center;gap:4px;margin-top:10px}
+#blank .start .agents:empty{display:none}
+#blank .start .agents button{width:28px;justify-content:center;padding:0}
+#blank .start .agents svg{width:16px;height:16px}
 #tools{display:flex;align-items:center;gap:4px}
 /* The bar is bare: icons and words on the glass, no capsules. A button lights as the pointer
    comes; only one that is on (comments, a page size) and the field being typed in have a ground. */
@@ -361,6 +367,7 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
   html[data-part=side] :is(#sl,#gh) .t.pair .half:hover .ic{color:var(--ink);background:var(--ov-2);transition:none}
   html[data-part=side] #gh .t.lift{background:var(--card)}
 }
+/*DIALOG_CSS*/
 </style>
 </head>
 <body>
@@ -408,6 +415,7 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
 <script>
 "use strict";
 /*RESIZE_HANDLES*/
+/*DIALOG_JS*/
 // The strip's small pictures, drawn as the buttons are; never text characters. Built element by
 // element, as everything on the strip is: no markup is ever parsed.
 const GLYPHS = {
@@ -570,6 +578,7 @@ const STARTS = [
   ["board", "Board", "key new board"],
   ["open-folder", "Open Folder\u2026", "key open folder"],
 ];
+let STARTED = [];
 function titled(node, base) {
   node.dataset.base = base;
   const key = HINTS[HINTED[node.id]];
@@ -1748,7 +1757,24 @@ function blank() {
     button.addEventListener("click", () => window.ipc.postMessage(message));
     start.append(button);
   }
+  const agents = document.createElement("div");
+  agents.className = "agents";
+  for (const agent of STARTED) {
+    const button = document.createElement("button");
+    button.title = "New " + agent.name;
+    button.setAttribute("aria-label", button.title);
+    button.append(agentMark(agent.id));
+    button.addEventListener("click", () => window.ipc.postMessage("agent " + agent.id));
+    agents.append(button);
+  }
+  start.append(agents);
   document.getElementById("blank").replaceChildren(start);
+}
+// The agents installed (agents.rs), told as they are found: their marks where no tab is left.
+function AG(agents) {
+  if (JSON.stringify(agents) === JSON.stringify(STARTED)) return;
+  STARTED = agents;
+  blank();
 }
 </script>
 </body>

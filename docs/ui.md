@@ -241,19 +241,24 @@ define colours of its own beyond its `--ground`.
   icon while the tab is out of sight), the Dock's count of what is new, and, only while the
   person is in another app, a notice of the system's with no sound. A sign goes when the thing
   no longer waits; none of them animates or takes the focus.
-- **A question is a sheet**, the system's own, on the window it is about; with the window away
-  it is an alert in front. There is one kind (`Confirm`: a title, a sentence of what happens,
-  the act and Cancel) and no dialog drawn by a page:
+- **A question is a dialog**, the window's own (`dialog.rs`), one look for everything the app
+  asks or announces: a mark that draws itself, a title, a sentence, and two buttons. With the
+  window away (put away, in the Dock) a question is the system's alert in front instead.
   - the title asks about the act, with the app's or the thing's name ("Quit LLX Desk?");
   - the detail says what is lost or ended, in one or two sentences, and nothing else;
-  - the default button names the act (Quit, Restart, Close), never OK or Yes; Cancel is second,
-    and Esc;
-  - asked again while it is up, it is not stacked;
-  - it arrives and leaves as the system moves a sheet, which keeps Reduce Motion, Increase
-    Contrast, the glass and VoiceOver right with no code of ours.
-- **What can wait is never a sheet.** An update that is ready, an integration to add: a row
-  under the toolbar (the offer bar), one at a time, with the button that does it and Not Now.
-  It fades in, takes no focus, and comes back later when put off.
+  - the default button names the act (Quit, Restart, Close), never OK or Yes, and is the
+    dialog's one accent; the other is quiet, second, and Esc;
+  - asked again while it is up, it is not stacked; another waits its turn behind it;
+  - one the person asked for takes the keys, on its default button. One the app raises on its
+    own leaves the keys where they are, so a Return typed into a terminal never answers it;
+  - the card is solid with a hairline over a veil, and takes no blur.
+- **News is announced once.** An update that is ready is a dialog once a version: both versions
+  under the mark, what the release says is new (the one part that scrolls), Restart to Update
+  and Later. Later puts it off: its row under the toolbar (the offer bar) comes back another
+  day, and Settings always has it.
+- **What else can wait is never a dialog.** An integration to add: a row under the toolbar (the
+  offer bar), one at a time, with the button that does it and Not Now. It fades in, takes no
+  focus, and comes back later when put off.
 - **Notices** don't carry the only copy of something important:
   - one with a timer pauses while the pointer or focus is on it, and has a close button;
   - they keep off the window's bottom edge;
@@ -277,7 +282,8 @@ define colours of its own beyond its `--ground`.
   illustration, logo or motion, and nothing to press: "+" and the menus open what can be.
 - **The one exception is the window with no tab left.** The whole pages' part is empty, so it
   offers what opens a tab, as a menu does: New Page, New Terminal, Board, Open Folder…, each with
-  its key as Settings sets it, quiet until pointed at.
+  its key as Settings sets it, quiet until pointed at. Under them, the coding agents installed:
+  each its mark alone, an icon button whose name is its tooltip, which starts it in a terminal.
 
 ## Motion
 
@@ -286,6 +292,9 @@ wait.
 
 - **Only `transform` and `opacity` move.** Never animate width, height, position, margins,
   `box-shadow` or a blur radius. To change elevation, cross-fade a shadow layer.
+- **A dialog's mark draws once, as it arrives**: its ring closes, its badge lands, and for news
+  the version rolls to the new one. It is the one ornament the window has; it never delays
+  the buttons, and under Reduce Motion it stands drawn.
 - **Frequent things don't animate:**
   - typing into suggestions;
   - moving between buttons;

@@ -55,9 +55,48 @@ fn plugin_in(plugins: &Value) -> Option<(String, bool)> {
     Some((version.to_string(), mine["enabled"] == true))
 }
 
+/// Claude Code's own folder: `CLAUDE_CONFIG_DIR`, else `~/.claude`.
+fn records() -> Option<PathBuf> {
+    (std::env::var_os("CLAUDE_CONFIG_DIR").filter(|dir| !dir.is_empty()))
+        .map(PathBuf::from)
+        .or_else(|| Some(super::home().ok()?.join(".claude")))
+}
+
+/// Whether Claude Code's records, read without starting it, say the plugin is in place.
+/// `claude plugin list` reads every plugin the person has, wherever it is kept, and macOS asks
+/// the person about each protected folder in the app's name; so it is run only when the
+/// records leave something to repair or to ask.
+fn recorded(dir: &Path) -> bool {
+    let read = |name: &str| -> Option<Value> {
+        serde_json::from_str(&std::fs::read_to_string(records()?.join(name)).ok()?).ok()
+    };
+    let (Some(installed), Some(markets), Some(settings)) = (
+        read("plugins/installed_plugins.json"),
+        read("plugins/known_marketplaces.json"),
+        read("settings.json"),
+    ) else {
+        return false;
+    };
+    on_record(&installed, &markets, &settings, dir)
+}
+
+/// The plugin in Claude Code's records: installed at the app's version, from the marketplace
+/// at `dir`, and enabled.
+fn on_record(installed: &Value, markets: &Value, settings: &Value, dir: &Path) -> bool {
+    let version = env!("CARGO_PKG_VERSION");
+    let current = (installed["plugins"][PLUGIN].as_array())
+        .is_some_and(|copies| copies.iter().any(|copy| copy["version"] == version));
+    let here = markets[MARKETPLACE]["source"]["path"].as_str() == Some(&dir.display().to_string());
+    current && here && settings["enabledPlugins"][PLUGIN] == true
+}
+
 pub(super) fn state() -> State {
-    if marketplace().is_none() {
+    let Some(dir) = marketplace() else {
         return State::Unavailable("from LLX Desk.app: its bundle holds the plugin".into());
+    };
+    if recorded(&dir) {
+        let version = env!("CARGO_PKG_VERSION");
+        return State::On(format!("the plugin {version} is installed"));
     }
     let claude = match find("claude") {
         Ok(claude) => claude,

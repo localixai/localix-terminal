@@ -204,6 +204,12 @@ fn merged(login: &str, process: &OsStr) -> OsString {
     std::env::join_paths(dirs).unwrap_or_else(|_| process.to_os_string())
 }
 
+/// The `PATH` the agents are looked for on, once it is known: a command the app starts in a
+/// terminal (an agent in a tab) is looked for on it too, so what is offered is what starts.
+pub fn commands_path() -> Option<OsString> {
+    crate::lock(&KNOWN).as_ref().map(|known| known.path.clone())
+}
+
 /// Ask the person's login shell for its `PATH`, on a thread (it may take seconds, and runs their
 /// profile): the agents are looked for on it from then on, and the window told to draw again.
 pub(super) fn learn(proxy: &EventLoopProxy<Cmd>) {
@@ -232,6 +238,13 @@ pub fn known() -> String {
     let installed = now.installed.clone();
     *known = Some(now);
     installed
+}
+
+/// The agents installed as they were last found, without looking again: for what is drawn
+/// often (the marks where no tab is left).
+pub(super) fn listed() -> String {
+    let found = (crate::lock(&KNOWN).as_ref()).map(|known| known.installed.clone());
+    found.unwrap_or_else(known)
 }
 
 /// The agent a terminal's command line starts, read as a shell would start it: past variables

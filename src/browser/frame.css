@@ -89,4 +89,12 @@ html[data-glass],html[data-glass] body{background:transparent}
 html[data-reduced],html:not([data-glass]){background:var(--ground)}
 html[data-reduced] body{background:transparent}
 @media (prefers-reduced-transparency:reduce),(forced-colors:active){html{background:var(--ground)}html body{background:transparent}}
+/* The push button, one for every page: quiet, with a hairline; `.go` is a place's one accent.
+   In :where(), so a page that stands its buttons on another ground says only what differs. */
+:where(.btn){font:inherit;font-size:13px;line-height:16px;font-weight:500;height:24px;padding:0 12px;display:inline-flex;align-items:center;border:0;border-radius:var(--r-2);color:inherit;background:var(--ov-1);box-shadow:var(--hair-in);transition:background-color var(--t-out) var(--ease)}
+:where(.btn:hover:not(:disabled)){background:var(--ov-2);transition:none}
+:where(.btn:active:not(:disabled)){background:var(--ov-3);transition:none}
+:where(.btn.go){background:var(--accent);color:var(--on-acc);box-shadow:none}
+:where(.btn.go:hover:not(:disabled)){background:var(--accent);filter:brightness(1.08)}
+:where(.btn.go:active:not(:disabled)){background:var(--accent);filter:brightness(.92)}
 ::selection{background:-apple-system-selected-text-background}

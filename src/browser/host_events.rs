@@ -319,6 +319,8 @@ mod newtab;
 
 #[path = "host_clicks.rs"]
 mod clicks;
+#[path = "host_dialog.rs"]
+mod dialogs;
 #[path = "host_offer.rs"]
 mod offer_bar;
 #[path = "host_project.rs"]

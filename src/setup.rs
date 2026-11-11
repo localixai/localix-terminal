@@ -4,13 +4,15 @@
 //! is given the entry to paste. Each is an integration with a state and an act, reached two ways:
 //! Settings → Integrations in the window and `llx-desk setup` in a terminal.
 //!
-//! The app puts every one in place itself, for whatever agent is installed, each time it opens
-//! (`opened`, `auto`): nobody has to set anything up. What the person takes out stays out
+//! The app puts every one in place itself, for whatever agent is installed, when it starts and
+//! every hour while it runs (`doctor.rs`, a round of `opened` and `auto`): nobody has to set
+//! anything up. What the person takes out stays out
 //! (`declined`, kept in the store) until they put it back.
 
 mod claude;
 mod command;
 mod declined;
+mod doctor;
 mod mcp_hosts;
 mod shell;
 
@@ -20,6 +22,7 @@ use std::sync::Mutex;
 use serde_json::{Value, json};
 
 use declined::{declined, remember};
+pub use doctor::{doctor, keep_well};
 
 /// Where an integration is.
 #[derive(Debug, Clone, PartialEq, Eq)]
