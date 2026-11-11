@@ -10,7 +10,7 @@ use super::super::pty;
 use super::{Input, PAINT_EVERY, Shared, UNSENT_MAX, nap};
 
 /// How long the reader waits for output while some waits to be sent, and while none does.
-const PAINT_POLL_MS: i32 = 33;
+const PAINT_POLL_MS: i32 = 16;
 const IDLE_POLL_MS: i32 = 1000;
 /// A title is told on at most this often: a program that sets one all the time is heard now and
 /// then, the newest each time.
@@ -20,8 +20,12 @@ const TITLE_EVERY: Duration = Duration::from_millis(250);
 /// closes. It answers a program's cursor-position query, which some ask before they draw.
 pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: u32) {
     let mut reader = reader;
-    let mut buffer = [0u8; 8192];
+    let mut buffer = vec![0u8; READ_MOST];
     let mut queries = Queries::default();
+    // What follows the output at a pace of its own, not with every kilobyte of a flood: the
+    // program in front read again, and whoever waits on the screen woken.
+    let mut front = Paced::default();
+    let mut woken = Paced::default();
     loop {
         let mut gone = false;
         // Output waiting for the pace (or a title held back) is sent within a frame; with none,
@@ -29,20 +33,25 @@ pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: 
         // the poll too).
         let idle = {
             let state = shared.lock();
-            state.unsent.is_empty() && !state.replay && state.screen.retitled() == state.titled
+            let sent = state.unsent.is_empty() && !state.replay;
+            sent && state.screen.retitled() == state.titled && !front.owed && !woken.owed
         };
         let wait = if idle { IDLE_POLL_MS } else { PAINT_POLL_MS };
         if pty::readable(reader.as_raw_fd(), wait) {
-            match reader.read(&mut buffer) {
-                Ok(0) => gone = true,
-                Ok(n) => {
-                    let chunk = buffer.get(..n).unwrap_or_default();
-                    take_in(shared, input, chunk, queries.asked(chunk));
-                    fronted(shared, reader.as_raw_fd());
-                }
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
-                Err(_) => gone = true,
+            let (filled, ended) = fill(&mut reader, &mut buffer);
+            gone = ended;
+            if let Some(chunk) = buffer.get(..filled).filter(|chunk| !chunk.is_empty()) {
+                take_in(shared, input, chunk, queries.asked(chunk));
+                front.owed = true;
+                woken.owed = true;
             }
+        }
+        if woken.due(WAKE_EVERY) {
+            shared.wake.notify_all();
+        }
+        // The one that floods is the one in front.
+        if front.due(FRONT_EVERY) {
+            fronted(shared, reader.as_raw_fd());
         }
         if shared.lock().closed {
             return;
@@ -67,6 +76,25 @@ pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: 
     }
 }
 
+/// The most output taken in at once. A PTY hands over a kilobyte or a few a read however much
+/// waits, so the reads go on until this much is in hand or no more waits: the screen, whoever
+/// waits on it and the window are told once for all that waited.
+const READ_MOST: usize = 1 << 16;
+/// Reads into `buffer` until it is full or nothing more waits. How much was read, and whether the
+/// program is gone (its end of the terminal closed).
+fn fill(reader: &mut impl Read, buffer: &mut [u8]) -> (usize, bool) {
+    let mut filled = 0;
+    while let Some(room) = buffer.get_mut(filled..).filter(|room| !room.is_empty()) {
+        match reader.read(room) {
+            Ok(0) => return (filled, true),
+            Ok(n) => filled += n,
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
+            Err(_) => return (filled, true),
+        }
+    }
+    (filled, false)
+}
 /// The most cursor reports one read of output is answered with: a program that asks again and
 /// again in one breath is not reading what it is told.
 const MOST_CURSOR_REPLIES: usize = 8;
@@ -97,11 +125,12 @@ impl Queries {
 
 fn take_in(shared: &Shared, input: &Input, chunk: &[u8], asked: usize) {
     let mut state = shared.lock();
-    state.screen.feed(chunk);
+    let righted = state.screen.feed(chunk);
     state.version += 1;
     state.changed_at = Instant::now();
     if state.painter.is_some() && !state.replay {
         state.unsent.extend_from_slice(chunk);
+        state.unsent.extend_from_slice(righted);
         if state.unsent.len() > UNSENT_MAX {
             state.unsent.clear();
             state.replay = true;
@@ -113,7 +142,6 @@ fn take_in(shared: &Shared, input: &Input, chunk: &[u8], asked: usize) {
     for _ in 0..asked.min(MOST_CURSOR_REPLIES) {
         input.queue(format!("\x1b[{row};{column}R").as_bytes());
     }
-    shared.wake.notify_all();
 }
 
 /// Whoever listens told the program's title, if it changed and the last one went out long enough
@@ -137,12 +165,36 @@ fn retitled(shared: &Shared) {
     }
 }
 
+/// The program in front is read at most this often while output keeps coming.
+const FRONT_EVERY: Duration = Duration::from_millis(50);
+/// Whoever waits on the screen is woken at most this often while output keeps coming: a wait
+/// looks the screen through each time, and woken with every kilobyte it held a flood to a
+/// quarter of its speed. A text is still found within a frame of showing.
+const WAKE_EVERY: Duration = Duration::from_millis(16);
+/// Something done after output, at most so often: at once when the last time is long past, else
+/// owed until its time comes (the reader does not sleep long while anything is owed).
+#[derive(Default)]
+struct Paced {
+    at: Option<Instant>,
+    owed: bool,
+}
+impl Paced {
+    /// Whether it is owed and its time has come; then it is no longer owed.
+    fn due(&mut self, every: Duration) -> bool {
+        if !self.owed || self.at.is_some_and(|at| at.elapsed() < every) {
+            return false;
+        }
+        self.at = Some(Instant::now());
+        self.owed = false;
+        true
+    }
+}
 /// How often the name in front is read again while the group stays: a program that replaces
 /// itself (`exec`: a shell running `claude` becomes it) keeps its group, not its name.
 const RENAMED: Duration = Duration::from_millis(500);
 
 /// Whoever listens told when another program came in front: a program started, or ended, in
-/// the terminal, or the one in front became another. The group is read with each output; the
+/// the terminal, or the one in front became another. The group is read with the output (`FRONT_EVERY`); the
 /// name when it changed, or now and then while it stays.
 fn fronted(shared: &Shared, master: std::os::fd::RawFd) {
     let group = super::super::foreground::group(master);

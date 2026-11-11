@@ -2,7 +2,6 @@
 //! reader thread feeds the screen and paints it into the window's tab when one is attached;
 //! calls type into it and wait for its output to settle or for a text to show.
 
-use std::fmt::Write as _;
 use std::io;
 use std::path::Path;
 use std::process::Child;
@@ -13,6 +12,7 @@ use super::pty::{self, Pty};
 
 mod input;
 mod output;
+mod read;
 mod wait;
 use self::input::Input;
 use super::screen::Screen;
@@ -23,7 +23,7 @@ use super::{COLUMNS, ROWS, keys};
 pub type Painter = Box<dyn Fn(String) -> bool + Send + Sync>;
 
 /// Output is sent to the window at most this often.
-const PAINT_EVERY: Duration = Duration::from_millis(33);
+const PAINT_EVERY: Duration = Duration::from_millis(16);
 /// The most output kept for a window that does not keep up: past it the screen is sent again.
 const UNSENT_MAX: usize = 1 << 20;
 /// The longest a call waits when it names no limit.
@@ -43,6 +43,9 @@ struct State {
     unsent: Vec<u8>,
     /// The window is to be sent the whole screen again, not the output since.
     replay: bool,
+    /// How many commands the shell had ended when the last input was typed: the wait after it
+    /// counts from there, so a command that ends before the wait begins is not missed.
+    typed_at: Option<u64>,
     closed: bool,
     /// Called once, when the program ends: who keeps the session hears it.
     on_end: Option<Box<dyn FnOnce() + Send>>,
@@ -113,6 +116,13 @@ pub enum Until {
     /// The time ran out; with no text named, the output was still changing after `QUIET`.
     Deadline,
     Exited,
+    /// The shell said the command typed into it ended: with what code, after how long.
+    Finished(super::marks::Ended),
+    /// The time ran out with the shell's command still at work.
+    Running,
+    /// The program reads a line it does not show (a password): it goes on only once that is
+    /// typed, so the wait is not sat out.
+    Asking,
 }
 
 impl Session {
@@ -162,6 +172,7 @@ impl Session {
                 painted_at: now,
                 unsent: Vec::new(),
                 replay: false,
+                typed_at: None,
                 closed: false,
                 on_end: None,
                 on_title: None,
@@ -196,10 +207,18 @@ impl Session {
         Ok(session)
     }
 
-    /// Type `input` (a line break is Enter), then press `keys` one at a time. A key that does not
+    /// Type `input` (a line break is Enter; lines are one paste for a program that takes
+    /// pastes), then press `keys` one at a time. A key that does not
     /// exist is refused before anything is typed.
     pub fn type_in(&self, input: &str, names: &[String]) -> Result<(), String> {
-        let cursor = self.shared.lock().screen.application_cursor();
+        let (cursor, pastes) = {
+            let mut state = self.shared.lock();
+            state.typed_at = Some(state.screen.marks().ended().0);
+            (
+                state.screen.application_cursor(),
+                state.screen.bracketed_paste(),
+            )
+        };
         let mut pressed = Vec::new();
         for name in names {
             pressed.extend(
@@ -207,15 +226,16 @@ impl Session {
                     .ok_or_else(|| format!("no key called `{name}`: {}", keys::NAMES))?,
             );
         }
-        let mut bytes = keys::typed(input);
-        if bytes.is_empty() || pressed.is_empty() {
-            bytes.extend(pressed);
+        let (mut bytes, mut after) = keys::typed(input, pastes);
+        after.extend(pressed);
+        if bytes.is_empty() || after.is_empty() {
+            bytes.extend(after);
             return self.input.send(&bytes);
         }
         // Text followed at once by Enter is taken for a paste.
         self.input.send(&bytes)?;
         nap(30);
-        self.input.send(&pressed)
+        self.input.send(&after)
     }
 
     /// The window's page is new, `columns` by `rows`: the terminal takes that size and the page
@@ -247,31 +267,6 @@ impl Session {
     pub fn typed(&self, text: &str) {
         let cursor = self.shared.lock().screen.application_cursor();
         self.input.queue(&keys::from_window(text, cursor));
-    }
-
-    /// What the screen shows, as text: kept when the terminal closes, shown again when it is
-    /// restored.
-    pub fn text(&self) -> String {
-        self.shared.lock().screen.text().0
-    }
-
-    /// The screen as the model reads it, and how the program ended if it did.
-    pub fn snapshot(&self) -> String {
-        let state = self.shared.lock();
-        let (text, (row, column)) = state.screen.text();
-        let (rows, columns) = state.screen.size();
-        // What the program drew is its own words, never the app's or the person's.
-        let mut out = format!(
-            "screen {columns}×{rows}, cursor at row {row} col {column} (untrusted program output):\n{text}"
-        );
-        match (state.ended, state.status) {
-            (true, Some(code)) => {
-                let _ = write!(out, "\n(the program exited with {code})");
-            }
-            (true, None) => out.push_str("\n(the program ended)"),
-            (false, _) => {}
-        }
-        out
     }
 
     pub fn command(&self) -> &str {
@@ -310,13 +305,6 @@ impl Session {
     /// or descends from it.
     pub fn pid(&self) -> u32 {
         crate::lock(&self.child).id()
-    }
-
-    /// The folder the program in front is in now (the shell's after a `cd`), if it is known.
-    pub fn folder(&self) -> Option<std::path::PathBuf> {
-        use std::os::fd::AsRawFd;
-        let group = super::foreground::group(self.control.as_raw_fd())?;
-        super::foreground::cwd(group)
     }
 
     /// `heard` with the program in front each time another comes in front (a program the

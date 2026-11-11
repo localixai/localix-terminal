@@ -2,7 +2,14 @@
 //! would (cursor moves, erases, redraws), for what the model reads and for a page that needs the
 //! whole screen again. The bytes are untrusted, so only text, line moves (`\n`, `\r`, `\t`,
 //! `\b`) and CSI sequences reach this emulator: no title, no clipboard write, no string sequence.
-//! The title a program sets (OSC 0 or 2) is kept aside as plain text, for the tab's subtitle.
+//! The title a program sets (OSC 0 or 2) is kept aside as plain text, for the tab's subtitle,
+//! and a shell's marks of its commands (OSC 133) are counted.
+
+use super::marks::Marks;
+
+/// What puts right a terminal a command left wrong: no mouse reports of any kind, in any
+/// encoding, and the cursor shown.
+const RIGHTED: &[u8] = b"\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?25h";
 
 pub(super) struct Screen {
     safe: Safe,
@@ -17,9 +24,23 @@ impl Screen {
         }
     }
 
-    pub(super) fn feed(&mut self, bytes: &[u8]) {
+    /// Takes in the program's output. What it gives back is the terminal's own, to be drawn
+    /// after it: when the shell says a command ended and runs nothing more, what that command
+    /// left on (the mouse reported, the cursor hidden) is put right, or the prompt would take
+    /// clicks as typing.
+    pub(super) fn feed(&mut self, bytes: &[u8]) -> &'static [u8] {
+        let ended = self.safe.marks.ended().0;
         let kept = self.safe.keep(bytes);
         self.parser.process(&kept);
+        let screen = self.parser.screen();
+        let left_on =
+            screen.hide_cursor() || screen.mouse_protocol_mode() != vt100::MouseProtocolMode::None;
+        let marks = &self.safe.marks;
+        if marks.ended().0 == ended || marks.running().is_some() || !left_on {
+            return &[];
+        }
+        self.parser.process(RIGHTED);
+        RIGHTED
     }
 
     /// The title the program set last, cleaned to plain words; `None` until it sets one.
@@ -35,6 +56,16 @@ impl Screen {
     /// Whether the program asked for cursor keys in application mode (DECCKM).
     pub(super) fn application_cursor(&self) -> bool {
         self.parser.screen().application_cursor()
+    }
+
+    /// What the shell said of its commands.
+    pub(super) fn marks(&self) -> &Marks {
+        &self.safe.marks
+    }
+
+    /// Whether the program asked to be told where a paste starts and ends.
+    pub(super) fn bracketed_paste(&self) -> bool {
+        self.parser.screen().bracketed_paste()
     }
 
     /// The screen as text, its blank rows at the end left out, and where the cursor is (row and
@@ -130,6 +161,7 @@ struct Safe {
     title: Option<String>,
     /// Counts the times the title changed, so a reader knows when to pass it on.
     retitled: u32,
+    marks: Marks,
 }
 
 impl Safe {
@@ -219,12 +251,14 @@ impl Safe {
         };
     }
 
-    /// A string sequence ended: the title, when it was an OSC that sets one.
+    /// A string sequence ended: the title, when it was an OSC that sets one, or a shell's mark.
     fn string_ended(&mut self) {
         let Some(osc) = self.osc.take() else { return };
         let text = String::from_utf8_lossy(&osc);
-        if let Some(("0" | "2", title)) = text.split_once(';')
-            && let Some(title) = clean_title(title)
+        let Some(("0" | "2", title)) = text.split_once(';') else {
+            return self.marks.read(&text);
+        };
+        if let Some(title) = clean_title(title)
             && self.title.as_ref() != Some(&title)
         {
             self.title = Some(title);

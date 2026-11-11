@@ -35,7 +35,7 @@ Public paths stay stable through re-exports; implementation modules stay private
 | Native UI | `browser/host_commands.rs` is the event-loop protocol; `host_events.rs` handles native events; `host_dispatch.rs` carries out commands; `host_keys.rs` and `host_newtab.rs` adapt user actions. |
 | Deck and tabs | `deck_build.rs` constructs views; `deck_layout.rs` places them; `deck_drop.rs` previews drops; `deck_render.rs` sends state as data. `tabs_transfer.rs` moves existing views and `tabs_layout.rs` sizes them. |
 | Platform and scripts | `browser/platform.rs` is the platform facade; `platform_views.rs` handles native view behavior; `webview_scripts.rs` waits for scripts across navigation. |
-| Terminal and storage | `terminal/session.rs` owns lifecycle; `session/input.rs`, `output.rs` and `wait.rs` own input, output and waits. `store.rs` manages connections; `store/schema.rs` contains unchanged, append-only SQL steps. |
+| Terminal and storage | `terminal/session.rs` owns lifecycle; `session/input.rs`, `output.rs`, `read.rs` and `wait.rs` own input, output, what is read of the screen, and waits. `terminal/marks.rs` counts the commands a shell says it started and ended, and `terminal/hooks.rs` has the person's zsh say so. `store.rs` manages connections; `store/schema.rs` contains unchanged, append-only SQL steps. |
 
 ### Rules the tests check
 

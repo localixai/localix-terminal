@@ -4,6 +4,18 @@
 
 ### Added
 
+- A wait on a terminal ends when the shell's command does, and says how: "The command ended with
+  exit code 1 after 3.2s", where it could only say the output settled. A text waited for that
+  never shows is no longer waited out once the command is over, and the screen's read says
+  whether the shell's command still runs or how the last one exited. A command at work is
+  waited for to its end or the call's limit ("The command is still running after 10s"), not
+  given up on at its first quiet moment; one that takes keys (an editor, a REPL) or stays
+  quiet for three seconds (a question) ends the wait as before. zsh in a tab says so by
+  itself: it starts with a folder of the app's whose one file reads the person's own files
+  first, then marks each command's start and end; nothing of theirs is changed, and
+  `LLX_DESK_SHELL_MARKS=0` in the environment leaves the shell as it is. Any other shell that
+  marks its commands (OSC 133) is read the same way.
+
 - What an agent opens from a terminal of the window lands beside that terminal, in its tab: the
   agent on the left, its page, terminal or board on the right, and the keys stay in the terminal.
   The next thing it opens takes that place, and the one before becomes a tab right after; `show`
@@ -24,6 +36,17 @@
   `c3 · codex`, on a first prompt that names its card, its name on the board and how to hand it in.
 
 ### Changed
+
+- A terminal takes in a flood of output about four times as fast while a call waits on it: the
+  wait is woken once a frame, not with every kilobyte, and the program in front is read on a
+  timer. The window is sent the output 60 times a second (it was 30).
+- A wait on a terminal whose program asks for a password (input it hides) ends at once and says
+  so, as the screen's read does, where it sat out its whole time before.
+- A program that dies with the mouse reported or the cursor hidden no longer leaves the shell's
+  prompt taking clicks as typing: when the shell says the command ended, both are put right.
+- Lines an agent types into a program that takes pastes (an agent's prompt, a REPL's editor)
+  arrive as one paste, and the line breaks that end them are Enter after it. Before, each line
+  was Enter and a prompt sent its first line alone. One line is typed as ever.
 
 - `llx-desk mcp` speaks the MCP revision an agent asks for: every one from 2024-11-05 to
   2025-11-25 after the `initialize` handshake, and 2026-07-28 with none, each request naming its
@@ -86,6 +109,10 @@
 
 ### Security
 
+- A key in what an agent reads (a terminal's screen, a page's text, a script's answer) is shown
+  as its kind, `[hidden: GitHub token]`, not its value: GitHub, AWS, Google, Stripe, Slack,
+  GitLab, npm and model API keys, signed tokens and private keys, known by their shape. The
+  window shows the person what it always did.
 - A page's own scripts can no longer speak for the app or the person. Only the app's own calls
   reach the probe, by a per-run key. Each call carries a random 64-bit id and a 128-bit word from
   the system's random source, and its reply counts only with both and only from the tab it went

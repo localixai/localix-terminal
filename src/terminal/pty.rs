@@ -8,7 +8,7 @@ use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 
-use super::{COLUMNS, ROWS, environment};
+use super::{COLUMNS, ROWS, environment, hooks};
 
 /// The program started and the master end of its terminal.
 pub(super) struct Pty {
@@ -31,22 +31,28 @@ pub(super) fn spawn(
         .map(|(_, shell)| shell.clone())
         .or_else(|| std::env::var("SHELL").ok())
         .unwrap_or_else(|| "sh".into());
-    let mut program = match command.trim() {
-        "" => {
-            let name = Path::new(&shell)
-                .file_name()
-                .map_or_else(|| "sh".into(), |name| name.to_string_lossy().into_owned());
+    // The person's shell by its name, when it is what starts.
+    let own = command.trim().is_empty().then(|| {
+        Path::new(&shell)
+            .file_name()
+            .map_or_else(|| "sh".into(), |name| name.to_string_lossy().into_owned())
+    });
+    let mut program = match &own {
+        Some(name) => {
             let mut login = Command::new(&shell);
             login.arg0(format!("-{name}"));
             login
         }
-        command => {
+        None => {
             let mut sh = Command::new("sh");
             sh.arg("-c").arg(command);
             sh
         }
     };
     environment::apply(&mut program, vars);
+    if let Some(name) = &own {
+        hooks::apply(&mut program, name, vars);
+    }
     program
         .current_dir(dir)
         .stdin(Stdio::from(slave.try_clone()?))
@@ -158,6 +164,36 @@ pub(super) fn kill(child: &mut Child) {
     unsafe { libc::kill(-leader, libc::SIGKILL) };
     let _ = child.kill();
     let _ = child.wait();
+}
+
+/// How the terminal behind `master` takes typing now: whether it shows it, and whether it gathers
+/// whole lines (a full-screen program or a shell's own line editor takes each key itself).
+#[derive(Clone, Copy)]
+pub(super) struct Typing {
+    pub(super) shown: bool,
+    pub(super) by_line: bool,
+}
+
+impl Typing {
+    pub(super) fn of(master: &File) -> Option<Self> {
+        // SAFETY: termios is a plain C struct, for which all zeros is a valid value.
+        let mut modes: libc::termios = unsafe { std::mem::zeroed() };
+        // SAFETY: tcgetattr only writes into `modes`, on a descriptor `master` keeps open.
+        (unsafe { libc::tcgetattr(master.as_raw_fd(), &raw mut modes) } == 0).then_some(Self {
+            shown: modes.c_lflag & libc::ECHO != 0,
+            by_line: modes.c_lflag & libc::ICANON != 0,
+        })
+    }
+
+    /// Whether a line is read that is not shown: how a password is asked for.
+    pub(super) fn hidden(self) -> bool {
+        !self.shown && self.by_line
+    }
+}
+
+/// Whether the program at the terminal behind `master` reads a line it does not show.
+pub(super) fn hides_input(master: &File) -> bool {
+    Typing::of(master).is_some_and(Typing::hidden)
 }
 
 /// Wait up to `ms` for `fd` to be readable.

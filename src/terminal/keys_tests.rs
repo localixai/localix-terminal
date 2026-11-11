@@ -60,8 +60,8 @@ fn an_unknown_name_is_no_key() {
 
 #[test]
 fn a_line_break_is_typed_as_enter() {
-    assert_eq!(typed("a\r\nb\nc"), b"a\rb\rc");
-    assert_eq!(typed("print(1)\n"), b"print(1)\r");
+    assert_eq!(typed("a\r\nb\nc", false).0, b"a\rb\rc");
+    assert_eq!(typed("print(1)\n", false), (b"print(1)\r".to_vec(), vec![]));
 }
 
 #[test]
@@ -82,4 +82,26 @@ fn every_key_a_call_or_a_goal_names_is_a_terminal_key() {
     assert_eq!(encode("ArrowUp", false), encode("Up", false));
     assert_eq!(encode("ArrowLeft", true), Some(b"\x1bOD".to_vec()));
     assert_eq!(encode("Shift+Tab", false), Some(b"\x1b[Z".to_vec()));
+}
+
+#[test]
+fn lines_go_as_one_paste_to_a_program_that_takes_pastes() {
+    // The breaks inside are part of the text; the ones after it are Enter, pressed after.
+    assert_eq!(
+        typed("def f():\n  return 1\n\n", true),
+        (
+            b"\x1b[200~def f():\r  return 1\x1b[201~".to_vec(),
+            b"\r\r".to_vec()
+        )
+    );
+    // One line is typed as ever, with or without its Enter.
+    assert_eq!(typed("print(1)\n", true), (b"print(1)\r".to_vec(), vec![]));
+    assert_eq!(typed("ls", true), (b"ls".to_vec(), vec![]));
+    assert_eq!(typed("\n\n", true), (b"\r\r".to_vec(), vec![]));
+}
+
+#[test]
+fn a_text_cannot_end_its_own_paste() {
+    let (body, _) = typed("a\n\x1b[201~rm -rf x\nb", true);
+    assert_eq!(body, b"\x1b[200~a\rrm -rf x\rb\x1b[201~");
 }

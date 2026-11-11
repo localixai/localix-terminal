@@ -203,6 +203,7 @@ pub fn run(bound: &Bound, browser: Option<Browser>, begin: Begin) -> i32 {
         events,
         Arc::new(store),
     );
+    desk.keep_shell_files_in(crate::paths::data().join("shell"));
     let shared = Arc::new(Shared {
         desk,
         hub,

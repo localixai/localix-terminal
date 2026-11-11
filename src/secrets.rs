@@ -4,6 +4,8 @@
 //! app puts the value in where it is typed, and every answer it gives shows `{{secret:NAME}}`
 //! wherever the value would be. Nothing prints a saved value.
 
+mod shapes;
+
 use std::fmt::Write as _;
 use std::io;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
@@ -171,9 +173,11 @@ impl Vault {
     }
 
     /// `text` with every known secret's value shown as its reference: as typed, and in the forms
-    /// a program writes it in (`forms`).
+    /// a program writes it in (`forms`). A key nobody saved, known by its shape, is shown as its
+    /// kind (`shapes`).
     pub fn mask(&self, text: &str) -> String {
-        masked(&crate::lock(&self.known), text)
+        let named = masked(&crate::lock(&self.known), text);
+        shapes::hidden(&named).into_owned()
     }
 }
 

@@ -4,12 +4,16 @@
 
 mod environment;
 mod foreground;
+mod hooks;
 mod keys;
 pub mod lineage;
+mod marks;
 mod pty;
 mod screen;
 mod session;
 
+pub use hooks::keep_in as keep_shell_files_in;
+pub use marks::Ended;
 pub use session::{DEFAULT_WAIT, Painter, Session, Until};
 
 /// The grid a terminal panel shows: a terminal session is this size.

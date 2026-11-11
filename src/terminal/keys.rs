@@ -94,10 +94,27 @@ fn control(lower: &str) -> Option<u8> {
     (key.is_ascii_lowercase() || b"@[\\]^_".contains(&key)).then(|| key.to_ascii_uppercase() & 0x1f)
 }
 
-/// `input` as a terminal types it: a line break is Enter (`\r`), which the terminal turns back
-/// into `\n` for a program that reads lines.
-pub(super) fn typed(input: &str) -> Vec<u8> {
-    input.replace("\r\n", "\r").replace('\n', "\r").into_bytes()
+/// What opens and closes a paste for a program that asked to be told of them.
+const PASTE_START: &str = "\x1b[200~";
+const PASTE_END: &str = "\x1b[201~";
+
+/// `input` as a terminal types it, and what is pressed after it. A line break is Enter (`\r`),
+/// which the terminal turns back into `\n` for a program that reads lines. Lines for a program
+/// that `pastes` (it asked to be told of a paste) go as one paste, so an editor takes them as
+/// text and submits nothing midway; the breaks that end the text are the Enter after it.
+pub(super) fn typed(input: &str, pastes: bool) -> (Vec<u8>, Vec<u8>) {
+    let text = input.replace("\r\n", "\r").replace('\n', "\r");
+    let body = text.trim_end_matches('\r');
+    if !pastes || !body.contains('\r') {
+        return (text.into_bytes(), Vec::new());
+    }
+    let enters = text.len() - body.len();
+    // A text that carries the closing mark would end its paste and type the rest.
+    let body = body.replace(PASTE_END, "");
+    (
+        format!("{PASTE_START}{body}{PASTE_END}").into_bytes(),
+        vec![b'\r'; enters],
+    )
 }
 
 #[cfg(test)]

@@ -119,6 +119,10 @@ llx-desk window '{"action": "interact", "tab": "w1", "keys": ["Tab", "Enter"], "
 # A terminal: start a REPL, type into it, read its answer
 llx-desk window '{"action": "open", "kind": "terminal", "command": "python3 -q", "wait_for": ">>>"}'
 llx-desk window '{"action": "interact", "tab": "t1", "input": "sum(range(101))\n", "wait_for": "5050"}'
+# In a shell the wait ends with the command and says its exit code ("The command ended with exit code 0 after 2.1s")
+llx-desk window '{"action": "interact", "tab": "t2", "input": "cargo test\n", "yield_ms": 120000}'
+# Lines go as one paste to a program that takes pastes; a wait on a password prompt ends at once and says so
+llx-desk window '{"action": "interact", "tab": "t1", "input": "def f():\n    return 1\n\n", "wait_for": ">>>"}'
 
 # A form by refs: fields filled, options picked, then the click; a saved secret typed unseen
 llx-desk window '{"action": "interact", "tab": "w2", "fill": {"e4": "demo", "e5": "{{secret:DEMO_PW}}"}, "click": "e6", "wait_for": "Dashboard"}'
@@ -223,6 +227,7 @@ llx-desk has no approval prompt of its own: **the agent's permission to run the 
 - A page sees anything you are signed in to in this WebView. Do not let an agent type real passwords or card numbers it can read, or buy, book or submit personal data, unless you asked for exactly that.
 - Dialogs are never accepted on a page's say-so: `confirm` and `prompt` get Cancel unless the call says `dialog: "accept"`.
 - Passwords the agent should not see: save with `llx-desk secret NAME < FILE` and use `{{secret:NAME}}` in a page's `fill` or a terminal's `input`. The app types the value; answers show the placeholder. Screenshots show what the page draws.
+- A key an answer would carry (a GitHub, cloud, Stripe, Slack, GitLab, npm or model API key, a signed token, a private key) is shown to the agent as `[hidden: GitHub token]`, known by its shape. What you see in the window is not changed.
 - Terminals run with the environment of the caller that opened them, but for the variables its integration names in `LLX_DESK_SCRUB` (the Claude Code plugin names its session's).
 - Screenshots are files in the app's home; the newest 30 are kept.
 

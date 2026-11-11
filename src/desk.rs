@@ -198,6 +198,11 @@ impl Desk {
         desk
     }
 
+    /// The shells of the terminals to come keep what they read at their start in `folder`.
+    pub fn keep_shell_files_in(&self, folder: PathBuf) {
+        crate::terminal::keep_shell_files_in(folder);
+    }
+
     /// What the person sent from the window to `owner`'s tabs since it was last asked, taken.
     pub fn said(&self, owner: &str) -> Option<String> {
         let said = crate::lock(&self.registry).take_said(owner);

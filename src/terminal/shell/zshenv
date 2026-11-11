@@ -1,0 +1,26 @@
+# LLX Desk: a zsh started in a terminal tab reads this file in place of the person's .zshenv.
+# It puts ZDOTDIR back as it was, reads their .zshenv, and has the shell say when a command
+# starts and how it ended, so a wait on the terminal knows. Nothing of the person's is changed.
+if [[ -n ${LLX_DESK_ZDOTDIR+x} ]]; then
+  export ZDOTDIR=$LLX_DESK_ZDOTDIR
+  unset LLX_DESK_ZDOTDIR
+else
+  unset ZDOTDIR
+fi
+if [[ -r ${ZDOTDIR-$HOME}/.zshenv ]]; then
+  builtin source -- ${ZDOTDIR-$HOME}/.zshenv
+fi
+if [[ -o interactive ]]; then
+  _llx_desk_preexec() {
+    _llx_desk_ran=1
+    builtin print -n '\e]133;C\a'
+  }
+  _llx_desk_precmd() {
+    builtin local code=$?
+    [[ -n $_llx_desk_ran ]] && builtin print -n "\e]133;D;$code\a"
+    _llx_desk_ran=
+  }
+  builtin typeset -ga preexec_functions precmd_functions
+  preexec_functions+=(_llx_desk_preexec)
+  precmd_functions=(_llx_desk_precmd $precmd_functions)
+fi

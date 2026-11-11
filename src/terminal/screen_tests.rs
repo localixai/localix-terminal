@@ -159,3 +159,50 @@ fn a_text_that_wraps_at_the_panes_edge_is_found_whole() {
     plain.feed(b"ab   \r\ncd");
     assert_eq!(plain.search_text(), "ab\ncd");
 }
+
+#[test]
+fn a_shells_marks_are_counted_and_never_drawn() {
+    let mut screen = Screen::new(5, 40);
+    // A mark split across two reads, ended either way a string ends.
+    screen.feed(b"$ \x1b]133;C\x07out\r\n\x1b]133;D");
+    assert!(screen.marks().running().is_some());
+    screen.feed(b";3\x1b\\$ ");
+    let (count, ended) = screen.marks().ended();
+    assert_eq!((count, ended.unwrap().code), (1, Some(3)));
+    assert_eq!(screen.text().0, "$ out\n$");
+}
+
+#[test]
+fn what_a_command_left_on_is_put_right_when_the_shell_says_it_ended() {
+    // A program that died with the mouse reported and the cursor hidden: the shell's prompt
+    // would take clicks as typing.
+    let mut screen = Screen::new(5, 40);
+    assert!(
+        screen
+            .feed(b"\x1b]133;C\x07\x1b[?1002h\x1b[?1006h\x1b[?25ltui")
+            .is_empty()
+    );
+    let righted = screen.feed(b"\r\nKilled\r\n\x1b]133;D;137\x07$ ");
+    assert_eq!(righted, RIGHTED);
+    let drawn = String::from_utf8(screen.replay()).unwrap();
+    assert!(
+        !drawn.contains("?1002h") && !drawn.contains("?25l"),
+        "{drawn:?}"
+    );
+    // A command that left nothing on, and output with no command's end in it: nothing is added.
+    assert!(
+        screen
+            .feed(b"\x1b]133;C\x07ok\x1b]133;D;0\x07$ ")
+            .is_empty()
+    );
+    assert!(screen.feed(b"\x1b[?1000hplain").is_empty());
+}
+
+#[test]
+fn a_program_the_shell_started_at_once_keeps_what_it_turned_on() {
+    // A line typed ahead: the next command starts in the same breath the last one ended.
+    let mut screen = Screen::new(5, 40);
+    screen.feed(b"\x1b]133;C\x07");
+    let righted = screen.feed(b"\x1b]133;D;0\x07\x1b]133;C\x07\x1b[?1000h");
+    assert!(righted.is_empty());
+}
