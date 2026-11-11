@@ -58,6 +58,9 @@ pub(super) struct Conn {
     pub(super) binary: AtomicBool,
     pub(super) ready: AtomicBool,
     pub(super) running: AtomicUsize,
+    /// The process at the other end, when the system says: a call from a program of one of the
+    /// window's terminals is known by it.
+    pub(super) peer: Option<libc::pid_t>,
 }
 
 impl Conn {
@@ -70,6 +73,7 @@ impl Conn {
 /// Serve `stream` until it ends.
 pub(super) fn serve(stream: UnixStream, shared: &Arc<Shared>) {
     let Ok(read) = stream.try_clone() else { return };
+    let peer = crate::wire::peer::peer_pid(&stream);
     let Ok(out) = Outbox::spawn(stream, "desk-write") else {
         return;
     };
@@ -79,6 +83,7 @@ pub(super) fn serve(stream: UnixStream, shared: &Arc<Shared>) {
         binary: AtomicBool::new(false),
         ready: AtomicBool::new(false),
         running: AtomicUsize::new(0),
+        peer,
     });
     let mut input = BufReader::new(Greeting {
         stream: read,

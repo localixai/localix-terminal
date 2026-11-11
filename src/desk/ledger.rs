@@ -46,11 +46,21 @@ impl Desk {
     /// ledger.
     pub(super) fn own(&self, key: &str, call: &Call, kind: Kind, facts: Facts<'_>) {
         crate::lock(&self.registry).own(key, call.owner, call.person);
+        // A board's panel opens after its row: it is put beside as it is shown (`reveal`).
+        let anchor = (self.anchor_of(call)).filter(|_| !matches!(kind, Kind::Board));
         // A page's first load may have made its row before the call that opened it got here
         // (`went`): of the same project it is this tab's row; of another, it never was.
         let before = crate::lock(&self.ledger).get(key).copied();
         if let Some((row, project)) = before {
             if project == call.project.id && call.again.is_none_or(|again| again == row) {
+                // In a tab of its own since its page loaded: beside its terminal now.
+                if let Some(anchor) = anchor {
+                    let now = crate::board::now();
+                    let placed = (self.feed)
+                        .write(|write| self.place_beside(write, row, anchor, now))
+                        .unwrap_or_default();
+                    self.bring(key, placed.as_deref());
+                }
                 return;
             }
             crate::lock(&self.ledger).remove(key);
@@ -74,17 +84,23 @@ impl Desk {
             command: facts.command,
         };
         let window = call.window.or_else(|| self.in_use());
-        self.keep(key, &opened, (call.again, window));
+        let placed = self.keep(key, &opened, (call.again, window), anchor);
+        if anchor.is_some() {
+            self.bring(key, placed.as_deref());
+        }
     }
 
     /// A row for pane `key`, `opened`: a new one, or the row `again` names (a pane the run
-    /// before left open). Placed in a tab in the same change: a tab of its own when it is new.
+    /// before left open). Placed in a tab in the same change: beside terminal `anchor` when it
+    /// was opened from it and the place is free (the panes that tab had, then), else a tab of
+    /// its own.
     fn keep(
         &self,
         key: &str,
         opened: &Opened<'_>,
         (again, window): (Option<Row>, Option<crate::layout::WindowId>),
-    ) {
+        anchor: Option<Row>,
+    ) -> Option<Vec<Row>> {
         if again.is_none() {
             self.begin(opened.project);
         }
@@ -97,11 +113,17 @@ impl Desk {
                 }
                 None => ledger::open(write.tx(), opened, now)?,
             };
-            Self::place_pane(write, row, (opened.project, window), now)?;
-            Ok(row)
+            let beside = match anchor {
+                Some(anchor) => self.place_beside(write, row, anchor, now)?,
+                None => None,
+            };
+            if beside.is_none() {
+                Self::place_pane(write, row, (opened.project, window), now)?;
+            }
+            Ok((row, beside))
         });
         match kept {
-            Ok(row) => {
+            Ok((row, beside)) => {
                 crate::lock(&self.ledger).insert(key.to_string(), (row, opened.project));
                 // The pane has its key now: the window draws it in its tab, and its project's
                 // past lists it by that key.
@@ -112,8 +134,12 @@ impl Desk {
                 self.feed.record(&pane, Op::Upserted);
                 let project = opened.project;
                 self.feed.record(&Entity::Ledger { project }, Op::Upserted);
+                beside
             }
-            Err(why) => log::warn!("tab {key} is not in the ledger: {why}"),
+            Err(why) => {
+                log::warn!("tab {key} is not in the ledger: {why}");
+                None
+            }
         }
     }
 
@@ -151,6 +177,7 @@ impl Desk {
         let title = (crate::lock(&self.titled).remove(key)).and_then(|titled| titled.pending);
         let session = self.session_of(key);
         let (row, project) = crate::lock(&self.ledger).remove(key)?;
+        crate::lock(&self.links).forget(row);
         Some(Closing {
             row,
             project,
@@ -206,7 +233,7 @@ impl Desk {
                     command: None,
                 };
                 // A page the window opened itself (a popup) is of the window the person works in.
-                self.keep(key, &opened, (None, self.in_use()));
+                self.keep(key, &opened, (None, self.in_use()), None);
                 let kept = crate::lock(&self.ledger).get(key).copied();
                 match kept {
                     Some(known) => known,

@@ -1,5 +1,5 @@
 //! The person's settings for the window: its appearance (theme, how much of the desktop shows
-//! through, the fonts) and the shortcuts they changed. Kept in `settings.json` under the
+//! through, the fonts), where what an agent opens lands, and the shortcuts they changed. Kept in `settings.json` under the
 //! config directory, read once, written whole on each change; a file that does not read is
 //! the defaults (and left as it is until the person changes something, when it is kept beside as
 //! `settings.json.bad`).
@@ -31,6 +31,17 @@ pub(super) enum Transparency {
     #[default]
     Standard,
     High,
+}
+
+/// Where a page, terminal or board an agent opens from a terminal of the window lands.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(super) enum Opens {
+    /// On that terminal's right, in its tab.
+    #[default]
+    Beside,
+    /// In a tab of its own.
+    Tab,
 }
 
 /// The fonts offered, each a CSS stack that falls back to the system's.
@@ -81,6 +92,7 @@ pub(super) struct Settings {
     pub ui_font: String,
     pub code_font: String,
     pub font_size: u8,
+    pub agent_opens: Opens,
     /// The shortcuts the person changed, by id: a chord, or none (taken off).
     pub shortcuts: BTreeMap<String, Option<String>>,
 }
@@ -93,6 +105,7 @@ impl Default for Settings {
             ui_font: "system".into(),
             code_font: "system".into(),
             font_size: 13,
+            agent_opens: Opens::Beside,
             shortcuts: BTreeMap::new(),
         }
     }
@@ -130,6 +143,10 @@ impl Settings {
         if let Some(level) = change.get("transparency") {
             self.transparency =
                 serde_json::from_value(level.clone()).map_err(|why| why.to_string())?;
+        }
+        if let Some(opens) = change.get("agent_opens") {
+            self.agent_opens =
+                serde_json::from_value(opens.clone()).map_err(|why| why.to_string())?;
         }
         if let Some(font) = text("ui_font") {
             if !UI_FONTS.iter().any(|(id, _, _)| *id == font) {
@@ -226,6 +243,7 @@ impl Settings {
                 "ui_font": default.ui_font,
                 "code_font": default.code_font,
                 "size": default.font_size,
+                "agent_opens": default.agent_opens,
             },
             "ui_fonts": fonts(&UI_FONTS),
             "code_fonts": fonts(&CODE_FONTS),
@@ -286,6 +304,11 @@ fn kept() -> &'static Mutex<Settings> {
 /// The settings now.
 pub(super) fn now() -> Settings {
     crate::lock(kept()).clone()
+}
+
+/// Whether what an agent opens from a terminal lands beside it, as the person chose.
+pub(super) fn opens_beside() -> bool {
+    crate::lock(kept()).agent_opens == Opens::Beside
 }
 
 /// `change` made and kept; the settings after it.

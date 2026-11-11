@@ -132,6 +132,9 @@ impl Deck {
         shared: &Arc<Shared>,
         proxy: &EventLoopProxy<Cmd>,
     ) -> Result<(), String> {
+        // A first page that opens beside the terminal shown leaves the window to it.
+        let aside = crate::lock(&shared.scope).opens_aside()
+            && matches!(self.shown, Shown::Term(id) if self.term(id).is_some());
         let tabs = Tabs::open(&self.frame.native, window, shared, proxy)?;
         if self.strip.is_none() {
             // A headless window shows with its first page.
@@ -141,7 +144,9 @@ impl Deck {
             tabs::see_through_until_drawn(tabs.active(), 1, shared);
         }
         self.web = Some(tabs);
-        self.shown = Shown::Web;
+        if !aside {
+            self.shown = Shown::Web;
+        }
         Ok(())
     }
 

@@ -99,7 +99,7 @@ impl Tabs {
         // The first page is of the project the call opening it named, as every later one.
         let opening = {
             let mut scope = crate::lock(&shared.scope);
-            let project = scope.take_opening();
+            let project = scope.take_opening().map(|(project, _)| project);
             if let Some(project) = &project {
                 scope.touched(project);
             }

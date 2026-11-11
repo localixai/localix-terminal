@@ -3,9 +3,18 @@
 
 use super::On;
 use super::clicks::act;
+use crate::browser::deck::Deck;
 use crate::browser::split;
 use crate::browser::strip::{Click, Key};
 use crate::browser::{Halves, Heard};
+
+/// What the window tells the layout of its split.
+enum Tell {
+    /// It is split so now.
+    Split(split::Kept),
+    /// The split the layout kept, of these two, is whole now.
+    Whole(split::Kept),
+}
 
 impl On<'_> {
     /// Split the window, the tab shown beside the next of its project's (else the one before),
@@ -128,21 +137,41 @@ impl On<'_> {
         }
         let arranged = self.shared.arranged_of(&group);
         let kept = arranged.as_ref().and_then(split::kept_of);
-        let now = (open.pair().and(open.split.beside)).map(|beside| split::Kept {
-            shown: id.clone(),
-            beside: beside.key.name(),
-            right: beside.right,
-        });
+        let split_now = |open: &Deck| {
+            (open.pair().and(open.split.beside)).map(|beside| split::Kept {
+                shown: id.clone(),
+                beside: beside.key.name(),
+                right: beside.right,
+            })
+        };
+        // The layout keeps another split than the one this window drew from it: the app put a
+        // pane beside the tab shown, or took one away, and the window follows.
+        let drawn = (open.split.drawn.take()).filter(|(of, _)| *of == group);
+        if let Some((_, drawn)) = drawn {
+            let now = split_now(open);
+            match split::followed(now.as_ref(), drawn.as_ref(), kept.as_ref(), &id) {
+                split::Follow::Stay => {}
+                split::Follow::Beside(beside) => {
+                    open.split.beside = Some(beside);
+                    open.split.grabbed = None;
+                }
+                split::Follow::Whole => open.split_with(None),
+            }
+        }
+        open.split.drawn = Some((group.clone(), kept.clone()));
+        let now = split_now(open);
         let told = open.split.told.clone();
         let tell = match (now, kept) {
-            (Some(now), kept) if kept.as_ref() != Some(&now) && !same(&now, kept.as_ref()) => {
-                (told != split::Told::of(Some(&now))).then_some(Some(now))
+            (Some(now), kept)
+                if kept.as_ref() != Some(&now) && !split::same(&now, kept.as_ref()) =>
+            {
+                (told != split::Told::of(Some(&now))).then_some(Tell::Split(now))
             }
             (Some(_), _) | (None, None) => None,
             (None, Some(kept)) => {
                 let there = |name: &str| group_of(name) == Some(group.as_str());
                 if !there(&kept.shown) || !there(&kept.beside) {
-                    (told != split::Told::Whole).then_some(None)
+                    (told != split::Told::Whole).then_some(Tell::Whole(kept))
                 } else {
                     // Undone by the person and not yet told back: it stays undone.
                     if told != split::Told::Whole
@@ -160,8 +189,11 @@ impl On<'_> {
             .and_then(|arranged| split::share_of(arranged, pair?));
         open.split.follow_share(pair, saved);
         if let Some(tell) = tell {
-            open.split.told = split::Told::of(tell.as_ref());
-            self.tell_split(&group, tell.as_ref());
+            open.split.told = match &tell {
+                Tell::Split(now) => split::Told::of(Some(now)),
+                Tell::Whole(_) => split::Told::Whole,
+            };
+            self.tell_split(&group, &tell);
         }
     }
 
@@ -185,7 +217,7 @@ impl On<'_> {
         self.shared.heard(&key.name(), Heard::SplitResized(portion));
     }
 
-    /// The person made the window whole: the layout is told.
+    /// The person made the window whole: the layout is told which split it was.
     fn unsplit(&mut self) {
         let Some(open) = self.deck.as_mut() else {
             return;
@@ -193,20 +225,26 @@ impl On<'_> {
         open.split_with(None);
         let group = open.shown_project(self.shared);
         let kept = (self.shared.arranged_of(&group).as_ref()).and_then(split::kept_of);
-        if kept.is_some() {
+        if let Some(kept) = kept {
             open.split.told = split::Told::Whole;
-            self.tell_split(&group, None);
+            self.tell_split(&group, &Tell::Whole(kept));
         }
     }
 
-    /// The layout told the split of project `group` (`kept`), or that it has none.
-    fn tell_split(&self, group: &str, kept: Option<&split::Kept>) {
-        let halves = kept.map(|kept| Halves {
+    /// The layout told of project `group`'s split: the one the window has now, or the one it
+    /// kept that is whole now.
+    fn tell_split(&self, group: &str, tell: &Tell) {
+        let (Tell::Split(kept) | Tell::Whole(kept)) = tell;
+        let halves = Halves {
             shown: &kept.shown,
             beside: &kept.beside,
             right: kept.right,
-        });
-        self.shared.heard(group, Heard::Split(halves));
+        };
+        let said = match tell {
+            Tell::Split(_) => Heard::Split(halves),
+            Tell::Whole(_) => Heard::Whole(halves),
+        };
+        self.shared.heard(group, said);
     }
 
     /// The layout of the window's projects, as the app keeps it: the order of their tabs and
@@ -251,10 +289,4 @@ impl On<'_> {
         };
         let _ = act(self.deck, Click::Show(key), self.shared);
     }
-}
-
-/// Whether split `now` is split `kept` seen from its other half: the same two tabs on the same
-/// sides, the other one in use.
-fn same(now: &split::Kept, kept: Option<&split::Kept>) -> bool {
-    kept.is_some_and(|kept| split::sides(kept) == split::sides(now))
 }

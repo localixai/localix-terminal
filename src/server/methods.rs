@@ -192,6 +192,7 @@ pub(super) fn window_call(shared: &Shared, conn: &Conn, params: &Value) -> Outco
                 )
             })?;
         let vars = environment(params);
+        let from = conn.peer.and_then(|pid| shared.desk.pane_of(pid));
         let call = Call {
             owner: &who.owner,
             project: &who.project,
@@ -202,6 +203,7 @@ pub(super) fn window_call(shared: &Shared, conn: &Conn, params: &Value) -> Outco
             again: None,
             person: false,
             window: None,
+            from: from.as_deref(),
         };
         let mut answered = shared
             .desk
@@ -253,6 +255,7 @@ fn presented(shared: &Shared, params: &Value) -> Result<Value, RpcError> {
         again: None,
         person: false,
         window: None,
+        from: None,
     };
     let go = params.get("go").and_then(Value::as_bool).unwrap_or(false);
     (shared.desk.present(&call, go))

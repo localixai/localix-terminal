@@ -4,6 +4,15 @@
 
 ### Added
 
+- What an agent opens from a terminal of the window lands beside that terminal, in its tab: the
+  agent on the left, its page, terminal or board on the right, and the keys stay in the terminal.
+  The next thing it opens takes that place, and the one before becomes a tab right after; `show`
+  of a tab brings it there too, so the window is not taken from the terminal. Each terminal has
+  its own place. A split you make whole (⇧⌘\) stays whole until you split that terminal again,
+  a tab you arranged yourself is never replaced, and an agent with a name on the board (a
+  worker) opens tabs of its own. The call is known by the terminal its program descends from,
+  with any agent and no setup. **Settings → Agents → What an agent opens** turns it to plain
+  tabs.
 - Claude Code in a terminal of LLX Desk opens the pages the person asks for ("open google") as
   tabs of the window, not in another browser it has the tools of, unless the person names it.
   It is told so by a row at the start of the session, which holds where an organization's

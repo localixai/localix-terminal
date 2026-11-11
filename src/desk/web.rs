@@ -50,7 +50,8 @@ impl Desk {
             // that, not for the page's load, so tabs opened together load together.
             let _change = crate::lock(&self.tabs_change);
             if let Some(browser) = &self.browser {
-                browser.opening(&crate::projects::key(call.project.id));
+                let aside = self.lands_beside(call).is_some();
+                browser.opening(&crate::projects::key(call.project.id), aside);
             }
             page.start(&url).map_err(|e| e.to_string())?
         };

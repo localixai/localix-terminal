@@ -2,7 +2,6 @@
 
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, OnceLock, Weak};
-use std::time::Duration;
 
 use serde_json::Value;
 
@@ -32,18 +31,20 @@ impl Desk {
             return Err(format!("{} is not a directory", dir.display()));
         }
         let group = crate::projects::key(call.project.id);
+        // Opened from a terminal, its tab leaves the window to that one and lands beside it.
+        let aside = self.lands_beside(call).is_some();
         let (id, session) = self.start_session(
             text(args, "command").unwrap_or(""),
             &dir,
             call.vars,
-            &group,
+            (&group, aside),
             "",
         )?;
         let wanted = text(args, "wait_for");
         let most = waits(args, DEFAULT_WAIT);
         let until = session.wait(wanted, 0, most);
         let output = Output {
-            report: describe(until, wanted, most),
+            report: until.said(wanted, most),
             state: Some(session.snapshot()),
             shot: None,
         };
@@ -54,13 +55,14 @@ impl Desk {
         Ok((Some(id), output))
     }
 
-    /// A session in a tab of the window (where there is one), its id and handle.
+    /// A session in a tab of the window (where there is one), its id and handle. The tab is of
+    /// project `group`; `aside`, it opens beside the tab in sight and does not take the window.
     pub(super) fn start_session(
         &self,
         command: &str,
         dir: &std::path::Path,
         vars: Option<&[(String, String)]>,
-        group: &str,
+        (group, aside): (&str, bool),
         before: &str,
     ) -> Result<(u32, Arc<Session>), String> {
         let _starting = crate::lock(&self.starting);
@@ -77,7 +79,7 @@ impl Desk {
         }
         let id = self.next_terminal.fetch_add(1, Ordering::SeqCst);
         let typed: Arc<OnceLock<Weak<Session>>> = Arc::default();
-        let painter = self.painter(id, command, group, &typed);
+        let painter = self.painter(id, command, (group, aside), &typed);
         let session = Session::start_after(command, dir, vars, painter, before)
             .map_err(|e| format!("could not start it: {e}"))?;
         let session = Arc::new(session);
@@ -141,7 +143,7 @@ impl Desk {
         &self,
         id: u32,
         command: &str,
-        group: &str,
+        (group, aside): (&str, bool),
         typed: &Arc<OnceLock<Weak<Session>>>,
     ) -> Option<Painter> {
         let browser = self.browser.as_ref()?;
@@ -152,6 +154,9 @@ impl Desk {
         };
         let title = format!("desk · session {id} · {shown}");
         browser.group(&format!("t{id}"), group);
+        if aside {
+            browser.aside(&format!("t{id}"));
+        }
         let panel = browser.panel(id, &title, terminal::page(&title));
         let typed_to = Arc::clone(typed);
         let typed = Arc::clone(typed);
@@ -255,7 +260,7 @@ impl Desk {
         let most = waits(args, DEFAULT_WAIT);
         let until = session.wait(wanted, before, most);
         Ok(Output {
-            report: describe(until, wanted, most),
+            report: until.said(wanted, most),
             state: Some(session.snapshot()),
             shot: None,
         })
@@ -310,7 +315,7 @@ impl Desk {
         title: &str,
         before: &str,
     ) -> Result<(), String> {
-        let (id, _) = self.start_session(command, call.cwd, call.vars, group, before)?;
+        let (id, _) = self.start_session(command, call.cwd, call.vars, (group, false), before)?;
         let facts = Facts {
             title,
             cwd: Some(call.cwd),
@@ -332,19 +337,5 @@ pub(super) fn term_dir(call: &Call, args: &Value) -> std::path::PathBuf {
     match text(args, "workdir") {
         Some(dir) => call.cwd.join(dir),
         None => call.cwd.to_path_buf(),
-    }
-}
-
-/// How a wait ended, in words.
-fn describe(until: Until, wanted: Option<&str>, most: Duration) -> String {
-    match (until, wanted) {
-        (Until::Matched, Some(wanted)) => format!("\"{wanted}\" showed."),
-        (Until::Matched | Until::Settled, _) => "The output settled.".into(),
-        (Until::Deadline, Some(wanted)) => format!(
-            "\"{wanted}\" did not show within {}s: the program may still be working; wait again or read the screen.",
-            most.as_secs()
-        ),
-        (Until::Deadline, None) => "Still changing: wait again or read the screen.".into(),
-        (Until::Exited, _) => "The program ended.".into(),
     }
 }

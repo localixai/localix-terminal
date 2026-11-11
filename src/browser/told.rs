@@ -32,9 +32,11 @@ pub enum Heard<'a> {
     /// A page showed an address, or was titled: the ledger keeps it (popups too, which the
     /// window opened itself).
     Went(Went<'a>),
-    /// The window split in the project of this key (its halves' tabs), or made whole there
-    /// (none): the layout keeps it.
-    Split(Option<Halves<'a>>),
+    /// The window split in the project of this key (its halves' tabs): the layout keeps it.
+    Split(Halves<'a>),
+    /// The split of these two tabs made whole, or one of them gone: the layout keeps their tab
+    /// whole, and every other split as it is.
+    Whole(Halves<'a>),
     /// They finished resizing this pane's split: the left half's share, in ten-thousandths.
     SplitResized(u16),
     /// They dragged the tab of this key's pane before the tab of pane `before` (none: to the

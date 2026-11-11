@@ -8,6 +8,7 @@
 
 mod actions;
 mod args;
+mod beside;
 mod board;
 mod board_file;
 mod board_ops;
@@ -102,6 +103,8 @@ pub struct Desk {
     writes: OnceLock<writes::Writes>,
     /// Each open tab's row in the ledger, and its project, by key.
     ledger: Mutex<HashMap<String, (crate::ledger::Row, ProjectId)>>,
+    /// Which pane was opened from which terminal of the window (beside.rs).
+    links: Mutex<beside::Links>,
     /// Each terminal's title writes, so a title said often is written once in a while.
     titled: Mutex<HashMap<String, ledger::Titled>>,
     /// The app is ending: its tabs go with it, yet stay open in the ledger, a split kept.
@@ -157,6 +160,7 @@ impl Desk {
                 me: Weak::clone(weak),
                 writes: OnceLock::new(),
                 ledger: Mutex::default(),
+                links: Mutex::default(),
                 titled: Mutex::default(),
                 ending: AtomicBool::new(false),
                 begun: Mutex::default(),
@@ -192,32 +196,6 @@ impl Desk {
             log::warn!("desk: the boards will not be written out to their projects: {error}");
         }
         desk
-    }
-
-    /// The person opened the app (app.rs): the window comes to them, back if they put it away;
-    /// with no tab in it yet, what the project had open, else the window's start of a new tab.
-    pub fn present(&self, call: &Call, go: bool) -> Result<String, String> {
-        let browser = (self.browser.as_ref()).ok_or("there is no window here: no display")?;
-        crate::lock(&self.registry).known(call);
-        let group = crate::projects::key(call.project.id);
-        let listed = browser.listing().unwrap_or_default();
-        // Going to the project: the window goes first, so what opens for it opens in sight.
-        let empty = match go {
-            true => {
-                browser.go(&group);
-                !listed.iter().any(|tab| tab.group == group)
-            }
-            false => listed.is_empty(),
-        };
-        if empty {
-            self.reopen_project(call, &group)?;
-        }
-        browser.present();
-        Ok(if empty {
-            "The window opened, with what the project had open.".into()
-        } else {
-            "The window opened.".into()
-        })
     }
 
     /// What the person sent from the window to `owner`'s tabs since it was last asked, taken.

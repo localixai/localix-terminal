@@ -32,6 +32,9 @@ pub struct Call<'a> {
     pub person: bool,
     /// The window it opens in (its row in the layout); none: the window the person works in.
     pub window: Option<crate::layout::WindowId>,
+    /// The terminal of the window its program runs in (`t3`), when it runs in one: what it
+    /// opens lands beside that terminal (beside.rs).
+    pub from: Option<&'a str>,
 }
 
 /// Why a call did not come to what it asked.

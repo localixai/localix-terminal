@@ -209,3 +209,32 @@ The `window` tool keeps its calls. A pane's key names it in every window; `list`
 for each pane the agent owns: its key, its kind in parentheses, `[shown]` when it is shown, then its
 title and detail (`w1 (browser) [shown]: Title detail`); it says nothing of windows or tabs. `show`
 of a pane shows its tab in its window and focuses it.
+
+### Beside the terminal
+
+A call that comes from a terminal of the window is known by it: the server reads the process at
+the other end of the connection (`wire/peer.rs`), and the desk finds the terminal whose program
+that process descends from (`terminal/lineage.rs`). The agent sets nothing up and the call
+carries nothing new; a call from another terminal app has no terminal here and opens tabs.
+
+What the project's own agent opens from a terminal lands in that terminal's tab, on its right,
+in the same change as the pane's ledger row (`desk/beside.rs`):
+
+| the terminal's tab                         | where the new pane lands                         |
+| ------------------------------------------ | ------------------------------------------------ |
+| the terminal alone                         | on its right; the terminal keeps the keys        |
+| the terminal and a pane it opened before   | in that pane's place; that pane a tab right after |
+| arranged by the person (another pane)      | a tab of its own                                 |
+| made whole by the person (⇧⌘\)             | a tab of its own, until they split it again      |
+
+`show` of a hidden pane follows the same table, so the window is not taken from the terminal.
+The links are kept while both panes are open: which pane was opened from which terminal, and
+the terminals the person made whole. A pane closing forgets its links, and a terminal closing
+leaves what was beside it a tab. An agent with a name on the board (`--as`, a worker) opens
+tabs of its own, as does the person and what the app opens again: several workers of one
+terminal would take the one place in turn. Settings → Agents → What an agent opens turns the
+whole of it to plain tabs.
+
+The window follows: a tab opened aside does not take the window (it is drawn beside the tab in
+sight), and a window still laid out as the layout kept it takes the layout's next split, where
+one the person changed since is told to the layout instead.

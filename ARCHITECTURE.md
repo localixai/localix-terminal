@@ -76,6 +76,10 @@ normal tests in CI.
   split is one tab of two panes). `desk/layout.rs` is its one owner: a pane placed in a tab of its
   own as it opens (in the same transaction as its ledger row), taken out as it closes, put beside
   another, a project or a tab shown; each change with its notices (`Window`, `Workspace`, `Tab`).
+  `desk/beside.rs` is the place beside a terminal: what an agent opens from a terminal of the
+  window lands on that terminal's right, the call known by the terminal its program descends
+  from (`terminal/lineage.rs`, the connection's process from `wire/peer.rs`), and the links
+  between a pane and its terminal kept while both are open (`docs/windows.md`, Agents).
   It outlives the app, so a project opens again with the same tabs, places and splits.
 - **`browser/`** is the window: a `tao` event loop on the main thread, a `wry` WebView per page, a
   probe script injected in each page for observing and acting (`probe/`: its start, which keeps the

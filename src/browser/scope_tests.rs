@@ -36,7 +36,21 @@ fn going_to_a_project_shows_its_last_tab_and_clears_its_mark() {
 #[test]
 fn the_project_of_the_tab_opening_is_taken_once() {
     let mut scope = Scope::default();
-    scope.opening("2");
-    assert_eq!(scope.take_opening().as_deref(), Some("2"));
+    scope.opening("2", false);
+    assert_eq!(scope.take_opening(), Some(("2".to_string(), false)));
     assert_eq!(scope.take_opening(), None);
+}
+
+#[test]
+fn a_tab_that_opens_beside_another_is_said_so_once() {
+    let mut scope = Scope::default();
+    // A page: said with its project, as it has no key yet.
+    scope.opening("2", true);
+    assert!(scope.opens_aside());
+    assert_eq!(scope.take_opening(), Some(("2".to_string(), true)));
+    // A terminal: by its key.
+    scope.aside("t4");
+    assert!(!scope.take_aside("t5"));
+    assert!(scope.take_aside("t4"));
+    assert!(!scope.take_aside("t4"));
 }

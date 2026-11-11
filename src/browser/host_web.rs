@@ -209,13 +209,19 @@ fn new_tab(
     let project = match opener {
         Some(opener) => crate::lock(&shared.groups)
             .get(&Key::Web(opener).name())
-            .cloned(),
+            .cloned()
+            .map(|project| (project, false)),
         None => crate::lock(&shared.scope).take_opening(),
+    };
+    // One that opens beside a tab in sight leaves the window to that tab: the layout splits it.
+    let (project, aside) = match project {
+        Some((project, aside)) => (Some(project), aside),
+        None => (None, false),
     };
     let shown = (project.as_deref()).is_none_or(|project| {
         let mut scope = crate::lock(&shared.scope);
         scope.touched(project);
-        scope.in_sight(project)
+        scope.in_sight(project) && !aside
     });
     let added = match crate::browser::guard::loadable(url) {
         Some(url) => tabs.add(&open.frame.native, &url, project, shown, shared, proxy),

@@ -1,5 +1,6 @@
 //! The app's own life as the person lives it: they quit it (asked first while programs run),
-//! or bring it forward with nothing to show (their shell, in their home). The window only says
+//! open it from a folder (the window comes to them, with what the project had open), or bring
+//! it forward with nothing to show (their shell, in their home). The window only says
 //! what they did (`Heard::Quit`, `Heard::Reopened`); what that comes to is decided here, and
 //! the end itself is the host's (`Desk::on_quit`: the app stops).
 
@@ -73,9 +74,36 @@ impl Desk {
                 again: None,
                 person: true,
                 window: None,
+                from: None,
             },
             false,
         )
+    }
+
+    /// The person opened the app (app.rs): the window comes to them, back if they put it away;
+    /// with no tab in it yet, what the project had open, else the window's start of a new tab.
+    pub fn present(&self, call: &Call, go: bool) -> Result<String, String> {
+        let browser = (self.browser.as_ref()).ok_or("there is no window here: no display")?;
+        crate::lock(&self.registry).known(call);
+        let group = crate::projects::key(call.project.id);
+        let listed = browser.listing().unwrap_or_default();
+        // Going to the project: the window goes first, so what opens for it opens in sight.
+        let empty = match go {
+            true => {
+                browser.go(&group);
+                !listed.iter().any(|tab| tab.group == group)
+            }
+            false => listed.is_empty(),
+        };
+        if empty {
+            self.reopen_project(call, &group)?;
+        }
+        browser.present();
+        Ok(if empty {
+            "The window opened, with what the project had open.".into()
+        } else {
+            "The window opened.".into()
+        })
     }
 
     /// How many terminals still run their program.

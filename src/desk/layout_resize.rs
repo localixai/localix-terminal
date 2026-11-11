@@ -4,7 +4,6 @@
 use crate::feed::Entity;
 use crate::layout::{self, Tree};
 use crate::ledger::Row;
-use crate::projects::ProjectId;
 
 use super::Desk;
 use super::layout::told;
@@ -18,86 +17,95 @@ pub(super) enum SplitTold {
         beside: Row,
         right: bool,
     },
-    /// Each split tab of the project made whole.
-    Whole(ProjectId),
+    /// The tab these two panes shared made whole (one of them may be gone by now).
+    Whole([Option<Row>; 2]),
 }
 
 impl Desk {
-    /// The person split the window in project `group` (`halves`, by its panes' keys), or made it
-    /// whole there: the layout's tab of the pane in use made of the two, or each split tab of
-    /// the project made whole, the pane in focus staying.
+    /// The person split the window (`halves`, by its panes' keys): the layout's tab of the pane
+    /// in use made of the two.
     ///
     /// In one go, for tests: the window's events read the split at once (`split_of`) and keep it
     /// on the writer thread (heard.rs).
     #[cfg(test)]
-    pub(super) fn split_told(&self, group: &str, halves: Option<crate::browser::Halves<'_>>) {
-        if let Some(split) = self.split_of(group, halves) {
-            self.split_kept(group, split);
+    pub(super) fn split_told(&self, halves: crate::browser::Halves<'_>) {
+        if let Some(split) = self.split_of(halves, false) {
+            self.split_kept(split);
         }
     }
 
-    /// What the split told comes to, read from memory as the window tells it; none when there
-    /// is nothing to keep.
+    /// The person made the split of `halves` whole, as `split_told` tells a split.
+    #[cfg(test)]
+    pub(super) fn whole_told(&self, halves: crate::browser::Halves<'_>) {
+        if let Some(split) = self.split_of(halves, true) {
+            self.split_kept(split);
+        }
+    }
+
+    /// What the split told comes to (`whole`: it is no more), read from memory as the window
+    /// tells it; none when there is nothing to keep.
     pub(super) fn split_of(
         &self,
-        group: &str,
-        halves: Option<crate::browser::Halves<'_>>,
+        halves: crate::browser::Halves<'_>,
+        whole: bool,
     ) -> Option<SplitTold> {
         // The app ending, its panes go: the layout stays as it is for when they open again.
         if self.ending.load(std::sync::atomic::Ordering::SeqCst) {
             return None;
         }
         let row = |key: &str| crate::lock(&self.ledger).get(key).map(|(row, _)| *row);
-        match halves {
-            Some(halves) => Some(SplitTold::Halves {
-                shown: row(halves.shown)?,
-                beside: row(halves.beside)?,
-                right: halves.right,
-            }),
-            None => crate::projects::of_key(group).map(SplitTold::Whole),
+        if whole {
+            let rows = [row(halves.shown), row(halves.beside)];
+            return rows
+                .iter()
+                .any(Option::is_some)
+                .then_some(SplitTold::Whole(rows));
         }
+        Some(SplitTold::Halves {
+            shown: row(halves.shown)?,
+            beside: row(halves.beside)?,
+            right: halves.right,
+        })
     }
 
-    /// The split of project `group` kept in the layout.
-    pub(super) fn split_kept(&self, group: &str, split: SplitTold) {
+    /// The split told kept in the layout, and what it says of the place beside a terminal
+    /// (beside.rs).
+    pub(super) fn split_kept(&self, split: SplitTold) {
         let done = match split {
             SplitTold::Halves {
                 shown,
                 beside,
                 right,
-            } => self.split_panes(shown, beside, right),
-            SplitTold::Whole(project) => self.unsplit_project(project),
+            } => (self.split_panes(shown, beside, right)).map(|()| self.split_again(shown, beside)),
+            SplitTold::Whole(rows) => (self.unsplit_of(rows)).map(|panes| self.made_whole(&panes)),
         };
         if let Err(why) = done {
-            log::warn!("the split of {group} is not in the layout: {why}");
+            log::warn!("the split is not in the layout: {why}");
         }
     }
 
-    /// Every split tab of project `project` in the window in use made whole, its pane in focus
-    /// staying.
-    fn unsplit_project(&self, project: ProjectId) -> Result<(), String> {
+    /// The tab the panes `rows` shared made whole, its pane in focus staying and the other a
+    /// tab right after: the panes it had. Each other split tab is left as it is.
+    fn unsplit_of(&self, rows: [Option<Row>; 2]) -> Result<Vec<Row>, String> {
         let now = crate::board::now();
-        let wanted = self.in_use();
         self.feed.write(|write| {
-            let open = layout::windows(write.tx())?;
-            let window = (wanted.filter(|wanted| open.iter().any(|window| window.id == *wanted)))
-                .or_else(|| open.first().map(|window| window.id));
-            let Some(window) = window else {
-                return Ok(());
-            };
-            let space = (layout::workspaces(write.tx(), window)?.into_iter())
-                .find(|space| space.project == project);
-            let Some(space) = space else {
-                return Ok(());
-            };
-            for tab in layout::tabs(write.tx(), space.id)? {
+            for row in rows.into_iter().flatten() {
+                let Some(id) = layout::tab_of(write.tx(), row)? else {
+                    continue;
+                };
+                let Some(tab) = layout::tab(write.tx(), id)? else {
+                    continue;
+                };
                 let panes = tab.tree.panes();
-                if panes.len() > 1 {
+                // Only the tab the two shared: one of them moved to another split is not it.
+                let shared = rows.iter().flatten().all(|row| panes.contains(row));
+                if panes.len() > 1 && shared {
                     let kept = tab.focused.unwrap_or(panes[0]);
-                    Self::unsplit_tab(write, tab.id, kept, now)?;
+                    Self::unsplit_tab(write, id, kept, now)?;
+                    return Ok(panes);
                 }
             }
-            Ok(())
+            Ok(vec![])
         })
     }
 

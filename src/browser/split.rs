@@ -156,6 +156,50 @@ pub(super) fn again(kept: &Kept, shown: &str) -> Option<Beside> {
     })
 }
 
+/// Whether split `now` is split `kept` seen from its other half: the same two tabs on the same
+/// sides, the other one in use.
+pub(super) fn same(now: &Kept, kept: Option<&Kept>) -> bool {
+    kept.is_some_and(|kept| sides(kept) == sides(now))
+}
+
+/// What a split window does as the layout tells its project's split.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Follow {
+    /// Nothing: the layout keeps what the window shows, or the person changed the window since
+    /// and the layout is told of that instead.
+    Stay,
+    /// This tab is beside the one shown now.
+    Beside(Beside),
+    /// The window is whole now.
+    Whole,
+}
+
+/// What the window, split as `now`, does now that the layout keeps `kept`, having kept `drawn`
+/// when the window was last made one with it; `shown` is the tab in use. A window still as the
+/// layout kept it follows what the layout keeps now: the app put another pane there, or took
+/// one away. One the person changed since is theirs.
+pub(super) fn followed(
+    now: Option<&Kept>,
+    drawn: Option<&Kept>,
+    kept: Option<&Kept>,
+    shown: &str,
+) -> Follow {
+    let Some(now) = now else {
+        return Follow::Stay;
+    };
+    let as_drawn = drawn == Some(now) || same(now, drawn);
+    let as_kept = kept == Some(now) || same(now, kept);
+    if !as_drawn || as_kept {
+        return Follow::Stay;
+    }
+    match kept.and_then(|kept| again(kept, shown)) {
+        // The same two tabs the other way round is the person's swap, not the layout's.
+        Some(beside) if beside.key.name() == now.beside => Follow::Stay,
+        Some(beside) => Follow::Beside(beside),
+        None => Follow::Whole,
+    }
+}
+
 /// The space between the halves, in points: the window's glass, as a line.
 pub(super) const GAP: f64 = 1.0;
 /// The least either half keeps, in points, however the line is dragged or the window sized.
@@ -178,6 +222,9 @@ pub(super) struct Split {
     /// What the window last told the layout of its project's split, until the layout tells it
     /// back: told twice is told once, and a split the person undid does not come back meanwhile.
     pub told: Told,
+    /// The split the layout kept for the project shown (its key) when the window was last
+    /// made one with it: what the layout changes since is the app's doing, and followed.
+    pub drawn: Option<(String, Option<Kept>)>,
 }
 
 impl Default for Split {
@@ -188,6 +235,7 @@ impl Default for Split {
             grabbed: None,
             sizing: None,
             told: Told::Nothing,
+            drawn: None,
         }
     }
 }

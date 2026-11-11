@@ -85,6 +85,12 @@ impl Browser {
             .collect()
     }
 
+    /// Whether what an agent opens from a terminal lands beside it: the person's choice in
+    /// Settings.
+    pub fn opens_beside(&self) -> bool {
+        super::super::settings::opens_beside()
+    }
+
     /// The window's tabs, in the strip's order; `None` while it is closed.
     pub fn listing(&self) -> Option<Vec<WindowTab>> {
         let (reply, answer) = mpsc::sync_channel(1);
@@ -242,9 +248,16 @@ impl Browser {
     }
 
     /// The next tab the app opens is of project `project` (its key): out of sight, and that
-    /// project marked, when the window shows another. The app opens one tab at a time.
-    pub fn opening(&self, project: &str) {
-        crate::lock(&self.shared.scope).opening(project);
+    /// project marked, when the window shows another. `aside`, it opens beside a tab in sight
+    /// (the layout says which) and does not take the window. The app opens one tab at a time.
+    pub fn opening(&self, project: &str, aside: bool) {
+        crate::lock(&self.shared.scope).opening(project, aside);
+    }
+
+    /// Terminal or board `key`, about to open, opens beside a tab in sight: it does not take
+    /// the window.
+    pub fn aside(&self, key: &str) {
+        crate::lock(&self.shared.scope).aside(key);
     }
 
     /// The projects the window knows (`group` keys tabs by theirs), most recent first: what

@@ -54,9 +54,15 @@ impl Desk {
                 self.write_later(move || desk.showing(&group, window));
             }
             Heard::Split(halves) => {
-                if let Some(split) = self.split_of(key, halves) {
-                    let (desk, group) = (Arc::clone(self), key.to_string());
-                    self.write_later(move || desk.split_kept(&group, split));
+                if let Some(split) = self.split_of(halves, false) {
+                    let desk = Arc::clone(self);
+                    self.write_later(move || desk.split_kept(split));
+                }
+            }
+            Heard::Whole(halves) => {
+                if let Some(split) = self.split_of(halves, true) {
+                    let desk = Arc::clone(self);
+                    self.write_later(move || desk.split_kept(split));
                 }
             }
             Heard::SplitResized(portion) => {
@@ -125,6 +131,7 @@ impl Desk {
                     again: None,
                     person: true,
                     window: None,
+                    from: None,
                 };
                 // The person is known as their project's own, as an agent is once it calls: what
                 // they open is of that project wherever it is listed (an ended terminal's event).

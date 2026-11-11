@@ -94,6 +94,20 @@ impl Tree {
         }
     }
 
+    /// Pane `new` in the place of pane `old`, with its share. Whether `old` is one of its.
+    pub fn replace(&mut self, old: PaneId, new: PaneId) -> bool {
+        match self {
+            Self::Leaf { pane } if *pane == old => {
+                *pane = new;
+                true
+            }
+            Self::Leaf { .. } => false,
+            Self::Branch { children, .. } => {
+                (children.iter_mut()).any(|child| child.tree.replace(old, new))
+            }
+        }
+    }
+
     /// The tree without pane `pane`: its share goes to the rest of its branch, and a branch left
     /// with one child is that child. None when `pane` was all of it.
     pub fn without(self, pane: PaneId) -> Option<Self> {

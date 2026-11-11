@@ -91,14 +91,11 @@ impl Desk {
         if let Some((panel, frame)) = paint {
             panel.paint(&frame);
         }
-        if op == "show"
-            && let Some(browser) = &self.browser
-            && browser.act(&key, false).is_err()
-        {
+        if op == "show" && self.browser.is_some() && self.reveal(call, &key).is_err() {
             // The window went with the board's tab (the person closed its last one): the board
             // gets a tab again, painted as it is.
             self.reopen_board(call);
-            browser.act(&key, false)?;
+            self.reveal(call, &key)?;
         }
         Ok(Output {
             report: if report.is_empty() {
@@ -147,7 +144,8 @@ impl Desk {
             },
         );
         let project = call.project.name.clone();
-        let panel = self.board_panel(n, &key, &project, id);
+        let aside = self.lands_beside(call).is_some();
+        let panel = self.board_panel(n, (&key, aside), &project, id);
         let kept = Kept {
             key,
             board,
@@ -179,7 +177,8 @@ impl Desk {
         self.own(&kept.key, call, crate::ledger::Kind::Board, facts);
         // The old panel let go first: it shares the new one's id.
         drop(kept.panel.take());
-        kept.panel = self.board_panel(n, &kept.key, &kept.project, project);
+        let aside = self.lands_beside(call).is_some();
+        kept.panel = self.board_panel(n, (&kept.key, aside), &kept.project, project);
         if let Some(panel) = &kept.panel {
             panel.paint(&kept.frame());
         }
@@ -187,11 +186,22 @@ impl Desk {
 
     /// The board's panel: what the person does in it comes back as their actions, and a page that
     /// loads late is painted whole.
-    fn board_panel(&self, n: u32, key: &str, name: &str, project: ProjectId) -> Option<Arc<Panel>> {
+    ///
+    /// `aside`, its tab opens beside the tab in sight and does not take the window.
+    fn board_panel(
+        &self,
+        n: u32,
+        (key, aside): (&str, bool),
+        name: &str,
+        project: ProjectId,
+    ) -> Option<Arc<Panel>> {
         let browser = self.browser.as_ref()?;
         let id = crate::browser::BOARD.checked_add(n)?;
         let title = format!("desk · board · {name}");
         browser.group(key, &crate::projects::key(project));
+        if aside {
+            browser.aside(key);
+        }
         let panel = Arc::new(browser.panel(id, &title, board::page(&title)));
         let me = Weak::clone(&self.me);
         // The window's loop calls these: the board is worked, saved and painted on a thread of its

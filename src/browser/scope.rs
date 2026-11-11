@@ -18,8 +18,11 @@ pub(super) struct Scope {
     last: HashMap<String, String>,
     /// The projects where something happened out of sight.
     marked: HashSet<String>,
-    /// The project of the next tab the app opens (`Browser::opening`).
-    opening: Option<String>,
+    /// The project of the next tab the app opens (`Browser::opening`), and whether that tab
+    /// opens beside one in sight and so does not take the window.
+    opening: Option<(String, bool)>,
+    /// The terminals and boards that open beside a tab in sight, by their keys.
+    aside: HashSet<String>,
     /// The person went to a project with no tab open: the app opens what it had, and till a
     /// tab of it shows (or [`AWAIT`] passed), the window does not follow the tab it shows
     /// elsewhere. When the person went.
@@ -77,14 +80,30 @@ impl Scope {
         self.awaiting.is_some_and(|since| since.elapsed() < AWAIT)
     }
 
-    /// The next tab the app opens is of `project`.
-    pub(super) fn opening(&mut self, project: &str) {
-        self.opening = Some(project.to_string());
+    /// The next tab the app opens is of `project`; `aside`, it opens beside one in sight and
+    /// does not take the window.
+    pub(super) fn opening(&mut self, project: &str, aside: bool) {
+        self.opening = Some((project.to_string(), aside));
     }
 
-    /// The project of the tab opening now, once.
-    pub(super) fn take_opening(&mut self) -> Option<String> {
+    /// The project of the tab opening now and whether it opens aside, once.
+    pub(super) fn take_opening(&mut self) -> Option<(String, bool)> {
         self.opening.take()
+    }
+
+    /// Whether the tab opening next opens aside: asked before it is taken.
+    pub(super) fn opens_aside(&self) -> bool {
+        self.opening.as_ref().is_some_and(|(_, aside)| *aside)
+    }
+
+    /// Tab `key`, about to open, opens beside one in sight.
+    pub(super) fn aside(&mut self, key: &str) {
+        self.aside.insert(key.to_string());
+    }
+
+    /// Whether tab `key` opens aside, once.
+    pub(super) fn take_aside(&mut self, key: &str) -> bool {
+        self.aside.remove(key)
     }
 
     /// What of this scope is its window's (the project it shows, each project's last tab in it,

@@ -14,7 +14,7 @@ const BROWSER = [
   'When they ask to open, show or look at a web page or a site ("open google"), open it as a tab of',
   'that window with `llx-desk window` (the llx-desk window skill), not with another browser\'s tools',
   '(Claude in Chrome, a built-in browser pane, `open <url>`). Use another browser only when the',
-  'person names it.',
+  'person names it. What you open lands beside this terminal, in their sight: no `show` is needed.',
 ].join(' ')
 
 const EMPTY: Desk = { app: 'not running', window: '-', terminals: '0', tabs: [], comments: [] }

@@ -101,7 +101,7 @@ fn panes_opened_are_tabs_and_a_split_is_one_tab_of_two_kept_across_a_restart() {
         beside: "t3",
         right: true,
     };
-    desk.split_told(&group, Some(halves));
+    desk.split_told(halves);
     assert_eq!(tabs(&store, project), [vec![one, three], vec![two]]);
     assert!(notices(&store).iter().any(|told| told == "tab"));
 
@@ -142,17 +142,17 @@ fn a_split_made_whole_puts_the_other_pane_in_a_tab_after_it() {
             .unwrap()
     };
     let (one, two) = (row("t1"), row("t2"));
-    let group = crate::projects::key(project);
-    desk.split_told(
-        &group,
-        Some(Halves {
-            shown: "t2",
-            beside: "t1",
-            right: false,
-        }),
-    );
+    desk.split_told(Halves {
+        shown: "t2",
+        beside: "t1",
+        right: false,
+    });
     assert_eq!(tabs(&store, project), [vec![one, two]]);
-    desk.split_told(&group, None);
+    desk.whole_told(Halves {
+        shown: "t2",
+        beside: "t1",
+        right: false,
+    });
     assert_eq!(tabs(&store, project), [vec![two], vec![one]]);
     desk.shutdown();
 }

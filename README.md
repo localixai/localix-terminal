@@ -27,7 +27,7 @@
 
 ## On the desk
 
-- **Terminals**: real shells on a PTY, split and dragged like any tab; a coding agent running in one shows its mark and its session's title.
+- **Terminals**: real shells on a PTY, split and dragged like any tab; a coding agent running in one shows its mark and its session's title, and what it opens lands beside it: the agent on the left, its page on the right.
 - **A browser**: real pages on the system WebView, with history, an address bar that knows the project's pages, phone and tablet sizes, and comments you pin to an element.
 - **A board**: the project's kanban (Backlog, Todo, Doing, Review, Done, Discarded), kept in the project as `.localix/board.json` for git.
 - **Projects**: a project is a folder. Its tabs, history, board and events are its own, and it opens as you left it, even after a restart.
@@ -171,7 +171,7 @@ get `CLICOLOR=1`. You can still opt out in your shell profile or for one command
 
 In a terminal: ⌘K clears, ⌘← ⌘→ line start and end, ⌥← ⌥→ words, ⌘⌫ ⌥⌫ delete to the start and a word, ⌘↑ ⌘↓ top and bottom.
 
-**Settings** (⌘, or the sliders at the top of the column): theme, how much of the desktop the glass lets through, the interface and code fonts, the terminals' font size, and every shortcut: click its keys and press new ones (⌫ takes it off; one already taken asks first), reset one or all. They apply at once and are kept in `~/.config/llx-desk/settings.json`.
+**Settings** (⌘, or the sliders at the top of the column): theme, how much of the desktop the glass lets through, the interface and code fonts, the terminals' font size, whether what an agent opens lands beside its terminal or in a tab, and every shortcut: click its keys and press new ones (⌫ takes it off; one already taken asks first), reset one or all. They apply at once and are kept in `~/.config/llx-desk/settings.json`.
 
 </details>
 

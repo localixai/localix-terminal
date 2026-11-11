@@ -195,8 +195,11 @@ impl On<'_> {
 
     fn panel(&mut self, opening: Opening) {
         let alive = Arc::clone(&opening.3);
-        // A terminal or a board of a project not shown opens out of sight there.
-        let shown = !self.out_of_sight(&Key::Term(opening.0).name());
+        // A terminal or a board of a project not shown opens out of sight there; one that opens
+        // beside a tab in sight leaves the window to that tab.
+        let key = Key::Term(opening.0).name();
+        let aside = crate::lock(&self.shared.scope).take_aside(&key);
+        let shown = !self.out_of_sight(&key) && !aside && self.deck.is_some();
         let opened = match self.deck.as_mut() {
             Some(open) => open.add_term(opening, shown, self.proxy),
             None => Deck::for_term((self.target, self.steps), opening, self.shared, self.proxy)

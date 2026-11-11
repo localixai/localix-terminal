@@ -161,3 +161,16 @@ fn a_row_of_places_takes_a_digit_and_a_single_shortcut_does_not() {
             .is_err()
     );
 }
+
+#[test]
+fn what_an_agent_opens_lands_beside_its_terminal_unless_the_person_chose_a_tab() {
+    let mut settings = Settings::default();
+    assert_eq!(settings.agent_opens, Opens::Beside);
+    assert_eq!(settings.page()["defaults"]["agent_opens"], "beside");
+    settings.change(&json!({"agent_opens": "tab"})).unwrap();
+    assert_eq!(settings.agent_opens, Opens::Tab);
+    assert!(settings.change(&json!({"agent_opens": "window"})).is_err());
+    // A file of a version before the choice reads as the default.
+    let read: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).unwrap();
+    assert_eq!(read.agent_opens, Opens::Beside);
+}

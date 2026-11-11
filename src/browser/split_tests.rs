@@ -195,3 +195,66 @@ fn a_carried_tab_lands_beside_a_whole_window_or_in_the_half_not_in_use() {
         })
     );
 }
+
+fn kept(shown: &str, beside: &str, right: bool) -> Kept {
+    Kept {
+        shown: shown.into(),
+        beside: beside.into(),
+        right,
+    }
+}
+
+#[test]
+fn a_window_drawn_as_the_layout_kept_it_follows_what_the_layout_keeps_now() {
+    let drawn = kept("t1", "w1", true);
+    // The app put another pane beside the terminal: the window shows that one there.
+    let now = kept("t1", "w2", true);
+    assert_eq!(
+        followed(Some(&drawn), Some(&drawn), Some(&now), "t1"),
+        Follow::Beside(beside(w(2), true))
+    );
+    // Seen from the other half it is the same window: the pane in use stays in use.
+    let other = kept("w1", "t1", false);
+    assert_eq!(
+        followed(Some(&other), Some(&drawn), Some(&now), "w1"),
+        Follow::Whole
+    );
+    // The layout keeps the tab whole now, or split elsewhere: the window is whole.
+    assert_eq!(
+        followed(Some(&drawn), Some(&drawn), None, "t1"),
+        Follow::Whole
+    );
+    let elsewhere = kept("t5", "w1", true);
+    assert_eq!(
+        followed(Some(&drawn), Some(&drawn), Some(&elsewhere), "t1"),
+        Follow::Whole
+    );
+}
+
+#[test]
+fn a_split_the_person_just_made_is_not_undone_by_what_the_layout_kept_before() {
+    let drawn = kept("t1", "w1", true);
+    let theirs = kept("t1", "t3", true);
+    // The layout has not heard of it yet: it still keeps the one before.
+    assert_eq!(
+        followed(Some(&theirs), Some(&drawn), Some(&drawn), "t1"),
+        Follow::Stay
+    );
+    // And one that says something else again is no reason to drop the person's.
+    let late = kept("t1", "w2", true);
+    assert_eq!(
+        followed(Some(&theirs), Some(&drawn), Some(&late), "t1"),
+        Follow::Stay
+    );
+    assert_eq!(
+        followed(Some(&theirs), None, Some(&late), "t1"),
+        Follow::Stay
+    );
+    // Nothing changed in the layout: nothing to follow. A whole window is the layout's to
+    // split as it keeps (`again`), not this.
+    assert_eq!(
+        followed(Some(&drawn), Some(&drawn), Some(&drawn), "t1"),
+        Follow::Stay
+    );
+    assert_eq!(followed(None, None, Some(&late), "t1"), Follow::Stay);
+}

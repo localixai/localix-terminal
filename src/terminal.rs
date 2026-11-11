@@ -5,6 +5,7 @@
 mod environment;
 mod foreground;
 mod keys;
+pub mod lineage;
 mod pty;
 mod screen;
 mod session;

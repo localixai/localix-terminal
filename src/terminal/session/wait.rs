@@ -69,3 +69,19 @@ impl Session {
         }
     }
 }
+
+impl Until {
+    /// How the wait ended, in words: for `wanted`, the text waited for, within `most`.
+    pub fn said(self, wanted: Option<&str>, most: Duration) -> String {
+        match (self, wanted) {
+            (Self::Matched, Some(wanted)) => format!("\"{wanted}\" showed."),
+            (Self::Matched | Self::Settled, _) => "The output settled.".into(),
+            (Self::Deadline, Some(wanted)) => format!(
+                "\"{wanted}\" did not show within {}s: the program may still be working; wait again or read the screen.",
+                most.as_secs()
+            ),
+            (Self::Deadline, None) => "Still changing: wait again or read the screen.".into(),
+            (Self::Exited, _) => "The program ended.".into(),
+        }
+    }
+}

@@ -127,6 +127,7 @@ pub(crate) fn reopened(browser: &Browser) {
         again: None,
         person: false,
         window: None,
+        from: None,
     };
     let opened = desk
         .window(&call, &json!({"action": "open", "kind": "board"}))
@@ -179,6 +180,7 @@ pub(crate) fn center(browser: &Browser) {
         again: None,
         person: false,
         window: None,
+        from: None,
     };
     let act = |args: serde_json::Value| desk.window(&call, &args).unwrap();
     act(json!({"action": "open", "kind": "board"}));

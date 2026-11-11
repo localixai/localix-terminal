@@ -306,6 +306,12 @@ impl Session {
         super::foreground::of(self.control.as_raw_fd())
     }
 
+    /// The process of the program the terminal was opened with: what runs in the terminal is it,
+    /// or descends from it.
+    pub fn pid(&self) -> u32 {
+        crate::lock(&self.child).id()
+    }
+
     /// The folder the program in front is in now (the shell's after a `cd`), if it is known.
     pub fn folder(&self) -> Option<std::path::PathBuf> {
         use std::os::fd::AsRawFd;
