@@ -14,6 +14,9 @@ The desk itself knows no model; this plugin is Claude Code's side of it.
    claude-code` does the same in a terminal). The plugin's `bin/llx-desk` (on the Bash tool's
    `PATH`) runs the app's program: on the `PATH`, in `~/.local/bin`, or in the app. Nothing is
    downloaded.
+   Without the app's button, the plugin of this repository installs at Claude Code's prompt
+   with `/plugin install llx-desk --marketplace rsaryev/llx-desk`; the app still has to be
+   installed, as the plugin runs its program.
 3. Optional: **Hold Claude to its board card** (`finish_cards`, off by default): Claude stopping with
    its own card still in Doing is asked once to finish it first.
 
@@ -41,11 +44,15 @@ settings) so calls do not each ask.
     it or block it; if it ends so again, Claude hears which card;
   - a line above the prompt: tabs, who has which card, how many wait for your review or are blocked;
   - when the session ends, closes the tabs the project opened (`llx-desk window --end`), only where
-    the desk runs.
+    the desk runs;
+  - in a terminal of LLX Desk (`TERM_PROGRAM=llx-desk`), tells Claude that a page you ask for
+    ("open google") opens as a tab of the window, not in another browser it has the tools of (Claude
+    in Chrome, a built-in browser pane), unless you name that browser.
 
   All of it is the mod's own events (`agent.spawn`, `turn.complete`, `tool.call`, `session.end`),
-  none a classic hook or the prompt's content: an organization's security default keeps those out of reach
-  of the plugins a person installs.
+  none a classic hook or the prompt's content: an organization's security default keeps those out
+  of reach of the plugins a person installs. The window as the browser is one row the mod adds
+  to the conversation when the session starts, which Claude reads and you do not see.
 
 Two sessions in one project share its tabs; use `--as NAME` to keep them apart.
 
@@ -53,3 +60,5 @@ Two sessions in one project share its tabs; use `--as NAME` to keep them apart.
 
 `claude --plugin-dir plugins/claude-code` runs Claude Code with this plugin;
 `claude plugin validate .` checks the marketplace and `claude plugin validate plugins/claude-code` the plugin.
+`bun test plugins/claude-code/hooks` runs the hooks' tests (`register.spec.ts`, against a mocked
+host).

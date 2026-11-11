@@ -1,4 +1,6 @@
 //! Hook regressions against a small host mock; no installed Claude session or desk is needed.
+//! Run by `bun test`: the file is a `.spec.ts` so that `claude plugin test`, which takes every
+//! `.test.ts` for its own kit, leaves it alone.
 
 import { expect, mock, test } from 'bun:test'
 
@@ -29,9 +31,10 @@ const answer = (argv: string[]): Ran => {
 }
 
 /** A session on a mock host whose programs answer as `runner` says; its hooks, once started. */
-async function session(runner: Runner) {
+async function session(runner: Runner, vars: Record<string, string> = {}) {
   const calls: { argv: string[]; timeoutMs: number }[] = []
   const spawned: string[][] = []
+  const appended: { message: { type: string; content: { type: string; text: string }[] } }[] = []
   type Handler = (api: unknown, event: unknown, next: (event: unknown) => Promise<unknown>) => Promise<unknown>
   const hooks = new Map<string, Handler>()
   const on = (event: string, filterOrHandler: unknown, handler?: Handler) => {
@@ -41,8 +44,11 @@ async function session(runner: Runner) {
   let followed!: () => void
   const following = new Promise<void>(resolve => { followed = resolve })
   const api = {
-    env: { get: async () => '/home/test' },
-    session: { cwd: async () => '/work/project/nested' },
+    env: { get: async (name: string) => vars[name] ?? (name === 'HOME' ? '/home/test' : undefined) },
+    session: {
+      cwd: async () => '/work/project/nested',
+      append: async (row: (typeof appended)[number]) => { appended.push(row) },
+    },
     fs: { read: async () => '{"cards":[]}' },
     ui: { status: () => undefined },
     command: { register: async () => undefined },
@@ -69,7 +75,7 @@ async function session(runner: Runner) {
   await hooks.get('session.start')!(api, {}, next)
   await following
   const hook = (name: string, event: unknown) => hooks.get(name)!(api, event, next)
-  return { calls, spawned, hook }
+  return { calls, spawned, appended, hook }
 }
 
 /** A program that cannot start, as a missing one fails: at once. */
@@ -126,4 +132,22 @@ test('a hung app is not asked again under another name, and the session ends wit
   expect(ended[0]?.argv.slice(1)).toEqual(['window', '--project', '/work/project/nested', '--end'])
   expect(ended[0]?.timeoutMs).toBeLessThanOrEqual(1500)
   expect(Date.now() - started).toBeLessThan(2500)
+})
+
+test('in a terminal of the desk, a page the person asks for opens in its window, not another browser', async () => {
+  const told = async (vars: Record<string, string>) => {
+    const { appended, hook } = await session(async argv => answer(argv), vars)
+    await hook('session.end', {})
+    return appended
+  }
+  // Said once, as a row the model reads ahead of the first prompt: the prompt itself is left
+  // alone, since where an organization seats a policy the mod's part of it is passed over.
+  const inDesk = await told({ TERM_PROGRAM: 'llx-desk' })
+  expect(inDesk).toHaveLength(1)
+  expect(inDesk[0]!.message.type).toBe('user')
+  const text = inDesk[0]!.message.content[0]!.text
+  expect(text).toContain('llx-desk window')
+  expect(text).toContain('Claude in Chrome')
+  // Elsewhere (another terminal) nothing is said: the person may mean their own browser.
+  expect(await told({ TERM_PROGRAM: 'WarpTerminal' })).toEqual([])
 })

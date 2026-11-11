@@ -203,7 +203,11 @@ normal tests in CI.
   server: the app through LaunchServices, in the
   background, when this program is the app's (`bundle.rs`), else this program as `serve`. The CLI,
   `--said --follow` and `mcp.rs` (an MCP server on stdio whose one tool is the window tool as
-  `api/describe` gives it) are its clients; `llx-desk window --board` reads a project's board from its
+  `api/describe` gives it; `mcp/wire.rs` reads a line as a request or a notification and writes
+  the answers, `mcp/era.rs` tells a host that opens with `initialize` from one that names its
+  revision in every request and words a result for each, `mcp/running.rs` holds the calls being
+  worked, so one the agent cancels is not answered and one it follows hears that it still runs)
+  are its clients; `llx-desk window --board` reads a project's board from its
   file and starts nothing.
 - **`cli/app.rs`** is the program opened as the app (LLX Desk.app from the Finder or the Dock;
   `llx-desk open` elsewhere): it sets up what is always on, then is the server with its window
@@ -222,7 +226,9 @@ normal tests in CI.
   in the other agents of the window's that take MCP servers (`mcp_hosts.rs`: one table of Codex,
   Gemini CLI, Copilot, OpenCode, Hermes — each put in and taken out with its own `mcp add` /
   `remove`, OpenCode's JSON written as it has none; whether it is there read from its
-  configuration file). The app puts every one in place itself when it opens (`opened`, `auto`),
+  configuration file, `mcp_hosts/place.rs` saying where the agent keeps it (its own variable,
+  as the login shell has it, or the profile in use) and `mcp_hosts/read.rs` reading the
+  server's command out of its JSON, TOML or YAML). The app puts every one in place itself when it opens (`opened`, `auto`),
   for each agent installed; what the person takes out is remembered in the store's `state`
   (`integration.declined.<id>`) and left out. The person's programs run as their terminal would
   (`shell.rs`: their login shell's PATH, a deadline each, an answer for one that asks). An

@@ -1,10 +1,21 @@
 //! The plugin's hooks: the line above the prompt and `/tabs`, the person's comments as turns,
-//! and the board's workers held to their cards.
+//! the board's workers held to their cards, and, in a terminal of the desk, its window as the
+//! browser the person means (a row the session starts with).
 
 import { atom, read, update } from 'claude-code'
 import type { Events, Register } from 'claude-code'
 
 import type { BoardCard, BoardSummary, Desk } from '../types'
+
+/** What a session in a terminal of the desk is told: the window the person watches is their
+ * browser, ahead of any other browser's tools the session has. */
+const BROWSER = [
+  'This session runs in a terminal of LLX Desk, the window the person is watching.',
+  'When they ask to open, show or look at a web page or a site ("open google"), open it as a tab of',
+  'that window with `llx-desk window` (the llx-desk window skill), not with another browser\'s tools',
+  '(Claude in Chrome, a built-in browser pane, `open <url>`). Use another browser only when the',
+  'person names it.',
+].join(' ')
 
 const EMPTY: Desk = { app: 'not running', window: '-', terminals: '0', tabs: [], comments: [] }
 // Change the tag when Desk's fields change: it declines what an earlier version stored.
@@ -113,6 +124,13 @@ const finish = (named: string) =>
 export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
+    // In a terminal of the desk the person watches its window: a page they ask for opens there,
+    // so they see it beside the session, rather than in a browser the session also has the
+    // tools of. Said as a row of the conversation, ahead of the first prompt: a section of the
+    // system prompt is passed over where an organization seats its policy.
+    if ((await $.env.get('TERM_PROGRAM')) === 'llx-desk') {
+      await $.session.append({ message: { type: 'user', content: [{ type: 'text', text: BROWSER }] } }).catch(() => undefined)
+    }
     // The program: the one on PATH, else LLX Desk.app's (its link in ~/.local/bin, or the app
     // where macOS keeps apps). Never installed from here: the pane only reads.
     const home = await $.env.get('HOME')

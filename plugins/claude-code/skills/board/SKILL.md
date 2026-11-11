@@ -10,7 +10,7 @@ allowed-tools: Bash(llx-desk window:*)
 The project's board is a tab of the llx-desk window, kept by the desk (and written out to
 `.localix/board.json` in the project), so it outlives sessions. As it is now:
 
-!`llx-desk window --board 2>&1 || true`
+!`llx-desk window --board 2>&1`
 
 (Nothing above: no open card yet.) Six columns:
 

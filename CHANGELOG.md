@@ -4,6 +4,10 @@
 
 ### Added
 
+- Claude Code in a terminal of LLX Desk opens the pages the person asks for ("open google") as
+  tabs of the window, not in another browser it has the tools of, unless the person names it.
+  It is told so by a row at the start of the session, which holds where an organization's
+  policy passes over what a plugin adds to the system prompt.
 - A card waiting in Backlog or Todo is run by an agent the person picks among those installed
   (Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode, Hermes): ▶ on a Todo card or on the
   open card, or Run With in a card's menu. The card goes to Doing as that agent's worker
@@ -12,6 +16,20 @@
 
 ### Changed
 
+- `llx-desk mcp` speaks the MCP revision an agent asks for: every one from 2024-11-05 to
+  2025-11-25 after the `initialize` handshake, and 2026-07-28 with none, each request naming its
+  revision (`server/discover` says which are served; one not served is refused with the list to
+  try). It tells the agent what the window is for (pages, terminals, the board), names the tool
+  "LLX Desk Window" and says that it changes things outside the agent. A call the agent cancels
+  is not answered, and one it follows with a progress token is told every few seconds that it
+  still runs, so a long wait is not given up on. Arguments that are not an object, an id that is
+  neither text nor a number, a cursor into the one-page tool list and a batch of requests are
+  each refused with the protocol's own error.
+- The window tool's description fits the 4096 bytes some agents keep of one (it was 5809): each
+  fact is said once, in the field it belongs to or in its kind's guide, and every field says what
+  it takes. A `tabs` list is declared as the ids or the tabs it holds.
+- The Claude Code plugin's version is the one a session loads: read from the app's folder, the
+  folder's own, so an app that was updated is not told its plugin is older.
 - A card's hover move (Move to Todo, Reopen, Unblock, Run) is a quiet grey icon with its words as a
   tooltip, in the age's place, instead of a filled button with text and a shadow.
 - Open Folder… and the question before quitting are sheets on the window (an alert of their own
@@ -80,6 +98,23 @@
 
 ### Fixed
 
+- GitHub Copilot and Hermes are offered only by their own commands, `copilot` and `hermes`. A
+  shell helper that suggests one command and a runner that does one task and leaves were taken
+  for them, and started a program that is not the agent.
+- The window tool in Codex is found when its `command` is a literal string (a path with a quote
+  or a backslash) or has a comment after it; it read as "not added" and was added again.
+- An agent's configuration is read where the agent itself keeps it: in the folder its own
+  variable names (`CODEX_HOME`, `GEMINI_CLI_HOME`, `COPILOT_HOME`, `XDG_CONFIG_HOME` for OpenCode,
+  `HERMES_HOME`) as your login shell sets it, and for Hermes in the profile in use. The agent's
+  `mcp add` runs with the same variables. It was always read under the home directory, so a moved
+  one read as "not added" forever.
+- Settings with comments in them (Gemini CLI, OpenCode) are read; they counted as empty.
+- The window tool already added to an agent is left as it is when the app opens or you press Add:
+  the agent's `mcp add` wrote the entry anew, without the timeouts and tool lists you set in it.
+- GitHub Copilot gives a call of the window tool two minutes (it gave 30 seconds, less than a
+  terminal may be waited on); an entry added before is added once more with the timeout.
+- After adding the tool, Settings and `llx-desk setup` name the agent's own reload command
+  (`/mcp reload` in Gemini CLI and Copilot) in place of starting it again.
 - On Linux, a terminal opened with a command (an agent from "+") names that program in front, not
   `sh`: the shell that only runs the command is looked past, as macOS's replaces itself.
 - The app and the command line opening the database at the same moment no longer leave the app

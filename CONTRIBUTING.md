@@ -6,7 +6,7 @@ Issues and pull requests are welcome. Keep a change small and focused.
 cargo build
 cargo clippy --all-targets -- -D warnings
 cargo test                                   # unit tests, and the CLI against a server with no window
-bun test plugins/claude-code/hooks/register.test.ts  # plugin hooks with a mocked host; Bun 1.3+
+bun test plugins/claude-code/hooks/register.spec.ts  # plugin hooks with a mocked host; Bun 1.3+
 bun test src/browser                               # UI gestures, frame cadence and motion lifecycle
 bunx tsc -p plugins/claude-code                    # the plugin's types (see below)
 shellcheck install.sh scripts/*.sh plugins/claude-code/bin/llx-desk

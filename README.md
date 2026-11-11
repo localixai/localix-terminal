@@ -62,7 +62,11 @@ Code plugin on macOS (skills, a worker subagent, a mod that follows your comment
 an MCP server in Codex, Gemini CLI, GitHub Copilot, OpenCode and Hermes, each put in with the
 agent's own `mcp add`. **Settings → Integrations** (⌘,) shows them; one you remove stays removed
 until you add it back. Any other MCP host takes the entry *Copy MCP Entry* gives. In a terminal,
-`llx-desk setup` does the same.
+`llx-desk setup` does the same. An agent whose configuration you moved (`CODEX_HOME`,
+`GEMINI_CLI_HOME`, `COPILOT_HOME`, `XDG_CONFIG_HOME`, `HERMES_HOME`, a Hermes profile) is
+connected there, as your login shell sets it, and an entry already in place is left as you have
+it. Gemini CLI starts no MCP server in a folder you have not trusted
+in it: trust the project's folder there (`/permissions trust`) and the tool appears.
 
 <details>
 <summary>More install options</summary>

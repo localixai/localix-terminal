@@ -19,5 +19,5 @@
     "jsxFragmentFactory": "Fragment"
   },
   "include": [".claude-plugin/types", "hooks", "types"],
-  "exclude": ["hooks/*.test.ts"]
+  "exclude": ["hooks/*.spec.ts"]
 }
