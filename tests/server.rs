@@ -18,7 +18,7 @@ fn help_and_the_tool_description_need_no_server() {
     let describe = home.run(tmp, &["window"]);
     let text = String::from_utf8_lossy(&describe.stdout);
     assert!(
-        text.contains("tabs of one window") && text.contains("\"properties\""),
+        text.contains("Tabs of one window") && text.contains("\"properties\""),
         "{text}"
     );
     assert!(!home.socket().exists(), "a server was started");

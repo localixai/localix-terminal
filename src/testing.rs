@@ -1,7 +1,9 @@
-//! Test-only helpers: a temporary directory that removes itself.
+//! Test-only helpers: a temporary directory that removes itself, and a stream that keeps the
+//! JSON lines written to it.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(crate) struct Scratch(PathBuf);
@@ -39,5 +41,30 @@ impl Scratch {
 impl Drop for Scratch {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// A stream a writer thread is given in a test: what was written to it, read back as the JSON
+/// lines it holds.
+#[derive(Clone, Default)]
+pub(crate) struct Sink(Arc<Mutex<Vec<u8>>>);
+
+impl Sink {
+    pub(crate) fn lines(&self) -> Vec<serde_json::Value> {
+        let written = crate::lock(&self.0).clone();
+        (String::from_utf8_lossy(&written).lines())
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect()
+    }
+}
+
+impl std::io::Write for Sink {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        crate::lock(&self.0).extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }

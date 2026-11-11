@@ -26,7 +26,7 @@ pub fn schema() -> Value {
     );
     put(
         "tabs",
-        json!({"type": "array", "items": {}, "description":
+        json!({"type": "array", "items": {"anyOf": [{"type": "object"}, {"type": "string"}]}, "description":
         "open: several tabs at once, each an object with `kind` and its fields; close: several tab ids."}),
     );
     put(
@@ -63,7 +63,7 @@ pub fn schema() -> Value {
     );
     put(
         "key_delay_ms",
-        json!({"type": "integer", "minimum": 0, "maximum": 2000}),
+        json!({"type": "integer", "minimum": 0, "maximum": 2000, "description": "browser: ms to wait between `keys`."}),
     );
     put(
         "script",
@@ -73,7 +73,10 @@ pub fn schema() -> Value {
         "read",
         json!({"type": "boolean", "description": "browser: also the page's whole text."}),
     );
-    put("offset", json!({"type": "integer", "minimum": 0}));
+    put(
+        "offset",
+        json!({"type": "integer", "minimum": 0, "description": "browser, read: where in the page's text to go on from."}),
+    );
     put(
         "size",
         json!({"type": "string", "description": "The page's size, its tab's own: a device (`iPhone SE`, `iPhone 15 Pro`, `Pixel 8`, `iPad Mini`, `Laptop`, `Desktop`; `mobile`, `tablet`), `WIDTHxHEIGHT`, or `window` to fill the window again. The window stays as the person left it: the page is framed in it. Layout only: the user agent stays."}),
