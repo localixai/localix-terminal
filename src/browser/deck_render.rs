@@ -1,5 +1,6 @@
 //! The deck's current state rendered as data for its strip, side and page toolbar.
 
+use super::super::alerts;
 use super::super::host::Shared;
 use super::super::panel::Held;
 use super::super::strip::{self, Item, Key};
@@ -105,6 +106,7 @@ impl Deck {
             .iter()
             .find(|tab| tab.shown)
             .map(|tab| tab.id.clone());
+        let mut waits = alerts::waits(&alerts::read(&crate::lock(&shared.center)));
         let items: Vec<Item> = listed
             .into_iter()
             .filter_map(|tab| {
@@ -113,6 +115,7 @@ impl Deck {
                     title: tab.title,
                     detail: tab.detail,
                     agent: shared.offers.agent(&tab.id),
+                    waits: waits.remove(&tab.id),
                     group: tab.group,
                 })
             })
@@ -182,7 +185,7 @@ impl Deck {
 
     /// The strip's open list: the history and the Event Center draw into it, each saying what it
     /// shows. While the Events show, the history's last word is drawn over, so it is said again
-    /// after; shut, the Event Center draws nothing, and its events are read only while it is open.
+    /// after. Shut, the Event Center still hears its events: its button's dot says what is new.
     fn tell_menus(&self, strip: &wry::WebView, shared: &Shared) {
         let rows = (self.menu == Some(Menu::History)).then(|| self.rows(shared));
         if self.menu == Some(Menu::Events) {
@@ -190,10 +193,8 @@ impl Deck {
         } else {
             self.say((Part::Strip, strip), "menu", &strip::menu(rows.as_deref()));
         }
-        let center = match self.menu == Some(Menu::Events) {
-            true => strip::center(&crate::lock(&shared.center), true),
-            false => strip::center("", false),
-        };
+        let open = self.menu == Some(Menu::Events);
+        let center = strip::center(&crate::lock(&shared.center), open);
         self.say((Part::Strip, strip), "center", &center);
     }
 

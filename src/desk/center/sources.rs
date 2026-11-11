@@ -40,6 +40,14 @@ impl Source for Asks {
                     )
                     .button("Done", Do::Answer { tab: tab.clone() })
                     .button("Show", Do::Show { key: tab.clone() }),
+                    Subject::Terminal(tab) if registry.owner_named(tab).is_none() => return None,
+                    Subject::Terminal(tab) => Event::new(
+                        format!("waiting:{tab}:{}", ask.n),
+                        Kind::Waiting,
+                        &group(&ask.owner),
+                        tab,
+                    )
+                    .button("Show", Do::Show { key: tab.clone() }),
                     Subject::Session(owner) => Event::new(
                         format!("waiting:{owner}:{}", ask.n),
                         Kind::Waiting,
@@ -122,43 +130,67 @@ fn handed_in(card: &crate::board::Card) -> String {
     }
 }
 
-/// The terminals whose program ended, while their tab is open.
+/// The terminals whose program ended or has a note for the person, while their tab is open.
 struct Terminals;
+
+/// What a terminal has for the person: its command, how its program ended if it did, and the
+/// note it waits with.
+struct Had {
+    id: u32,
+    command: String,
+    ended: bool,
+    status: Option<i32>,
+    note: Option<(u32, String)>,
+}
 
 impl Source for Terminals {
     fn gather(&self, desk: &Desk) -> Vec<Event> {
         // The sessions' lock is let go before the registry's is taken.
-        let ended: Vec<(u32, String, Option<i32>)> = (crate::lock(&desk.sessions).iter())
-            .filter(|(_, session)| session.ended())
-            .map(|(id, session)| (*id, session.command().trim().to_string(), session.status()))
+        let had: Vec<Had> = (crate::lock(&desk.sessions).iter())
+            .map(|(id, session)| Had {
+                id: *id,
+                command: session.command().trim().to_string(),
+                ended: session.ended(),
+                status: session.status(),
+                note: session.note(),
+            })
+            .filter(|had| had.ended || had.note.is_some())
             .collect();
         let registry = crate::lock(&desk.registry);
         let mut events = vec![];
-        for (id, command, status) in ended {
-            let key = format!("t{id}");
+        for had in had {
+            let key = format!("t{}", had.id);
             let Some(owner) = registry.owner_named(&key) else {
                 continue;
             };
-            let (kind, detail) = match status {
-                Some(0) => (Kind::Finished, "Finished".to_string()),
-                Some(code) => (Kind::Failed, format!("Exited with {code}")),
-                None => (Kind::Failed, "Ended".to_string()),
-            };
-            let title = if command.is_empty() {
+            let group = registry.group_of(&owner);
+            let title = if had.command.is_empty() {
                 "shell"
             } else {
-                &command
+                &had.command
             };
-            let event = Event::new(
-                format!("ended:{key}"),
-                kind,
-                &registry.group_of(&owner),
-                &key,
-            )
-            .says(title, detail)
-            .button("Show", Do::Show { key: key.clone() })
-            .button("Close", Do::Close { key });
-            events.push(event);
+            let show = || Do::Show { key: key.clone() };
+            // The program's own words, plain: shown to the person as its title is.
+            if let Some((number, words)) = had.note {
+                let event = Event::new(format!("said:{key}:{number}"), Kind::Said, &group, &key)
+                    .says(title, words)
+                    .names_its_tab()
+                    .button("Show", show());
+                events.push(event);
+            }
+            if had.ended {
+                let (kind, detail) = match had.status {
+                    Some(0) => (Kind::Finished, "Finished".to_string()),
+                    Some(code) => (Kind::Failed, format!("Exited with {code}")),
+                    None => (Kind::Failed, "Ended".to_string()),
+                };
+                let event = Event::new(format!("ended:{key}"), kind, &group, &key)
+                    .says(title, detail)
+                    .names_its_tab()
+                    .button("Show", show())
+                    .button("Close", Do::Close { key: key.clone() });
+                events.push(event);
+            }
         }
         events
     }

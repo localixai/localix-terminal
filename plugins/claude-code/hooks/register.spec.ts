@@ -107,6 +107,31 @@ test('turn notifications stay in the session project, including taking the ask b
   await hook('session.end', {})
 })
 
+/** The asks a session made of the desk since `from`, as the words of each. */
+const asked = (calls: { argv: string[] }[], from: number) =>
+  calls
+    .slice(from)
+    .map(call => call.argv.at(-1)!)
+    .filter(last => last.startsWith('{'))
+    .map(last => (JSON.parse(last) as { ask?: string }).ask)
+
+test('a question the agent asks waits for the person until they answer it', async () => {
+  const { calls, hook } = await session(async argv => answer(argv))
+  const before = calls.length
+  await hook('tool.call', { tool: 'AskUserQuestion', questions: [{ question: 'Which database should the cart use?' }] })
+  expect(asked(calls, before)).toEqual(['Claude asks: Which database should the cart use?', ''])
+})
+
+test('a turn that an error ended is said however short, and one the person stopped is not', async () => {
+  const { calls, hook } = await session(async argv => answer(argv))
+  const before = calls.length
+  await hook('turn.complete', { durationMs: 900, answer: '', reason: 'error' })
+  await hook('turn.complete', { durationMs: 90_000, answer: 'half', reason: 'aborted', isAborted: true })
+  // The session ends while its line is up: the line goes with it.
+  await hook('session.end', {})
+  expect(asked(calls, before)).toEqual(['Claude stopped on an error', ''])
+})
+
 test('a program missing from the PATH is tried once, then the one that ran is asked first', async () => {
   const local = '/home/test/.local/bin/llx-desk'
   const { calls, spawned, hook } = await session(async argv => (argv[0] === local ? answer(argv) : missing()))

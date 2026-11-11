@@ -10,10 +10,11 @@ use super::{Deck, Menu, Shown};
 impl Deck {
     /// Show or close the tab `click` names; why not, when it is not there.
     pub(crate) fn act(&mut self, click: Click, shared: &Shared) -> Result<(), String> {
+        use Click::{Clear, Listed, Unmenu};
         let (key, closing) = match click {
             Click::Show(key) => (key, false),
             Click::Close(key) => (key, true),
-            Click::History | Click::Events | Click::Unmenu | Click::Event(..) | Click::Clear => {
+            Click::History | Click::Events | Listed | Unmenu | Click::Event(..) | Clear => {
                 self.menu_click(click, shared);
                 return Ok(());
             }
@@ -125,6 +126,12 @@ impl Deck {
             // Opened: all it shows is seen.
             Click::Events => {
                 if self.toggle(Menu::Events) {
+                    shared.heard("", Heard::Center(CenterDid::Opened));
+                }
+            }
+            Click::Listed => {
+                if self.menu != Some(Menu::Events) {
+                    self.menu = Some(Menu::Events);
                     shared.heard("", Heard::Center(CenterDid::Opened));
                 }
             }

@@ -144,6 +144,37 @@ fn a_program_that_ended_is_news_until_its_tab_is_closed_from_the_center() {
 }
 
 #[test]
+fn what_a_program_asks_to_tell_the_person_waits_until_they_type_in_its_terminal() {
+    let (desk, scratch) = (desk(), Scratch::new());
+    let mine = caller(&desk, scratch.path(), Some("me"));
+    let me = mine.call();
+    let command =
+        r"printf '\033]9;4;1;50\007\033]777;notify;Agent;Needs your answer\007said'; sleep 20";
+    let open =
+        json!({"action": "open", "kind": "terminal", "command": command, "wait_for": "said"});
+    desk.window(&me, &open).unwrap();
+
+    let events = shown(&desk);
+    assert_eq!(events.len(), 1, "{events:?}");
+    let said = &events[0];
+    assert_eq!(
+        (said.kind, said.tab.as_str(), said.detail.as_str()),
+        (Kind::Said, "t1", "Agent: Needs your answer")
+    );
+    assert_eq!(said.labels(), ["Show", "Dismiss"]);
+    // On its tab, which the program already names, it waits with what was said.
+    assert_eq!(said.words, "Agent: Needs your answer");
+
+    // What the window answers the program for them is not the person; a key of theirs is.
+    let session = desk.session(1).unwrap();
+    session.typed("\x1b[2;2R");
+    assert_eq!(shown(&desk).len(), 1);
+    session.typed("y");
+    assert!(shown(&desk).is_empty());
+    desk.shutdown();
+}
+
+#[test]
 fn the_agent_asks_the_person_on_a_tab_once_and_their_done_reaches_it_as_a_note() {
     let (desk, scratch) = (desk(), Scratch::new());
     let mine = caller(&desk, scratch.path(), Some("me"));
@@ -225,6 +256,56 @@ fn a_session_that_waits_for_the_person_is_one_line_replaced_and_taken_back() {
 
     // It goes on: the line goes.
     assert!(wait("").starts_with("The ask for this session is taken back"));
+    assert!(shown(&desk).is_empty());
+    desk.shutdown();
+}
+
+#[test]
+fn a_session_that_waits_in_a_terminal_is_that_terminals_line_with_its_tab_to_show() {
+    let (desk, scratch) = (desk(), Scratch::new());
+    let mine = caller(&desk, scratch.path(), None);
+    let me = mine.call();
+    let open = json!({"action": "open", "kind": "terminal", "command": "cat"});
+    desk.window(&me, &open).unwrap();
+    desk.window(&me, &open).unwrap();
+    // Two agents of one project, each in its terminal: each waits by itself.
+    let wait = |from: &'static str, words: &str| {
+        let call = Call {
+            from: Some(from),
+            ..mine.call()
+        };
+        (desk.window(&call, &json!({"action": "interact", "ask": words}))).unwrap()
+    };
+    let said = wait("t1", "Claude needs your permission: Bash: cargo test");
+    assert!(
+        said.starts_with("Asked the person for this session"),
+        "{said}"
+    );
+    wait("t2", "Claude finished: the cart is fixed");
+    let events = shown(&desk);
+    let lines: Vec<_> = (events.iter())
+        .map(|event| (event.kind, event.tab.as_str(), event.title.as_str()))
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            (Kind::Waiting, "t2", "Claude finished: the cart is fixed"),
+            (
+                Kind::Waiting,
+                "t1",
+                "Claude needs your permission: Bash: cargo test"
+            ),
+        ],
+        "the newest first"
+    );
+    assert_eq!(events[0].labels(), ["Show", "Dismiss"]);
+
+    // One goes on: its line goes, the other's stays.
+    assert!(wait("t1", "").starts_with("The ask for this session is taken back"));
+    assert_eq!(shown(&desk).len(), 1);
+    // A terminal closed takes its line with it.
+    desk.window(&me, &json!({"action": "close", "tab": "t2"}))
+        .unwrap();
     assert!(shown(&desk).is_empty());
     desk.shutdown();
 }

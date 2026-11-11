@@ -101,6 +101,9 @@ let waiting = false
 /** A turn of the main agent at least this long is worth telling the person it ended. */
 const LONG_TURN_MS = 30_000
 
+/** The longest line of the agent's question that the person is shown. */
+const SHOWN_MOST = 120
+
 /** The plugin's worker, as a spawn names it. */
 const WORKER = 'llx-desk:worker'
 /** A worker's name on the board as its task gives it: `your name on the board: cart-button`. */
@@ -122,6 +125,8 @@ const finish = (named: string) =>
   `Your card ${named} is still in Doing on the board. Hand it in with \`review\` and a note of what was done and how it was checked, give it back to Todo with \`release\` and where it stands, or \`block\` it with what it waits for; then end.`
 
 export const register: Register = (on, options) => {
+  // A session begun waits for nobody yet.
+  waiting = false
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     // In a terminal of the desk the person watches its window: a page they ask for opens there,
@@ -288,6 +293,19 @@ export const register: Register = (on, options) => {
   // own cards the same way when the person turned that on. A long turn of the main agent leaves
   // one line in the Event Center that the session waits for the person, while the desk runs; the
   // next turn takes it back, so it is never more than one, never stale.
+  /** The session waits for the person with `words` in the Event Center, while the desk runs. */
+  const waits = (words: string) => {
+    if (!deskRun || !deskUp) return
+    waiting = true
+    void deskRun(['window', ...project, JSON.stringify({ action: 'interact', ask: words })])
+  }
+  /** It goes on: its line, if one is up, is taken back. */
+  const goesOn = () => {
+    if (!waiting || !deskRun || !deskUp) return
+    waiting = false
+    void deskRun(['window', ...project, JSON.stringify({ action: 'interact', ask: '' })])
+  }
+
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     if (e.isAborted || 'refusal' in e) return done
@@ -315,19 +333,23 @@ export const register: Register = (on, options) => {
       }
       if (!named) heldMain = ''
     }
-    if (e.durationMs < LONG_TURN_MS || !deskRun || !deskUp) return done
+    // An error ended it: said however short the turn, as the session stopped without an answer.
+    if (e.reason === 'error') {
+      waits('Claude stopped on an error')
+      return done
+    }
+    // A short turn says nothing, and what waited within it goes.
+    if (e.durationMs < LONG_TURN_MS) {
+      goesOn()
+      return done
+    }
     const said = (e.answer.split('\n').find(line => line.trim()) ?? '').trim().slice(0, 140)
-    const ask = said ? `Claude finished: ${said}` : 'Claude finished and waits for you'
-    waiting = true
-    void deskRun(['window', ...project, JSON.stringify({ action: 'interact', ask })])
+    waits(said ? `Claude finished: ${said}` : 'Claude finished and waits for you')
     return done
   })
 
   on('turn.start', async ($, e, next) => {
-    if (!e.agentId && waiting && deskUp && deskRun) {
-      waiting = false
-      void deskRun(['window', ...project, JSON.stringify({ action: 'interact', ask: '' })])
-    }
+    if (!e.agentId) goesOn()
     return next(e)
   })
 
@@ -371,10 +393,24 @@ export const register: Register = (on, options) => {
     return { deny: `llx-desk: you are ${name} on the board: pass "who": "${name}" in every call on it, then run it again.` }
   }).catch(($, e, next) => next(e))
 
+  // A question the agent asks the person waits for them in the Event Center till it is answered:
+  // one line on the terminal the session runs in, gone as soon as the session goes on.
+  on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
+    const first = e.questions[0]?.question.replace(/\s+/g, ' ').trim().slice(0, SHOWN_MOST)
+    waits(first ? `Claude asks: ${first}` : 'Claude asks you a question')
+    try {
+      return await next(e)
+    } finally {
+      goesOn()
+    }
+  }).catch(($, e, next) => next(e))
+
   // The session ends: the tabs the project opened close (never a server started for it: only
   // the app's program is run, and `--end` starts nothing).
   on('session.end', async ($, e, next) => {
     ended = true
+    // Its line in the Event Center is its terminal's, which stays open: it goes with the session.
+    goesOn()
     if (deskRun && deskUp) await deskRun(['window', ...project, '--end'], END_MS).catch(() => undefined)
     return next(e)
   })

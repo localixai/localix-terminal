@@ -35,7 +35,7 @@ Public paths stay stable through re-exports; implementation modules stay private
 | Native UI | `browser/host_commands.rs` is the event-loop protocol; `host_events.rs` handles native events; `host_dispatch.rs` carries out commands; `host_keys.rs` and `host_newtab.rs` adapt user actions. |
 | Deck and tabs | `deck_build.rs` constructs views; `deck_layout.rs` places them; `deck_drop.rs` previews drops; `deck_render.rs` sends state as data. `tabs_transfer.rs` moves existing views and `tabs_layout.rs` sizes them. |
 | Platform and scripts | `browser/platform.rs` is the platform facade; `platform_views.rs` handles native view behavior; `webview_scripts.rs` waits for scripts across navigation. |
-| Terminal and storage | `terminal/session.rs` owns lifecycle; `session/input.rs`, `output.rs`, `read.rs` and `wait.rs` own input, output, what is read of the screen, and waits. `terminal/marks.rs` counts the commands a shell says it started and ended, and `terminal/hooks.rs` has the person's zsh say so. `store.rs` manages connections; `store/schema.rs` contains unchanged, append-only SQL steps. |
+| Terminal and storage | `terminal/session.rs` owns lifecycle; `session/input.rs`, `output.rs`, `read.rs` and `wait.rs` own input, output, what is read of the screen, and waits. `terminal/marks.rs` counts the commands a shell says it started and ended, `terminal/hooks.rs` has the person's zsh or bash say so, and `terminal/notes.rs` keeps what a program asks to tell the person, for the Event Center. `store.rs` manages connections; `store/schema.rs` contains unchanged, append-only SQL steps. |
 
 ### Rules the tests check
 
@@ -237,6 +237,11 @@ normal tests in CI.
   (`integration.declined.<id>`) and left out. The person's programs run as their terminal would
   (`shell.rs`: their login shell's PATH, a deadline each, an answer for one that asks). An
   integration names the agent it is for and what to offer.
+- **`browser/alerts.rs`, `browser/alerts_macos.rs`** say what waits for the person outside the
+  Event Center's list, read from that list and never a source of their own: which tabs wait (the
+  strip's dot and second line), and, on macOS in the app's bundle, a silent notice for each new
+  thing while the person is in another app, taken back when it no longer waits, and the Dock's
+  count. `alerts.rs` decides; `alerts_macos.rs` only carries it out.
 - **`offers.rs`, `browser/offer.rs`** are what the app offers the person at the moment it fits:
   one quiet bar under the strip: the agent's mark, the button that does it, and a cross that puts it off (Not Now). `offers.rs` keeps their answers
   (`answers` in the store; the window asks through `browser::Answers`): taken is never offered again, put off waits a day, three,

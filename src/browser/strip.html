@@ -55,7 +55,7 @@ body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
 #cr .c .mk{display:flex}
 #cr .c .mk svg{fill:currentColor;stroke:none}
 #cr .c .dn{width:9px;height:9px;stroke-width:1.6}
-#cr .c .d{flex:none;width:6px;height:6px;border-radius:3px;background:var(--accent)}
+#cr .c .d,#tabs .t .d{flex:none;width:6px;height:6px;border-radius:3px;background:var(--accent)}
 #cr .sep{flex:none;padding:0 1px;font-size:12px;line-height:15px;color:var(--ink-3)}
 #cr .b{width:24px;min-width:24px;height:24px;border-radius:6px;margin-left:2px}
 #cr .b svg{width:14px;height:14px}
@@ -191,7 +191,12 @@ html:not([data-glass]) #sug,html:not([data-glass]) #menu{background:var(--ground
 .v.off .n{color:var(--ink-2)}
 .v.off .i{opacity:.6}
 .v .u{display:block;margin-top:1px;padding-left:17px;font-size:11px;line-height:14px;color:var(--ink-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-/* The Event Center: each event with what it is, its words and its buttons. */
+/* The Event Center: its button, marked with the crumbs' dot while something new wants the person,
+   and each event with what it is, its words and its buttons. */
+#ev,:is(#sl,#gh) .ic{position:relative}
+#ev .d,:is(#sl,#gh) .ic .d{position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:3px;background:var(--accent)}
+/* A tab that waits for the person, out of sight: the same dot, on its icon's corner. */
+:is(#sl,#gh) .ic .d{top:-1px;right:-1px}
 .ev{display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:center;column-gap:9px;padding:5px 8px;border-radius:var(--r-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 .ev.go:hover{background:var(--acc-2);transition:none}
 .ev.go:active{background:var(--acc-3);transition:none}
@@ -201,6 +206,8 @@ html:not([data-glass]) #sug,html:not([data-glass]) #menu{background:var(--ground
 .ev .dot{width:7px;height:7px;border-radius:4px;background:var(--hue);opacity:.35}
 .ev.new .dot{opacity:1}
 .ev .tx{min-width:0}
+.ev .n .mk{display:inline-flex;width:12px;height:12px;margin-right:5px;vertical-align:-1.5px}
+.ev .n .mk svg{width:12px;height:12px}
 .ev .n{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ev .u{display:block;margin-top:1px;font-size:11px;line-height:14px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ev .side{display:flex;align-items:center;gap:4px}
@@ -364,6 +371,7 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
     </div>
     <div id="end">
     <div class="grp">
+      <span class="b" id="ev" title="Show events"><svg viewBox="0 0 16 16"><path d="M4.2 11V7.4a3.8 3.8 0 0 1 7.6 0V11l1 1.2H3.2zM6.6 13.4a1.5 1.5 0 0 0 2.8 0"/></svg><span class="d" hidden></span></span>
       <span class="b" id="hs" title="Show history"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.3"/></svg></span>
       <span class="b" id="mo" title="Show more" hidden><svg viewBox="0 0 16 16"><path d="M4.5 4.5 8 8l-3.5 3.5M8.5 4.5 12 8l-3.5 3.5"/></svg></span>
     </div>
@@ -434,6 +442,8 @@ function glyph(name) {
 // Every name is set as text.
 let barSig = null;
 function S(data) {
+  RUNS.clear();
+  for (const tab of data.tabs || []) if (tab.agent) RUNS.set(tab.key, { id: tab.agent, name: tab.name });
   const part = document.documentElement.dataset.part;
   if (part === "side") return side(data);
   const shown = data.tabs.find((tab) => tab.key === data.shown);
@@ -447,7 +457,7 @@ function S(data) {
   // The same again draws nothing, as the side does not: a press that began on a crumb or a tab is
   // not lost to a title another tab changed.
   const now = JSON.stringify([sided, project, data.shown, shown && [shown.key, shown.kind, shown.agent, shown.name, shown.title],
-    places.map((one) => [one.key, one.name, one.folder, one.marked]), tabs.map((tab) => [tab.key, tab.title, tab.kind])]);
+    places.map((one) => [one.key, one.name, one.folder, one.marked]), tabs.map((tab) => [tab.key, tab.title, tab.kind, tab.waits])]);
   if (now === barSig) return;
   barSig = now;
   crumbs(shown, places, project);
@@ -466,6 +476,10 @@ function S(data) {
     close.append(glyph("close"));
     wire(item, close, tab.key);
     item.append(icon, name, close);
+    if (tab.waits && tab.key !== data.shown) {
+      name.after(Object.assign(document.createElement("span"), { className: "d" }));
+      item.title += " — waits for you";
+    }
     return item;
   }));
   fit();
@@ -547,7 +561,7 @@ function wire(item, close, key) {
 // button's hint says its key.
 let HINTS = {};
 const HINTED = { bk: "back", fw: "forward", rl: "reload", fs: "page-size", cm: "comment", nt: "new-page",
-  hs: "history", mn: "collapse", sc: "sidebar", sd: "send", sn: "new-page", sg: "settings", url: "address", sq: "find-tab",
+  hs: "history", ev: "events", mn: "collapse", sc: "sidebar", sd: "send", sn: "new-page", sg: "settings", url: "address", sq: "find-tab",
   pj: "projects" };
 // What opens a tab where none is left: each command with its key (shortcuts.rs, as Settings sets it).
 const STARTS = [
@@ -660,6 +674,8 @@ function emptied(words) {
   box.textContent = words;
   return box;
 }
+// The coding agent in front in each terminal, by the tab's key, as the tabs were last told.
+const RUNS = new Map();
 function agentMark(agent) {
   const svg = new DOMParser().parseFromString(MARKS[agent] || "", "image/svg+xml").documentElement;
   if (svg.nodeName !== "svg") return glyph("term");
@@ -750,7 +766,10 @@ function patchRow(item, tab, half) {
   const on = tab.key === listedShown ? " on" : "";
   const classes = (half ? "half" : "t") + on;
   if (item.className !== classes) item.className = classes;
-  const title = (tab.agent ? tab.name + " — " + tab.title : tab.title) + placeKey(listed.indexOf(tab));
+  // What waits for the person in it (alerts.rs): its words take the second line, and out of
+  // sight its icon carries the dot the Event Center's button does.
+  const waits = tab.waits || "";
+  const title = (tab.agent ? tab.name + " — " + tab.title : tab.title) + (waits ? " — waits for you" : "") + placeKey(listed.indexOf(tab));
   if (item.title !== title) item.title = title;
   const icon = item.querySelector(".ic");
   const look = tab.agent ? "agent " + tab.agent : GLYPHS[tab.kind] ? tab.kind : "web";
@@ -758,8 +777,11 @@ function patchRow(item, tab, half) {
     icon.dataset.look = look;
     icon.replaceChildren(tab.agent ? agentMark(tab.agent) : glyph(GLYPHS[tab.kind] ? tab.kind : "web"));
   }
+  const dot = icon.querySelector(":scope > .d");
+  if (waits && !on && !dot) icon.append(Object.assign(document.createElement("span"), { className: "d" }));
+  if (dot && (!waits || on)) dot.remove();
   set(item.querySelector(".n"), tab.name || tab.title);
-  set(item.querySelector(".u"), holds(tab));
+  set(item.querySelector(".u"), waits && tab.kind !== "board" ? waits : holds(tab));
 }
 // One tab's row in the side.
 function sideRow(tab, half) {
@@ -1489,13 +1511,12 @@ document.addEventListener("keydown", (event) => {
   } else if (event.key === "Escape") {
     event.preventDefault();
     window.ipc.postMessage("unmenu");
-    // Focus goes back to the button that opened the history; the Event Center, opened by its
-    // shortcut, has none.
-    if (!menu.classList.contains("evs")) document.getElementById("hs").focus();
+    // Focus goes back to the button that opened the menu.
+    document.getElementById(menu.classList.contains("evs") ? "ev" : "hs").focus();
   }
 });
-// The Event Center: what waits for the person, newest first, under the bar's end (it has no button
-// of its own: its shortcut and the Window menu open it). While it is `open` the list is in the menu,
+// The Event Center: what waits for the person, newest first, under its button (the bar's end when
+// the button waits in "»"); its dot says something new wants them. While it is `open` the list is in the menu,
 // each event with its buttons, whose place is said back. Every word is set as text.
 // An event says how it is shown: its section's heading and place, its tone, and what each of its
 // buttons is for. The strip knows no kind of event of its own.
@@ -1515,6 +1536,12 @@ setInterval(() => {
   }
 }, 30000);
 function V(events, open) {
+  // The dot is for what wants the person and is new; what ended well is listed, quietly.
+  const unseen = events.filter((event) => event.unseen && event.urgent).length;
+  const bell = document.getElementById("ev");
+  bell.querySelector(".d").hidden = unseen === 0;
+  titled(bell, unseen ? "Show events: " + unseen + " new" : "Show events");
+  bell.classList.toggle("on", open);
   if (!open) {
     if (menuSig?.[0] === "e") menuSig = null;
     return;
@@ -1525,7 +1552,7 @@ function V(events, open) {
   menu.style.display = "flex";
   document.getElementById("back").style.display = "block";
   menu.classList.add("evs");
-  under(menu, "end");
+  under(menu, bell.hidden ? "end" : "ev");
   document.getElementById("hs").className = "b";
   const now = "e" + JSON.stringify(events);
   if (now === menuSig) return glass();
@@ -1579,9 +1606,12 @@ function row(event, several) {
   const name = document.createElement("span");
   name.className = "n";
   name.textContent = event.title || event.section;
+  // An event of a terminal a coding agent runs in is the agent's: its mark leads, its name says who.
+  const agent = RUNS.get(event.tab);
+  if (agent) name.prepend(agentMark(agent.id));
   const words = document.createElement("span");
   words.className = "u";
-  words.textContent = [event.detail, event.tab, several ? event.group : ""].filter(Boolean).join(" · ");
+  words.textContent = [event.detail, agent && agent.name, event.tab, several ? event.group : ""].filter(Boolean).join(" · ");
   text.append(name, words);
   item.title = event.detail;
   const side = document.createElement("span");
@@ -1662,7 +1692,7 @@ document.getElementById("fs").addEventListener("click", () => {
 // Buttons with no room, as Safari's: the rightmost go first into "»", whose system menu holds
 // them (strip.rs's Tool), until the crumbs have room again. Only the bar's: the browser's
 // toolbar keeps its few, and its address field gives way.
-const TOOLS = ["hs"];
+const TOOLS = ["ev", "hs"];
 const ROOM = 160;
 let fitting = 0;
 function fit() {
@@ -1698,7 +1728,7 @@ for (const id of ["bar", "lead", "cr", "tabs", "end"]) {
     if (event.target === part) window.ipc.postMessage("zoom");
   });
 }
-for (const [id, what] of [["sd", "send"], ["cm", "comment"], ["bk", "back"], ["fw", "forward"], ["hs", "history"], ["back", "unmenu"]]) {
+for (const [id, what] of [["sd", "send"], ["cm", "comment"], ["bk", "back"], ["fw", "forward"], ["hs", "history"], ["ev", "events"], ["back", "unmenu"]]) {
   document.getElementById(id).addEventListener("click", () => window.ipc.postMessage(what));
 }
 // No tab left, the pages' whole part offers them (`looked` draws it again as the keys change).

@@ -104,6 +104,14 @@ impl Desk {
                 log::warn!("terminal t{id} ended, still open in the ledger (no thread: {why})");
             }
         });
+        // What its program asks to tell the person is news for the Event Center too.
+        let feed = self.feed.clone();
+        session.on_note(move || {
+            feed.record(
+                &crate::feed::Entity::Terminal { id },
+                crate::feed::Op::Upserted,
+            );
+        });
         // What its program says it is doing (the title it sets) shows under the tab's name, and
         // which program is in front (a coding agent typed in its shell among them) is the window's
         // to know: its mark on the tab, its integration offered.

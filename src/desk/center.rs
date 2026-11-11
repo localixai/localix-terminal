@@ -36,6 +36,9 @@ pub(super) enum Subject {
     Tab(String),
     /// The owner's session waits for them: kept until it goes on.
     Session(String),
+    /// The session that runs in this terminal waits for them: kept until it goes on, or the
+    /// terminal closes. Each terminal's own, so several agents of a project wait side by side.
+    Terminal(String),
 }
 
 impl Subject {
@@ -43,7 +46,7 @@ impl Subject {
     fn place(&self) -> String {
         match self {
             Subject::Tab(tab) => format!("on {tab}"),
-            Subject::Session(_) => "for this session".to_string(),
+            Subject::Session(_) | Subject::Terminal(_) => "for this session".to_string(),
         }
     }
 
@@ -53,7 +56,7 @@ impl Subject {
             Subject::Tab(_) => {
                 "their Done or comment reaches you as their notes do, and it goes with its tab"
             }
-            Subject::Session(_) => "it stays until you go on",
+            Subject::Session(_) | Subject::Terminal(_) => "it stays until you go on",
         }
     }
 }
@@ -162,6 +165,18 @@ impl Desk {
         said
     }
 
+    /// Whose wait a session's ask is: its terminal's when its program runs in one that is open,
+    /// else the session's own.
+    pub(super) fn waits(&self, call: &super::Call) -> Subject {
+        let terminal = (call.from)
+            .filter(|key| key.starts_with('t'))
+            .filter(|key| crate::lock(&self.registry).owner_named(key).is_some());
+        match terminal {
+            Some(key) => Subject::Terminal(key.to_string()),
+            None => Subject::Session(call.owner.to_string()),
+        }
+    }
+
     /// A run begins: what the last one left open of its own (asks, programs that ended) is past.
     pub(super) fn settle_last_run(&self) {
         let now = board::now();
@@ -172,7 +187,9 @@ impl Desk {
 
     /// Tab `key` closed: what was asked on it goes.
     fn tab_gone(&self, key: &str) {
-        crate::lock(&self.asks).remove(&Subject::Tab(key.to_string()));
+        let mut asks = crate::lock(&self.asks);
+        asks.remove(&Subject::Tab(key.to_string()));
+        asks.remove(&Subject::Terminal(key.to_string()));
     }
 
     /// The center gathered again and, if it changed, shown.

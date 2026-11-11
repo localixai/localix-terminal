@@ -145,6 +145,8 @@ pub(super) struct Item {
     pub group: String,
     /// The coding agent a terminal runs in front (offer.rs), when it is known.
     pub agent: Option<&'static str>,
+    /// The words of what waits for the person in it (alerts.rs), when something does.
+    pub waits: Option<String>,
 }
 
 /// `items` with each group's together, the groups in the order they first appear.
@@ -198,6 +200,9 @@ pub(super) fn script(
             if let Some(agent) = agent {
                 tab["agent"] = json!(agent.id);
                 tab["name"] = json!(agent.name);
+            }
+            if let Some(waits) = &item.waits {
+                tab["waits"] = json!(waits);
             }
             tab["group"] = json!(item.group);
             tab
@@ -332,7 +337,7 @@ pub(super) fn comment(key: &str, on: bool, sent: u32) -> String {
 pub(super) const PAGE: &str = include_str!("strip.html");
 
 /// The SHA-384 of the page's one script, its resize helper in: the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "F3c6EPTEYsZR3cG+SejcNRoHl5HoYsq6Fuj41wEXTVwIEW25u7f3mvimB4wuNqrP";
+const SCRIPT_SHA384: &str = "QAxCF/Da5bjnJM5aqFPgFTelvCtd/jPIUUGCcV0YmIASPNrMUqIFxi1uObjvM3So";
 
 /// The strip's page: the trusted UI's resize helper inlined, so it opens without external
 /// resources, its bars as tall as the window lays them out (`BAR`, `NAV`, `ROW`: its style, not

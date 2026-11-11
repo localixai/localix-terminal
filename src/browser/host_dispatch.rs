@@ -80,8 +80,8 @@ impl On<'_> {
                     open.titled(id, title);
                 }
             }
-            // Drawn once the turn is over (`told`).
-            Cmd::Strip => {}
+            // Drawn once the turn is over (`told`); what waits is said outside the window too.
+            Cmd::Strip => crate::browser::alerts::told(&crate::lock(&shared.center), proxy),
             Cmd::Offered(id, on) => self.offered(id, on),
             Cmd::Go(project) => self.go_project(&project),
             Cmd::Arranged(_, arranged) => self.arranged(arranged),

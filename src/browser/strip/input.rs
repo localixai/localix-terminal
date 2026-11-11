@@ -5,16 +5,18 @@ use super::{Key, SIDE};
 /// A toolbar button the strip had no room for: it waits in the "»" menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in super::super) enum Tool {
+    Events,
     History,
 }
 
 impl Tool {
     /// The buttons, in the toolbar's order (and the menu's).
-    pub(in super::super) const ALL: [Self; 1] = [Self::History];
+    pub(in super::super) const ALL: [Self; 2] = [Self::Events, Self::History];
 
     /// The button the strip names by its id.
     fn parse(id: &str) -> Option<Self> {
         Some(match id {
+            "ev" => Self::Events,
             "hs" => Self::History,
             _ => return None,
         })
@@ -23,6 +25,7 @@ impl Tool {
     /// Its line in the "»" menu.
     pub(in super::super) fn label(self) -> &'static str {
         match self {
+            Self::Events => "Event Center",
             Self::History => "History",
         }
     }
@@ -31,6 +34,7 @@ impl Tool {
     pub(in super::super) fn bit(self) -> u8 {
         match self {
             Self::History => 1,
+            Self::Events => 2,
         }
     }
 }
@@ -50,6 +54,8 @@ pub(in super::super) enum Click {
     Offer(bool),
     /// The Event Center opens or closes.
     Events,
+    /// The Event Center opens, or stays open (a notice of the system's was clicked).
+    Listed,
     /// The open menu closes (a click beside it).
     Unmenu,
     /// Action `.1` of the Event Center's event numbered `.0`.
@@ -196,6 +202,7 @@ pub(in super::super) fn click(body: &str) -> Option<Click> {
         ("forward", None) => Some(Click::Forward),
         ("history", None) => Some(Click::History),
         ("events", None) => Some(Click::Events),
+        ("events", Some("open")) => Some(Click::Listed),
         ("unmenu", None) => Some(Click::Unmenu),
         ("clear", None) => Some(Click::Clear),
         ("event", Some(at)) => {

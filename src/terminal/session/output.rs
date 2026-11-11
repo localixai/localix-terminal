@@ -57,6 +57,7 @@ pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: 
             return;
         }
         retitled(shared);
+        noted(shared);
         paint(shared, Pace::Throttled);
         if gone {
             let status = exit_status(pid);
@@ -162,6 +163,22 @@ fn retitled(shared: &Shared) {
     };
     if let Some((heard, title)) = due {
         heard(&title);
+    }
+}
+
+/// Whoever listens told that the program has another note for the person.
+fn noted(shared: &Shared) {
+    let heard = {
+        let mut state = shared.lock();
+        let number = state.screen.notes().waiting().map(|(number, _)| number);
+        match number {
+            Some(number) if number != state.noted => state.noted = number,
+            _ => return,
+        }
+        state.on_note.clone()
+    };
+    if let Some(heard) = heard {
+        heard();
     }
 }
 

@@ -10,11 +10,36 @@
   whether the shell's command still runs or how the last one exited. A command at work is
   waited for to its end or the call's limit ("The command is still running after 10s"), not
   given up on at its first quiet moment; one that takes keys (an editor, a REPL) or stays
-  quiet for three seconds (a question) ends the wait as before. zsh in a tab says so by
-  itself: it starts with a folder of the app's whose one file reads the person's own files
-  first, then marks each command's start and end; nothing of theirs is changed, and
-  `LLX_DESK_SHELL_MARKS=0` in the environment leaves the shell as it is. Any other shell that
-  marks its commands (OSC 133) is read the same way.
+  quiet for three seconds (a question) ends the wait as before. zsh and bash in a tab say so
+  by themselves: the shell starts on a file of the app's that reads the person's own files
+  first (for bash: `/etc/profile`, then the first of `.bash_profile`, `.bash_login`,
+  `.profile`, as a login shell reads them), then marks each command's start and end; nothing
+  of theirs is changed, and `LLX_DESK_SHELL_MARKS=0` in the environment leaves the shell as it
+  is. A bash with a DEBUG trap of its own is left unmarked, and so is a line that is one
+  subshell alone (`( … )`). Any other shell that marks its commands (OSC 133) is read the same
+  way.
+- What waits for you is said outside the Event Center's list too, all three read from that one
+  list:
+  - a tab that waits carries a dot on its icon while it is out of sight, and its second line says
+    what waits (`Claude asks: Which database…`);
+  - while you are in another app, each new thing is a notice in Notification Center, with no
+    sound; a click shows the tab it is about (the list, where it has none), and the notice is
+    taken back once the thing no longer waits. macOS asks once whether to allow them, when the
+    first one comes; System Settings → Notifications turns them off. What already waited when
+    the app was started is counted and not told again, and a notice an earlier run left is
+    taken back;
+  - the Dock's icon counts what is new, until the list is seen.
+- A session that waits for you in a terminal is that terminal's line in the Event Center: it has
+  Show, the coding agent's mark and name, and two agents of one project each keep their own line
+  (one used to replace the other).
+- The Claude Code plugin says more of what waits for you, each as one line that goes when the
+  session goes on: a question Claude asks you (`Claude asks: Which database…`), and a turn an
+  error ended (however short). A turn you stopped yourself says nothing.
+- The Event Center has its button in the bar again, before history's: a bell alone, with the
+  crumbs' dot while something new wants the person. With no room it waits in "»" with the rest.
+- What a program asks its terminal to tell the person (a notification: OSC 9, OSC 777
+  `notify`) waits in the Event Center under "Programs Say", with the tab to show, until they
+  type in that terminal. The words are the program's, shown as plain text and told to no agent.
 
 - What an agent opens from a terminal of the window lands beside that terminal, in its tab: the
   agent on the left, its page, terminal or board on the right, and the keys stay in the terminal.

@@ -226,6 +226,7 @@ impl On<'_> {
         let labels: Vec<&str> = tools.iter().map(|tool| tool.label()).collect();
         let at = (f64::from(x), f64::from(y));
         match open.choose(at, &labels, None).and_then(|at| tools.get(at)) {
+            Some(Tool::Events) => self.clicked("events"),
             Some(Tool::History) => self.clicked("history"),
             None => {}
         }

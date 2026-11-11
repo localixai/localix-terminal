@@ -3,6 +3,9 @@
 //! browser's own, fuller surface (navigate, read, keys, scripts).
 
 mod agents;
+mod alerts;
+#[cfg(target_os = "macos")]
+mod alerts_macos;
 #[cfg(target_os = "macos")]
 mod app_menu;
 #[cfg(target_os = "macos")]

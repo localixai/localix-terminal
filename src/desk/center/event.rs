@@ -13,6 +13,7 @@ pub(in crate::desk::center) enum Kind {
     Waiting,
     Review,
     Blocked,
+    Said,
     Failed,
     Finished,
 }
@@ -54,6 +55,7 @@ impl Kind {
             Kind::Waiting => ("Waiting for You", Tone::Purple, true),
             Kind::Review => ("Ready for Review", Tone::Blue, true),
             Kind::Blocked => ("Blocked", Tone::Orange, true),
+            Kind::Said => ("Programs Say", Tone::Purple, true),
             Kind::Failed => ("Programs Ended", Tone::Red, true),
             Kind::Finished => ("Programs Finished", Tone::Green, false),
         };
@@ -138,6 +140,9 @@ pub(in crate::desk::center) struct Event {
     pub(in crate::desk::center) tab: String,
     pub(in crate::desk::center) title: String,
     pub(in crate::desk::center) detail: String,
+    /// What its tab waits with, where the title only names that tab (a terminal's program);
+    /// none: the title.
+    pub(in crate::desk::center) words: String,
     /// When it happened (seconds since the epoch; none: when the center first saw it).
     pub(in crate::desk::center) at: u64,
     /// In order: the strip says back the place of the one clicked.
@@ -158,6 +163,7 @@ impl Event {
             tab: tab.to_string(),
             title: String::new(),
             detail: String::new(),
+            words: String::new(),
             at: 0,
             buttons: vec![],
             unseen: false,
@@ -167,6 +173,12 @@ impl Event {
     pub(in crate::desk::center) fn says(mut self, title: &str, detail: String) -> Self {
         self.title = title.to_string();
         self.detail = detail;
+        self
+    }
+
+    /// Its title names its tab, so the tab waits with its detail.
+    pub(in crate::desk::center) fn names_its_tab(mut self) -> Self {
+        self.words.clone_from(&self.detail);
         self
     }
 

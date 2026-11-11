@@ -64,3 +64,13 @@ fn other_strings_are_not_marks() {
     assert!(marks.running().is_none());
     assert_eq!(marks.ended(), (0, None));
 }
+
+#[test]
+fn a_start_said_with_the_command_line_is_a_start() {
+    // Some shells say what was typed along with the start; the words after it are not read.
+    let mut marks = Marks::default();
+    marks.read("133;C;cmdline_url=echo%20hi");
+    assert!(marks.running().is_some());
+    marks.read("133;D;0");
+    assert_eq!(marks.ended().0, 1);
+}

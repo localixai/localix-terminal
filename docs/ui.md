@@ -232,6 +232,11 @@ define colours of its own beyond its `--ground`.
 - **Unavailable items** are dimmed in menu bar menus and hidden in context menus.
 - **Every action has a home in the menu bar.** A context menu or a toolbar button is a shortcut
   to it, never its only place.
+- **What waits for the person** has one list, the Event Center, and three quiet signs read from
+  it, never a source of their own: the 6 pt accent dot (on the center's button, and on a tab's
+  icon while the tab is out of sight), the Dock's count of what is new, and, only while the
+  person is in another app, a notice of the system's with no sound. A sign goes when the thing
+  no longer waits; none of them animates or takes the focus.
 - **Notices** don't carry the only copy of something important:
   - one with a timer pauses while the pointer or focus is on it, and has a close button;
   - they keep off the window's bottom edge;

@@ -3,9 +3,11 @@
 //! whole screen again. The bytes are untrusted, so only text, line moves (`\n`, `\r`, `\t`,
 //! `\b`) and CSI sequences reach this emulator: no title, no clipboard write, no string sequence.
 //! The title a program sets (OSC 0 or 2) is kept aside as plain text, for the tab's subtitle,
-//! and a shell's marks of its commands (OSC 133) are counted.
+//! a shell's marks of its commands (OSC 133) are counted, and a note for the person (OSC 9,
+//! OSC 777) is kept as plain text.
 
 use super::marks::Marks;
+use super::notes::Notes;
 
 /// What puts right a terminal a command left wrong: no mouse reports of any kind, in any
 /// encoding, and the cursor shown.
@@ -61,6 +63,11 @@ impl Screen {
     /// What the shell said of its commands.
     pub(super) fn marks(&self) -> &Marks {
         &self.safe.marks
+    }
+
+    /// What the program asked to tell the person.
+    pub(super) fn notes(&mut self) -> &mut Notes {
+        &mut self.safe.notes
     }
 
     /// Whether the program asked to be told where a paste starts and ends.
@@ -162,6 +169,7 @@ struct Safe {
     /// Counts the times the title changed, so a reader knows when to pass it on.
     retitled: u32,
     marks: Marks,
+    notes: Notes,
 }
 
 impl Safe {
@@ -251,12 +259,14 @@ impl Safe {
         };
     }
 
-    /// A string sequence ended: the title, when it was an OSC that sets one, or a shell's mark.
+    /// A string sequence ended: the title, when it was an OSC that sets one, a shell's mark, or
+    /// a note for the person.
     fn string_ended(&mut self) {
         let Some(osc) = self.osc.take() else { return };
         let text = String::from_utf8_lossy(&osc);
         let Some(("0" | "2", title)) = text.split_once(';') else {
-            return self.marks.read(&text);
+            self.marks.read(&text);
+            return self.notes.read(&text);
         };
         if let Some(title) = clean_title(title)
             && self.title.as_ref() != Some(&title)

@@ -59,6 +59,10 @@ struct State {
     /// when), and who hears it each time it changes (its name; none when it is not known).
     front: Front,
     on_front: Option<Arc<Fronted>>,
+    /// Called when the program's note for the person comes or goes, and the number of the last
+    /// one it was called for.
+    on_note: Option<Arc<dyn Fn() + Send + Sync>>,
+    noted: u32,
 }
 
 /// Hears the program in front of a terminal, by the name it was started as.
@@ -180,6 +184,8 @@ impl Session {
                 titled_at: now,
                 front: Front::default(),
                 on_front: None,
+                on_note: None,
+                noted: 0,
             }),
             wake: Condvar::new(),
         });
@@ -267,6 +273,7 @@ impl Session {
     pub fn typed(&self, text: &str) {
         let cursor = self.shared.lock().screen.application_cursor();
         self.input.queue(&keys::from_window(text, cursor));
+        self.attended(text);
     }
 
     pub fn command(&self) -> &str {

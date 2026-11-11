@@ -17,6 +17,7 @@ fn the_tabs_reach_the_page_as_data() {
             detail: "https://a.example/\"><b>".into(),
             group: "proj".into(),
             agent: None,
+            waits: None,
         },
         Item {
             key: Key::Term(2),
@@ -24,6 +25,7 @@ fn the_tabs_reach_the_page_as_data() {
             detail: String::new(),
             group: "proj".into(),
             agent: None,
+            waits: None,
         },
     ];
     let script = script(&items, Key::Term(2), None, &none());
@@ -70,6 +72,7 @@ fn an_empty_title_reads_as_what_the_tab_is() {
         detail: String::new(),
         group: String::new(),
         agent: None,
+        waits: None,
     }];
     let script = script(&items, Key::Web(1), None, &none());
     assert!(script.contains("\"title\":\"New tab\""), "{script}");
@@ -82,6 +85,7 @@ fn item(key: Key, title: &str, group: &str) -> Item {
         detail: String::new(),
         group: group.into(),
         agent: None,
+        waits: None,
     }
 }
 
@@ -230,6 +234,7 @@ fn a_terminal_running_an_agent_carries_its_mark_and_what_it_does() {
         detail: "Fix the cart button".into(),
         group: "proj".into(),
         agent: None,
+        waits: None,
     }];
     let script = script(&items, Key::Term(3), Some(true), &none());
     let data: serde_json::Value = serde_json::from_str(
@@ -255,10 +260,34 @@ fn a_shell_running_an_agent_in_front_carries_its_mark() {
         detail: "okak@Mac:~".into(),
         group: "proj".into(),
         agent: Some("codex"),
+        waits: None,
     }];
     let drawn = script(&items, Key::Term(4), Some(true), &none());
     assert!(drawn.contains(r#""agent":"codex""#), "{drawn}");
     assert!(drawn.contains(r#""name":"Codex""#), "{drawn}");
+}
+
+#[test]
+fn a_tab_that_waits_for_the_person_carries_the_words_of_what_waits() {
+    let listed = |waits: Option<&str>| {
+        let items = [Item {
+            key: Key::Term(4),
+            title: "session 4 · shell".into(),
+            detail: "okak@Mac:~".into(),
+            group: "proj".into(),
+            agent: Some("claude"),
+            waits: waits.map(str::to_string),
+        }];
+        script(&items, Key::Web(1), Some(true), &none())
+    };
+    let drawn = listed(Some("Claude asks: Which database?"));
+    assert!(
+        drawn.contains(r#""waits":"Claude asks: Which database?""#),
+        "{drawn}"
+    );
+    // A tab nothing waits in says nothing of it.
+    let drawn = listed(None);
+    assert!(!drawn.contains("waits"), "{drawn}");
 }
 
 #[test]

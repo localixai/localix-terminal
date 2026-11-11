@@ -118,15 +118,22 @@ pub(super) fn record(
     Ok(kept)
 }
 
-/// What the last run left open of what only that run held (an ask, a program that ended): ids
+/// What the last run left open of what only that run held (an ask, a program's note, a program that ended): ids
 /// count afresh each run, so a new run's event must not meet the old row. A review or a blocked
 /// card is the board's, and outlives the restart.
 pub(super) fn settle_run_local(tx: &Transaction<'_>, now: u64) -> Result<(), String> {
-    let kinds = [Kind::Ask, Kind::Waiting, Kind::Failed, Kind::Finished].map(Kind::name);
+    let kinds = [
+        Kind::Ask,
+        Kind::Waiting,
+        Kind::Said,
+        Kind::Failed,
+        Kind::Finished,
+    ]
+    .map(Kind::name);
     tx.execute(
         "UPDATE center_events SET settled = ?1
-         WHERE settled IS NULL AND kind IN (?2, ?3, ?4, ?5)",
-        params![now, kinds[0], kinds[1], kinds[2], kinds[3]],
+         WHERE settled IS NULL AND kind IN (?2, ?3, ?4, ?5, ?6)",
+        params![now, kinds[0], kinds[1], kinds[2], kinds[3], kinds[4]],
     )
     .map_err(|why| why.to_string())?;
     Ok(())

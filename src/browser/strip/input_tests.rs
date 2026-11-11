@@ -65,9 +65,11 @@ fn the_toolbar_buttons_are_clicks() {
         "the page's tools are its toolbar's"
     );
     assert_eq!(click("more 700 40"), None, "nothing held");
-    // The Event Center has no button in the bar: its shortcut and menu item open it.
-    assert_eq!(click("more 700 40 ev"), None);
-    assert_eq!(Tool::ALL, [Tool::History]);
+    // The Event Center's button folds into "»" after history's, and is in its menu first.
+    let both = Tool::Events.bit() | held;
+    assert_eq!(click("more 700 40 ev hs"), Some(Click::More(700, 40, both)));
+    assert_eq!(Tool::ALL, [Tool::Events, Tool::History]);
+    assert_eq!(Tool::Events.label(), "Event Center");
     assert_eq!(
         click("more 700 40 hs xx"),
         None,
@@ -115,6 +117,8 @@ fn where_the_strip_wants_glass_is_a_rectangle_or_none() {
 #[test]
 fn the_event_center_opens_closes_and_says_which_button_of_which_event() {
     assert_eq!(click("events"), Some(Click::Events));
+    // A notice's click opens the list and never shuts it.
+    assert_eq!(click("events open"), Some(Click::Listed));
     assert_eq!(click("unmenu"), Some(Click::Unmenu));
     assert_eq!(click("event 7 1"), Some(Click::Event(7, 1)));
     assert_eq!(click("clear"), Some(Click::Clear));

@@ -189,11 +189,10 @@ pub(crate) fn center(browser: &Browser) {
     act(
         json!({"action": "interact", "tab": "b1", "op": "review", "card": "c1", "note": "fixed it"}),
     );
-    // The bar has no button for the center: its shortcut opens it.
-    assert_eq!(
-        browser.peek_strip("document.getElementById('ev') === null"),
-        Ok(json!(true))
-    );
+    // The bar has a button for the center, with a dot while something new waits for the person.
+    until("the center's button shows that something waits", || {
+        browser.peek_strip("document.querySelector('#ev .d')?.hidden") == Ok(json!(false))
+    });
     browser.click("events");
     until("the center lists it, new until it is seen", || {
         let read = "[document.querySelectorAll('#menu .ev').length, document.querySelector('#menu .ev .n')?.textContent]";
@@ -207,6 +206,11 @@ pub(crate) fn center(browser: &Browser) {
     until("and the center is empty", || {
         browser.peek_strip("document.querySelectorAll('#menu .ev').length + ':' + getComputedStyle(document.getElementById('menu')).display") == Ok(json!("0:none"))
     });
+    assert_eq!(
+        browser.peek_strip("document.querySelector('#ev .d').hidden"),
+        Ok(json!(true)),
+        "nothing waits: the button is quiet"
+    );
     act(json!({"action": "close", "tab": "b1"}));
     desk.shutdown();
     let _ = std::fs::remove_dir_all(&home);

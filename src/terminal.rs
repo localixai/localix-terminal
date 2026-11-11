@@ -8,6 +8,7 @@ mod hooks;
 mod keys;
 pub mod lineage;
 mod marks;
+mod notes;
 mod pty;
 mod screen;
 mod session;

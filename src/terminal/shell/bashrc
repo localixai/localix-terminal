@@ -1,0 +1,51 @@
+# LLX Desk: a bash started in a terminal tab reads this file. It reads the files a login bash
+# reads (/etc/profile, then the person's first of .bash_profile, .bash_login, .profile), and
+# has the shell say when a command starts and how it ended, so a wait on the terminal knows.
+# None of the person's files is changed. The shell itself is not a login one: it ends with
+# `exit`, not `logout`, and reads no .bash_logout.
+if [ -r /etc/profile ]; then
+  . /etc/profile
+fi
+for _llx_desk_file in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+  if [ -r "$_llx_desk_file" ]; then
+    . "$_llx_desk_file"
+    break
+  fi
+done
+unset _llx_desk_file
+# A shell with a DEBUG trap of its own is left as it is: there is one such trap.
+if [[ $- == *i* && -z $(trap -p DEBUG) ]]; then
+  # Set from the start, and read as `${name-}`: a profile may make an unset name an error.
+  _llx_desk_ran=
+  _llx_desk_armed=
+  # First at each prompt: the command the person ran, if one, ended with this code.
+  _llx_desk_prompt() {
+    local code=$?
+    [[ -n ${_llx_desk_ran-} ]] && builtin printf '\e]133;D;%s\a' "$code"
+    _llx_desk_ran=
+    return "$code"
+  }
+  # Last at each prompt: the next command to run is the person's.
+  _llx_desk_arm() {
+    _llx_desk_armed=1
+  }
+  # Before each command. The first after a prompt is the person's, unless it is the next
+  # prompt's own: Enter alone ran nothing. It is handed `$_`, which stays what it was. A line
+  # that is one subshell alone, `( … )`, runs no command here, and is not said to start or end.
+  _llx_desk_debug() {
+    [[ -z ${_llx_desk_armed-} || -n ${COMP_LINE-} ]] && return
+    _llx_desk_armed=
+    [[ $BASH_COMMAND == _llx_desk_prompt ]] && return
+    _llx_desk_ran=1
+    builtin printf '\e]133;C\a'
+  }
+  if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) == "declare -a"* ]]; then
+    PROMPT_COMMAND=(_llx_desk_prompt "${PROMPT_COMMAND[@]}" _llx_desk_arm)
+  else
+    # Each on a line of its own: the person's may end in `;` or a newline.
+    PROMPT_COMMAND="_llx_desk_prompt${PROMPT_COMMAND:+
+$PROMPT_COMMAND}
+_llx_desk_arm"
+  fi
+  trap '_llx_desk_debug "$_"' DEBUG
+fi
