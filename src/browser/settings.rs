@@ -93,6 +93,7 @@ pub(super) struct Settings {
     pub code_font: String,
     pub font_size: u8,
     pub agent_opens: Opens,
+    pub updates: super::updates::Updates,
     /// The shortcuts the person changed, by id: a chord, or none (taken off).
     pub shortcuts: BTreeMap<String, Option<String>>,
 }
@@ -106,6 +107,7 @@ impl Default for Settings {
             code_font: "system".into(),
             font_size: 13,
             agent_opens: Opens::Beside,
+            updates: super::updates::Updates::Auto,
             shortcuts: BTreeMap::new(),
         }
     }
@@ -143,6 +145,10 @@ impl Settings {
         if let Some(level) = change.get("transparency") {
             self.transparency =
                 serde_json::from_value(level.clone()).map_err(|why| why.to_string())?;
+        }
+        if let Some(updates) = change.get("updates") {
+            self.updates =
+                serde_json::from_value(updates.clone()).map_err(|why| why.to_string())?;
         }
         if let Some(opens) = change.get("agent_opens") {
             self.agent_opens =
@@ -244,6 +250,7 @@ impl Settings {
                 "code_font": default.code_font,
                 "size": default.font_size,
                 "agent_opens": default.agent_opens,
+                "updates": default.updates,
             },
             "ui_fonts": fonts(&UI_FONTS),
             "code_fonts": fonts(&CODE_FONTS),

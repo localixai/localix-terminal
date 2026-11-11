@@ -183,7 +183,12 @@ normal tests in CI.
   card in Review or blocked, a program that ended) whenever the feed says something changed, kept in its journal (`journal.rs`:
   `center_events`, open and settled, with the person's marks), and shown under the strip's bell with
   buttons that take the person's own paths. An event says how it is shown (its section, tone, and
-  each button's role), so the window holds no table of kinds.
+  each button's role), so the window holds no table of kinds. Where an event leads is said by the
+  thing it is about, never by how that is reached (`leads.rs`: a tab, a board, an agent's
+  session), and found in the window or opened in it in one place: a session that runs outside
+  the window is continued by its agent's program (known from the caller's processes,
+  `terminal/lineage.rs`; the words that continue it are a column of the agents' table,
+  `browser/agents.rs`) in a terminal of its project, in its own folder.
 - **`view.rs`** is what a page shows and how it is acted on: an observation with each control's ref,
   and an action on a ref against the observation's epoch, so it never lands on a newer document.
 - **`secrets.rs`** keeps what an answer must not show: saved secrets, named `{{secret:NAME}}` and put
@@ -223,6 +228,15 @@ normal tests in CI.
   `scripts/dmg.sh` makes the release files from it, the disk image and the zip (notarized with
   `--notarize`, as the release workflow does). The app is for Apple Silicon only.
   `packaging/homebrew/llx-desk.rb` is the cask a tap takes, filled in per release.
+- **`update.rs`, `update/`** keep the app up to date. `Updater` is the one owner of how far an
+  update is (`Stage`: idle, checking, fetching, ready, failed); Settings, the offer bar and the
+  app menu read it and ask it, and none keeps a copy. `release.rs` reads the latest release and
+  its checksums, `fetch.rs` fetches with the system's `curl` (HTTPS only), `install.rs` holds the
+  archive to its checksum and, on macOS, the app in it to the signing team and the notarization,
+  then swaps it with the app in place (the old one moved aside, back if the swap fails);
+  `place.rs` says where the app is and starts it again once this process ended. Only an app
+  installed from a release is replaced. The restart itself is the desk's (`lifecycle.rs`), as a
+  quit is: it asks first when programs run.
 - **`setup.rs`, `setup/`** are the integrations, reached from Settings → Integrations and from
   `llx-desk setup`: the command (`command.rs`: a link in `~/.local/bin` to the program, the login
   shell's profile when its PATH lacks it; a desktop entry on Linux), the Claude Code plugin

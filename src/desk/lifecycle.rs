@@ -40,6 +40,42 @@ impl Desk {
         }
     }
 
+    /// The person asked to restart into the update that is ready: asked first when terminals
+    /// still run a program; then the new app is put in place, set to open once this one ended,
+    /// and this one ends as a quit ends it. On a thread of its own, as a quit is.
+    pub(super) fn update_asked(self: &Arc<Self>) {
+        let desk = Arc::clone(self);
+        let asked = std::thread::Builder::new()
+            .name("desk-update".into())
+            .spawn(move || {
+                let running = desk.running_programs();
+                let sure = running == 0
+                    || (desk.browser.as_ref()).is_some_and(|browser| {
+                        browser.confirm(&Confirm {
+                            title: "Restart LLX Desk to update?".into(),
+                            detail: update_detail(running),
+                            yes: "Restart".into(),
+                        })
+                    });
+                if !sure {
+                    return;
+                }
+                let updated = crate::update::app().apply();
+                match updated.and_then(|again| again.start()) {
+                    Ok(()) => {
+                        if let Some(quit) = desk.quit.get() {
+                            quit();
+                        }
+                    }
+                    // Settings says so: the updater told it.
+                    Err(why) => log::warn!("desk: not updated: {why}"),
+                }
+            });
+        if let Err(why) = asked {
+            log::warn!("desk: the update was not asked (no thread: {why})");
+        }
+    }
+
     /// The person brought the app forward: the window to them, empty when nothing was left
     /// open. On a thread of its own, as a quit is.
     pub fn reopened(self: &Arc<Self>) {
@@ -75,6 +111,7 @@ impl Desk {
                 person: true,
                 window: None,
                 from: None,
+                runs: None,
             },
             false,
         )
@@ -113,13 +150,27 @@ impl Desk {
     }
 }
 
-/// What quitting would end, in words.
-fn quit_detail(running: usize) -> String {
-    let terminals = match running {
+/// How many terminals still run a program, in words.
+fn terminals(running: usize) -> String {
+    match running {
         1 => "A terminal is".to_string(),
         n => format!("{n} terminals are"),
-    };
+    }
+}
+
+/// What quitting would end, in words.
+fn quit_detail(running: usize) -> String {
+    let terminals = terminals(running);
     format!("{terminals} still running a program. Quitting ends it, and the window's tabs close.")
+}
+
+/// What restarting into an update would end, in words.
+fn update_detail(running: usize) -> String {
+    let terminals = terminals(running);
+    format!(
+        "{terminals} still running a program. Restarting ends it; the window opens again with \
+         the tabs it had."
+    )
 }
 
 #[cfg(test)]

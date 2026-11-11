@@ -161,6 +161,12 @@ FLIP is reserved for a structural change. The board coalesces snapshots, ignores
 redraws and defers replacement while a card is dragged or IME composition is active. The latest
 snapshot is drawn once the gesture finishes, keeping drafts and focus.
 
+A first window opens in the middle of the screen the system puts new windows on, at about
+three quarters of it each way and at most 1200 × 760 points (`placement.rs`). Where
+the person leaves a window, its size and how wide its side is are kept between launches
+(`window.json` in the app's data); a kept place whose screen is gone is held to the screen that
+is there.
+
 ## The window in use
 
 One window is the one in use, as the system's key window is: the person's presses and the window
@@ -230,9 +236,10 @@ in the same change as the pane's ledger row (`desk/beside.rs`):
 `show` of a hidden pane follows the same table, so the window is not taken from the terminal.
 The links are kept while both panes are open: which pane was opened from which terminal, and
 the terminals the person made whole. A pane closing forgets its links, and a terminal closing
-leaves what was beside it a tab. An agent with a name on the board (`--as`, a worker) opens
-tabs of its own, as does the person and what the app opens again: several workers of one
-terminal would take the one place in turn. Settings → Agents → What an agent opens turns the
+leaves what was beside it a tab. A worker the person ran from the board is known by its
+terminal (`desk/workers.rs`) and opens beside it, as the project's agent does. Any other agent
+with a name on the board (`--as`) opens tabs of its own, as does the person and what the app
+opens again: several named agents of one terminal would take the one place in turn. Settings → Agents → What an agent opens turns the
 whole of it to plain tabs.
 
 The window follows: a tab opened aside does not take the window (it is drawn beside the tab in

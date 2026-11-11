@@ -160,7 +160,8 @@ impl Desk {
         } else {
             command.trim()
         };
-        let title = format!("desk · session {id} · {shown}");
+        // Named by what it runs: its key (`t3`) already says which terminal it is.
+        let title = format!("desk · {shown}");
         browser.group(&format!("t{id}"), group);
         if aside {
             browser.aside(&format!("t{id}"));
@@ -301,7 +302,7 @@ impl Desk {
         command: &str,
         title: &str,
     ) -> Result<(), String> {
-        self.terminal_of_person(call, group, command, title, "")
+        (self.terminal_of_person(call, group, command, title, "")).map(drop)
     }
 
     /// `person_terminal`, its screen showing `before` first, dimmed: a terminal restored.
@@ -312,17 +313,18 @@ impl Desk {
         command: &str,
         before: &str,
     ) -> Result<(), String> {
-        self.terminal_of_person(call, group, command, command, before)
+        (self.terminal_of_person(call, group, command, command, before)).map(drop)
     }
 
-    fn terminal_of_person(
+    /// The person's terminal, as each way of asking for one starts it: its tab's key.
+    pub(super) fn terminal_of_person(
         &self,
         call: &Call,
         group: &str,
         command: &str,
         title: &str,
         before: &str,
-    ) -> Result<(), String> {
+    ) -> Result<String, String> {
         let (id, _) = self.start_session(command, call.cwd, call.vars, (group, false), before)?;
         let facts = Facts {
             title,
@@ -330,13 +332,9 @@ impl Desk {
             command: Some(command).filter(|command| !command.is_empty()),
             ..Facts::default()
         };
-        self.own(
-            &format!("t{id}"),
-            call,
-            crate::ledger::Kind::Terminal,
-            facts,
-        );
-        Ok(())
+        let key = format!("t{id}");
+        self.own(&key, call, crate::ledger::Kind::Terminal, facts);
+        Ok(key)
     }
 }
 

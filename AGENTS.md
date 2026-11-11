@@ -72,6 +72,9 @@ The app is the server: `~/.local/bin/llx-desk` links into `~/Applications/LLX De
 1. Build and bundle: `cargo build --release && scripts/bundle-macos.sh`.
 2. Replace the bundle whole. `ditto` it to `LLX Desk.app.new`, then move that over the old one.
    Never copy over the link or the binary.
-3. Restart: run `llx-desk quit`, then `open -g -a ~/Applications/"LLX Desk.app" --args serve`.
+3. Restart: run `llx-desk quit`, then
+   `env -i HOME="$HOME" USER="$USER" PATH=/usr/bin:/bin open -g -a ~/Applications/"LLX Desk.app" --args serve`.
+   The bare environment matters: an app opened from an agent's shell hands that session's
+   variables to every terminal the person opens in it.
 4. Check that `llx-desk status` names the new build. Another session may start an older app after
    the quit. If it does, open the new one again: it takes over.

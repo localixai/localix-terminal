@@ -43,23 +43,23 @@ pub(super) fn describe(shared: &Shared, _conn: &Conn, _params: &Value) -> Outcom
     done(Ok(super::api::describe(&shared.build)))
 }
 
-pub(super) fn end(shared: &Shared, _conn: &Conn, params: &Value) -> Outcome {
-    done(who(shared, params).map(|who| {
+pub(super) fn end(shared: &Shared, conn: &Conn, params: &Value) -> Outcome {
+    done(who(shared, conn.peer, params).map(|who| {
         let closed = shared.desk.end(&who.owner);
         let plural = if closed == 1 { "" } else { "s" };
         json!({"text": format!("Closed {closed} tab{plural}.")})
     }))
 }
 
-pub(super) fn said(shared: &Shared, _conn: &Conn, params: &Value) -> Outcome {
+pub(super) fn said(shared: &Shared, conn: &Conn, params: &Value) -> Outcome {
     done(
-        who(shared, params)
+        who(shared, conn.peer, params)
             .map(|who| json!({"text": shared.desk.said(&who.owner).unwrap_or_default()})),
     )
 }
 
-pub(super) fn acknowledge(shared: &Shared, _conn: &Conn, params: &Value) -> Outcome {
-    done(who(shared, params).map(|who| {
+pub(super) fn acknowledge(shared: &Shared, conn: &Conn, params: &Value) -> Outcome {
+    done(who(shared, conn.peer, params).map(|who| {
         let ids: Vec<u64> = (params
             .get("ids")
             .and_then(Value::as_array)
@@ -113,13 +113,16 @@ struct Who {
     agent: Option<String>,
 }
 
-fn who(shared: &Shared, params: &Value) -> Result<Who, RpcError> {
+/// Who calls from the process `peer`: the project and agent its params name. One that names no
+/// agent from a terminal the person ran a card's worker in is that worker.
+fn who(shared: &Shared, peer: Option<libc::pid_t>, params: &Value) -> Result<Who, RpcError> {
     let path = PathBuf::from(text(params, "project")?);
     let project =
         (shared.desk.project(&path)).map_err(|why| RpcError::new(code::BAD_PARAMS, why))?;
     let agent = (params.get("agent").and_then(Value::as_str))
         .filter(|agent| !agent.is_empty())
-        .map(str::to_string);
+        .map(str::to_string)
+        .or_else(|| peer.and_then(|pid| shared.desk.worker_at(pid, project.id)));
     Ok(Who {
         owner: crate::projects::owner(&project, agent.as_deref()),
         project,
@@ -138,7 +141,7 @@ fn text<'a>(params: &'a Value, name: &str) -> Result<&'a str, RpcError> {
 /// and tell it again the notes the person sent that nobody acknowledged: a break loses none.
 fn subscribed(shared: &Shared, conn: &Conn, params: &Value) -> Result<Value, RpcError> {
     // A subscriber is always someone's: no connection hears every project's comments.
-    let owner = who(shared, params)?.owner;
+    let owner = who(shared, conn.peer, params)?.owner;
     let wanted: Vec<String> = match params.get("events").and_then(Value::as_array) {
         Some(list) => list
             .iter()
@@ -180,7 +183,7 @@ fn status_of(shared: &Shared) -> Value {
 /// One call of the `window` tool.
 pub(super) fn window_call(shared: &Shared, conn: &Conn, params: &Value) -> Outcome {
     let run = || -> Result<(Value, Option<Blob>), RpcError> {
-        let who = who(shared, params)?;
+        let who = who(shared, conn.peer, params)?;
         let cwd = PathBuf::from(text(params, "cwd")?);
         let args = params
             .get("args")
@@ -193,6 +196,8 @@ pub(super) fn window_call(shared: &Shared, conn: &Conn, params: &Value) -> Outco
             })?;
         let vars = environment(params);
         let from = conn.peer.and_then(|pid| shared.desk.pane_of(pid));
+        let runs = (conn.peer.and_then(crate::desk::agent_of))
+            .map(|(program, folder)| (program, folder.unwrap_or_else(|| cwd.clone())));
         let call = Call {
             owner: &who.owner,
             project: &who.project,
@@ -204,6 +209,7 @@ pub(super) fn window_call(shared: &Shared, conn: &Conn, params: &Value) -> Outco
             person: false,
             window: None,
             from: from.as_deref(),
+            runs: (runs.as_ref()).map(|(program, folder)| (program.as_str(), folder.as_path())),
         };
         let mut answered = shared
             .desk
@@ -242,7 +248,7 @@ pub(super) fn window_call(shared: &Shared, conn: &Conn, params: &Value) -> Outco
 /// The person opened the app: the window to them (`Desk::present`), a terminal in it when it has
 /// no tab, started in `cwd` with the caller's environment.
 fn presented(shared: &Shared, params: &Value) -> Result<Value, RpcError> {
-    let who = who(shared, params)?;
+    let who = who(shared, None, params)?;
     let cwd = PathBuf::from(text(params, "cwd")?);
     let vars = environment(params);
     let call = Call {
@@ -256,6 +262,7 @@ fn presented(shared: &Shared, params: &Value) -> Result<Value, RpcError> {
         person: false,
         window: None,
         from: None,
+        runs: None,
     };
     let go = params.get("go").and_then(Value::as_bool).unwrap_or(false);
     (shared.desk.present(&call, go))

@@ -26,8 +26,8 @@ fn a_run_names_the_agents_worker_and_starts_it_on_its_card() {
     for told in [
         "card c3",
         "tab b1",
-        "is codex-c3",
-        "\"op\": \"review\"",
+        "worker codex-c3",
+        "`review`",
         "\"who\":\"codex-c3\"",
     ] {
         assert!(run.command.contains(told), "{told}: {}", run.command);

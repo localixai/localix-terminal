@@ -25,6 +25,9 @@ pub struct Said {
     pub id: u64,
     pub tab: String,
     pub text: String,
+    /// It was told to those who subscribed, as something to act on now; quiet news (a card
+    /// added, a tab closed) waits for the owner's next call instead.
+    pub told: bool,
 }
 
 #[derive(Default)]
@@ -126,15 +129,24 @@ impl Registry {
             .collect()
     }
 
-    /// The person said `words` about tab `key`: kept for that tab's owner, who is returned with
-    /// what was kept, to be told.
-    pub(super) fn hear(&mut self, key: &str, words: &str) -> Option<(String, Said)> {
-        let owner = self.tabs.get(key).cloned()?;
+    /// The person said `words` about tab `key`: kept for that tab's owner (or for `to`, an agent
+    /// of its project the words are for), who is returned with what was kept; `told` when it is
+    /// to be told to those who subscribed.
+    pub(super) fn hear(
+        &mut self,
+        key: &str,
+        to: Option<&str>,
+        words: &str,
+        told: bool,
+    ) -> Option<(String, Said)> {
+        let owner = self.tabs.get(key)?;
+        let owner = to.map_or_else(|| owner.clone(), str::to_string);
         self.next_said += 1;
         let said = Said {
             id: self.next_said,
             tab: key.to_string(),
             text: words.to_string(),
+            told,
         };
         let kept = self.said.entry(owner.clone()).or_default();
         kept.push(said.clone());
@@ -149,9 +161,12 @@ impl Registry {
         self.said.remove(owner).unwrap_or_default()
     }
 
-    /// What `owner` has not been given yet, left where it is.
+    /// What `owner` was told and has not been given yet, left where it is. Quiet news is not
+    /// among it: told again to one who subscribes, it would wake a session that has just
+    /// started with what the person did before it.
     pub(super) fn pending(&self, owner: &str) -> Vec<Said> {
-        self.said.get(owner).cloned().unwrap_or_default()
+        let kept = self.said.get(owner).into_iter().flatten();
+        kept.filter(|said| said.told).cloned().collect()
     }
 
     /// `owner`'s note `id`, while it has not been given yet.

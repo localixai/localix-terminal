@@ -112,9 +112,7 @@ impl Desk {
     fn interact(&self, call: &Call, args: &Value) -> Result<Output, Failure> {
         // An ask with no tab: the session waits for the person.
         if text(args, "tab").is_none() && args.get("ask").is_some() {
-            return Ok(self
-                .ask(call.owner, self.waits(call), text(args, "ask"))
-                .into());
+            return Ok(self.waits(call, text(args, "ask")).into());
         }
         let tab = self.tab(call, text(args, "tab"))?;
         unread(tab.kind, args)?;

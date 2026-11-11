@@ -23,6 +23,9 @@ pub(super) struct Agent {
     /// How a command of its starts on a first prompt and stays to talk: the words before the
     /// prompt (none: the prompt is its first word). A command not here takes none.
     pub seeds: &'static [(&'static str, &'static str)],
+    /// How a command of its continues the last session of the folder it is started in: the
+    /// words after the command.
+    pub continues: &'static [(&'static str, &'static str)],
 }
 
 /// Brand marks (but Hermes's): see NOTICE.md.
@@ -33,6 +36,7 @@ pub(super) const AGENTS: [Agent; 6] = [
         commands: &["claude"],
         mark: include_str!("marks/claude.svg"),
         seeds: &[("claude", "")],
+        continues: &[("claude", "--continue")],
     },
     Agent {
         id: "codex",
@@ -40,6 +44,7 @@ pub(super) const AGENTS: [Agent; 6] = [
         commands: &["codex"],
         mark: include_str!("marks/codex.svg"),
         seeds: &[("codex", "")],
+        continues: &[("codex", "resume --last")],
     },
     Agent {
         id: "gemini",
@@ -47,6 +52,7 @@ pub(super) const AGENTS: [Agent; 6] = [
         commands: &["gemini"],
         mark: include_str!("marks/gemini.svg"),
         seeds: &[("gemini", "-i")],
+        continues: &[("gemini", "--resume latest")],
     },
     Agent {
         id: "copilot",
@@ -54,6 +60,7 @@ pub(super) const AGENTS: [Agent; 6] = [
         commands: &["copilot"],
         mark: include_str!("marks/copilot.svg"),
         seeds: &[("copilot", "-i")],
+        continues: &[("copilot", "--continue")],
     },
     Agent {
         id: "opencode",
@@ -61,6 +68,7 @@ pub(super) const AGENTS: [Agent; 6] = [
         commands: &["opencode"],
         mark: include_str!("marks/opencode.svg"),
         seeds: &[("opencode", "--prompt")],
+        continues: &[("opencode", "--continue")],
     },
     Agent {
         id: "hermes",
@@ -68,6 +76,7 @@ pub(super) const AGENTS: [Agent; 6] = [
         commands: &["hermes"],
         mark: include_str!("marks/hermes.svg"),
         seeds: &[("hermes", "chat -q")],
+        continues: &[("hermes", "--continue")],
     },
 ];
 
@@ -94,6 +103,33 @@ impl Agent {
                 .join(" "),
         )
     }
+}
+
+/// An agent's last session of a folder, continued: the agent's name and the command line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Continued {
+    pub name: &'static str,
+    pub line: String,
+}
+
+/// How `program` (an agent's, as it was started) continues the last session of the folder it
+/// is started in; none where it is no agent's.
+pub fn continued(program: &str) -> Option<Continued> {
+    let agent = of_command(program)?;
+    let file = program.rsplit('/').next().unwrap_or(program);
+    let (_, words) = agent
+        .continues
+        .iter()
+        .find(|(command, _)| *command == file)?;
+    Some(Continued {
+        name: agent.name,
+        line: format!("{program} {words}"),
+    })
+}
+
+/// Whether `program` is a coding agent's.
+pub fn runs(program: &str) -> bool {
+    of_command(program).is_some()
 }
 
 /// Agent `id` started on `prompt`, where it is installed and takes a first prompt: its command

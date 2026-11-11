@@ -2,7 +2,7 @@
 //! says its events; none knows the window, the bell or the other sources. A new one is a type
 //! here and its place in `SOURCES`.
 
-use super::{Do, Event, Kind, Subject};
+use super::{Do, Event, Kind, Leads, Subject};
 use crate::board::Column;
 use crate::desk::Desk;
 
@@ -39,7 +39,7 @@ impl Source for Asks {
                         tab,
                     )
                     .button("Done", Do::Answer { tab: tab.clone() })
-                    .button("Show", Do::Show { key: tab.clone() }),
+                    .button("Show", Do::Open(Leads::Tab(tab.clone()))),
                     Subject::Terminal(tab) if registry.owner_named(tab).is_none() => return None,
                     Subject::Terminal(tab) => Event::new(
                         format!("waiting:{tab}:{}", ask.n),
@@ -47,13 +47,25 @@ impl Source for Asks {
                         &group(&ask.owner),
                         tab,
                     )
-                    .button("Show", Do::Show { key: tab.clone() }),
-                    Subject::Session(owner) => Event::new(
-                        format!("waiting:{owner}:{}", ask.n),
-                        Kind::Waiting,
-                        &group(owner),
-                        "",
-                    ),
+                    .button("Show", Do::Open(Leads::Tab(tab.clone()))),
+                    Subject::Session(owner) => {
+                        let group = group(owner);
+                        let id = format!("waiting:{owner}:{}", ask.n);
+                        let event = Event::new(id, Kind::Waiting, &group, "");
+                        // It runs outside the window: its agent's program continues it here.
+                        match &ask.from {
+                            Some((program, folder)) => event.button(
+                                "Continue Here",
+                                Do::Open(Leads::Session {
+                                    owner: owner.clone(),
+                                    group,
+                                    program: program.clone(),
+                                    folder: folder.clone(),
+                                }),
+                            ),
+                            None => event,
+                        }
+                    }
                 };
                 Some(event.says(&ask.words, String::new()).at(ask.at))
             })
@@ -74,9 +86,7 @@ impl Source for Boards {
             let (project, tab) = (*project, kept.key.as_str());
             let group = crate::projects::key(project);
             let group = group.as_str();
-            let board = || Do::Board {
-                group: group.to_string(),
-            };
+            let board = || Do::Open(Leads::Board(group.to_string()));
             for card in &kept.board.cards {
                 let id = card.id.clone();
                 if card.column == Column::Review {
@@ -169,7 +179,7 @@ impl Source for Terminals {
             } else {
                 &had.command
             };
-            let show = || Do::Show { key: key.clone() };
+            let show = || Do::Open(Leads::Tab(key.clone()));
             // The program's own words, plain: shown to the person as its title is.
             if let Some((number, words)) = had.note {
                 let event = Event::new(format!("said:{key}:{number}"), Kind::Said, &group, &key)

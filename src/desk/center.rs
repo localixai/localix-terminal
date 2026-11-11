@@ -14,9 +14,12 @@
 
 mod event;
 mod journal;
+mod leads;
 mod sources;
 
 use event::{Do, Event, Kind};
+use leads::Leads;
+pub use leads::agent_of;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -26,7 +29,7 @@ use serde_json::json;
 
 use super::Desk;
 use crate::board;
-use crate::browser::{Asked, CenterDid};
+use crate::browser::CenterDid;
 use crate::feed::{Consumer, Entity, Kind as Of, Notice, Op};
 
 /// Who the agent asks the person for.
@@ -68,6 +71,9 @@ pub(super) struct Ask {
     owner: String,
     words: String,
     at: u64,
+    /// A session's that runs outside the window: its agent's program and the folder it works
+    /// in, by which it is continued in a terminal (leads.rs).
+    from: Option<(String, std::path::PathBuf)>,
 }
 
 /// The number of the last ask.
@@ -140,6 +146,17 @@ impl Desk {
     /// The agent of `owner` asks the person `words` for `subject` (none: it takes that back);
     /// what it is told back.
     pub(super) fn ask(&self, owner: &str, subject: Subject, words: Option<&str>) -> String {
+        self.ask_from(owner, subject, words, None)
+    }
+
+    /// `ask`, of a session whose agent's program and folder are `from`.
+    pub(super) fn ask_from(
+        &self,
+        owner: &str,
+        subject: Subject,
+        words: Option<&str>,
+        from: Option<(String, std::path::PathBuf)>,
+    ) -> String {
         let place = subject.place();
         let mut asks = crate::lock(&self.asks);
         let said = match words {
@@ -150,6 +167,7 @@ impl Desk {
                     owner: owner.to_string(),
                     words: words.chars().take(ASK_MOST).collect(),
                     at: board::now(),
+                    from,
                 };
                 asks.insert(subject, ask);
                 format!(
@@ -165,15 +183,21 @@ impl Desk {
         said
     }
 
-    /// Whose wait a session's ask is: its terminal's when its program runs in one that is open,
-    /// else the session's own.
-    pub(super) fn waits(&self, call: &super::Call) -> Subject {
+    /// A session waits for the person with `words` (none: it goes on). The wait is its
+    /// terminal's when its program runs in one that is open, else the session's own, with what
+    /// continues it in the window.
+    pub(super) fn waits(&self, call: &super::Call, words: Option<&str>) -> String {
         let terminal = (call.from)
             .filter(|key| key.starts_with('t'))
             .filter(|key| crate::lock(&self.registry).owner_named(key).is_some());
         match terminal {
-            Some(key) => Subject::Terminal(key.to_string()),
-            None => Subject::Session(call.owner.to_string()),
+            Some(key) => self.ask(call.owner, Subject::Terminal(key.to_string()), words),
+            None => {
+                let from =
+                    (call.runs).map(|(program, folder)| (program.to_string(), folder.into()));
+                let subject = Subject::Session(call.owner.to_string());
+                self.ask_from(call.owner, subject, words, from)
+            }
         }
     }
 
@@ -333,12 +357,7 @@ impl Desk {
                 let posted = json!({"op": "unblock", "card": card}).to_string();
                 self.person_on_board(project, &posted);
             }
-            Do::Board { group } => self.person_asked(&group, Asked::Board),
-            Do::Show { key } => {
-                if let Some(browser) = &self.browser {
-                    let _ = browser.reveal(&key);
-                }
-            }
+            Do::Open(leads) => self.lead(leads),
             Do::Close { key } => {
                 let _ = self.close_tab(&key);
             }

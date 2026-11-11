@@ -117,3 +117,32 @@ fn an_agent_starts_on_a_first_prompt_quoted_for_the_shell_where_its_command_take
             .contains("no agent `nope`")
     );
 }
+
+#[test]
+fn an_agent_s_program_continues_its_last_session_of_a_folder_with_its_own_words() {
+    let line = |program: &str| continued(program).map(|again| (again.name, again.line));
+    assert_eq!(
+        line("claude"),
+        Some(("Claude Code", "claude --continue".into()))
+    );
+    assert_eq!(line("codex"), Some(("Codex", "codex resume --last".into())));
+    assert_eq!(
+        line("gemini"),
+        Some(("Gemini CLI", "gemini --resume latest".into()))
+    );
+    // As it was started, wherever it is installed.
+    assert_eq!(
+        line("/opt/homebrew/bin/opencode"),
+        Some(("OpenCode", "/opt/homebrew/bin/opencode --continue".into()))
+    );
+    assert_eq!(line("zsh"), None);
+    // Every agent of the table says how: one that could not would lead nowhere.
+    for agent in &AGENTS {
+        for command in agent.commands {
+            assert!(
+                continued(command).is_some(),
+                "{command} continues no session"
+            );
+        }
+    }
+}

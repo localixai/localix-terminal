@@ -10,6 +10,8 @@ use serde_json::Value;
 pub(super) struct Started {
     pub(super) command: String,
     pub(super) title: String,
+    /// The worker's name on the board.
+    pub(super) who: String,
 }
 
 /// The person's `action` on board tab `key`, made ready for the board: a `run` names its worker
@@ -31,22 +33,25 @@ pub(super) fn prepared(
     let (agent, card) = (word("agent")?, word("card")?);
     let who = format!("{agent}-{card}");
     let command = start(&agent, &prompt(&card, &who, key))?;
-    action["who"] = Value::String(who);
+    action["who"] = Value::String(who.clone());
     let title = format!("{card} · {}", command.split(' ').next().unwrap_or(&agent));
-    Ok((action, Some(Started { command, title })))
+    let started = Started {
+        command,
+        title,
+        who,
+    };
+    Ok((action, Some(started)))
 }
 
 /// What the agent is told first: its card, its name on the board, and how to work it there.
 pub(super) fn prompt(card: &str, who: &str, key: &str) -> String {
     let read = serde_json::json!({"action": "interact", "tab": key, "op": "card", "card": card, "who": who});
     format!(
-        "Work card {card} of this project's llx-desk board (its tab {key}). Your name on the board is \
-         {who}, and the card is already yours in Doing. Read it with `llx-desk window '{read}'`: its \
-         title and note say what to do and how to tell it is done. Pass \"who\": \"{who}\" in every \
-         call on the board. Keep to what the card asks. When the work needs the person, `block` it \
-         with a `reason`. When it is done and checked, hand it in for the person's review \
-         (\"op\": \"review\", with a `note` of what you did and how you checked it); never move it \
-         to Done yourself."
+        "Work card {card} of this project's llx-desk board (its tab {key}) as its worker {who}: it \
+         is already yours in Doing. Read it with `llx-desk window '{read}'` and do what its title \
+         and note ask. If the work needs the person, `block` the card with a `reason`. When it is \
+         done and checked, hand it in with `review` and a `note` of what you did and how you \
+         checked it; never move it to Done yourself."
     )
 }
 

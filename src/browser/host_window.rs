@@ -54,7 +54,13 @@ pub(super) fn on_window(
         // The system's appearance changed: a glass that follows it is tinted again.
         WindowEvent::ThemeChanged(_) => open.frame.retint(),
         // Another window took the keys, or this one took them back: the chrome follows.
-        WindowEvent::Focused(_) => open.tell_frame(),
+        WindowEvent::Focused(focused) => {
+            open.tell_frame();
+            // The person turned away: where they left the window is kept for the next launch.
+            if !focused {
+                crate::browser::placement::keep(*crate::lock(&shared.kept));
+            }
+        }
         _ => {}
     }
     false

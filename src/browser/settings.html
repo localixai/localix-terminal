@@ -94,6 +94,12 @@ button:disabled,select:disabled{opacity:.4;cursor:default;pointer-events:none}
 /* Integrations. */
 .state{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--ink-3)}
 .state.on{background:-apple-system-green}
+/* The app's update: what it says turns red when it failed; a download draws a hairline that
+   fills, under its row. */
+#u-says.failed{color:-apple-system-red}
+#u-bar{height:2px;background:var(--ov-2)}
+#u-bar[hidden]{display:none}
+#u-bar i{display:block;height:100%;width:0;background:var(--accent);transition:width var(--t-move) var(--ease)}
 .state.unavailable{background:transparent;box-shadow:inset 0 0 0 1px var(--ink-3)}
 /* A notice of what happened: at the top, away from the window's bottom edge; it fades in and out
    in place, stays while the pointer is on it, and closes on a click. */
@@ -140,6 +146,17 @@ running 230 tests  <span class="p">ok</span>  0O 1lI {}[]=&gt; -&gt;</div>
   <div class="card" id="integrations"><div class="empty">Looking for tools…</div></div>
   <div class="foot"><span>Another MCP host?</span><button class="btn" id="copy-mcp">Copy MCP Entry</button></div>
 
+  <h2>Updates</h2>
+  <div class="card">
+    <div class="row"><div class="l"><b id="u-title">LLX Desk</b><small id="u-says" role="status"></small></div>
+      <button class="btn" id="u-notes" hidden>Release Notes</button>
+      <button class="btn" id="u-act" hidden></button></div>
+    <div id="u-bar" role="progressbar" aria-label="Download" aria-valuemin="0" aria-valuemax="100" hidden><i></i></div>
+    <div class="row"><div class="l"><b>New versions</b><small>An update is installed when you restart into it, never on its own.</small></div>
+      <button class="ic gone" data-reset="updates" aria-label="Reset New versions"></button>
+      <select id="updates" aria-label="New versions"></select></div>
+  </div>
+
   <h2>Keyboard Shortcuts</h2>
   <label id="find"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><input id="q" placeholder="Search by name or keys, such as &quot;cmd d&quot;" spellcheck="false" autocomplete="off"></label>
   <div class="card" id="keys"></div>
@@ -155,6 +172,7 @@ const post = (change) => window.ipc && window.ipc.postMessage("k" + JSON.stringi
 const THEMES = [["system", "System"], ["light", "Light"], ["dark", "Dark"]];
 const LEVELS = [["off", "Off"], ["low", "Low"], ["standard", "Standard"], ["high", "High"]];
 const PLACES = [["beside", "Beside Its Terminal"], ["tab", "In a Tab"]];
+const UPDATES = [["auto", "Download Automatically"], ["manual", "Only When I Check"]];
 const GLASSY = "How much of the desktop shows through the glass.";
 const REDUCED = "Reduced by Accessibility settings (Display > Reduce transparency).";
 const RESET = ["M3.5 8a4.5 4.5 0 1 0 1.4-3.3", "M3.5 3v2.2h2.2"];
@@ -201,7 +219,7 @@ function choices(id, list, value) {
   select.value = value;
 }
 const fontList = (fonts) => fonts.map((font) => [font.id, font.name]);
-for (const id of ["theme", "transparency", "ui_font", "code_font", "agent_opens"]) {
+for (const id of ["theme", "transparency", "ui_font", "code_font", "agent_opens", "updates"]) {
   document.getElementById(id).addEventListener("change", (event) => change(id, event.target.value));
 }
 const step = (by) => cur && data && change("font_size", Math.min(data.sizes[1], Math.max(data.sizes[0], cur.font_size + by)));
@@ -213,11 +231,11 @@ addEventListener("desk-look", () => cur && show());
 
 // The setting a reset button is for: its name in the settings, and in the defaults the page is
 // told (settings.rs `page`); the words for the default it goes back to.
-const RESETS = { theme: "theme", transparency: "transparency", ui_font: "ui_font", code_font: "code_font", font_size: "size", agent_opens: "agent_opens" };
+const RESETS = { theme: "theme", transparency: "transparency", ui_font: "ui_font", code_font: "code_font", font_size: "size", agent_opens: "agent_opens", updates: "updates" };
 function defaultLabel(name) {
   const value = data.defaults[RESETS[name]];
   if (name === "font_size") return value + " pt";
-  const list = { theme: THEMES, transparency: LEVELS, agent_opens: PLACES }[name];
+  const list = { theme: THEMES, transparency: LEVELS, agent_opens: PLACES, updates: UPDATES }[name];
   if (list) return list.find(([key]) => key === value)?.[1];
   return data[name === "ui_font" ? "ui_fonts" : "code_fonts"].find((font) => font.id === value)?.name;
 }
@@ -237,6 +255,7 @@ function show() {
   document.getElementById("transparency").disabled = reduced;
   document.getElementById("tnote").textContent = reduced ? REDUCED : GLASSY;
   choices("agent_opens", PLACES, cur.agent_opens);
+  choices("updates", UPDATES, cur.updates);
   choices("ui_font", fontList(data.ui_fonts), cur.ui_font);
   choices("code_font", fontList(data.code_fonts), cur.code_font);
   document.getElementById("size").textContent = cur.font_size + " pt";
@@ -522,6 +541,29 @@ function I(list) {
     return row;
   }));
 }
+// The app's update (updates.rs `row`): the build that runs, how far an update is, and the one
+// act it takes now. The answer to a click comes as U again.
+function U(row) {
+  document.getElementById("u-title").textContent = row.title;
+  const says = document.getElementById("u-says");
+  says.textContent = row.says;
+  says.className = row.failed ? "failed" : "";
+  const bar = document.getElementById("u-bar");
+  bar.hidden = row.progress === null;
+  bar.setAttribute("aria-valuenow", row.progress ?? 0);
+  bar.firstElementChild.style.width = (row.progress ?? 0) + "%";
+  const act = document.getElementById("u-act");
+  act.hidden = !row.button;
+  act.textContent = row.button ?? "";
+  act.disabled = row.busy;
+  act.className = row.act === "apply" ? "btn go" : "btn";
+  act.dataset.act = row.act ?? "";
+  const notes = document.getElementById("u-notes");
+  notes.hidden = !row.notes;
+  notes.dataset.version = row.notes ?? "";
+}
+document.getElementById("u-act").addEventListener("click", (event) => post({ update: event.target.dataset.act }));
+document.getElementById("u-notes").addEventListener("click", (event) => post({ update: event.target.dataset.version }));
 function T(text, error) {
   const toast = document.getElementById("err");
   toast.textContent = text;

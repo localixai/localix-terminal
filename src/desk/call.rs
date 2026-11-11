@@ -35,6 +35,10 @@ pub struct Call<'a> {
     /// The terminal of the window its program runs in (`t3`), when it runs in one: what it
     /// opens lands beside that terminal (beside.rs).
     pub from: Option<&'a str>,
+    /// The coding agent's program the call comes from (`claude`) and the folder that program
+    /// works in, when the call descends from one: how its session is continued in a terminal
+    /// of the window (center/leads.rs).
+    pub runs: Option<(&'a str, &'a Path)>,
 }
 
 /// Why a call did not come to what it asked.

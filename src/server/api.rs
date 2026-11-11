@@ -84,7 +84,7 @@ pub(super) const METHODS: [Method; 11] = [
     method(
         "events/subscribe",
         "Be told of `events` (all when none) of the caller's tabs (the app quitting is everyone's), as \
-         notifications on this connection; the person's unacknowledged notes are told again now.",
+         notifications on this connection; the person's unacknowledged notes that want acting on are told again now (quiet news waits for a call).",
         subscribe_params,
         false,
         m::subscribe,

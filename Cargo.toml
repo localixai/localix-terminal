@@ -21,6 +21,8 @@ wry = "0.57"
 url = "2.5.8"
 # The few unix calls std has no wrapper for: the PTY, signals, locks.
 libc = "0.2"
+# An update's archive is checked against the checksum its release lists.
+sha2 = "0.11.1"
 # A terminal session's screen.
 vt100 = "0.16.2"
 # What the desk keeps across restarts: the change feed, the boards, the Event Center's journal. Built
@@ -47,7 +49,6 @@ test-server = []
 
 [dev-dependencies]
 llx-desk = { path = ".", features = ["test-server"] }
-sha2 = "0.11.1"
 
 # Opens a real window: run with LLX_DESK_DISPLAY_TESTS=1.
 [[test]]

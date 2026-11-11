@@ -207,6 +207,8 @@ fn app_menu(items: &mut Items<'_>, mine: &[(&Shortcut, Option<Chord>)]) -> Retai
             "",
         ),
     );
+    let check = super::updates::CHECK.to_string();
+    items.entry(&app, "Check for Updates…", "", 0, check);
     separator(&app);
     for (shortcut, chord) in mine.iter().filter(|(s, _)| s.does != QUIT) {
         items.add(&app, shortcut, chord.as_ref());

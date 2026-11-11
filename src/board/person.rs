@@ -15,6 +15,9 @@ pub struct Did {
     pub words: String,
     /// Worth telling now (a returned card, a comment), or only with the agent's next call.
     pub urgent: Urgency,
+    /// The worker whose card it is about, when it is theirs to hear: none for the main agent's
+    /// card, and for what is news of the board as a whole.
+    pub who: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,7 +110,11 @@ impl Board {
                     quote(&card.title),
                     owner(card.who.as_deref())
                 );
-                Ok(Did { words, urgent })
+                Ok(Did {
+                    words,
+                    urgent,
+                    who: None,
+                })
             }
             "limit" => {
                 let limit = (action.get("limit").and_then(Value::as_u64))
@@ -119,6 +126,7 @@ impl Board {
                 Ok(Did {
                     words,
                     urgent: Urgency::Later,
+                    who: None,
                 })
             }
             other => Err(format!("no board action `{other}`")),
@@ -214,7 +222,9 @@ impl Board {
         card.blocked = None;
         let id = card.id.clone();
         self.moved(at, Column::Doing, PERSON, None);
-        Ok(self.did(&id, "ran", " by a worker of its own", Urgency::Later))
+        // News for the project's agent: the worker is told its card as it starts.
+        let did = self.did(&id, "ran", " by a worker of its own", Urgency::Later);
+        Ok(Did { who: None, ..did })
     }
 
     /// A new title or note for card `id`, wherever it is.
@@ -231,16 +241,18 @@ impl Board {
 
     /// `verb` on card `id`, in words: `returned c4 "Cart" (tests)` and the rest.
     fn did(&self, id: &str, verb: &str, rest: &str, urgent: Urgency) -> Did {
-        let words = match self.card(id) {
-            Ok(card) => format!(
+        let card = self.card(id).ok();
+        let words = match card {
+            Some(card) => format!(
                 "{verb} {} {}{}{rest}",
                 card.id,
                 quote(&card.title),
                 owner(card.who.as_deref())
             ),
-            Err(_) => format!("{verb} {id}{rest}"),
+            None => format!("{verb} {id}{rest}"),
         };
-        Did { words, urgent }
+        let who = card.and_then(|card| card.who.clone());
+        Did { words, urgent, who }
     }
 }
 

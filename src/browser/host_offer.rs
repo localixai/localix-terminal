@@ -18,8 +18,12 @@ impl On<'_> {
             return;
         };
         let bar = open.offered();
-        if let Some(id) = self.shared.offers.clicked(bar.as_ref(), take) {
-            crate::browser::offer::take(id, self.shared, self.proxy);
+        match self.shared.offers.clicked(bar.as_ref(), take) {
+            Some(id) if id.starts_with(crate::browser::updates::OF_UPDATE) => {
+                self.shared.heard("", crate::browser::Heard::Update);
+            }
+            Some(id) => crate::browser::offer::take(id, self.shared, self.proxy),
+            None => {}
         }
         open.refresh(self.shared);
     }

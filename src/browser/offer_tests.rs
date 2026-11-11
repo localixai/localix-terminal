@@ -122,3 +122,25 @@ fn the_store_is_asked_once_for_the_refreshes_of_a_moment_and_an_answer_ends_the_
         "put off, it is not due, before the store is written"
     );
 }
+
+#[test]
+fn an_update_taken_is_the_desk_s_to_carry_out_and_one_put_off_closes() {
+    let offers = Offers::default();
+    let bar = Bar {
+        id: "update:0.2.0".to_string(),
+        agent: None,
+        says: "LLX Desk 0.2.0 is ready to install.".to_string(),
+        take: Some("Restart to Update".to_string()),
+        later: Some("Not Now".to_string()),
+        busy: false,
+        failed: false,
+    };
+    // Taken: its id goes on, and nothing is held (the desk may ask first, and the app ends).
+    assert_eq!(
+        offers.clicked(Some(&bar), true).as_deref(),
+        Some("update:0.2.0")
+    );
+    assert_eq!(*crate::lock(&offers.held), None);
+    assert_eq!(offers.clicked(Some(&bar), false), None);
+    assert_eq!(*crate::lock(&offers.held), None);
+}

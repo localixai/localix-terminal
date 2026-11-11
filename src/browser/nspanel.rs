@@ -230,28 +230,37 @@ fn front(object: &AnyObject) {
     let _: () = unsafe { msg_send![object, orderFrontRegardless] };
 }
 
-/// The primary screen's room for windows, below its menu bar and above its Dock, in points from
-/// the top left.
-pub(super) fn work_area() -> Option<Area> {
+/// Each screen's room for windows, below its menu bar and beside its Dock, in points from the
+/// first screen's top left; the first is the one with the menu bar.
+pub(super) fn work_areas() -> Vec<Area> {
     // SAFETY: `screens` is NSScreen's class method, answering an array.
     let screens: Retained<AnyObject> = unsafe { msg_send![class!(NSScreen), screens] };
     // SAFETY: an NSArray answers `count` with an NSUInteger.
     let count: usize = unsafe { msg_send![&*screens, count] };
-    if count == 0 {
-        return None;
-    }
-    // SAFETY: the array has an element at 0 (checked just above).
-    let primary: Retained<AnyObject> = unsafe { msg_send![&*screens, objectAtIndex: 0usize] };
-    // SAFETY: an NSScreen answers `frame` with an NSRect, which `CGRect` lays out.
-    let frame: CGRect = unsafe { msg_send![&*primary, frame] };
-    // SAFETY: as above, for `visibleFrame`.
-    let visible: CGRect = unsafe { msg_send![&*primary, visibleFrame] };
-    Some(Area {
-        x: visible.origin.x,
-        y: frame.size.height - visible.origin.y - visible.size.height,
-        width: visible.size.width,
-        height: visible.size.height,
-    })
+    let screen = |at: usize| -> (CGRect, CGRect) {
+        // SAFETY: the array has an element at `at` (below `count`).
+        let screen: Retained<AnyObject> = unsafe { msg_send![&*screens, objectAtIndex: at] };
+        // SAFETY: an NSScreen answers `frame` with an NSRect, which `CGRect` lays out.
+        let frame: CGRect = unsafe { msg_send![&*screen, frame] };
+        // SAFETY: as above, for `visibleFrame`.
+        let visible: CGRect = unsafe { msg_send![&*screen, visibleFrame] };
+        (frame, visible)
+    };
+    // The system counts up from the first screen's bottom left.
+    let Some(top) = (count > 0).then(|| screen(0).0.size.height) else {
+        return Vec::new();
+    };
+    (0..count)
+        .map(|at| {
+            let (_, visible) = screen(at);
+            Area {
+                x: visible.origin.x,
+                y: top - visible.origin.y - visible.size.height,
+                width: visible.size.width,
+                height: visible.size.height,
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]

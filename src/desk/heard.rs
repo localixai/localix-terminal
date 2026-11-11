@@ -93,6 +93,7 @@ impl Desk {
                 self.write_later(move || desk.window_closed(window));
             }
             Heard::Quit => self.quit_asked(),
+            Heard::Update => self.update_asked(),
             Heard::Reopened => self.reopened(),
             Heard::Asked(asked) => self.person_asked(key, asked),
             Heard::Center(did) => self.person_on_center(did),
@@ -132,6 +133,7 @@ impl Desk {
                     person: true,
                     window: None,
                     from: None,
+                    runs: None,
                 };
                 // The person is known as their project's own, as an agent is once it calls: what
                 // they open is of that project wherever it is listed (an ended terminal's event).
@@ -153,8 +155,29 @@ impl Desk {
                         desk.person_terminal(&Call { cwd, ..call }, &group, "")
                     }
                     Asked::Agent(command) => desk.person_terminal(&call, &group, command),
-                    Asked::Worker { command, title } => {
-                        desk.person_terminal_titled(&call, &group, command, title)
+                    Asked::Worker {
+                        command,
+                        title,
+                        who,
+                    } => (desk.worker_terminal(&call, &group, command, title, who)).map(drop),
+                    Asked::Session {
+                        command,
+                        title,
+                        folder,
+                        waits,
+                    } => {
+                        // Its own folder, where its agent keeps it: never another, whose last
+                        // session would be continued in its place.
+                        let inside = (folder.canonicalize().ok())
+                            .filter(|folder| folder.starts_with(&person.project.path));
+                        match inside {
+                            Some(cwd) => {
+                                let call = Call { cwd: &cwd, ..call };
+                                (desk.person_terminal_titled(&call, &group, command, title))
+                                    .inspect(|()| desk.continued_here(waits))
+                            }
+                            None => Err(format!("{} is no folder of it", folder.display())),
+                        }
                     }
                     Asked::Board => (desk.board(&call, &json!({"op": "show"})))
                         .map(|_| ())

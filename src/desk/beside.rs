@@ -88,12 +88,15 @@ impl Desk {
     }
 
     /// The terminal what `call` opens lands beside: the one it came from, when that is a
-    /// terminal of its project and the caller is the project's own agent. A named agent is one
-    /// of several the same terminal may run, and they would take the one place in turn; what
+    /// terminal of its project and the caller is the project's own agent, or the worker the
+    /// person ran in that terminal. Another named agent is one of several the same terminal
+    /// may run, and they would take the one place in turn; what
     /// the person opens, or the app opens again, has its own place. None where the person
     /// chose tabs in Settings.
     pub(super) fn anchor_of(&self, call: &Call) -> Option<Row> {
-        if call.agent.is_some() || call.person || call.again.is_some() {
+        let named = (call.agent)
+            .filter(|name| self.worker_in(call.from, call.project.id).as_deref() != Some(*name));
+        if named.is_some() || call.person || call.again.is_some() {
             return None;
         }
         if (self.browser.as_ref()).is_some_and(|browser| !browser.opens_beside()) {

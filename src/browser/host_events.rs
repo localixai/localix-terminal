@@ -11,7 +11,6 @@ use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy, EventLoopWi
 use super::super::comments::Comments;
 use super::super::deck::Deck;
 use super::super::guard::token;
-use super::super::placement::Kept;
 use super::super::platform;
 use super::super::windows::{Route, Windows};
 use super::presence::{Presenter, Stage};
@@ -61,6 +60,7 @@ where
     platform::watch_display(&proxy);
     platform::watch_presses(&proxy);
     super::super::agents::learn(&proxy);
+    settings_tab::watch_updates(&shared, &proxy);
     let mut looping = Looping {
         windows: Windows::new(),
         presenter: Presenter::new(),
@@ -114,7 +114,10 @@ impl Looping {
                 reason = "the event loop owns the main thread and never returns: the process ends \
                           here, with the code the run returned (main.rs hands it over)"
             )]
-            Event::UserEvent(Cmd::Exit(code)) => std::process::exit(code),
+            Event::UserEvent(Cmd::Exit(code)) => {
+                crate::browser::placement::keep(*crate::lock(&self.shared.kept));
+                std::process::exit(code)
+            }
             // Every window drawn again, each with its own project in sight.
             Event::MainEventsCleared if self.stale => {
                 self.stale = false;
@@ -301,7 +304,7 @@ pub(super) fn fresh() -> Arc<Shared> {
         comments: Comments::default(),
         turn: Default::default(),
         notices: Default::default(),
-        kept: Mutex::new(Kept::default()),
+        kept: Mutex::new(crate::browser::placement::recalled()),
         offers: crate::browser::offer::Offers::default(),
         folders: Mutex::default(),
     })

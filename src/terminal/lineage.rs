@@ -53,6 +53,24 @@ pub fn ancestor(pid: libc::pid_t, among: &[libc::pid_t]) -> Option<libc::pid_t> 
     None
 }
 
+/// The nearest process, `pid` itself or one it descends from, whose name `known` knows: the
+/// program a call comes from, whatever shells and tools it started in between. Its name, and
+/// the folder it works in (its own, not that of a tool it started elsewhere), where that can
+/// be read.
+pub fn program_among(
+    pid: libc::pid_t,
+    known: impl Fn(&str) -> bool,
+) -> Option<(String, Option<std::path::PathBuf>)> {
+    let mut at = pid;
+    for _ in 0..DEPTH {
+        if let Some(name) = super::foreground::program(at).filter(|name| known(name)) {
+            return Some((name, super::foreground::cwd(at)));
+        }
+        at = parent(at)?;
+    }
+    None
+}
+
 #[cfg(test)]
 #[path = "lineage_tests.rs"]
 mod tests;

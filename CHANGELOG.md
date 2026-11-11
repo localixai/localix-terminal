@@ -4,6 +4,24 @@
 
 ### Added
 
+- An event leads to what it is about even where that has no tab. A coding agent's session that
+  runs outside the window (in another terminal app or an editor) and waits for you has
+  **Continue Here**: its row's click, or its system notice's, opens a terminal of its project
+  in the folder that agent works in and continues its last session there (`claude
+  --continue`, `codex resume --last`, and each other agent's own words); the line is done with
+  once that terminal opened. It is the last session of that folder that is continued, and one
+  still open in the other app goes on there too. The agent is known from the program the call
+  comes from, so this needs nothing of the agent or its plugin. What an event leads to is one kind of thing for every source (a tab, a
+  board, a session), found or opened in one place.
+- The app updates itself. A newer release is looked for soon after the app starts and every few
+  hours, downloaded while you work, held to the checksum its release lists and, on macOS, to the
+  project's Developer ID signature and Apple's notarization; nothing is installed on its own.
+  When it is ready a row under the toolbar says so, with Restart to Update and Not Now; restarting
+  asks first when a terminal still runs a program, and the window opens again with the tabs it
+  had. Settings → Updates shows the build that runs, how far an update is (a download with its
+  part), Check Now, the release's notes, and a choice to look for updates only when asked; the
+  app menu has Check for Updates…. Only an app installed from a release is updated: a build from
+  source says so and asks nothing of the network.
 - A wait on a terminal ends when the shell's command does, and says how: "The command ended with
   exit code 1 after 3.2s", where it could only say the output settled. A text waited for that
   never shows is no longer waited out once the command is over, and the screen's read says
@@ -62,6 +80,11 @@
 
 ### Changed
 
+- The first window opens in the middle of the screen at about three quarters of it each way
+  (up to 1200 × 760 points), so what is around it stays in sight, where it used to take a
+  strip of the screen's right edge at full height. Where you leave the window, and its
+  size, are kept between launches; a window whose screen is gone opens on the one that is there,
+  held to what it leaves.
 - A terminal takes in a flood of output about four times as fast while a call waits on it: the
   wait is woken once a frame, not with every kilobyte, and the program in front is read on a
   timer. The window is sent the output 60 times a second (it was 30).
@@ -159,6 +182,22 @@
 
 ### Fixed
 
+- A card's worker, run from the board (Run), is that worker by the terminal it runs in: its
+  session acts on the board under its name with nothing passed (`who`), what you say of its
+  card (a comment, a card sent back) is told to it alone while its terminal runs, and to the
+  project's agent once that is over; what it opens lands beside its terminal, as the project's
+  own agent's pages do. Its first prompt is half as long. Before, the project's main session
+  was woken with every note meant for the worker.
+- A tab that opens while the window is split takes the window whole, as another tab picked
+  does, where it used to take the half in use and keep the other half's tab beside it. The
+  split stays the project's: either of its two tabs picked shows it again.
+- A terminal's tab is named by what it runs (`shell`, `claude`), without `session 8 ·` before
+  it: its key already says which terminal it is.
+- Claude Code plugin: the row above the prompt is one line, cut at its end in a narrow pane,
+  where its parts wrapped into each other; it no longer counts the app's terminals.
+- A session that starts is no longer woken with the quiet news of the board from before it (a
+  card added, a card run by a worker of its own): only what wants acting on (a comment, a card
+  sent back) is told again to one who subscribes, and the rest comes with its next call.
 - GitHub Copilot and Hermes are offered only by their own commands, `copilot` and `hermes`. A
   shell helper that suggests one command and a runner that does one task and leaves were taken
   for them, and started a program that is not the agent.

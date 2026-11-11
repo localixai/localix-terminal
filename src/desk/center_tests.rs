@@ -14,12 +14,12 @@ use crate::testing::Scratch;
 
 /// What the center shows now, once the feed has told it all that changed.
 impl Event {
-    fn labels(&self) -> Vec<&str> {
+    pub(super) fn labels(&self) -> Vec<&str> {
         self.buttons.iter().map(|button| button.label).collect()
     }
 }
 
-fn shown(desk: &Desk) -> Vec<Event> {
+pub(super) fn shown(desk: &Desk) -> Vec<Event> {
     assert!(desk.feed.settled(Duration::from_secs(5)));
     desk.paint_center();
     crate::lock(&desk.center).shown.clone()

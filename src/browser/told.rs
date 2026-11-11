@@ -14,6 +14,9 @@ pub enum Heard<'a> {
     /// They asked to quit the app (its menu, the Dock, or closing its main window): the desk
     /// decides, asking them first when programs run.
     Quit,
+    /// They asked to restart the app into the update that is ready: the desk decides, asking
+    /// them first when programs run.
+    Update,
     /// They brought the app forward with nothing to show (its Dock icon, opening it again): the
     /// desk gives them a window, empty when nothing was left open.
     Reopened,
@@ -180,7 +183,21 @@ pub enum Asked {
     Agent(&'static str),
     /// A coding agent started on a card of the board, in a terminal of theirs in the project's
     /// folder: its command line (its first prompt in it) and the terminal's title (`c3 · codex`).
-    Worker { command: String, title: String },
+    Worker {
+        command: String,
+        title: String,
+        /// Its name on the board: who it is in its terminal.
+        who: String,
+    },
+    /// A coding agent's session continued in a terminal of theirs, in the folder of the project
+    /// it works in: the command line that continues it and the terminal's title. `waits` is
+    /// whose wait in the Event Center it answers once the terminal opened.
+    Session {
+        command: String,
+        title: String,
+        folder: std::path::PathBuf,
+        waits: String,
+    },
     /// A closed tab of the project's history, opened again: its row in the ledger.
     Again(i64),
     /// They went to the project, which has no tab open: what it had open when the app quit, or

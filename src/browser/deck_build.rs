@@ -82,18 +82,19 @@ impl Deck {
     ) -> Result<Self, String> {
         let look = frame::look(headless, frame::transparency());
         let top = if headless { 0.0 } else { HEIGHT };
-        // A shown window opens on the right of the person's screen, or where they left it; a
+        // A shown window opens in the middle of the person's screen, or where they left it; a
         // hidden one keeps the page's own size.
-        let placed = match headless {
-            true => None,
-            false => platform::work_area(target).map(|area| {
-                let deck = placement::deck(area, crate::lock(&shared.kept).deck);
-                match steps {
-                    0 => deck,
-                    steps => placement::cascade(area, deck, steps),
-                }
-            }),
+        let areas = match headless {
+            true => Vec::new(),
+            false => platform::work_areas(target),
         };
+        let placed = (!areas.is_empty()).then(|| {
+            let deck = placement::deck(&areas, crate::lock(&shared.kept).deck);
+            match steps {
+                0 => deck,
+                steps => placement::cascade(placement::home(&areas, deck), deck, steps),
+            }
+        });
         let (size, at) = match placed {
             Some(at) => (
                 LogicalSize::new(at.width, at.height),

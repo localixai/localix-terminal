@@ -174,3 +174,18 @@ fn what_an_agent_opens_lands_beside_its_terminal_unless_the_person_chose_a_tab()
     let read: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).unwrap();
     assert_eq!(read.agent_opens, Opens::Beside);
 }
+
+#[test]
+fn updates_are_looked_for_unless_the_person_chose_to_ask() {
+    use crate::browser::updates::Updates;
+    let mut settings = Settings::default();
+    assert_eq!(settings.updates, Updates::Auto);
+    assert_eq!(settings.page()["defaults"]["updates"], "auto");
+    settings.change(&json!({"updates": "manual"})).unwrap();
+    assert_eq!(settings.updates, Updates::Manual);
+    assert_eq!(settings.page()["settings"]["updates"], "manual");
+    assert!(settings.change(&json!({"updates": "nightly"})).is_err());
+    // Settings kept before there was such a choice read as the default.
+    let kept: Settings = serde_json::from_str(r#"{"theme": "dark"}"#).unwrap();
+    assert_eq!(kept.updates, Updates::Auto);
+}

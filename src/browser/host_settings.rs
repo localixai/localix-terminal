@@ -2,7 +2,8 @@
 //! or the side's gear, in the project shown; what the person changes there is kept (settings.rs)
 //! and the whole window takes it at once: the menus' shortcuts, the theme, the glass, the fonts.
 //! Its Integrations are setup.rs's, each read and turned on a thread of its own (they run the
-//! person's programs), the page told when they are done.
+//! person's programs), the page told when they are done. Its Updates are update.rs's: the page is
+//! told whenever how far an update is changed, and the checks made for the person start here.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
@@ -13,11 +14,12 @@ use super::clicks::act;
 use crate::browser::panel::Panel;
 use crate::browser::settings;
 use crate::browser::strip::{Click, Key, SETTINGS};
+use crate::browser::updates;
 
 /// The page, as settings.html is.
 const PAGE: &str = include_str!("settings.html");
 /// The SHA-384 of the page's one script: the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "VaFdlN3DNeNK2p91/u0o2ZVoI7sJdSW/ZtPisjexkjvs8gNlZFQ2a25VrSa3E4m4";
+const SCRIPT_SHA384: &str = "D7D/dZfA+CVEuq8uLWxYJaogjGYusYA7iq4Pv818ZpUj6UkA6vxIQu6dA0sf+ynZ";
 
 /// The page, its script run by its hash.
 fn page() -> String {
@@ -36,7 +38,7 @@ impl On<'_> {
             .is_some_and(|panel| panel.alive());
         if alive && act(self.deck, Click::Show(key), self.shared).is_ok() {
             integrations(Arc::downgrade(self.shared), self.proxy.clone(), None);
-            return;
+            return paint_update(self.shared);
         }
         // Gone with the window: the old one's end reaches the loop before the new one's start.
         let mut kept = crate::lock(&self.shared.settings);
@@ -51,9 +53,16 @@ impl On<'_> {
             changed(&shared, &proxy, posted)
         }));
         panel.paint(&script(&settings::now(), None));
+        panel.paint(&update_script());
         *kept = Some(panel);
         drop(kept);
         integrations(Arc::downgrade(self.shared), self.proxy.clone(), None);
+    }
+
+    /// The app menu's Check for Updates…: Settings shown, where it is said how the check goes.
+    pub(super) fn check_for_updates(&mut self) {
+        self.settings();
+        crate::update::app().check();
     }
 
     /// The settings changed: every page and the menus take them.
@@ -78,6 +87,55 @@ fn script(settings: &settings::Settings, error: Option<&str>) -> String {
         settings.page(),
         serde_json::to_string(&error).unwrap_or_else(|_| "null".into())
     )
+}
+
+/// The page's call that draws how far the app's update is.
+fn update_script() -> String {
+    let row = updates::row(&crate::update::app().told(), crate::now());
+    format!(
+        "U({})",
+        serde_json::to_string(&row).unwrap_or_else(|_| "null".into())
+    )
+}
+
+/// Settings, when it is open, told how far the app's update is.
+fn paint_update(shared: &Shared) {
+    // Painted with the lock let go: the window's loop takes it too.
+    let brush = crate::lock(&shared.settings).as_ref().map(Panel::brush);
+    if let Some(panel) = brush {
+        panel.paint(&update_script());
+    }
+}
+
+/// The app's updates from here on: Settings and the offer bar are told whenever how far one is
+/// changed, and one is looked for while the person's settings say to. Never for windows the
+/// person does not see (a test's).
+pub(super) fn watch_updates(shared: &Arc<Shared>, proxy: &tao::event_loop::EventLoopProxy<Cmd>) {
+    if crate::browser::platform::unseen() {
+        return;
+    }
+    let (shared, proxy) = (Arc::downgrade(shared), proxy.clone());
+    crate::update::app().on_change(move || {
+        if let Some(shared) = shared.upgrade() {
+            paint_update(&shared);
+        }
+        let _ = proxy.send_event(Cmd::Strip);
+    });
+    crate::update::app().watch(|| settings::now().updates == updates::Updates::Auto);
+}
+
+/// What the person did in the page's Updates: a check, the restart into what is ready, or the
+/// notes of a release, opened as a page of theirs in the project shown.
+fn update(shared: &Shared, asked: &str) {
+    match asked {
+        "check" => crate::update::app().check(),
+        "apply" => shared.heard("", crate::browser::Heard::Update),
+        version => {
+            let group = crate::lock(&shared.scope).shown().to_string();
+            let page = crate::browser::Asked::Page(Some(updates::notes(version)));
+            shared.heard(&group, crate::browser::Heard::Asked(page));
+        }
+    }
 }
 
 /// The page's call that says `text` for a moment, as an error or not.
@@ -170,6 +228,9 @@ fn changed(shared: &Weak<Shared>, proxy: &tao::event_loop::EventLoopProxy<Cmd>, 
     let Some(shared) = shared.upgrade() else {
         return;
     };
+    if let Some(asked) = asked["update"].as_str() {
+        return update(&shared, asked);
+    }
     if asked["copy"] == "mcp" {
         let said = match crate::setup::mcp_entry() {
             Ok(entry) => {

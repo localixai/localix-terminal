@@ -41,6 +41,7 @@ pub(crate) fn scenario(browser: &Browser, origin: &str) {
         person: false,
         window: None,
         from: None,
+        runs: None,
     };
     let url = format!("{origin}/form.html");
     let opened = desk

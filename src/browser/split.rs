@@ -1,8 +1,8 @@
 //! Split view: two tabs side by side, never more. The window keeps only the tab beside the one
 //! shown and which side it is on: the shown tab is always the half in use, so a click in the
 //! other half makes it the one in use (the two change places as roles, not as sides). Another
-//! tab picked, the window shows it whole, and its project keeps the split: one of its two tabs
-//! picked again, the window splits as it was. Made whole by the person, or a half's tab closed,
+//! tab picked or opened, the window shows it whole, and its project keeps the split: one of its two
+//! tabs picked again, the window splits as it was. Made whole by the person, or a half's tab closed,
 //! the split is gone.
 
 use super::strip::Key;

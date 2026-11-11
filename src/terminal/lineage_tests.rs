@@ -1,6 +1,6 @@
 //! Tests of a process's lineage: a program is known by the one it descends from.
 
-use super::{ancestor, parent};
+use super::{ancestor, parent, program_among};
 
 fn own() -> libc::pid_t {
     libc::pid_t::try_from(std::process::id()).unwrap()
@@ -36,4 +36,26 @@ fn a_program_of_no_one_named_descends_from_none() {
     assert_eq!(ancestor(own(), &[]), None);
     // The first process is nobody's child here.
     assert_eq!(ancestor(1, &[own()]), None);
+}
+
+#[test]
+fn the_program_a_process_comes_from_is_the_nearest_one_known_with_its_own_folder() {
+    let me = own();
+    let mine = super::super::foreground::program(me).unwrap();
+    // Itself when it is known, in the folder it works in; none where nothing up to the first
+    // process is known.
+    let here = std::env::current_dir().unwrap().canonicalize().unwrap();
+    let (name, folder) = program_among(me, |name| name == mine).unwrap();
+    assert_eq!(name, mine);
+    assert_eq!(
+        folder.and_then(|folder| folder.canonicalize().ok()),
+        Some(here)
+    );
+    assert_eq!(program_among(me, |_| false), None);
+    // Past itself to what started it.
+    let above = (parent(me))
+        .and_then(super::super::foreground::program)
+        .unwrap();
+    let found = program_among(me, |name| name == above).map(|(name, _)| name);
+    assert_eq!(found, Some(above));
 }

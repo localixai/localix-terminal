@@ -137,6 +137,20 @@ impl Offers {
         if held.is_some() {
             return held;
         }
+        // An update that is ready is offered on any tab, before what the tab itself offers.
+        if let Some((id, says)) = super::updates::offer(&crate::update::app().told())
+            && self.due(&id)
+        {
+            return Some(Bar {
+                id,
+                agent: None,
+                says,
+                take: Some("Restart to Update".to_string()),
+                later: Some("Not Now".to_string()),
+                busy: false,
+                failed: false,
+            });
+        }
         let Key::Term(_) = shown else {
             return None;
         };
@@ -205,6 +219,8 @@ impl Offers {
         let bar = bar?;
         let mut held = crate::lock(&self.held);
         match (take, bar.take.is_some()) {
+            // The update is the desk's to carry out (it may ask first): nothing is held here.
+            (true, true) if bar.id.starts_with(super::updates::OF_UPDATE) => Some(bar.id.clone()),
             (true, true) => {
                 *held = Some(Bar {
                     take: None,

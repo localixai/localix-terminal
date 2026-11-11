@@ -40,6 +40,7 @@ pub mod setup;
 pub mod shots;
 pub mod store;
 pub mod terminal;
+pub mod update;
 pub mod view;
 pub mod wire;
 

@@ -161,6 +161,9 @@ impl Deck {
         // A session's id used again: the screen kept of the one before is not this one's.
         self.terms.retain(|kept| kept.id != open.id);
         if shown {
+            // A tab that opens takes the window whole, as another tab picked does: the split
+            // stays its project's, and is back with either of its two tabs.
+            self.split.beside = None;
             self.shown = Shown::Term(open.id);
         }
         self.terms.push(open);

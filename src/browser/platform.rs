@@ -76,25 +76,35 @@ pub(super) fn dock(
 ) {
 }
 
-/// The primary screen's room for windows: below the menu bar and above the Dock on macOS, else
-/// the whole monitor. `None` when there is no monitor.
-pub(super) fn work_area<T>(target: &EventLoopWindowTarget<T>) -> Option<super::placement::Area> {
+/// Each screen's room for windows, the first the one a first window opens on: without its menu
+/// bar and Dock where the system says them (macOS), else the screens whole.
+pub(super) fn work_areas<T>(target: &EventLoopWindowTarget<T>) -> Vec<super::placement::Area> {
     #[cfg(target_os = "macos")]
-    if let Some(area) = super::nspanel::work_area() {
-        return Some(area);
+    {
+        let areas = super::nspanel::work_areas();
+        if !areas.is_empty() {
+            return areas;
+        }
     }
-    let monitor = target.primary_monitor()?;
-    let scale = monitor.scale_factor();
-    let (size, at) = (
-        monitor.size().to_logical::<f64>(scale),
-        monitor.position().to_logical::<f64>(scale),
-    );
-    Some(super::placement::Area {
-        x: at.x,
-        y: at.y,
-        width: size.width,
-        height: size.height,
-    })
+    let primary = target.primary_monitor();
+    let first = primary.iter().cloned();
+    let rest = (target.available_monitors()).filter(|monitor| Some(monitor) != primary.as_ref());
+    first
+        .chain(rest)
+        .map(|monitor| {
+            let scale = monitor.scale_factor();
+            let (size, at) = (
+                monitor.size().to_logical::<f64>(scale),
+                monitor.position().to_logical::<f64>(scale),
+            );
+            super::placement::Area {
+                x: at.x,
+                y: at.y,
+                width: size.width,
+                height: size.height,
+            }
+        })
+        .collect()
 }
 
 /// The deck's minimize button puts it away, out of sight and still drawing.

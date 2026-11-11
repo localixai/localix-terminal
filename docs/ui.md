@@ -232,11 +232,28 @@ define colours of its own beyond its `--ground`.
 - **Unavailable items** are dimmed in menu bar menus and hidden in context menus.
 - **Every action has a home in the menu bar.** A context menu or a toolbar button is a shortcut
   to it, never its only place.
+- **An event's row leads to what it is about.** Its click, and its system notice's, bring that
+  in front: a tab that is open is shown; what has no tab is opened as one (an agent's session
+  that runs in another app is continued in a terminal here, **Continue Here**), and its line
+  is then done with. A row that leads nowhere has no click.
 - **What waits for the person** has one list, the Event Center, and three quiet signs read from
   it, never a source of their own: the 6 pt accent dot (on the center's button, and on a tab's
   icon while the tab is out of sight), the Dock's count of what is new, and, only while the
   person is in another app, a notice of the system's with no sound. A sign goes when the thing
   no longer waits; none of them animates or takes the focus.
+- **A question is a sheet**, the system's own, on the window it is about; with the window away
+  it is an alert in front. There is one kind (`Confirm`: a title, a sentence of what happens,
+  the act and Cancel) and no dialog drawn by a page:
+  - the title asks about the act, with the app's or the thing's name ("Quit LLX Desk?");
+  - the detail says what is lost or ended, in one or two sentences, and nothing else;
+  - the default button names the act (Quit, Restart, Close), never OK or Yes; Cancel is second,
+    and Esc;
+  - asked again while it is up, it is not stacked;
+  - it arrives and leaves as the system moves a sheet, which keeps Reduce Motion, Increase
+    Contrast, the glass and VoiceOver right with no code of ours.
+- **What can wait is never a sheet.** An update that is ready, an integration to add: a row
+  under the toolbar (the offer bar), one at a time, with the button that does it and Not Now.
+  It fades in, takes no focus, and comes back later when put off.
 - **Notices** don't carry the only copy of something important:
   - one with a timer pauses while the pointer or focus is on it, and has a close button;
   - they keep off the window's bottom edge;

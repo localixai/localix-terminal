@@ -239,6 +239,8 @@ fn new_tab(
         None => {}
     }
     if shown {
+        // Whole, as a terminal that opens (`Deck::add_term`).
+        open.split.beside = None;
         open.show(Shown::Web);
     }
 }

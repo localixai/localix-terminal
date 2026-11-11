@@ -81,10 +81,8 @@ pub(in crate::desk::center) enum Do {
         project: crate::projects::ProjectId,
         card: String,
     },
-    /// The board of the project grouped as `group`, in front (opened again if it was closed).
-    Board { group: String },
-    /// A tab in front.
-    Show { key: String },
+    /// The person taken to what the event is about, found in the window or opened in it.
+    Open(super::Leads),
     /// A tab closed, as its x.
     Close { key: String },
     /// What the agent asked on a tab is done: it hears so, and the ask goes.
@@ -105,7 +103,7 @@ pub(in crate::desk::center) enum Role {
 impl Do {
     pub(in crate::desk::center) fn role(&self) -> Role {
         match self {
-            Do::Board { .. } | Do::Show { .. } => Role::Open,
+            Do::Open(_) => Role::Open,
             Do::Accept { .. } | Do::Unblock { .. } | Do::Close { .. } | Do::Answer { .. } => {
                 Role::Act
             }

@@ -23,7 +23,7 @@ fn what_the_person_sent_reaches_the_owner_of_the_tab_once() {
         &json!({"action": "open", "kind": "terminal", "command": "sleep 20", "yield_ms": 300}),
     )
     .unwrap();
-    crate::lock(&desk.registry).hear("t1", "this button is wrong");
+    crate::lock(&desk.registry).hear("t1", None, "this button is wrong", true);
     let said = desk.said(&mine.owner).unwrap();
     assert!(
         said.contains("this button is wrong") && said.contains("untrusted"),

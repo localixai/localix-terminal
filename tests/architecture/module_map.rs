@@ -24,16 +24,22 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
     ("secrets", &["paths"]),
     ("terminal", &["fds"]),
     ("setup", &["bundle", "fds", "paths", "store"]),
+    // The app kept up to date: it knows where the app is, and nothing of the window or the desk.
+    ("update", &["bundle", "paths"]),
     // The answers are kept in the store and given to the window through `browser::Answers`.
     ("offers", &["browser", "store"]),
-    // The window: Settings → Integrations reaches setup; it draws what it is sent.
-    ("browser", &["bundle", "paths", "setup", "shots", "view"]),
+    // The window: Settings → Integrations reaches setup, its Updates the updater; it draws what
+    // it is sent.
+    (
+        "browser",
+        &["bundle", "paths", "setup", "shots", "update", "view"],
+    ),
     // The window tool, over the window, the terminals and the kept owners.
     (
         "desk",
         &[
             "board", "browser", "feed", "layout", "ledger", "offers", "projects", "secrets",
-            "served", "shots", "store", "terminal", "view",
+            "served", "shots", "store", "terminal", "update", "view",
         ],
     ),
     // The socket: every method onto the desk, holding the window's handle.

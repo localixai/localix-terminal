@@ -4,7 +4,7 @@
 //! acting on now (a card sent back, a comment) is told to whoever subscribed, as a comment is; one
 //! with only quiet news (a card accepted, reordered) waits for the agent's next call.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Weak;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::time::Duration;
@@ -79,6 +79,7 @@ impl Desk {
             let asked = Asked::Worker {
                 command: run.command,
                 title: run.title,
+                who: run.who,
             };
             desk.person_asked(&crate::projects::key(project), asked);
         }
@@ -124,10 +125,17 @@ impl Desk {
             };
             (kept.key.clone(), std::mem::take(&mut kept.heard))
         };
-        let Some((words, urgent)) = note(&key, heard) else {
-            return;
-        };
-        self.hear(&key, &words, urgent == Urgency::Now);
+        // What is said of a card a worker runs is that worker's; the rest is the project's agent's.
+        let mut parts: BTreeMap<Option<String>, Vec<Did>> = BTreeMap::new();
+        for did in heard {
+            let to = (did.who.as_deref()).and_then(|who| self.worker_owner(project, who));
+            parts.entry(to).or_default().push(did);
+        }
+        for (to, heard) in parts {
+            if let Some((words, urgent)) = note(&key, heard) {
+                self.hear_for(&key, to.as_deref(), &words, urgent == Urgency::Now);
+            }
+        }
     }
 }
 

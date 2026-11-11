@@ -132,6 +132,10 @@ notice, and a reader for consumers. Its state is the truth; nothing else writes 
 **A source of events for the person.** A type in `desk/center/sources.rs` implementing `Source`
 (it reads only its own owner and takes its own locks), its place in `SOURCES`, and, for a new kind
 of event, a variant of `center::Kind` with its line in `Kind::look`. The window needs nothing.
+An event that leads somewhere says what it is about as a `Leads` (`desk/center/leads.rs`), with
+`Do::Open`: a tab, a board, an agent's session. A new kind of thing to lead to is a variant
+there and its arm in `lead`, which finds it in the window or opens it; no source opens anything
+itself, and the row's click and the system notice's take the same path.
 
 **A consumer.** A type implementing `feed::Consumer` with a name of its own: `handle` re-reads the
 owner and is harmless twice; `reconcile` makes its output again from the owners. It is started where

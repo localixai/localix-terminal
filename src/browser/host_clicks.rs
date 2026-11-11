@@ -67,6 +67,9 @@ impl On<'_> {
         if let Some(url) = went(said) {
             return self.go(url);
         }
+        if said == crate::browser::updates::CHECK {
+            return self.check_for_updates();
+        }
         match click(said) {
             Some(Click::Visit(at)) => return self.visit(at),
             Some(Click::Offer(take)) => return self.offer(take),

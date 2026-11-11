@@ -53,10 +53,12 @@ fn a_note_puts_what_wants_acting_on_first_and_says_whether_to_tell_now() {
     let quiet = Did {
         words: "accepted c2 \"Header\"".into(),
         urgent: Urgency::Later,
+        who: None,
     };
     let loud = Did {
         words: "commented on c3 \"API\": \"why\"".into(),
         urgent: Urgency::Now,
+        who: None,
     };
     let (words, urgent) = note("b1", vec![quiet.clone(), loud]).unwrap();
     assert!(
@@ -105,6 +107,37 @@ fn a_panes_look_leaves_the_persons_notes_for_the_agents_own_call() {
         "the agent's own call still gets it: {:?}",
         mine.said
     );
+}
+
+#[test]
+fn quiet_news_of_the_board_waits_for_a_call_and_is_not_told_again_to_who_subscribes() {
+    let (desk, scratch) = (desk(), Scratch::new());
+    let mine = caller(&desk, scratch.path(), None);
+    let me = mine.call();
+    desk.window(&me, &json!({"action": "open", "kind": "board"}))
+        .unwrap();
+    // The person adds a card and runs nothing: news that waits. A session that starts after it
+    // and subscribes is not woken with it as if it had just been said.
+    desk.person_on_board(mine.project.id, r#"{"op": "add", "title": "Header"}"#);
+    desk.tell_board(mine.project.id);
+    assert!(desk.pending(&mine.owner).is_empty());
+    // What wants acting on now is told again to who subscribes, until it is taken.
+    desk.person_on_board(
+        mine.project.id,
+        r#"{"op": "comment", "card": "c1", "text": "Make it sticky"}"#,
+    );
+    desk.tell_board(mine.project.id);
+    let again = desk.pending(&mine.owner);
+    assert_eq!(again.len(), 1, "{again:?}");
+    assert!(again[0].text.contains("Make it sticky"), "{again:?}");
+    // The next call carries both, the quiet news with it.
+    let said = desk.call(&me, &json!({"action": "list"})).unwrap().said;
+    let said = said.unwrap_or_default();
+    assert!(
+        said.contains("added c1 \"Header\"") && said.contains("Make it sticky"),
+        "{said}"
+    );
+    assert!(desk.pending(&mine.owner).is_empty());
 }
 
 #[test]

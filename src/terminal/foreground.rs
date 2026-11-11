@@ -70,6 +70,11 @@ const fn last_child(_pid: libc::pid_t) -> Option<libc::pid_t> {
     None
 }
 
+/// The name process `pid` was started as.
+pub(super) fn program(pid: libc::pid_t) -> Option<String> {
+    named(&arguments(pid)?)
+}
+
 /// The name a program was started as, from its arguments.
 pub(super) fn named(args: &[String]) -> Option<String> {
     let base = |arg: &str| arg.rsplit('/').next().unwrap_or(arg).to_string();

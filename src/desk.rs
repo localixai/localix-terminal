@@ -34,6 +34,7 @@ mod tab;
 mod term;
 mod told;
 mod web;
+mod workers;
 mod writes;
 
 use std::collections::HashMap;
@@ -52,6 +53,7 @@ pub use args::{description, schema};
 #[cfg(test)]
 use call::plain;
 pub use call::{Answered, Call, Failure, Output};
+pub use center::agent_of;
 pub use events::{Events, Quiet, said_block};
 use registry::Registry;
 pub use registry::Said;
@@ -61,6 +63,8 @@ pub struct Desk {
     page: Option<Page>,
     browser: Option<Browser>,
     sessions: Mutex<HashMap<u32, Arc<Session>>>,
+    /// The workers the person ran from a board, by the terminal each runs in (`workers.rs`).
+    workers: Mutex<HashMap<String, workers::Worker>>,
     /// The project (the window's key) each session was started for: kept as long as the session
     /// is, whatever becomes of its tab and its row of the ledger.
     session_groups: Mutex<HashMap<u32, String>>,
@@ -138,6 +142,7 @@ impl Desk {
                 page: browser.clone().map(|browser| Page::new(browser, headless)),
                 browser,
                 sessions: Mutex::default(),
+                workers: Mutex::default(),
                 session_groups: Mutex::default(),
                 starting: Mutex::default(),
                 next_terminal: AtomicU32::new(1),
@@ -210,8 +215,8 @@ impl Desk {
         (!notes.is_empty()).then(|| said_block(&notes))
     }
 
-    /// What the person sent to `owner` that was not delivered yet, left as it is: told again to
-    /// whoever subscribes, until acknowledged.
+    /// What the person sent to `owner` to act on now that was not delivered yet, left as it
+    /// is: told again to whoever subscribes, until acknowledged. Quiet news waits for a call.
     pub fn pending(&self, owner: &str) -> Vec<Said> {
         crate::lock(&self.registry).pending(owner)
     }
@@ -224,8 +229,13 @@ impl Desk {
     /// Kept `words` for the owner of tab `key`; with `told`, the notice that tells those who
     /// subscribed, recorded under the registry's lock with the note it announces.
     fn hear(&self, key: &str, words: &str, told: bool) {
+        self.hear_for(key, None, words, told);
+    }
+
+    /// `hear`, for `to` when the words are for another agent of the tab's project.
+    fn hear_for(&self, key: &str, to: Option<&str>, words: &str, told: bool) {
         let mut registry = crate::lock(&self.registry);
-        if let Some((owner, said)) = registry.hear(key, words)
+        if let Some((owner, said)) = registry.hear(key, to, words, told)
             && told
         {
             let said = Entity::Said { owner, id: said.id };

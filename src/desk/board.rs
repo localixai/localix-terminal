@@ -52,7 +52,8 @@ impl Kept {
 impl Desk {
     /// A `board` call: `op` on the project's board, and the board as the worker reads it after.
     pub(super) fn board(&self, call: &Call, args: &Value) -> Result<Output, Failure> {
-        let worker = Worker(board::worker_name(text(args, "who"))?);
+        // A named agent is that worker on the board, with no `who` of its own to pass.
+        let worker = Worker(board::worker_name(text(args, "who").or(call.agent))?);
         let op = text(args, "op").unwrap_or("look");
         let (report, state, paint, key) = {
             let mut boards = crate::lock(&self.boards);

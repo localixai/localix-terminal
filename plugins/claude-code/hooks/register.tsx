@@ -439,18 +439,21 @@ export const register: Register = (on, options) => {
     const tabs = `${d.tabs.length} tab${d.tabs.length === 1 ? '' : 's'}`
     const last = d.comments[d.comments.length - 1]
     const working = b && b.working.length ? ` · Doing: ${b.working.slice(0, 3).join(', ')}${b.working.length > 3 ? '…' : ''}` : ''
+    // One line of text, its parts spans of it: a narrow pane cuts its end off, where a row of
+    // boxes would be squeezed into columns that wrap into each other.
     return (
       <Box>
-        <Text color="cyan">◐ desk</Text>
-        <Text dimColor>
-          {running ? ` · ${tabs}` : ''}
-          {running && d.terminals !== '0' ? ` · ${d.terminals} terminal${d.terminals === '1' ? '' : 's'}` : ''}
-          {working}
-        </Text>
-        {b && b.review ? <Text color="yellow"> · {b.review} to review</Text> : null}
-        {b && b.blocked ? <Text color="red"> · {b.blocked} blocked</Text> : null}
-        <Text dimColor>
-          {last ? ` · last comment ${last.at}` : ''} · /tabs
+        <Text wrap="truncate-end">
+          <Text color="cyan">◐ desk</Text>
+          <Text dimColor>
+            {running ? ` · ${tabs}` : ''}
+            {working}
+          </Text>
+          {b && b.review ? <Text color="yellow"> · {b.review} to review</Text> : null}
+          {b && b.blocked ? <Text color="red"> · {b.blocked} blocked</Text> : null}
+          <Text dimColor>
+            {last ? ` · last comment ${last.at}` : ''} · /tabs
+          </Text>
         </Text>
       </Box>
     )

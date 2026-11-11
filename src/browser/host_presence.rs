@@ -121,7 +121,10 @@ impl Presenter {
         if let Ok(at) = native.outer_position() {
             let (at, size) = (
                 at.to_logical::<f64>(scale),
-                native.outer_size().to_logical::<f64>(scale),
+                // The size it is opened at again is its inner one (frame.rs): the outer one
+                // would add a title bar's height with every launch where the bar is the
+                // system's.
+                native.inner_size().to_logical::<f64>(scale),
             );
             crate::lock(&shared.kept).deck = Some(Rect {
                 x: at.x,
