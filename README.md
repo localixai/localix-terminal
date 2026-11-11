@@ -53,7 +53,8 @@ On macOS that is **LLX Desk.app** in `~/Applications`; or take
 [`LLX-Desk-macos.dmg`](https://github.com/rsaryev/llx-desk/releases/latest/download/LLX-Desk-macos.dmg),
 open it and drag the app to Applications (it is signed and notarized by Apple). It is a regular
 Mac app: Dock icon, menu bar, ⌘Q. Opened, it links `llx-desk` into `~/.local/bin` and brings the
-window to you, with your shell in it when it has no tab yet. `llx-desk open .` opens the current
+window to you: what the project had open, or, with nothing left open, New Page, New Terminal,
+Board and Open Folder… with their keys (no terminal opens unasked). `llx-desk open .` opens the current
 folder as a project.
 
 The app connects your agents by itself, each time it opens, for whichever is installed: the Claude

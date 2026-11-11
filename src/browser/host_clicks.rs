@@ -29,8 +29,19 @@ impl On<'_> {
         presenter.event(event, &mut stage);
     }
 
-    /// The person opened the app: the window comes back.
+    /// The person opened the app: the window comes back; with nothing open yet, an empty one,
+    /// its start of a new tab.
     pub(super) fn opened(&mut self) {
+        if self.deck.is_none() {
+            match Deck::empty((self.target, self.steps), self.shared, self.proxy) {
+                Ok(deck) => {
+                    deck.refresh(self.shared);
+                    deck.frame.focus();
+                    *self.deck = Some(deck);
+                }
+                Err(why) => log::warn!("no window for the person: {why}"),
+            }
+        }
         let (presenter, mut stage) = self.staged();
         presenter.opened(&mut stage);
     }
@@ -62,7 +73,6 @@ impl On<'_> {
             Some(Click::Collapse) => return self.presence(Presence::Collapse),
             Some(Click::Quit) => return self.shared.heard("", Heard::Quit),
             Some(Click::NewTab(x, y)) => return self.plus(x, y),
-            Some(Click::Agent(at)) => return self.agent(at),
             Some(Click::Projects(x, y)) => return self.project_menu(x, y),
             Some(Click::Tabs(x, y)) => return self.tabs_menu(x, y),
             // Once a frame while the edge is dragged: laid out, nothing redrawn but at the end.

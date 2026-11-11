@@ -142,8 +142,8 @@ pub fn build() -> String {
 pub struct Begin {
     /// Its pages drawn out of sight.
     pub headless: bool,
-    /// The person opened the app: the window comes to them at once, with their shell when it
-    /// has no tab.
+    /// The person opened the app: the window comes to them at once, empty when nothing was left
+    /// open.
     pub opened: bool,
 }
 

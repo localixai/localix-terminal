@@ -161,3 +161,17 @@ fn a_title_said_often_is_written_once_in_a_while_and_its_last_word_when_the_row_
     assert_eq!(title(), "three");
     desk.shutdown();
 }
+
+#[test]
+fn a_project_with_nothing_left_open_opens_nothing_of_its_own() {
+    // The window shows its start of a new tab: no shell is opened for the person unasked.
+    let store = Arc::new(crate::store::Store::memory().unwrap());
+    let scratch = Scratch::new();
+    let desk = desk_on(Arc::clone(&store));
+    let mine = caller(&desk, scratch.path(), None);
+    desk.reopen_project(&mine.call(), &crate::projects::key(mine.project.id))
+        .unwrap();
+    assert!(crate::lock(&desk.sessions).is_empty());
+    assert!(crate::lock(&desk.ledger).is_empty());
+    desk.shutdown();
+}

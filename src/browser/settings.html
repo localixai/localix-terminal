@@ -471,7 +471,7 @@ function drawKeys() {
   if (seen !== listed) {
     listed = seen;
     if (!rows.length) {
-      list.replaceChildren(el("div", "empty", "No shortcut matches"));
+      list.replaceChildren(el("div", "empty", "No Matching Shortcuts"));
     } else {
       const out = [];
       let group = null;

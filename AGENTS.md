@@ -52,6 +52,9 @@ The window is a calm macOS tool, not a web app. Every control earns its place by
   token radius (`--r-1`, `--r-2`). One glyph style: the line icons the strip and board draw.
 - **Words in a control are for push buttons** (Accept, Send Back, Comment) and menus, in title
   case. A menu that the button opens says so with `aria-haspopup`.
+- **An empty place is one quiet line** of what would be there, no glyph, frame, picture or
+  motion; only the window with no tab offers its first commands with their keys
+  ([docs/ui.md](docs/ui.md), Words).
 - **One look per kind of control**: a new button reuses an existing class (`.fold`, `.quick`,
   `.btn.plain.ico`, `.btn.go`) rather than a variant of its own.
 

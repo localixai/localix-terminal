@@ -13,8 +13,8 @@ impl Desk {
     }
 
     /// The person went to `call`'s project, which has no tab open: what it had open when the
-    /// app last quit opens again, the same panes in the same tabs, places and splits; else their
-    /// shell in its folder.
+    /// app last quit opens again, the same panes in the same tabs, places and splits. Nothing
+    /// left, nothing opens: the window offers its start of a new tab.
     pub(super) fn reopen_project(&self, call: &Call, group: &str) -> Result<(), String> {
         let open: std::collections::HashSet<Row> = (crate::lock(&self.ledger).values())
             .map(|(row, _)| *row)
@@ -28,7 +28,7 @@ impl Desk {
             .filter(|tab| !open.contains(&tab.row))
             .collect();
         if left.is_empty() {
-            return self.person_terminal(call, group, "");
+            return Ok(());
         }
         left.sort_by_key(|tab| order.iter().position(|row| *row == tab.row));
         // They are this run's now: nothing of the project's closes as the first of them opens.

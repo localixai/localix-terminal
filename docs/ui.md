@@ -249,7 +249,13 @@ define colours of its own beyond its `--ground`.
 - **No "we"**, and no "your" or "my" where nothing is lost without it ("Projects", not "Your
   Projects"). An error says what happened near where it happened, without blame or codes.
 - **Settings**, never "Preferences". It opens with ⌘, from the app menu.
-- An empty state says what to do next, with a button.
+- **An empty place is one quiet line**, centred, in `--ink-2`, of what would be there: "No
+  History", "No Matching Tabs" (title case, as a menu's disabled item). An empty board column
+  says what its cards are ("Cards ready for an agent"). No glyph tile, dashed frame,
+  illustration, logo or motion, and nothing to press: "+" and the menus open what can be.
+- **The one exception is the window with no tab left.** The whole pages' part is empty, so it
+  offers what opens a tab, as a menu does: New Page, New Terminal, Board, Open Folder…, each with
+  its key as Settings sets it, quiet until pointed at.
 
 ## Motion
 

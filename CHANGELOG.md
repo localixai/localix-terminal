@@ -174,9 +174,11 @@
   session's end takes its asks with it; a crumb's terminal stays inside the project (no `..`);
   what the last run left open is history once the project has a tab again. Settings are the
   window's own, listed in every project.
-- **The window stays when every tab is closed.** It shows, centred, what can be opened: New Page,
-  New Terminal, Board, and each agent installed. Every empty place (the tabs, the history, the
-  Event Center) says so the same way: a glyph, a quiet line, centred.
+- **The window stays when every tab is closed.** It offers, centred and quiet as a menu, what opens
+  a tab: New Page, New Terminal, Board, Open Folder…, each with its key as Settings sets it. Every
+  other empty place says what would be there in one quiet line, with no glyph, frame or button:
+  the tabs ("No Tabs"), the history, the Event Center, a search in Settings, a board column ("Cards
+  ready for an agent").
 - **The glass's levels are even steps**, Standard as a system window's (half the desktop through),
   Low and High a step either side, Off opaque.
 - **The side shuts to a rail** of the tabs' pictures, its button where it was, instead of
@@ -216,7 +218,8 @@
   nothing of their own. On macOS it is a regular app (Dock icon, menu bar built from the shortcuts,
   ⌘Q); the first call of an agent starts it through LaunchServices, in the background, and nothing
   an agent does takes your keys. Opened, it links `llx-desk` into `~/.local/bin` and brings the
-  window to you, your login shell in it when it has no tab. The Dock icon brings the window back;
+  window to you, with what the project had open (nothing left open, the window's start of a new
+  tab; no terminal opens unasked). The Dock icon brings the window back;
   the main window's close button quits as ⌘Q does (as does the Dock's Quit, or logging out),
   asking first while terminals run a program. `install.sh` installs the app (macOS:
   `~/Applications`; Linux: the program, the command and a desktop entry, `llx-desk open`).

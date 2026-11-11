@@ -28,7 +28,7 @@ impl Deck {
                 return Ok(());
             }
             // The host opens its page: the tab it needs is built on the event loop.
-            Click::Visit(_) | Click::Offer(_) | Click::Agent(_) => return Ok(()),
+            Click::Visit(_) | Click::Offer(_) => return Ok(()),
             Click::Drag => {
                 let _ = self.frame.native.drag_window();
                 return Ok(());
@@ -143,7 +143,6 @@ impl Deck {
             | Click::Forward
             | Click::Visit(_)
             | Click::Offer(_)
-            | Click::Agent(_)
             | Click::SplitMove(..)
             | Click::SplitEven
             | Click::Move(..)

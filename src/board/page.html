@@ -92,9 +92,8 @@ body.inspecting main,body.inspecting .bar{margin-right:min(348px,calc(100vw - 26
 button.pill:hover{background:var(--ov-2);color:var(--fg);transition:none}
 button.pill:active{background:var(--ov-3)}
 .list{flex:1;min-height:0;overflow-y:auto;padding:2px 8px 10px;display:flex;flex-direction:column;gap:8px}
-.empty{margin:2px 0;padding:18px 12px;border-radius:var(--r-3);border:1px dashed var(--ov-3);color:var(--ink-2);text-align:center;line-height:15px;font-size:12px;
-  display:flex;flex-direction:column;align-items:center;gap:7px}
-.empty svg{opacity:.7}
+/* An empty column: one quiet line of what would be in it, no frame and no glyph. */
+.empty{padding:14px 8px;color:var(--ink-3);text-align:center;line-height:15px;font-size:12px}
 /* The one slot a drag keeps, sized to the card it carries; it grows only when it enters a column. */
 .slot{flex:none;height:44px;border-radius:var(--r-3);background:var(--acc-1);box-shadow:inset 0 0 0 1.5px var(--acc-3)}
 .slot.enter{animation:grow var(--t-out) var(--ease)}

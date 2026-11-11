@@ -8,13 +8,14 @@ const act = (action) => post("k" + JSON.stringify(action));
 const COLUMNS = [["backlog", "Backlog"], ["todo", "Todo"], ["doing", "Doing"], ["review", "Review"], ["done", "Done"], ["discarded", "Discarded"]];
 const ORDER = COLUMNS.map(([column]) => column);
 const TITLES = Object.fromEntries(COLUMNS);
+// An empty column says, in one quiet line, what would be in it.
 const EMPTY = {
-  backlog: "New cards land here. Nobody works on one until you move it to Todo.",
-  todo: "Nothing to do yet. Move a card here from Backlog, or let the agent plan.",
-  doing: "Agents take cards from Todo and work on them here.",
-  review: "Finished work waits here to be accepted or sent back.",
-  done: "Accepted cards collect here.",
-  discarded: "Nothing given up. Cards dropped from any column land here.",
+  backlog: "Ideas wait here until moved to Todo",
+  todo: "Cards ready for an agent",
+  doing: "Cards an agent is working on",
+  review: "Work waiting for you to accept",
+  done: "Cards you accepted",
+  discarded: "Cards given up",
 };
 const motion = matchMedia("(prefers-reduced-motion: reduce)");
 let board = { key: "", project: "", limit: 1, now: 0, cards: [], agents: [] };
@@ -56,17 +57,9 @@ function icon(d, size = 12) {
 const GLYPH = {
   close: "m3 3 6 6M9 3 3 9", check: "m2.5 6.3 2.3 2.2L9.5 3.5", back: "M4.5 3 2 5.5 4.5 8M2 5.5h5.5a2.5 2.5 0 0 1 0 5H6",
   fold: "M7.5 3 4.5 6l3 3", open: "M4.5 3l3 3-3 3",
-  // For the empty columns, drawn larger: an idea, a list, someone at work, an eye, a seal.
-  idea: "M4.4 8.6C3.4 7.9 2.8 6.9 2.8 5.7a3.2 3.2 0 0 1 6.4 0c0 1.2-.6 2.2-1.6 2.9v1H4.4zM4.6 11h2.8",
-  list: "M4.5 3.5h5M4.5 6h5M4.5 8.5h5M2.5 3.5h0M2.5 6h0M2.5 8.5h0",
-  work: "M6 1.8v1.4M6 8.8v1.4M1.8 6h1.4M8.8 6h1.4M3 3l1 1M8 8l1 1M9 3 8 4M4 8 3 9M6 4.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6z",
-  eye: "M1.2 6S3 2.8 6 2.8 10.8 6 10.8 6 9 9.2 6 9.2 1.2 6 1.2 6zM6 4.8a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z",
-  seal: "M6 1.3l1.3 1 1.6-.1.5 1.5 1.3.9-.5 1.5.5 1.5-1.3.9-.5 1.5-1.6-.1L6 10.7l-1.3-1-1.6.1-.5-1.5-1.3-.9.5-1.5-.5-1.5 1.3-.9.5-1.5 1.6.1zM4.3 6.1l1.2 1.1 2.2-2.3",
   trash: "M2.3 3.4h7.4M4.7 3.4V2.3h2.6v1.1M3.3 3.4l.5 6.3h4.4l.5-6.3M5 5.2v2.8M7 5.2v2.8",
-  shelf: "M2 4h8v5.7H2zM1.6 2.3h8.8V4H1.6zM4.6 6h2.8",
   chevron: "M3.5 4.8 6 7.2l2.5-2.4", play: "M4 2.8v6.4L9.2 6z",
 };
-const EMPTY_GLYPH = { backlog: "idea", todo: "list", doing: "work", review: "eye", done: "seal", discarded: "shelf" };
 
 const now = () => board.now + Math.floor((Date.now() - paintedAt) / 1000);
 function age(then) {
@@ -305,7 +298,7 @@ function laneView([column, title]) {
     pill = el("button.pill", { text: `${board.limit} each`, title: "Change how many cards a worker may hold in Doing",
       onclick: () => act({ op: "limit", limit: board.limit >= 3 ? 1 : board.limit + 1 }) });
   }
-  const list = el("div.list", { "data-col": column }, shown.length ? shown.map(cardView) : el("div.empty", {}, icon(GLYPH[EMPTY_GLYPH[column]], 18), el("span", { text: EMPTY[column] })));
+  const list = el("div.list", { "data-col": column }, shown.length ? shown.map(cardView) : el("div.empty", { text: EMPTY[column] }));
   const lane = el("section.lane", { "data-col": column, "aria-label": `${title}, ${cards.length}` },
     el("h2", { "aria-label": `${title}, ${cards.length}` }, el("span.dot"), title, el("span.n", { text: String(cards.length) }),
       el("span.end", {}, pill, el("button.fold", { title: `Fold ${title}`, "aria-label": `Fold ${title}`,

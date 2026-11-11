@@ -263,7 +263,7 @@ impl Looping {
             });
             return true;
         }
-        let mut deck = match Deck::empty(target, &self.shared, &self.proxy) {
+        let mut deck = match Deck::empty((target, 1), &self.shared, &self.proxy) {
             Ok(deck) => deck,
             Err(why) => {
                 log::warn!("no window for the tab carried out: {why}");

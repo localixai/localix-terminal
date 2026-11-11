@@ -15,7 +15,7 @@ pub enum Heard<'a> {
     /// decides, asking them first when programs run.
     Quit,
     /// They brought the app forward with nothing to show (its Dock icon, opening it again): the
-    /// desk gives them a window, with their shell when it has no tab.
+    /// desk gives them a window, empty when nothing was left open.
     Reopened,
     /// They sent their comments on a page: words for the agent, as a message of theirs.
     Sent(&'a str),

@@ -149,7 +149,6 @@ impl Deck {
         for (part, view) in parts {
             let Some(view) = view else { continue };
             self.say((part, view), "split", &split);
-            self.say((part, view), "agents", &super::super::agents::script());
             self.say((part, view), "drawn", &drawn);
         }
         self.tell_frame();

@@ -109,26 +109,24 @@ html[data-part=nav]:not([data-glass]) #browse{background:var(--ground)}
 #browse #addr{width:100%}
 #browse #nav{justify-self:start}
 #browse #tools{justify-self:end}
-/* Every empty place says so the same way, centred: a glyph, a quiet line, and what can be done
-   there. No tab left, the browser's toolbar gives the pages' whole part to it. */
-.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:26px 16px;box-sizing:border-box}
-.empty .g{box-sizing:border-box;width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:color-mix(in srgb,currentColor 7%,transparent);opacity:.7}
-.empty .g svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
-.empty .w{font-size:13px;line-height:16px;color:var(--ink-2)}
-.empty .row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:440px}
-.empty button{font:inherit;font-size:12px;line-height:15px;color:var(--ink);border:0;border-radius:var(--r-3);height:28px;padding:0 12px;background:var(--ov-1);box-shadow:var(--sh-hair);display:flex;gap:8px;align-items:center;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
-.empty button:hover{background:var(--ov-2);transition:none}
-.empty button:active{background:var(--ov-3);transition:none}
-.empty button .mk{display:grid;place-items:center}
-.empty button .mk svg{width:13px;height:13px;fill:currentColor}
+/* Every empty place says so the same way: one quiet line, centred, of what would be there; no
+   glyph, no frame, nothing to press ("+" opens what can be). */
+.empty{display:flex;align-items:center;justify-content:center;text-align:center;padding:26px 16px;box-sizing:border-box;font-size:13px;line-height:16px;color:var(--ink-2)}
 #sl .empty{flex:1}
 /* Where a tab carried in from another window would go: an empty place, as the held row's. */
 #sl .slot{flex:none;border-radius:var(--r-4);background:var(--ov-1)}
 /* A tab held: the side covers the window, clear past its column, which keeps its width. */
 #blank{display:none}
 html[data-part=nav][data-blank] #browse{display:none}
-html[data-part=nav][data-blank] #blank{position:fixed;inset:0;display:flex}
-#blank .empty{flex:1}
+html[data-part=nav][data-blank] #blank{position:fixed;inset:0;display:flex;overflow:hidden}
+/* No tab left, the pages' whole part offers what opens one, as a menu would: each command and
+   its key, quiet until pointed at. The keys are the person's, from Settings. */
+#blank .start{margin:auto;display:flex;flex-direction:column;gap:2px;width:248px}
+#blank .start button{font:inherit;font-size:13px;line-height:16px;color:var(--ink-2);background:none;border:0;border-radius:var(--r-2);height:28px;padding:0 10px;display:flex;align-items:center;justify-content:space-between;gap:24px;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+#blank .start button:hover{background:var(--ov-2);color:var(--fg);transition:none}
+#blank .start button:active{background:var(--ov-3);transition:none}
+#blank .start button:focus-visible{outline:auto 1px -webkit-focus-ring-color;outline-offset:-1px}
+#blank .start kbd{font:inherit;color:var(--ink-3);font-variant-numeric:tabular-nums}
 #tools{display:flex;align-items:center;gap:4px}
 /* The bar is bare: icons and words on the glass, no capsules. A button lights as the pointer
    comes; only one that is on (comments, a page size) and the field being typed in have a ground. */
@@ -399,7 +397,6 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
 <div id="gh"></div>
 <div id="line" role="separator" aria-orientation="vertical" aria-label="Split width" tabindex="0" title="Drag or use arrow keys to resize; Home evens the halves"></div>
 <script type="application/json" id="marks">{}</script>
-<script type="application/json" id="agents">[]</script>
 <script>
 "use strict";
 /*RESIZE_HANDLES*/
@@ -552,6 +549,13 @@ let HINTS = {};
 const HINTED = { bk: "back", fw: "forward", rl: "reload", fs: "page-size", cm: "comment", nt: "new-page",
   hs: "history", mn: "collapse", sc: "sidebar", sd: "send", sn: "new-page", sg: "settings", url: "address", sq: "find-tab",
   pj: "projects" };
+// What opens a tab where none is left: each command with its key (shortcuts.rs, as Settings sets it).
+const STARTS = [
+  ["new-page", "New Page", "key new page"],
+  ["new-terminal", "New Terminal", "key new terminal"],
+  ["board", "Board", "key new board"],
+  ["open-folder", "Open Folder\u2026", "key open folder"],
+];
 function titled(node, base) {
   node.dataset.base = base;
   const key = HINTS[HINTED[node.id]];
@@ -563,6 +567,7 @@ function looked(look) {
     const node = document.getElementById(id);
     if (node) titled(node, node.dataset.base ?? node.title);
   }
+  blank();
 }
 addEventListener("desk-look", (event) => looked(event.detail));
 // A shortcut's doing here (deck_acts.rs `keyed_in_strip`, `find_tab`): what a click would do.
@@ -648,40 +653,12 @@ const holds = (tab) => {
 // A coding agent's mark (agents.rs), drawn in the text's colour; the page is given them as
 // SVG at load, as MARKS. Both come as data the page reads, never as script: it runs this one alone.
 const MARKS = JSON.parse(document.getElementById("marks").textContent);
-// The agents installed, by their place in the app's list.
-const AGENTS = JSON.parse(document.getElementById("agents").textContent);
-// An empty place, said the same way everywhere: the glyph of the button `glyphOf`, `words`, and
-// rows of what can be done there.
-function emptied(glyphOf, words, rows) {
+// An empty place, said the same way everywhere: one quiet line of what would be there.
+function emptied(words) {
   const box = document.createElement("div");
   box.className = "empty";
-  const svg = document.querySelector("#" + glyphOf + " svg");
-  if (svg) {
-    const glyph = document.createElement("div");
-    glyph.className = "g";
-    glyph.append(svg.cloneNode(true));
-    box.append(glyph);
-  }
-  const said = document.createElement("div");
-  said.className = "w";
-  said.textContent = words;
-  box.append(said);
-  for (const row of rows || []) {
-    if (!row.length) continue;
-    const line = document.createElement("div");
-    line.className = "row";
-    line.append(...row);
-    box.append(line);
-  }
+  box.textContent = words;
   return box;
-}
-// A button of an empty place: what it says, the message it sends, a picture before it.
-function doing(label, message, picture) {
-  const button = document.createElement("button");
-  if (picture) button.append(picture);
-  button.append(label);
-  button.addEventListener("click", () => window.ipc.postMessage(message));
-  return button;
 }
 function agentMark(agent) {
   const svg = new DOMParser().parseFromString(MARKS[agent] || "", "image/svg+xml").documentElement;
@@ -731,8 +708,8 @@ function paintSide() {
   if (!rows.length) {
     rowOf.clear();
     return void list.replaceChildren(typed
-      ? emptied("sn", "No tab matches")
-      : emptied("sn", "No tabs", [[doing("New Page", "key new page"), doing("New Terminal", "key new terminal")]]));
+      ? emptied("No Matching Tabs")
+      : emptied("No Tabs"));
   }
   const drawn = [];
   for (const tab of rows) {
@@ -1448,7 +1425,7 @@ function M(rows) {
   const now = "h" + JSON.stringify(rows);
   if (now === menuSig) return glass();
   redrawn(menu, "h", now, () => {
-    if (rows.length === 0) return void menu.replaceChildren(emptied("hs", "No history yet"));
+    if (rows.length === 0) return void menu.replaceChildren(emptied("No History"));
     const several = new Set(rows.map((row) => row.group)).size > 1;
     menu.replaceChildren(...rows.map((row) => {
       const item = document.createElement("div");
@@ -1566,7 +1543,7 @@ function V(events, open) {
       clear.addEventListener("click", () => window.ipc.postMessage("clear"));
       head.append(clear);
     }
-    if (events.length === 0) return void menu.replaceChildren(head, emptied("ev", "No events"));
+    if (events.length === 0) return void menu.replaceChildren(head, emptied("No Events"));
     const several = new Set(events.map((event) => event.group)).size > 1;
     const list = document.createElement("div");
     list.className = "evl";
@@ -1724,18 +1701,24 @@ for (const id of ["bar", "lead", "cr", "tabs", "end"]) {
 for (const [id, what] of [["sd", "send"], ["cm", "comment"], ["bk", "back"], ["fw", "forward"], ["hs", "history"], ["back", "unmenu"]]) {
   document.getElementById(id).addEventListener("click", () => window.ipc.postMessage(what));
 }
-// No tab left: the kinds of tab, and the agents installed, each one click.
+// No tab left, the pages' whole part offers them (`looked` draws it again as the keys change).
 function blank() {
-  document.getElementById("blank").replaceChildren(emptied("sn", "No tabs open", [
-    [doing("New Page", "key new page"), doing("New Terminal", "key new terminal"), doing("New Board", "key new board")],
-    AGENTS.map((agent) => doing(agent.name, "agent " + agent.at, agentMark(agent.id))),
-  ]));
-}
-blank();
-// The agents installed, once the person's own PATH is known (the app may start with the system's).
-function agentsInstalled(list) {
-  AGENTS.splice(0, AGENTS.length, ...list);
-  blank();
+  const start = document.createElement("div");
+  start.className = "start";
+  for (const [id, label, message] of STARTS) {
+    const button = document.createElement("button");
+    const words = document.createElement("span");
+    words.textContent = label;
+    button.append(words);
+    if (HINTS[id]) {
+      const key = document.createElement("kbd");
+      key.textContent = HINTS[id];
+      button.append(key);
+    }
+    button.addEventListener("click", () => window.ipc.postMessage(message));
+    start.append(button);
+  }
+  document.getElementById("blank").replaceChildren(start);
 }
 </script>
 </body>

@@ -195,7 +195,7 @@ impl Desk {
     }
 
     /// The person opened the app (app.rs): the window comes to them, back if they put it away;
-    /// with no tab in it yet, their shell in `call.cwd` (their home), a terminal of their own.
+    /// with no tab in it yet, what the project had open, else the window's start of a new tab.
     pub fn present(&self, call: &Call, go: bool) -> Result<String, String> {
         let browser = (self.browser.as_ref()).ok_or("there is no window here: no display")?;
         crate::lock(&self.registry).known(call);
@@ -353,6 +353,8 @@ impl Desk {
     pub fn status(&self) -> String {
         let window = match (&self.page, &self.browser) {
             (Some(page), _) if page.is_open() || self.panels_open() => "open",
+            // Shown with no tab in it: the window's start of a new tab.
+            (Some(_), Some(browser)) if browser.shown() => "open, no tab",
             (Some(_), _) => "not open yet",
             (None, _) => "none (no display, or --no-window)",
         };

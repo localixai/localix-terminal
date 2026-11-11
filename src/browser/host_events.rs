@@ -107,7 +107,7 @@ impl Looping {
                 platform::quit_through(&self.proxy);
             }
             // The person opened the app again (its Dock icon, the Finder): the desk gives them a
-            // window, with their shell when it has no tab.
+            // window, empty when nothing was left open.
             Event::Reopen { .. } => self.shared.heard("", Heard::Reopened),
             #[expect(
                 clippy::disallowed_methods,

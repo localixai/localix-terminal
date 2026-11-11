@@ -77,15 +77,4 @@ impl On<'_> {
         let group = open.shown_project(self.shared);
         self.shared.heard(&group, Heard::Asked(asked));
     }
-
-    /// Agent `at` (its place in the agents' list) started in a terminal, where it is installed.
-    pub(super) fn agent(&self, at: u8) {
-        let path = crate::browser::agents::path();
-        let command = AGENTS
-            .get(usize::from(at))
-            .and_then(|agent| agent.command_on(&path));
-        if let Some(command) = command {
-            self.ask(Asked::Agent(command));
-        }
-    }
 }

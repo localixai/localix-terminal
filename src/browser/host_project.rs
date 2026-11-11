@@ -108,7 +108,7 @@ impl On<'_> {
     }
 
     /// The person goes to project `project`: its last tab shown, else, coming from another, the
-    /// app opens what it had open (or their shell in its folder). Already there with no tab (the
+    /// app opens what it had open (or nothing: the window's start of a new tab). Already there with no tab (the
     /// person closed them), nothing is opened again: what they asked for next opens alone.
     pub(super) fn go_project(&mut self, project: &str) {
         let Some(open) = self.deck.as_ref() else {

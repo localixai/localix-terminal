@@ -39,8 +39,8 @@ impl Desk {
         }
     }
 
-    /// The person brought the app forward: the window to them, with their shell in their home
-    /// when it has no tab. On a thread of its own, as a quit is.
+    /// The person brought the app forward: the window to them, empty when nothing was left
+    /// open. On a thread of its own, as a quit is.
     pub fn reopened(self: &Arc<Self>) {
         let desk = Arc::clone(self);
         let opened = std::thread::Builder::new()
@@ -57,8 +57,8 @@ impl Desk {
 
     /// The window to the person, as the app opened from the Finder or its Dock icon gives it:
     /// when it has no tab, the project used last as it was left (its tabs open when the app
-    /// quit; else their shell in its folder, Home's when there is none), with this process's
-    /// environment (a login shell reads the rest of theirs).
+    /// quit; else nothing, the window's start of a new tab), with this process's environment (a
+    /// login shell reads the rest of theirs).
     pub fn reopen(&self) -> Result<String, String> {
         let home = self.last_project()?;
         let owner = crate::projects::owner(&home, None);

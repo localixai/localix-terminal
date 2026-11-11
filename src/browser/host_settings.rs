@@ -17,7 +17,7 @@ use crate::browser::strip::{Click, Key, SETTINGS};
 /// The page, as settings.html is.
 const PAGE: &str = include_str!("settings.html");
 /// The SHA-384 of the page's one script: the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "56wtuVEtoOmzKnPR5R0MkX1ehs1+TNp+D++cBmibqJjv3zqeiSDRVM2qeufocDAh";
+const SCRIPT_SHA384: &str = "zGzETdws/tyS8VphVBKZirpNZd6vf9+l6JGv5t/V6Ke0NOPq3BJWykiG/nGwbveV";
 
 /// The page, its script run by its hash.
 fn page() -> String {

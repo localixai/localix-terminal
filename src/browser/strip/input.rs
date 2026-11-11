@@ -48,8 +48,6 @@ pub(in super::super) enum Click {
     Visit(i64),
     /// The offer bar's button that does it (`true`), or the other.
     Offer(bool),
-    /// An agent started in a terminal of the project shown: its place in the agents' list.
-    Agent(u8),
     /// The Event Center opens or closes.
     Events,
     /// The open menu closes (a click beside it).
@@ -266,7 +264,6 @@ pub(in super::super) fn click(body: &str) -> Option<Click> {
         ("typing", Some("off")) => Some(Click::Typing(false)),
         ("offer", Some("take")) => Some(Click::Offer(true)),
         ("offer", Some("later")) => Some(Click::Offer(false)),
-        ("agent", Some(at)) => at.parse().ok().map(Click::Agent),
         ("visit", Some(at)) if at.bytes().all(|b| b.is_ascii_digit()) => {
             at.parse().ok().map(Click::Visit)
         }

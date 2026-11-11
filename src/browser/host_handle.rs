@@ -119,6 +119,11 @@ impl Browser {
         answer.recv_timeout(std::time::Duration::from_secs(5)).ok()
     }
 
+    /// Whether the window is there for the person, in sight or put away (with no tab in it too).
+    pub fn shown(&self) -> bool {
+        self.presented().is_some_and(|state| state != "hidden")
+    }
+
     /// `question` asked of the person: whether they went on. Waits for their answer, however long
     /// they take; none (the window's loop gone) is no.
     pub fn confirm(&self, question: &super::Confirm) -> bool {

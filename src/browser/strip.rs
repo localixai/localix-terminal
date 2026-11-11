@@ -332,15 +332,13 @@ pub(super) fn comment(key: &str, on: bool, sent: u32) -> String {
 pub(super) const PAGE: &str = include_str!("strip.html");
 
 /// The SHA-384 of the page's one script, its resize helper in: the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "iXdr/0FnFKCSpEiGmOAhDPtLldm5L7fZOGIzZhfwbcPfpsXN94Nl4AYxSx2BmBWX";
+const SCRIPT_SHA384: &str = "F3c6EPTEYsZR3cG+SejcNRoHl5HoYsq6Fuj41wEXTVwIEW25u7f3mvimB4wuNqrP";
 
 /// The strip's page: the trusted UI's resize helper inlined, so it opens without external
 /// resources, its bars as tall as the window lays them out (`BAR`, `NAV`, `ROW`: its style, not
-/// its script), and the agents' `marks` and those `installed` (JSON) in it as data its script
-/// reads, never as script.
-pub(super) fn page(marks: &str, installed: &str) -> String {
+/// its script), and the agents' `marks` (JSON) in it as data its script reads, never as script.
+pub(super) fn page(marks: &str) -> String {
     // Inside a script element only `</script` ends it: no `<` of the data reaches the parser.
-    let data = |json: &str| json.replace('<', "\\u003c");
     PAGE.replacen("/*RESIZE_HANDLES*/", include_str!("resize.js"), 1)
         .replacen("{{hash}}", SCRIPT_SHA384, 1)
         .replacen("{{bar}}", &BAR.to_string(), 1)
@@ -348,12 +346,7 @@ pub(super) fn page(marks: &str, installed: &str) -> String {
         .replacen("{{row}}", &ROW.to_string(), 1)
         .replacen(
             "id=\"marks\">{}<",
-            &format!("id=\"marks\">{}<", data(marks)),
-            1,
-        )
-        .replacen(
-            "id=\"agents\">[]<",
-            &format!("id=\"agents\">{}<", data(installed)),
+            &format!("id=\"marks\">{}<", marks.replace('<', "\\u003c")),
             1,
         )
 }

@@ -1,5 +1,6 @@
-//! The strip's page as it is built: its one script run by its hash, the agents in it as data,
-//! its bars as tall as the window lays them out; and the side's width held as the layout holds it.
+//! The strip's page as it is built: its one script run by its hash, the agents' marks in it as
+//! data, its empty places, its bars as tall as the window lays them out; and the side's
+//! width held as the layout holds it.
 
 use sha2::Digest as _;
 
@@ -7,7 +8,7 @@ use super::*;
 
 #[test]
 fn the_assembled_page_contains_its_resize_helper_and_no_external_script() {
-    let page = page("{}", "[]");
+    let page = page("{}");
     assert!(page.contains("function resizeHandle("));
     assert!(!page.contains("/*RESIZE_HANDLES*/"));
     assert!(!page.contains("<script src="));
@@ -15,7 +16,7 @@ fn the_assembled_page_contains_its_resize_helper_and_no_external_script() {
 
 #[test]
 fn the_page_runs_its_one_script_by_its_hash() {
-    let page = page("{}", "[]");
+    let page = page("{}");
     let script = page
         .split("<script>")
         .nth(1)
@@ -39,16 +40,12 @@ fn the_page_runs_its_one_script_by_its_hash() {
 }
 
 #[test]
-fn the_agents_reach_the_page_as_data_that_never_ends_its_element() {
-    let (marks, installed) = (
-        r#"{"x":"</script><script>alert(1)</script>"}"#,
-        r#"[{"n":"<b>"}]"#,
-    );
-    let page = page(marks, installed);
+fn the_agents_marks_reach_the_page_as_data_that_never_ends_its_element() {
+    let marks = r#"{"x":"</script><script>alert(1)</script>"}"#;
+    let page = page(marks);
     // JSON's own escape of `<`, which the script's parse reads back as it was.
-    let escaped = |json: &str| json.replace('<', concat!("\\", "u003c"));
-    assert!(page.contains(&format!("id=\"marks\">{}</script>", escaped(marks))));
-    assert!(page.contains(&format!("id=\"agents\">{}</script>", escaped(installed))));
+    let escaped = marks.replace('<', concat!("\\", "u003c"));
+    assert!(page.contains(&format!("id=\"marks\">{escaped}</script>")));
     assert_eq!(page.matches("<script>").count(), 1);
 }
 
@@ -62,7 +59,7 @@ fn rule_height(page: &str, selector: &str) -> Option<String> {
 
 #[test]
 fn the_page_draws_its_bars_as_tall_as_the_window_lays_them_out() {
-    let page = page("{}", "[]");
+    let page = page("{}");
     // The bar is a compact toolbar's height, the browser's toolbar `NAV`'s, the tabs' row the
     // rest of the strip.
     let px = |points: f64| Some(format!("{points}px"));
@@ -85,4 +82,30 @@ fn the_side_is_held_between_its_narrowest_and_widest_and_to_half_the_window() {
     assert_eq!(side_widest(Some(300.0)), SIDE_MIN);
     assert_eq!(side_widest(Some(700.0)), 350.0);
     assert_eq!(side_widest(None), SIDE_MAX);
+}
+
+#[test]
+fn an_empty_place_is_one_quiet_line_and_an_empty_window_its_first_commands() {
+    // Each empty place says what would be there, in one line: no glyph, no button.
+    for line in ["No Tabs", "No Matching Tabs", "No History", "No Events"] {
+        assert!(PAGE.contains(&format!("emptied(\"{line}\")")), "{line}");
+    }
+    assert!(!PAGE.contains("function doing(") && !PAGE.contains(".empty .g"));
+    // The window with no tab left offers what opens one, each with its key as Settings sets it.
+    let start = (PAGE.split("const STARTS = [").nth(1))
+        .and_then(|rest| rest.split("];").next())
+        .unwrap_or_default();
+    for (id, words) in [
+        ("new-page", "key new page"),
+        ("new-terminal", "key new terminal"),
+        ("board", "key new board"),
+        ("open-folder", "key open folder"),
+    ] {
+        assert!(
+            start.contains(&format!("[\"{id}\"")) && start.contains(words),
+            "{id}"
+        );
+    }
+    // No picture and no motion of its own: the page draws nothing it does not say.
+    assert!(!PAGE.contains("img-src") && !PAGE.contains("@keyframes wind"));
 }

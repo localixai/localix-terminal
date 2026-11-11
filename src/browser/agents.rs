@@ -125,7 +125,7 @@ struct Known {
     /// The `PATH`: the process's, then the person's login shell's once it has said (an app
     /// started from the Finder or the Dock has only the system's).
     path: OsString,
-    /// The agents found on it, as [`installed`] says them.
+    /// The agents found on it, as [`known`] says them.
     installed: String,
 }
 
@@ -186,29 +186,16 @@ pub(super) fn learn(proxy: &EventLoopProxy<Cmd>) {
     }
 }
 
-/// The agents installed (their command on [`path`]), for a page being built: a JSON array of
-/// their place in [`AGENTS`], id and name. Looked for again as it is asked.
-pub(super) fn installed() -> String {
+/// The agents installed (their command on [`path`]): a JSON array of their place in
+/// [`AGENTS`], id and name, for a page the desk paints (the board's agents to run a card with).
+/// Looked for again as it is asked, so one installed since shows.
+pub fn known() -> String {
     let mut known = crate::lock(&KNOWN);
     let path = (known.as_ref()).map_or_else(process_path, |known| known.path.clone());
     let now = Known::on(path);
     let installed = now.installed.clone();
     *known = Some(now);
     installed
-}
-
-/// The call that gives a page that is up the agents installed, as it last looked: said on a
-/// refresh, so a page built before the login shell answered learns it too.
-pub(super) fn script() -> String {
-    format!("agentsInstalled({})", known())
-}
-
-/// The agents installed, as it last looked: a JSON array of their place in [`AGENTS`], id and
-/// name, for a page the desk paints (the board's agents to run a card with).
-pub fn known() -> String {
-    let mut known = crate::lock(&KNOWN);
-    let known = known.get_or_insert_with(|| Known::on(process_path()));
-    known.installed.clone()
 }
 
 /// The agent a terminal's command line starts, read as a shell would start it: past variables

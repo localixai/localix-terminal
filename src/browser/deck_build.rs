@@ -35,15 +35,16 @@ impl Deck {
         Ok(deck)
     }
 
-    /// A window with nothing in it yet, not the main one: a tab carried out of a list comes into
-    /// it (docs/windows.md).
+    /// A window with nothing in it yet, `steps` after the main one (0: the main one): the app
+    /// opened with nothing left open, or a tab carried out of a list comes into it
+    /// (docs/windows.md).
     pub(in super::super) fn empty(
-        target: &EventLoopWindowTarget<Cmd>,
+        (target, steps): (&EventLoopWindowTarget<Cmd>, usize),
         shared: &Shared,
         proxy: &EventLoopProxy<Cmd>,
     ) -> Result<Self, String> {
         Self::build(
-            (target, 1),
+            (target, steps),
             "llx-desk",
             &Viewport::DESKTOP,
             false,
@@ -179,8 +180,7 @@ fn strip_page(
 ) -> Result<WebView, String> {
     // Every part draws the agents' marks (the side's tabs, the bar's crumbs and offer).
     let marks = super::super::agents::marks();
-    let installed = super::super::agents::installed();
-    let page = frame::dress(&strip::page(&marks, &installed), look);
+    let page = frame::dress(&strip::page(&marks), look);
     let page = match part {
         Part::Strip => page,
         Part::Side => page.replacen("<html", "<html data-part=\"side\"", 1),
