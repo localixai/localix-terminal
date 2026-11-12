@@ -6,7 +6,7 @@ mod bounds;
 mod views;
 
 pub(super) use bounds::bound;
-pub(super) use views::{Follow, follow};
+pub(super) use views::{Follow, OVER_PAGES, follow};
 pub(super) use views::{
     Pane, clear, keep_rendering, keep_tab_rendering, reparent, see_through, stack,
     system_appearance, to_front,

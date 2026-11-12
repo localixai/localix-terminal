@@ -25,6 +25,8 @@ pub(super) const BAR: f64 = 38.0;
 pub(super) const NAV: f64 = 40.0;
 /// The tabs' row under the bar, in points, where there is no side.
 const ROW: f64 = 32.0;
+/// The documents' row over a session's documents, in points: the same row of tabs.
+pub(super) const DOCS: f64 = ROW;
 /// The strip's height, in points, where the tabs are a row under the toolbar (no side).
 pub(super) const HEIGHT: f64 = BAR + ROW;
 /// The side's width while it is open, in points, until the person drags it wider or narrower:
@@ -53,12 +55,14 @@ pub(super) fn side_held(width: f64, window: Option<f64>) -> f64 {
 /// Panels past this id are boards: board `b1` is panel `BOARD + 1`, a terminal's screen is its
 /// session's id.
 pub const BOARD: u32 = 1 << 24;
+/// Panels past this id are files being edited: file `f1` is panel `FILE + 1`.
+pub const FILE: u32 = 1 << 25;
 /// The panel of the window's own Settings, a tab like a terminal's (`s1`): the place between the
 /// terminals and the boards.
 pub(super) const SETTINGS: u32 = BOARD;
 
-/// A tab: one of the browser's (its id) or a panel (its id): a terminal session's screen, or a
-/// board.
+/// A tab: one of the browser's (its id) or a panel (its id): a terminal session's screen, a
+/// board, or a file being edited.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Key {
     Web(u32),
@@ -69,16 +73,18 @@ impl Key {
     pub(super) fn name(self) -> String {
         match self {
             Key::Web(id) => format!("w{id}"),
+            Key::Term(id) if id > FILE => format!("f{}", id - FILE),
             Key::Term(id) if id > BOARD => format!("b{}", id - BOARD),
             Key::Term(SETTINGS) => "s1".to_string(),
             Key::Term(id) => format!("t{id}"),
         }
     }
 
-    /// What the strip draws it as: `web`, `term` or `board`.
+    /// What the strip draws it as: `web`, `term`, `board`, `file` or `settings`.
     pub(super) fn kind(self) -> &'static str {
         match self {
             Key::Web(_) => "web",
+            Key::Term(id) if id > FILE => "file",
             Key::Term(id) if id > BOARD => "board",
             Key::Term(SETTINGS) => "settings",
             Key::Term(_) => "term",
@@ -95,7 +101,8 @@ impl Key {
             "w" => Some(Key::Web(id)),
             "t" if id < BOARD => Some(Key::Term(id)),
             "s" if id == 1 => Some(Key::Term(SETTINGS)),
-            "b" if id > 0 => BOARD.checked_add(id).map(Key::Term),
+            "b" if id > 0 && id < FILE - BOARD => Some(Key::Term(BOARD + id)),
+            "f" if id > 0 => FILE.checked_add(id).map(Key::Term),
             _ => None,
         }
     }
@@ -147,6 +154,9 @@ pub(super) struct Item {
     pub agent: Option<&'static str>,
     /// The words of what waits for the person in it (alerts.rs), when something does.
     pub waits: Option<String>,
+    /// A session's document: the tab that stands for its session in the lists (session.rs).
+    /// It is a tab of the documents' row, not of the side.
+    pub of: Option<String>,
 }
 
 /// `items` with each group's together, the groups in the order they first appear.
@@ -185,6 +195,7 @@ pub(super) fn script(
             let empty = match kind {
                 "web" => "New tab",
                 "board" => "Board",
+                "file" => "File",
                 _ => "Terminal",
             };
             let title = item.title.trim();
@@ -205,6 +216,9 @@ pub(super) fn script(
                 tab["waits"] = json!(waits);
             }
             tab["group"] = json!(item.group);
+            if let Some(of) = &item.of {
+                tab["of"] = json!(of);
+            }
             tab
         })
         .collect();
@@ -219,6 +233,16 @@ pub(super) fn script(
         json!({"tabs": tabs, "shown": shown.name(), "side": side,
             "project": projects.shown, "places": places})
     )
+}
+
+/// The call that draws the documents' row: the documents of the session shown, in their order,
+/// and the one in sight.
+pub(super) fn docs(row: Option<(Key, &[Key])>) -> String {
+    let row = row.map(|(on, keys)| {
+        let keys: Vec<String> = keys.iter().map(|key| key.name()).collect();
+        json!({"on": on.name(), "keys": keys})
+    });
+    format!("DR({})", json!(row))
 }
 
 /// The agents installed (`installed`: agents.rs `known`), for the marks shown where no tab is
@@ -345,17 +369,20 @@ pub(super) fn comment(key: &str, on: bool, sent: u32) -> String {
 /// The strip's page: dressed in the frame's stylesheet, clear over the window's glass.
 pub(super) const PAGE: &str = include_str!("strip.html");
 
-/// The SHA-384 of the page's one script, its resize helper and the dialog's script in: the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "9KcmdsTU199WLOQfy6Se3aM53jweZap8ZLvVI+8Hgb2Ee11txcWDj6iUow/EBQ/m";
+/// The SHA-384 of the page's one script, its resize helper, the dialog's script and the tree's in:
+/// the page's policy runs it alone.
+const SCRIPT_SHA384: &str = "dttF601S7Y2agGLZ/mzq0Abjb87mfL9hKIiaEcfrDiO2pAeF8A/eV1iYbnwdfQJG";
 
-/// The strip's page: the trusted UI's resize helper and the window's dialog (dialog.rs) inlined, so it opens without external
-/// resources, its bars as tall as the window lays them out (`BAR`, `NAV`, `ROW`: its style, not
+/// The strip's page: the trusted UI's resize helper, the window's dialog (dialog.rs) and the side's
+/// tree of files (tree.rs) inlined, so it opens without external resources, its bars as tall as the window lays them out (`BAR`, `NAV`, `ROW`: its style, not
 /// its script), and the agents' `marks` (JSON) in it as data its script reads, never as script.
 pub(super) fn page(marks: &str) -> String {
     // Inside a script element only `</script` ends it: no `<` of the data reaches the parser.
     PAGE.replacen("/*RESIZE_HANDLES*/", include_str!("resize.js"), 1)
         .replacen("/*DIALOG_JS*/", include_str!("dialog.js"), 1)
         .replacen("/*DIALOG_CSS*/", include_str!("dialog.css"), 1)
+        .replacen("/*TREE_JS*/", include_str!("tree.js"), 1)
+        .replacen("/*TREE_CSS*/", include_str!("tree.css"), 1)
         .replacen("{{hash}}", SCRIPT_SHA384, 1)
         .replacen("{{bar}}", &BAR.to_string(), 1)
         .replacen("{{nav}}", &NAV.to_string(), 1)

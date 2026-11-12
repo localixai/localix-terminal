@@ -93,8 +93,9 @@ impl Deck {
                 ids.join(", ")
             ));
         }
-        if !closing {
-            self.split_follows(key);
+        match closing {
+            true => self.stay_by(key, shared),
+            false => self.split_follows(key),
         }
         match (closing, key) {
             (false, Key::Web(id)) => {
@@ -116,6 +117,16 @@ impl Deck {
             }
         }
         Ok(())
+    }
+
+    /// Tab `key` is about to close: shown, the window stays in its session, on the other half
+    /// of a split or the next of its documents.
+    fn stay_by(&mut self, key: Key, shared: &Shared) {
+        if self.shown_key() == Some(key)
+            && let Some(next) = self.after_closed(key).filter(|next| self.there(*next))
+        {
+            let _ = self.act(Click::Show(next), shared);
+        }
     }
 
     /// A click on the menus: one opens or closes, or the Event Center's button is chosen.
@@ -183,7 +194,7 @@ impl Deck {
     /// The person's settings, taken by the window and its own pages (never the browser's).
     pub(crate) fn restyle(&mut self, settings: &super::super::settings::Settings) {
         let script = super::super::settings::look_script(settings);
-        for page in [&self.strip, &self.side, &self.nav, &self.line]
+        for page in [&self.strip, &self.side, &self.nav, &self.line, &self.docs]
             .into_iter()
             .flatten()
         {

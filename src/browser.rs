@@ -22,6 +22,7 @@ mod comments;
 mod deck;
 mod dialog;
 mod feedback;
+mod file_icons;
 mod frame;
 mod guard;
 mod host;
@@ -50,6 +51,7 @@ mod presses;
 mod scope;
 mod script;
 mod secret;
+mod session;
 mod settings;
 mod shortcuts;
 mod sizes;
@@ -59,6 +61,7 @@ mod tab_view;
 mod tabs;
 mod told;
 mod toolbar;
+mod tree;
 mod turn;
 mod updates;
 mod viewport;
@@ -75,7 +78,7 @@ pub use agents::{
     started_on as agent_started_on,
 };
 pub use capture::{Clip, Shot};
-pub use guard::loadable;
+pub use guard::{loadable, shows};
 pub use host::{
     Answers, Arranged, Arranging, Asked, Browser, CenterDid, Confirm, Dressing, Halves, Heard,
     Ledger, Past, Place, Tab, TabKind, Visited, Went, Window, host,
@@ -83,9 +86,10 @@ pub use host::{
 pub use notices::{Armed, Notice};
 pub use page::Page;
 pub use panel::{Fitted, Pane, Panel};
-pub use strip::BOARD;
 pub use strip::HOME;
+pub use strip::{BOARD, FILE};
 pub use tabs::MAX_TABS;
+pub use told::{Branch, Leaf, Tree, TreeDid};
 pub(crate) use toolbar::owns;
 pub use viewport::Viewport;
 pub use webview::WebviewDriver;

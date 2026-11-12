@@ -17,12 +17,16 @@ mod board_told;
 mod call;
 mod center;
 mod changes;
+mod edit;
+mod edit_disk;
 mod events;
+mod files;
 mod heard;
 mod layout;
 mod layout_drawn;
 mod layout_moves;
 mod layout_resize;
+mod layout_split;
 mod ledger;
 mod lifecycle;
 mod open;
@@ -30,6 +34,7 @@ mod registry;
 mod relay;
 mod restore;
 mod scope;
+mod sessions;
 mod tab;
 mod term;
 mod told;
@@ -107,14 +112,17 @@ pub struct Desk {
     writes: OnceLock<writes::Writes>,
     /// Each open tab's row in the ledger, and its project, by key.
     ledger: Mutex<HashMap<String, (crate::ledger::Row, ProjectId)>>,
-    /// Which pane was opened from which terminal of the window (beside.rs).
-    links: Mutex<beside::Links>,
+    /// The trees of files in sight in the window, each read and watched while it is (files.rs).
+    trees: Mutex<HashMap<ProjectId, files::Shown>>,
+    /// The files edited in tabs, by their tab's key (edit.rs).
+    edits: Mutex<HashMap<String, edit::Kept>>,
+    next_file: AtomicU32,
     /// Each terminal's title writes, so a title said often is written once in a while.
     titled: Mutex<HashMap<String, ledger::Titled>>,
     /// The app is ending: its tabs go with it, yet stay open in the ledger, a split kept.
     ending: AtomicBool,
-    /// The projects that have had a tab this run: what another run left open in them is past.
-    begun: Mutex<std::collections::HashSet<ProjectId>>,
+    /// What this run knows of the tabs the run before left open, by project.
+    past: Mutex<restore::Past>,
     /// What ends the app when the person quits it (`on_quit`).
     quit: OnceLock<Box<dyn Fn() + Send + Sync>>,
 }
@@ -167,10 +175,12 @@ impl Desk {
                 me: Weak::clone(weak),
                 writes: OnceLock::new(),
                 ledger: Mutex::default(),
-                links: Mutex::default(),
+                trees: Mutex::default(),
+                edits: Mutex::default(),
+                next_file: AtomicU32::new(1),
                 titled: Mutex::default(),
                 ending: AtomicBool::new(false),
-                begun: Mutex::default(),
+                past: Mutex::default(),
                 quit: OnceLock::new(),
             }
         });
@@ -190,9 +200,7 @@ impl Desk {
             log::warn!("desk: the Event Center will not follow what changes: {error}");
         }
         desk.gather_windows();
-        let drawn = layout_drawn::Drawn {
-            desk: Arc::downgrade(&desk),
-        };
+        let drawn = layout_drawn::Drawn::of(&desk);
         if let Err(error) = desk.feed.consume(Box::new(drawn)) {
             log::warn!("desk: the window will not follow the layout: {error}");
         }

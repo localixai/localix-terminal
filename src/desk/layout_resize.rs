@@ -68,16 +68,15 @@ impl Desk {
         })
     }
 
-    /// The split told kept in the layout, and what it says of the place beside a terminal
-    /// (beside.rs).
+    /// The split told kept in the layout.
     pub(super) fn split_kept(&self, split: SplitTold) {
         let done = match split {
             SplitTold::Halves {
                 shown,
                 beside,
                 right,
-            } => (self.split_panes(shown, beside, right)).map(|()| self.split_again(shown, beside)),
-            SplitTold::Whole(rows) => (self.unsplit_of(rows)).map(|panes| self.made_whole(&panes)),
+            } => self.split_panes(shown, beside, right),
+            SplitTold::Whole(rows) => self.unsplit_of(rows).map(drop),
         };
         if let Err(why) = done {
             log::warn!("the split is not in the layout: {why}");
@@ -89,6 +88,10 @@ impl Desk {
     fn unsplit_of(&self, rows: [Option<Row>; 2]) -> Result<Vec<Row>, String> {
         let now = crate::board::now();
         self.feed.write(|write| {
+            // A session keeps its documents: it shows one pane alone, and stays one tab.
+            if Self::whole_session(write, rows)? {
+                return Ok(vec![]);
+            }
             for row in rows.into_iter().flatten() {
                 let Some(id) = layout::tab_of(write.tx(), row)? else {
                     continue;

@@ -54,6 +54,48 @@ pub enum Heard<'a> {
     /// They closed window `i64` (its row in the layout; not the main one): its tabs are closed
     /// already, and the layout closes it.
     WindowClosed(i64),
+    /// What they did in the tree of files of the project this key names.
+    Tree(TreeDid<'a>),
+}
+
+/// What the person did in a project's tree of files. A folder is named by its path under the
+/// project's folder, its names joined by `/`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TreeDid<'a> {
+    /// A window shows the project's tree now, or none does any more: only a tree in sight is
+    /// read and watched.
+    Seen(bool),
+    /// They opened this folder.
+    Opened(&'a str),
+    /// They shut this folder.
+    Shut(&'a str),
+}
+
+/// News of a project's tree of files, as the window draws it: its folder, every folder open
+/// in it now (by its path under the root, `""` the root itself), and those of them whose
+/// entries are new to the window or changed, a parent before its own. What the window holds
+/// of a folder no longer open, or of another root, it lets go of.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tree {
+    pub root: std::path::PathBuf,
+    pub open: Vec<String>,
+    pub dirs: Vec<Branch>,
+}
+
+/// One open folder of a tree: its path under the root (`""`: the root), its entries in
+/// order, and how many more it holds than are listed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Branch {
+    pub path: String,
+    pub leaves: Vec<Leaf>,
+    pub more: usize,
+}
+
+/// One entry of a folder: its name, and whether it is a folder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Leaf {
+    pub name: String,
+    pub dir: bool,
 }
 
 /// A project's tabs in the window as the layout keeps them (docs/windows.md): the window draws
@@ -70,14 +112,19 @@ pub struct Arranged {
     pub shown: Option<String>,
 }
 
-/// One tab: its panes' keys left to right (a split's two, or one), side by side or not, each
-/// one's share, and the one in focus.
+/// One tab: its panes in sight by their keys, left to right (a split's two, or one), side by
+/// side or not, each one's share, and the one in focus. `docs` are its documents (a session's
+/// files and pages, one of them in sight at most) and `all` every pane it has, in order.
+/// `whole`, the person keeps it to its pane in focus alone, the rest put by.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Arranging {
     pub panes: Vec<String>,
     pub across: bool,
     pub shares: Vec<f64>,
     pub focused: Option<String>,
+    pub docs: Vec<String>,
+    pub all: Vec<String>,
+    pub whole: bool,
 }
 
 /// A project's split window: the tab in use, the one beside it, and whether that one is on the
@@ -122,6 +169,7 @@ pub enum TabKind {
     Page,
     Terminal,
     Board,
+    File,
 }
 
 /// A tab of a project's past, as the history menu lists it: its row in the ledger, what it is,
@@ -177,6 +225,8 @@ pub enum Asked {
     Page(Option<String>),
     /// A terminal of theirs, in this folder of the project, else in the project's.
     Terminal(Option<std::path::PathBuf>),
+    /// A file of theirs in an editor's tab: its path. What is not text opens as a page.
+    File(std::path::PathBuf),
     /// The project's board, opened or shown.
     Board,
     /// A coding agent's program, in a terminal of theirs in the project's folder: its command.
@@ -213,4 +263,18 @@ pub struct Tab {
     pub id: u32,
     pub url: String,
     pub title: String,
+}
+
+/// What the person's closing a tab of `kind` (a key's) says, to whoever listens.
+pub(super) fn closed(kind: &str) -> &'static str {
+    match kind {
+        "web" => "The person closed this browser tab.",
+        "board" => {
+            "The person closed the board's tab: the board is kept, and `board` shows it again."
+        }
+        "file" => {
+            "The person closed this file's tab: text left unsaved in it is kept with the file."
+        }
+        _ => "The person closed this tab: its program runs on, out of sight.",
+    }
 }

@@ -17,7 +17,7 @@ fn a_non_finite_resize_is_refused_without_changing_the_tree() {
 
 fn shares(tree: &Tree) -> Vec<f64> {
     match tree {
-        Tree::Leaf { .. } => vec![],
+        Tree::Leaf { .. } | Tree::Stack { .. } => vec![],
         Tree::Branch { children, .. } => children.iter().map(|child| child.share).collect(),
     }
 }

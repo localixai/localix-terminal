@@ -85,12 +85,6 @@ impl Browser {
             .collect()
     }
 
-    /// Whether what an agent opens from a terminal lands beside it: the person's choice in
-    /// Settings.
-    pub fn opens_beside(&self) -> bool {
-        super::super::settings::opens_beside()
-    }
-
     /// The window's tabs, in the strip's order; `None` while it is closed.
     pub fn listing(&self) -> Option<Vec<WindowTab>> {
         let (reply, answer) = mpsc::sync_channel(1);
@@ -214,6 +208,14 @@ impl Browser {
         let _ = self.proxy.send_event(Cmd::Strip);
     }
 
+    /// News of project `project`'s tree of files (its key): held for the windows that show
+    /// it, and drawn in their sides.
+    pub fn tree(&self, project: &str, tree: crate::browser::Tree) {
+        let news = super::super::tree::news(project, &tree);
+        crate::lock(&self.shared.trees).take(project, tree);
+        let _ = self.proxy.send_event(Cmd::Tree(project.to_string(), news));
+    }
+
     /// The window's projects' tabs as the layout keeps them: their order, their splits, the one
     /// each shows. The window draws them so.
     pub fn arranged(&self, windows: Vec<i64>, arranged: Vec<super::Arranged>) {
@@ -245,6 +247,11 @@ impl Browser {
     /// for what it had open.
     pub fn go(&self, project: &str) {
         let _ = self.proxy.send_event(Cmd::Go(project.to_string()));
+    }
+
+    /// The file at `path` opened by the app the person has for its kind: what no tab shows.
+    pub fn outside(&self, path: &std::path::Path) {
+        let _ = self.proxy.send_event(Cmd::Outside(path.to_path_buf()));
     }
 
     /// The next tab the app opens is of project `project` (its key): out of sight, and that

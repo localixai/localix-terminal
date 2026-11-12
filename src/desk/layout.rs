@@ -43,7 +43,8 @@ impl Desk {
 
     /// The app starts with one window: the tabs other windows had when it quit are gathered into
     /// the first, each in its project's workspace there, and those windows close. (Windows are
-    /// not opened again across a restart yet.)
+    /// not opened again across a restart yet.) Gathered, its tabs are shaped as sessions keep
+    /// them (sessions.rs).
     pub(super) fn gather_windows(&self) {
         let now = crate::board::now();
         let gathered = self.feed.write(|write| {
@@ -64,6 +65,7 @@ impl Desk {
         if let Err(why) = gathered {
             log::warn!("the windows of the run before stay as they were: {why}");
         }
+        self.sessions_shaped();
     }
 
     /// The person closed window `window` (its tabs closed first): the layout closes it.
@@ -109,7 +111,7 @@ impl Desk {
     }
 
     /// The workspace of `project` in the window panes open in, made when it has none.
-    fn workspace_for(
+    pub(super) fn workspace_for(
         write: &Write<'_, '_>,
         project: ProjectId,
         now: u64,
@@ -164,10 +166,14 @@ impl Desk {
 
     /// Pane `beside` put beside pane `shown`, on its right or its left, in `shown`'s tab: out
     /// of the tab it was in (which closes when it was all of it). Each pane alone again first,
-    /// so the tab is the two of them.
+    /// so the tab is the two of them. A session and a document are no such pair: the document
+    /// is shown in the session, or joins it (layout_split.rs).
     pub(super) fn split_panes(&self, shown: Row, beside: Row, right: bool) -> Result<(), String> {
         let now = crate::board::now();
         self.feed.write(|write| {
+            if Self::split_session(write, (shown, beside), right, now)? {
+                return Ok(());
+            }
             let Some(id) = layout::tab_of(write.tx(), shown)? else {
                 return Err("the pane in use is in no tab".to_string());
             };
@@ -235,7 +241,8 @@ impl Desk {
         Ok(())
     }
 
-    /// The tab of pane `pane` is the one its workspace shows, `pane` in focus.
+    /// The tab of pane `pane` is the one its workspace shows, `pane` in focus: a document, the
+    /// one its session has in sight.
     pub(super) fn show_pane(&self, pane: Row) -> Result<(), String> {
         self.feed.write(|write| {
             let Some(id) = layout::tab_of(write.tx(), pane)? else {
@@ -250,8 +257,10 @@ impl Desk {
                 layout::show_tab(write.tx(), tab.workspace, Some(id))?;
                 changed.push(Entity::Workspace { id: tab.workspace });
             }
-            if tab.focused != Some(pane) {
-                layout::set_tree(write.tx(), id, &tab.tree, Some(pane))?;
+            let mut tree = tab.tree.clone();
+            tree.show(pane);
+            if tab.focused != Some(pane) || tree != tab.tree {
+                layout::set_tree(write.tx(), id, &tree, Some(pane))?;
                 changed.push(Entity::Tab { id });
             }
             told(write, &changed)

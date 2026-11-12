@@ -271,9 +271,10 @@ fn every_web_view_takes_the_first_click_of_an_inactive_window() {
 
 #[test]
 fn the_window_is_told_the_ledgers_and_the_projects_only_by_its_feed_consumer() {
-    // A write of a project's history, or of the projects the desk knows, records a notice of the
-    // feed; the window's consumer alone tells the window. A write that told it by hand could be
-    // forgotten at the next write, and leave the history menu or the switcher stale.
+    // A write of a project's history, of the projects the desk knows, or a change of a tree of
+    // files in sight, records a notice of the feed; the window's consumer alone tells the window.
+    // A write that told it by hand could be forgotten at the next write, and leave the history
+    // menu, the switcher or the tree stale.
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut files = vec![];
     rust_files(&source, &mut files).unwrap();
@@ -286,7 +287,7 @@ fn the_window_is_told_the_ledgers_and_the_projects_only_by_its_feed_consumer() {
             if code.starts_with("//") {
                 continue;
             }
-            if [".tell_ledger(", ".tell_places("]
+            if [".tell_ledger(", ".tell_places(", ".tell_files("]
                 .iter()
                 .any(|call| code.contains(call))
             {

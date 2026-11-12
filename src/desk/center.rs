@@ -129,8 +129,9 @@ impl Consumer for Projector {
             Entity::Window { .. } | Entity::Workspace { .. } | Entity::Tab { .. } => {}
             // A note waiting for the agent is not the person's to act on.
             Entity::Said { .. } => {}
-            // A project's history and the projects known are what the window lists, not events.
-            Entity::Ledger { .. } | Entity::Projects => {}
+            // A project's history, its files and the projects known are what the window lists,
+            // not events.
+            Entity::Ledger { .. } | Entity::Projects | Entity::Files { .. } => {}
         }
         Ok(())
     }

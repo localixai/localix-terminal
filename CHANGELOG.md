@@ -4,6 +4,52 @@
 
 ### Added
 
+- **Files.** The side shows the project's tree under its tabs (the Files head folds it away).
+  A folder is read when it is opened and is heard from the system while it is in sight, so a
+  file made, renamed or deleted by anyone shows at once; nothing is read or watched for a
+  project no window shows. Each kind of file has its picture, the folders left open stay open,
+  and an entry's menu reveals it in the Finder or copies its path.
+- **Sessions.** A project's tabs are its sessions: a terminal, and the files and pages opened
+  in it. They are a row of tabs on the terminal's right, one of them in sight, and the side
+  lists the session alone, so two terminals never mix what each has open. What an agent opens
+  from a terminal joins that terminal's session; a file you pick in the tree, or a page you
+  open, joins the one you look at. An agent's document does not take the pane from one you are
+  reading: it waits as a tab of the row. Closing a session closes its documents, switching
+  between sessions and projects shows each as it was left, at once, and the tabs you had are
+  brought to this shape when the app starts. The side lists terminals' sessions and the board,
+  never a file or a page: one asked from no session (another terminal app's agent, you with
+  the board in sight) joins the session the project shows, else its last, and only a project
+  with no terminal keeps its documents in a tab of their own, which its first terminal takes.
+  A page you open is in its session the moment its tab exists, not once it has loaded: it no
+  longer shows as a row of the side for a second, nor fills the window before it moves to its
+  half. The row of a session's documents scrolls sideways when they do not fit, and no tab
+  narrows; the one in sight is brought into view. The board stays a tab of its own, one per
+  project.
+- A tab's menu in the row of a session's documents opens where you clicked, not at the
+  window's top left. From a file or a page, **Close Other Tabs** and **Close Tabs to the
+  Right** close the documents of its row, never a terminal; from a session they close the
+  other sessions and leave its own documents. A file's **Show in Finder** selects the file,
+  and **New Terminal Here** opens in its folder.
+- The window is told the layout once for a change, not once for each thing the change says
+  (a tab opened says four): it redraws its lists and its split a quarter as often.
+- **An editor**, a kind of tab (`f1`): a file picked in the tree opens in the session in
+  sight, beside its terminal. Syntax colours for C and C++, CSS, Go, HTML,
+  Java, JavaScript and TypeScript, JSON, Markdown, PHP, Python, Rust, SQL, XML, YAML and the
+  common shell and config formats. ⌘S saves the file in place, with the line ends and byte
+  order mark the disk had. A file changed on disk is followed (one Undo step) while it is not
+  edited; edited on both sides, a save writes nothing and says what the disk holds. What is
+  left unsaved is kept with the file's path, past its tab and the app. It takes UTF-8 text up
+  to 2 MB; a picture or a PDF opens as a page, and what neither shows (an archive, a program,
+  a larger file) opens in the app you have for its kind. A file's menu in the tree offers
+  **Open in New Tab** for every file, and **Open as Page** for HTML and SVG, which an editor
+  takes too.
+- Agents open a file for the person with `open` and `kind: "file"` (`path`, `line`), and
+  `interact` reads it as the person sees it. A file tab holds a file of its own project only,
+  however its path is said (`..`, a link), and is listed, read and closed by that project's
+  agents alone.
+- A project's tabs open again once: a restore asked for twice in a row runs one time, and a
+  file kept open in two rows comes back as one tab.
+
 - The window with no tab left shows the mark of each coding agent you have installed, under
   its first commands: a click starts that agent in a terminal of the project.
 - **Dialogs.** Everything the app asks or announces in its window has one look: a card over
@@ -67,15 +113,10 @@
   `notify`) waits in the Event Center under "Programs Say", with the tab to show, until they
   type in that terminal. The words are the program's, shown as plain text and told to no agent.
 
-- What an agent opens from a terminal of the window lands beside that terminal, in its tab: the
-  agent on the left, its page, terminal or board on the right, and the keys stay in the terminal.
-  The next thing it opens takes that place, and the one before becomes a tab right after; `show`
-  of a tab brings it there too, so the window is not taken from the terminal. Each terminal has
-  its own place. A split you make whole (⇧⌘\) stays whole until you split that terminal again,
-  a tab you arranged yourself is never replaced, and an agent with a name on the board (a
-  worker) opens tabs of its own. The call is known by the terminal its program descends from,
-  with any agent and no setup. **Settings → Agents → What an agent opens** turns it to plain
-  tabs.
+- A call is known by the terminal its program descends from, with any agent and no setup: that
+  is how a file or a page an agent opens joins its terminal's session (Sessions, above), and
+  the keys stay in the terminal. A terminal or the board an agent opens is a tab of its own
+  and leaves the window to what you look at.
 - Claude Code in a terminal of LLX Desk opens the pages the person asks for ("open google") as
   tabs of the window, not in another browser it has the tools of, unless the person names it.
   It is told so by a row at the start of the session, which holds where an organization's
@@ -190,6 +231,11 @@
 
 ### Fixed
 
+- A split window stays split under an open list: opening the Event Center, the history or a
+  dialog no longer takes one half away and stretches the other across the window until the
+  list shuts. The same holds while you type an address: the page's half keeps its place, and
+  the toolbar's menus and the address's suggestions open under the toolbar of the right half
+  too.
 - An agent started in a tab (Claude Code, Codex) is found when the app was opened from the
   Finder or the Dock: its command is looked for where your own shell looks, not on the system's
   `PATH` alone (`sh: claude: command not found`).
@@ -205,7 +251,7 @@
 - A card's worker, run from the board (Run), is that worker by the terminal it runs in: its
   session acts on the board under its name with nothing passed (`who`), what you say of its
   card (a comment, a card sent back) is told to it alone while its terminal runs, and to the
-  project's agent once that is over; what it opens lands beside its terminal, as the project's
+  project's agent once that is over; what it opens joins its terminal's session, as the project's
   own agent's pages do. Its first prompt is half as long. Before, the project's main session
   was woken with every note meant for the worker.
 - A tab that opens while the window is split takes the window whole, as another tab picked

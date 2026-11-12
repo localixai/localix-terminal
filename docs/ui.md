@@ -106,6 +106,13 @@ person's accent and the system's selection and focus colours, never a site's fix
   - leaving it puts back the frame the person had.
 
   Don't build a full-screen mode of our own.
+- **A session's documents** are a row of tabs over their pane, 32 pt tall (`strip::DOCS`), as
+  wide as that pane and no wider:
+  - it is the strip's own row of tabs (`.t`), each as wide as its name needs, 220 pt at most;
+  - the document in sight has the shown tab's neutral fill; the others are `--ink-2`;
+  - a tab's close button shows on the one in sight and on the one pointed at;
+  - a hairline closes the row; the row is not there when the session has no document;
+  - it lies over the pages and is no titlebar: a press on its empty part moves nothing.
 - **Tiling** is the system's. The window allows it (`FULL_SCREEN_PRIMARY`).
 - Don't draw window controls of our own. A copy that doesn't match exactly makes the app feel
   broken.
@@ -171,6 +178,11 @@ define colours of its own beyond its `--ground`.
   - side tab rows are two lines: 44 pt (a 28 pt tile with a 16 pt glyph, a 13/16 name, an
     11/14 second line, 6 pt above and below), or 32 to 36 pt for a single line;
   - menu and suggestion rows 24 pt, with 5 pt padding above and below the list;
+  - a row of the side's tree of files is one line, 24 pt: a 16 pt chevron where it is a
+    folder, a 16 pt picture, the name; 12 pt further in for each folder it is under. The tree
+    is under the tabs, which then take the height they need and at most half the side's; its
+    head (Files) folds it away. Only the rows in view are drawn, and a folder of more than
+    2,000 entries ends in one quiet row that says how many more there are;
   - a separator is 11 pt tall with a hairline.
 - **The side** is 248 pt by default, 200 to 480 pt when dragged, and never more than half the
   window. Shut, it is a 52 pt rail.

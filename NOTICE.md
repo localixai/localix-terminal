@@ -49,3 +49,23 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
 OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## File pictures
+
+The pictures of files and folders in `src/browser/file_icons/` are from the MIT-licensed
+[vscode-icons](https://github.com/vscode-icons/vscode-icons) set. Where a picture is a
+product's mark, it identifies that product; ownership of the mark remains with its owner.
+
+Copyright (c) 2016 Roberto Huertas
+
+Licensed under the MIT License, whose text is above.
+
+## The editor
+
+The scripts in `src/editor/vendor/` are built by `scripts/editor` from the MIT-licensed
+[CodeMirror](https://codemirror.net) packages (`@codemirror/*`) and the
+[Lezer](https://lezer.codemirror.net) parsers (`@lezer/*`), at the versions `scripts/editor/package.json` pins.
+
+Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
+
+Licensed under the MIT License, whose text is above.

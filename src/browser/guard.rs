@@ -37,3 +37,26 @@ pub(super) fn outside(url: &str) -> bool {
         .iter()
         .any(|scheme| url.starts_with(scheme))
 }
+
+/// The kinds of file a page shows as they are: markup it renders, a picture, a document.
+const SHOWN: [&str; 11] = [
+    "html", "htm", "svg", "png", "jpg", "jpeg", "gif", "webp", "avif", "ico", "pdf",
+];
+
+/// Of them, the ones that are text: an editor takes them too, and a page renders them.
+const RENDERED: [&str; 3] = ["html", "htm", "svg"];
+
+fn of_kind(path: &std::path::Path, kinds: &[&str]) -> bool {
+    (path.extension().and_then(|kind| kind.to_str()))
+        .is_some_and(|kind| kinds.contains(&kind.to_ascii_lowercase().as_str()))
+}
+
+/// Whether a page shows the file at `path` as it is.
+pub fn shows(path: &std::path::Path) -> bool {
+    of_kind(path, &SHOWN)
+}
+
+/// Whether the file at `path` is text a page renders: it has two ways to be opened in a tab.
+pub(super) fn renders(path: &std::path::Path) -> bool {
+    of_kind(path, &RENDERED)
+}

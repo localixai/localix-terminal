@@ -4,6 +4,7 @@
 use super::On;
 use super::clicks::act;
 use crate::browser::deck::Deck;
+use crate::browser::session;
 use crate::browser::split;
 use crate::browser::strip::{Click, Key};
 use crate::browser::{Halves, Heard};
@@ -34,15 +35,32 @@ impl On<'_> {
         let Some(shown) = listed.iter().find(|tab| tab.shown) else {
             return;
         };
+        let Some(key) = Key::parse(&shown.id) else {
+            return;
+        };
+        let arranged = self.shared.arranged_of(&shown.group);
+        // A session kept whole shows its document again; else the next tab the layout takes
+        // beside this one.
+        let back = (arranged.as_ref())
+            .and_then(|arranged| session::beside_whole(arranged, &shown.id))
+            .and_then(|kept| split::again(&kept, &shown.id));
+        let takes = |other: &Key| {
+            (arranged.as_ref()).is_none_or(|arranged| session::takes(arranged, key, *other))
+        };
         let tabs: Vec<Key> = (listed.iter())
             .filter(|tab| tab.group == shown.group)
             .filter_map(|tab| Key::parse(&tab.id))
+            .filter(|other| *other == key || takes(other))
             .collect();
-        let partner = Key::parse(&shown.id).and_then(|key| split::partner(&tabs, key));
-        if partner.is_some() {
-            open.split_with(partner);
-            open.refresh(self.shared);
+        match (back, split::partner(&tabs, key)) {
+            (Some(beside), _) => {
+                open.split.beside = Some(beside);
+                open.split.grabbed = None;
+            }
+            (None, Some(partner)) => open.split_with(Some(partner)),
+            (None, None) => return,
         }
+        open.refresh(self.shared);
     }
 
     /// Tab `key` beside the one shown, the window split; or the window whole again (none).
@@ -130,13 +148,25 @@ impl On<'_> {
         let group_of =
             |name: &str| (listed.iter().find(|tab| tab.id == name)).map(|tab| tab.group.as_str());
         let beside = open.split.beside.map(|beside| beside.key.name());
-        if beside
-            .is_some_and(|beside| group_of(&beside).is_some_and(|of| !of.is_empty() && of != group))
-        {
+        let arranged = self.shared.arranged_of(&group);
+        // A tab of another project, or one the layout does not take beside this one (a session
+        // keeps its documents and takes no other pane), is not beside it.
+        let astray = beside.is_some_and(|beside| {
+            group_of(&beside).is_some_and(|of| !of.is_empty() && of != group)
+        });
+        let refused = match (&arranged, Key::parse(&id), open.split.beside) {
+            (Some(arranged), Some(key), Some(beside)) => !session::takes(arranged, key, beside.key),
+            _ => false,
+        };
+        if astray || refused {
             open.split_with(None);
         }
-        let arranged = self.shared.arranged_of(&group);
-        let kept = arranged.as_ref().and_then(split::kept_of);
+        let split_of = |arranged: &crate::browser::Arranged| session::split_of(arranged, &id);
+        let kept = arranged.as_ref().and_then(split_of);
+        // A session's panes are the layout's to keep: it hears of one closed by itself.
+        let session = (arranged.as_ref())
+            .and_then(|arranged| session::tab_of(arranged, &id))
+            .is_some_and(|tab| !tab.docs.is_empty());
         let split_now = |open: &Deck| {
             (open.pair().and(open.split.beside)).map(|beside| split::Kept {
                 shown: id.clone(),
@@ -171,7 +201,7 @@ impl On<'_> {
             (None, Some(kept)) => {
                 let there = |name: &str| group_of(name) == Some(group.as_str());
                 if !there(&kept.shown) || !there(&kept.beside) {
-                    (told != split::Told::Whole).then_some(Tell::Whole(kept))
+                    (told != split::Told::Whole && !session).then_some(Tell::Whole(kept))
                 } else {
                     // Undone by the person and not yet told back: it stays undone.
                     if told != split::Told::Whole
@@ -222,9 +252,11 @@ impl On<'_> {
         let Some(open) = self.deck.as_mut() else {
             return;
         };
+        let shown = open.shown_key().map(Key::name).unwrap_or_default();
         open.split_with(None);
         let group = open.shown_project(self.shared);
-        let kept = (self.shared.arranged_of(&group).as_ref()).and_then(split::kept_of);
+        let kept = (self.shared.arranged_of(&group).as_ref())
+            .and_then(|arranged| session::split_of(arranged, &shown));
         if let Some(kept) = kept {
             open.split.told = split::Told::Whole;
             self.tell_split(&group, &Tell::Whole(kept));

@@ -2,6 +2,7 @@
 
 use super::super::host::Shared;
 use super::super::panel::Held;
+use super::super::session;
 use super::super::strip::{self, Item, Key};
 use super::super::{agents, alerts};
 use super::{Deck, Menu, Part, Shown};
@@ -11,6 +12,15 @@ impl Deck {
     /// Every tab as the strip shows them: a project's together, the browser's first in each; its
     /// key, its kind, its title, what it holds and its group.
     pub(crate) fn listing(&self, shared: &Shared) -> Vec<WindowTab> {
+        self.listed(shared, &shared.arranged_here())
+    }
+
+    /// The tabs as `listing` gives them, in the order of the layout `arranged`.
+    fn listed(
+        &self,
+        shared: &Shared,
+        arranged: &std::collections::HashMap<String, super::super::Arranged>,
+    ) -> Vec<WindowTab> {
         let groups = crate::lock(&shared.groups).clone();
         let group = |key: Key| groups.get(&key.name()).cloned().unwrap_or_default();
         let details = crate::lock(&shared.details).clone();
@@ -39,10 +49,9 @@ impl Deck {
             let key = Key::Term(open.id);
             out.push(WindowTab {
                 id: key.name(),
-                kind: if key.kind() == "board" {
-                    "board"
-                } else {
-                    "terminal"
+                kind: match key.kind() {
+                    kind @ ("board" | "file") => kind,
+                    _ => "terminal",
                 }
                 .into(),
                 title: title.to_string(),
@@ -52,12 +61,11 @@ impl Deck {
                 group: group(Key::Term(open.id)),
             });
         }
-        // In the layout's order (each tab's panes left to right), the rest as they came; each
-        // project's together.
-        let arranged = shared.arranged_here();
+        // In the layout's order (each tab's panes left to right, a session's documents as it
+        // keeps them), the rest as they came; each project's together.
         let place = |tab: &WindowTab| {
             (arranged.get(&tab.group).into_iter())
-                .flat_map(|arranged| arranged.tabs.iter().flat_map(|tab| tab.panes.iter()))
+                .flat_map(|arranged| arranged.tabs.iter().flat_map(|tab| tab.all.iter()))
                 .position(|key| *key == tab.id)
                 .unwrap_or(usize::MAX)
         };
@@ -81,10 +89,12 @@ impl Deck {
         if !self.held.now() {
             return;
         }
-        let listed = self.listing(shared);
+        let arranged = shared.arranged_here();
+        let listed = self.listed(shared, &arranged);
         let shown_key = (listed.iter().find(|tab| tab.shown)).and_then(|tab| Key::parse(&tab.id));
         let bar = shown_key.and_then(|key| shared.offers.bar(key, &self.proxy));
         crate::lock(&self.offer).clone_from(&bar);
+        self.keep_stacks(&arranged);
         self.layout();
         // The page shown comments as the strip says: told again once another tab is shown, or
         // its page loaded again (its load finished counts it).
@@ -106,20 +116,7 @@ impl Deck {
             .iter()
             .find(|tab| tab.shown)
             .map(|tab| tab.id.clone());
-        let mut waits = alerts::waits(&alerts::read(&crate::lock(&shared.center)));
-        let items: Vec<Item> = listed
-            .into_iter()
-            .filter_map(|tab| {
-                Some(Item {
-                    key: Key::parse(&tab.id)?,
-                    title: tab.title,
-                    detail: tab.detail,
-                    agent: shared.offers.agent(&tab.id),
-                    waits: waits.remove(&tab.id),
-                    group: tab.group,
-                })
-            })
-            .collect();
+        let items = Self::items(listed, &arranged, shown.as_deref(), shared);
         let shown = shown.and_then(|id| Key::parse(&id)).unwrap_or(Key::Web(0));
         let side = self.side.as_ref().map(|_| self.side_open);
         let places = crate::lock(&shared.places).clone();
@@ -148,13 +145,16 @@ impl Deck {
             (Part::Strip, Some(strip)),
             (Part::Side, self.side.as_ref()),
             (Part::Nav, self.nav.as_ref()),
+            (Part::Docs, self.docs.as_ref()),
         ];
         for (part, view) in parts {
             let Some(view) = view else { continue };
             self.say((part, view), "split", &split);
             self.say((part, view), "drawn", &drawn);
         }
+        self.tell_docs();
         self.tell_frame();
+        self.tell_tree(shared, None);
         self.tell_menus(strip, shared);
         self.tell_dialog(strip);
         let framed = (self.web.as_ref())
@@ -180,6 +180,39 @@ impl Deck {
             &strip::commenting(self.commenting, held),
         );
         self.say_turn(shared, nav);
+    }
+
+    /// The tabs `listed` as the strip's pages list them, tab `shown` the one the window shows:
+    /// each with what waits in it, its agent, and, a document, the tab that stands for its
+    /// session (the lists show the session; the document is a tab of the row over it), from
+    /// the moment it opens.
+    fn items(
+        listed: Vec<WindowTab>,
+        arranged: &std::collections::HashMap<String, super::super::Arranged>,
+        shown: Option<&str>,
+        shared: &Shared,
+    ) -> Vec<Item> {
+        let mut waits = alerts::waits(&alerts::read(&crate::lock(&shared.center)));
+        let mut led: std::collections::HashMap<String, String> = (arranged.values())
+            .flat_map(|arranged| session::led(arranged, shown))
+            .collect();
+        (listed.into_iter())
+            .filter_map(|tab| {
+                // A document just opened is in no tab of the layout yet: it is no row meanwhile.
+                let of = led
+                    .remove(&tab.id)
+                    .or_else(|| session::stands_for(arranged.get(&tab.group), &tab.id, shown));
+                Some(Item {
+                    key: Key::parse(&tab.id)?,
+                    title: tab.title,
+                    detail: tab.detail,
+                    agent: shared.offers.agent(&tab.id),
+                    waits: waits.remove(&tab.id),
+                    of,
+                    group: tab.group,
+                })
+            })
+            .collect()
     }
 
     /// The dialog up (dialog.rs), drawn over the whole window; one the person asked for takes
@@ -223,6 +256,7 @@ impl Deck {
             (Part::Strip, self.strip.as_ref()),
             (Part::Side, self.side.as_ref()),
             (Part::Nav, self.nav.as_ref()),
+            (Part::Docs, self.docs.as_ref()),
         ];
         for (part, view) in views {
             if let Some(view) = view {
@@ -245,7 +279,12 @@ impl Deck {
     /// part was last told of that kind (and no part has loaded its page again since): a refresh
     /// with nothing new wakes no page. A part is told apart by what it is, not where its view
     /// lives: windows come and go, and a deck moves.
-    fn say(&self, (part, view): (Part, &wry::WebView), kind: &'static str, script: &str) {
+    pub(super) fn say(
+        &self,
+        (part, view): (Part, &wry::WebView),
+        kind: &'static str,
+        script: &str,
+    ) {
         self.tell((Some(part), view), kind, script, ());
     }
 

@@ -47,6 +47,7 @@ impl Deck {
             .chain(terms)
             .chain(&self.side)
             .chain(&self.nav)
+            .chain(&self.docs)
         {
             super::super::hush::set(view, on);
         }
@@ -79,7 +80,28 @@ impl Deck {
 
     /// Where the browser's toolbar lies in the window: over the pages, beside the side.
     pub(in super::super) fn nav_at(&self) -> (f64, f64) {
-        (self.left(), self.top())
+        let (x, top) = self.pane_at(self.shown_key());
+        (x, top + self.docs_over(self.shown_key()))
+    }
+
+    /// Where the pane of tab `key` begins in the window: the left of its half, else of the
+    /// tabs' whole part, and the top of that part.
+    pub(super) fn pane_at(&self, key: Option<Key>) -> (f64, f64) {
+        let (size, left, top) = self.area(false);
+        let raised = super::super::platform::OVER_PAGES;
+        let halves = self.laid(self.halves(size.width, left), raised);
+        let whole = (left, size.width);
+        (super::super::split::span(halves, key, whole).0, top)
+    }
+
+    /// The halves the window shows now of `split`, the strip `raised` over the pages or not:
+    /// none while a list is open where they must stand aside for it.
+    fn laid(
+        &self,
+        split: Option<[(Key, f64, f64); 2]>,
+        raised: bool,
+    ) -> Option<[(Key, f64, f64); 2]> {
+        super::super::split::under(split, self.covered() || self.typing, raised)
     }
 
     /// What the offer bar shows now.
@@ -129,16 +151,19 @@ impl Deck {
     /// starts.
     pub(super) fn content(&self) -> (LogicalSize<f64>, f64, f64) {
         let (size, left, top) = self.area(self.browsing());
+        let now = self.shown_key();
+        // A document's pane starts under the row of its session's documents.
+        let docs = self.docs_over(now);
+        let (tall, top) = ((size.height - docs).max(0.0), top + docs);
         match self.halves(size.width, left) {
             Some(halves) => {
-                let now = self.shown_key();
                 let (_, x, width) = halves
                     .into_iter()
                     .find(|half| Some(half.0) == now)
                     .unwrap_or(halves[0]);
-                (LogicalSize::new(width, size.height), x, top)
+                (LogicalSize::new(width, tall), x, top)
             }
-            None => (size, left, top),
+            None => (LogicalSize::new(size.width, tall), left, top),
         }
     }
 
@@ -175,12 +200,10 @@ impl Deck {
         // the pages stand aside, still rendering.
         let over = self.covered() || self.typing;
         // Split, the window shows two tabs, each in its half; the one in use has the toolbar.
-        let halves = if over {
-            None
-        } else {
-            self.halves(size.width, left)
-        };
-        let raised = self.stack(halves.is_some());
+        // Both stay under a list the strip opens over them.
+        let split = self.halves(size.width, left);
+        let raised = self.stack(split.is_some());
+        let halves = self.laid(split, raised);
         if let Some(strip) = &self.strip {
             let height = if self.covered() {
                 top + size.height
@@ -190,9 +213,7 @@ impl Deck {
             pin(strip, LogicalSize::new(width, height));
         }
         let in_use = self.shown_key();
-        let (used_x, used_width) = (halves.iter().flatten())
-            .find(|half| Some(half.0) == in_use)
-            .map_or((left, size.width), |half| (half.1, half.2));
+        let (used_x, used_width) = super::super::split::span(halves, in_use, (left, size.width));
         if let Some(nav) = &self.nav {
             let blank = self.nav.is_some() && self.blank();
             let x = if self.browsing() || blank {
@@ -206,7 +227,8 @@ impl Deck {
                 NAV
             };
             let wide = if blank { size.width } else { used_width };
-            super::super::platform::bound(nav, LogicalSize::new(wide, tall), x, top);
+            let under = top + self.docs_over(in_use);
+            super::super::platform::bound(nav, LogicalSize::new(wide, tall), x, under);
             // Over a whole page it stretches with the window as the window resizes; over one
             // half of a split it keeps its width until the layout that follows.
             if halves.is_none() {
@@ -224,6 +246,7 @@ impl Deck {
                     .filter_map(|(key, x, w)| match key {
                         Key::Web(id) => {
                             let above = if Some(key) == in_use { toolbar } else { 0.0 };
+                            let above = above + self.docs_over(Some(key));
                             let tall = (size.height - above).max(0.0);
                             Some((id, LogicalSize::new(w, tall), x, top + above))
                         }
@@ -232,7 +255,9 @@ impl Deck {
                     .collect(),
                 None if self.shown == Shown::Web && !over => {
                     let (size, left, top) = self.area(self.nav.is_some());
-                    vec![(web.active_id(), size, left, top)]
+                    let docs = self.docs_over(in_use);
+                    let size = LogicalSize::new(size.width, (size.height - docs).max(0.0));
+                    vec![(web.active_id(), size, left, top + docs)]
                 }
                 None => vec![],
             };
@@ -249,18 +274,20 @@ impl Deck {
             if open.slot.shown(spot.is_some()) {
                 let _ = self.proxy.send_event(Cmd::Paint(open.id));
             }
+            let docs = self.docs_over(Some(Key::Term(open.id)));
             match spot {
                 Some((x, w)) => place(
                     &open.webview,
                     x,
-                    top,
-                    LogicalSize::new(w, size.height),
+                    top + docs,
+                    LogicalSize::new(w, (size.height - docs).max(0.0)),
                     true,
                 ),
                 None => place(&open.webview, -(width + 100.0), top, size, false),
             }
         }
         self.place_line(halves, (size, left, top), width);
+        self.place_docs(halves, (left, size.width, top), over);
         self.hush();
     }
 
@@ -271,7 +298,8 @@ impl Deck {
         // Bottom to top over the pages: the browser's toolbar, then the line between the halves
         // (whole, over the toolbar of either half), then the strip. While the person types an
         // address, the toolbar and its suggestions lie over the line instead.
-        let mut over: Vec<&wry::WebView> = Vec::with_capacity(4);
+        let mut over: Vec<&wry::WebView> = Vec::with_capacity(5);
+        over.extend(&self.docs);
         let line = (self.line.as_ref()).filter(|_| split);
         if let (Some(nav), false) = (&self.nav, self.typing) {
             over.push(nav);

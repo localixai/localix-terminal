@@ -31,6 +31,11 @@ impl Desk {
                         state: Some(self.board_text(&tab.key)?),
                         shot: None,
                     },
+                    Kind::File => Output {
+                        report: "A file is read as text: it is below.".into(),
+                        state: Some(self.file_text(&tab.key)?),
+                        shot: None,
+                    },
                 })
             }
             Some("close") => self.close(call, args),
@@ -78,6 +83,8 @@ impl Desk {
             Some(owner) if owner == call.owner => Ok(tab),
             // The project's board is one tab for all its agents: whoever opened it first owns it.
             _ if tab.kind == Kind::Board && self.board_of(call.project.id, &tab.key) => Ok(tab),
+            // A file has one tab in a project too, whoever opened it.
+            _ if tab.kind == Kind::File && self.file_of(call.project.id, &tab.key) => Ok(tab),
             // A call from another directory is another owner's: say whose, so the agent sees it
             // left its project (a `cd` into a scratch directory) rather than lost the tab.
             _ => Err(format!(
@@ -103,6 +110,11 @@ impl Desk {
             Kind::Board => Ok(Output {
                 state: Some(self.board_text(&tab.key)?),
                 ..Output::default()
+            }),
+            Kind::File => Ok(Output {
+                report: self.file_summary(&tab.key),
+                state: Some(self.file_text(&tab.key)?),
+                shot: None,
             }),
         }
     }
@@ -143,6 +155,8 @@ impl Desk {
             // A board's `op` acts on it; with none, it is read (what a page or a terminal is
             // acted on with was refused already).
             Kind::Board => return self.board(call, args),
+            // A file's tab is read: every field that would act on it was refused already.
+            Kind::File => self.read(tab)?,
             Kind::Web => {
                 let mark = self.told_mark();
                 let answering = self.answering(tab.id, args)?;
@@ -197,6 +211,10 @@ impl Desk {
                 self.let_go(&tab.key);
                 self.close_board(&tab.key)
             }
+            Kind::File => {
+                self.let_go(&tab.key);
+                self.close_file(&tab.key)
+            }
         }
     }
 
@@ -233,6 +251,7 @@ impl Desk {
             let known = window.iter().find(|w| w.id == key);
             let detail = match (tab.kind, known) {
                 (Kind::Board, _) => self.board_summary(&tab.key),
+                (Kind::File, _) => self.file_summary(&tab.key),
                 (_, Some(w)) => format!("{} {}", w.title, w.detail).trim().to_string(),
                 (Kind::Term, None) => self
                     .session(tab.id)

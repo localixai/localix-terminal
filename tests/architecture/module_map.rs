@@ -20,9 +20,12 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
     ("ledger", &["projects", "store"]),
     ("layout", &["ledger", "projects", "store"]),
     ("board", &["projects", "store"]),
+    ("files", &["projects", "store"]),
     ("feed", &["layout", "projects", "store"]),
     ("secrets", &["paths"]),
     ("terminal", &["fds"]),
+    // An editor's page and what it is told: it knows no file but the text it is handed.
+    ("editor", &[]),
     ("setup", &["bundle", "fds", "paths", "store"]),
     // The app kept up to date: it knows where the app is, and nothing of the window or the desk.
     ("update", &["bundle", "paths"]),
@@ -38,8 +41,8 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
     (
         "desk",
         &[
-            "board", "browser", "feed", "layout", "ledger", "offers", "projects", "secrets",
-            "served", "shots", "store", "terminal", "update", "view",
+            "board", "browser", "editor", "feed", "files", "layout", "ledger", "offers",
+            "projects", "secrets", "served", "shots", "store", "terminal", "update", "view",
         ],
     ),
     // The socket: every method onto the desk, holding the window's handle.

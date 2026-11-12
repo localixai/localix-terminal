@@ -22,6 +22,8 @@ use super::strip::Key;
 
 #[path = "deck_build.rs"]
 mod construction;
+#[path = "deck_docs.rs"]
+mod documents;
 #[path = "deck_drop.rs"]
 mod dropping;
 #[path = "deck_render.rs"]
@@ -37,6 +39,8 @@ mod history;
 mod layout;
 #[path = "deck_tear.rs"]
 mod tear;
+#[path = "deck_tree.rs"]
+mod tree;
 use super::tabs::{self, Tabs};
 pub(super) use history::Revisit;
 
@@ -81,6 +85,12 @@ pub(super) struct Deck {
     /// The line between a split window's halves, which the person drags (the strip's page
     /// again): out of sight while the window is whole.
     line: Option<WebView>,
+    /// The documents' row over the documents of the session shown (the strip's page again):
+    /// out of sight while no document is in sight.
+    docs: Option<WebView>,
+    /// Each tab's documents, as the layout was last drawn (session.rs): what the row lists and
+    /// lies over.
+    stacks: std::sync::Mutex<Vec<Vec<Key>>>,
     /// The window split in two, or whole (split.rs).
     pub(super) split: super::split::Split,
     /// A tab dragged over the pages: the half it lands in now (whether the right one), none off
@@ -334,22 +344,6 @@ impl Deck {
         }
     }
 
-    /// The two tabs side by side, left and right, when the window is split.
-    pub(super) fn pair(&self) -> Option<(Key, Key)> {
-        self.pair_with(self.split.beside)
-    }
-
-    /// The two halves' tabs, left and right, were `beside` the tab beside the shown one.
-    pub(super) fn pair_with(&self, beside: Option<super::split::Beside>) -> Option<(Key, Key)> {
-        super::split::pair(self.shown_key(), beside, |key| self.there(key))
-    }
-
-    /// Split the window, tab `key` beside the one shown, on the right; or make it whole (none).
-    pub(super) fn split_with(&mut self, key: Option<Key>) {
-        self.split.beside = key.map(|key| super::split::Beside { key, right: true });
-        self.split.grabbed = None;
-    }
-
     /// Whether `window` (an NSWindow's address) is this window.
     #[cfg(target_os = "macos")]
     pub(super) fn is_window(&self, window: usize) -> bool {
@@ -399,6 +393,8 @@ enum Part {
     Nav,
     /// The line between a split window's halves.
     Line,
+    /// The row of a session's documents, over their pane.
+    Docs,
 }
 
 /// How many times a part of the strip loaded its page: one that loads again has lost what it was

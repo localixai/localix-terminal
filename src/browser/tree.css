@@ -1,0 +1,36 @@
+/* The side's files: under the tabs, a head that shows or puts away the shown project's tree, and
+   the tree itself. Its rows are all one height, so only those in view are drawn (tree.js). The
+   rail has neither. */
+#fh,#ft{display:none}
+@media (min-width:121px){
+  html[data-part=side] #fh{flex:none;display:flex;align-items:center;gap:4px;height:24px;padding:0 4px;border-radius:var(--r-2);color:var(--ink-2);font-size:11px;line-height:14px;font-weight:600;cursor:default;user-select:none;outline:0;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
+  html[data-part=side][data-files] #ft{display:block;position:relative;flex:1 1 0;min-height:0;overflow-y:auto;outline:0}
+  /* With the files shown the tabs take the height they need, at most half the side's. */
+  html[data-part=side][data-files] #sl{flex:0 1 auto;max-height:50%}
+}
+#fh:hover{background:var(--ov-2);color:var(--ink);transition:none}
+#fh:active{background:var(--ov-3);transition:none}
+#fh:focus-visible{box-shadow:inset 0 0 0 1px var(--accent),0 0 0 3px var(--acc-2)}
+html[data-inactive] #fh:focus-visible{box-shadow:none}
+#fr{position:relative}
+/* A row: the folder's disclosure (a file keeps its place empty, so the pictures line up), the
+   picture of its kind, and its name. It rests in the quiet ink and is lit under the pointer. */
+.fe{position:absolute;left:0;right:0;height:24px;display:flex;align-items:center;gap:4px;padding-right:8px;box-sizing:border-box;border-radius:var(--r-2);color:var(--ink);font-size:13px;line-height:16px;cursor:default;user-select:none;transition:background-color var(--t-out) var(--ease)}
+.fe:hover{background:var(--ov-1);transition:none}
+.fe:active{background:var(--ov-3);transition:none}
+:is(#fh,.fe) .ch{flex:none;width:16px;height:16px;display:grid;place-items:center;color:var(--ink-2);transition:rotate var(--t-out) var(--ease)}
+:is(#fh,.fe) .ch svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+:is(#fh,.fe)[aria-expanded=false] .ch{rotate:-90deg}
+.fe .fi{flex:none;width:16px;height:16px;display:grid}
+.fe .fi svg{width:16px;height:16px}
+/* The pictures, one of each, where the rows' own point at them: out of sight, and still drawn from. */
+#fp{position:absolute;width:0;height:0;overflow:hidden}
+.fe .fn{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* The line that says how many more a folder holds than the tree lists: words, not an entry. */
+.fe.more{color:var(--ink-2);pointer-events:none}
+/* The pick: grey where the tree does not have the keyboard, the accent with white words where it
+   does (grey again in an inactive window, frame.css). */
+.fe[data-pick]{color:var(--fg);background:var(--ov-2)}
+#ft:focus-visible .fe[data-pick]{background:var(--acc-sel);color:var(--on-sel)}
+#ft:focus-visible .fe[data-pick] .ch{color:inherit}
+html[data-inactive] .fe .fi{opacity:.6}

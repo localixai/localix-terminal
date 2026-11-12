@@ -187,4 +187,26 @@ pub(super) const STEPS: &[&str] = &[
         WHERE workspaces.window = windows.id ORDER BY projects.opened DESC LIMIT 1);",
     // 3: a pane's visits found by their page, as each title a page says finds its visit.
     "CREATE INDEX IF NOT EXISTS visits_of_pane ON visits (pane, url);",
+    // 4: the folders a person left open in a project's tree of files, each by its path under
+    // the project's folder.
+    "CREATE TABLE open_dirs (
+        project INTEGER NOT NULL REFERENCES projects ON DELETE CASCADE,
+        path TEXT NOT NULL,
+        PRIMARY KEY (project, path)
+    ) WITHOUT ROWID;",
+    // 5: what a person left unsaved in a file, by the file's path, with the length and hash of
+    // the bytes the disk held when they wrote it. `turn` orders them by when each was last
+    // written, so the oldest go first when there are too many.
+    "CREATE TABLE drafts (
+        path TEXT PRIMARY KEY,
+        len INTEGER NOT NULL,
+        hash INTEGER NOT NULL,
+        turn INTEGER NOT NULL,
+        text TEXT NOT NULL
+    ) WITHOUT ROWID;
+    CREATE INDEX drafts_turn ON drafts (turn);",
+    // 6: a tab made whole shows its pane in focus alone; the rest of its panes stay its own.
+    // A node's `across` may be 2 from here on: a stack, its children one over the other, the
+    // one in sight with the share 1 and the rest 0.
+    "ALTER TABLE tabs ADD COLUMN whole INTEGER NOT NULL DEFAULT 0;",
 ];

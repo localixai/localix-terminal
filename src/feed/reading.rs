@@ -100,8 +100,8 @@ impl Feed {
             .map(drop)
     }
 
-    /// The consumer's loop: a page past its cursor, each notice handled, then the cursor kept,
-    /// once a page: after a crash the page's notices come again, which a consumer takes as
+    /// The consumer's loop: a page past its cursor, each notice handled, the consumer told it
+    /// has caught up, then the cursor kept, once a page: after a crash the page's notices come again, which a consumer takes as
     /// it takes any notice told twice.
     fn run(&self, consumer: &mut dyn Consumer) {
         let name = consumer.name();
@@ -118,6 +118,9 @@ impl Feed {
                             "feed consumer {name} passed over notice {seq}: it does not read"
                         );
                     }
+                }
+                if Some(seq) == last {
+                    consumer.caught_up();
                 }
                 self.advanced(name, seq);
             }

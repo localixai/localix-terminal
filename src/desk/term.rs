@@ -31,8 +31,8 @@ impl Desk {
             return Err(format!("{} is not a directory", dir.display()));
         }
         let group = crate::projects::key(call.project.id);
-        // Opened from a terminal, its tab leaves the window to that one and lands beside it.
-        let aside = self.lands_beside(call).is_some();
+        // Opened from a terminal, it is a session of its own and leaves the window to that one.
+        let aside = self.quiet(call);
         let (id, session) = self.start_session(
             text(args, "command").unwrap_or(""),
             &dir,

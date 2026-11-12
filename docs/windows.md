@@ -11,13 +11,19 @@ app
 ├─ project                       a folder (docs/projects.md)
 └─ window                        a native window: the workspace it shows
    └─ workspace                  the window × a project: the tabs of that project in that window
-      └─ tab                     one row of the side's list, in its place
-         └─ pane tree            the tab's split: branches and leaves
+      └─ tab                     one row of the side's list, in its place: a session or the
+         │                       board (and, in a project with no terminal, its documents)
+         └─ pane tree            the tab's split: branches, stacks and leaves
             ├─ branch            side by side or one above the other; each child with its share
+            ├─ stack → panes     a session's documents, one over the other, one of them in sight
             └─ leaf → pane       one pane, in focus or not
-               pane              web | terminal | board: its address or folder and program, its
-                                 title, its agent; the key agents use (w1, t2, b1)
+               pane              web | terminal | board | file: its address or folder and
+                                 program, its title, its agent; the key agents use (w1, t2, b1, f1)
 ```
+
+In short: project → session → its files and pages. A **session** is a terminal's tab: the
+terminal, and on its right the documents (files and pages) opened in it. Each session keeps its
+own, and another session never shows them.
 
 - A **window** shows one workspace at a time: the project shown. Switching the project shows
   another workspace of the same window; the others keep their tabs out of sight.
@@ -37,6 +43,12 @@ app
 | workspace | its row id (window, project)  | the same               |
 | tab       | its row id                    | the same               |
 | pane      | its row id                    | its key (`w1`, `t2`)   |
+
+A key's letter is the pane's kind: `w` a page, `t` a terminal, `b` the board, `f` a file in an
+editor. A file has one pane in its project, found by its path: opened again, by the person or
+an agent, it is the same pane shown. The app, not the tree, says how a picked file is shown:
+text in an editor, a kind a page shows (a picture, a PDF) as a page, anything else by the app
+the person has for it.
 
 A pane restored after a restart is the same row with a new key. Moving a tab to another window
 moves the row (its `workspace` changes); its panes, keys, pages and programs are the same ones.
@@ -216,32 +228,71 @@ for each pane the agent owns: its key, its kind in parentheses, `[shown]` when i
 title and detail (`w1 (browser) [shown]: Title detail`); it says nothing of windows or tabs. `show`
 of a pane shows its tab in its window and focuses it.
 
-### Beside the terminal
+### A session and its documents
 
 A call that comes from a terminal of the window is known by it: the server reads the process at
 the other end of the connection (`wire/peer.rs`), and the desk finds the terminal whose program
 that process descends from (`terminal/lineage.rs`). The agent sets nothing up and the call
-carries nothing new; a call from another terminal app has no terminal here and opens tabs.
+carries nothing new; a call from another terminal app has no terminal here.
 
-What the project's own agent opens from a terminal lands in that terminal's tab, on its right,
-in the same change as the pane's ledger row (`desk/beside.rs`):
+A file or a page is a **document**. It joins the session it was asked from, in the same change
+as the pane's ledger row (`desk/beside.rs`): the terminal's tab holds its documents as a stack
+(`layout/stack.rs`) on the terminal's right, one of them in sight, the terminal on the left.
 
-| the terminal's tab                         | where the new pane lands                         |
-| ------------------------------------------ | ------------------------------------------------ |
-| the terminal alone                         | on its right; the terminal keeps the keys        |
-| the terminal and a pane it opened before   | in that pane's place; that pane a tab right after |
-| arranged by the person (another pane)      | a tab of its own                                 |
-| made whole by the person (⇧⌘\)             | a tab of its own, until they split it again      |
+| who asks                                    | the session the document joins                   |
+| ------------------------------------------- | ------------------------------------------------ |
+| an agent, from a terminal of its project    | that terminal's                                  |
+| the person (the tree, ⌘T, a link's new tab) | the one they look at                             |
+| anyone, from no session                     | the one the project shows, else its last         |
 
-`show` of a hidden pane follows the same table, so the window is not taken from the terminal.
-The links are kept while both panes are open: which pane was opened from which terminal, and
-the terminals the person made whole. A pane closing forgets its links, and a terminal closing
-leaves what was beside it a tab. A worker the person ran from the board is known by its
-terminal (`desk/workers.rs`) and opens beside it, as the project's agent does. Any other agent
-with a name on the board (`--as`) opens tabs of its own, as does the person and what the app
-opens again: several named agents of one terminal would take the one place in turn. Settings → Agents → What an agent opens turns the
-whole of it to plain tabs.
+- The side lists **sessions**, not their documents: a session is one row, by its terminal. Its
+  documents are a row of tabs over their pane (`browser/deck_docs.rs`): a press shows one, its
+  close button closes it, and the row is there only while the session shown has documents.
+  A tab of the row is as wide as its name, up to a tab of the side's, and never narrows: more
+  than fit scroll sideways (a wheel turned up and down moves the row too), an edge with more
+  past it fades, and the document in sight is brought into view when it changes.
+- A document's menu (a right click on its tab in the row) is the tab's menu, placed where the
+  person clicked: the row says its points are its own (`Cmd::DocsClicked`) and the window
+  moves them to where the row lies, as it does the side's and the toolbar's. Its "other" tabs
+  and those "to the right" are the documents of its row; a session's are the rows of the
+  side, never its own documents (`host_tab_menu.rs` `beside`). A document offers no split:
+  it is in its session's half already.
+- **A document is never a row of the side, from the moment its tab exists.** Its pane is owned
+  and placed in its session as the window makes the tab, before its page loads
+  (`desk/open.rs`), and the window is told the layout before it is asked to show the tab
+  (`bring`), so the document comes up in its half at once. For the moment between the tab and
+  the layout that holds it, the window lists it under the session in sight
+  (`browser/session.rs` `stands_for`).
+- An agent's document is the one in sight unless the person is in a document of that session
+  themselves: then it waits behind, a tab of the row. The terminal keeps the keys either way,
+  and the window is not taken from what the person looks at. What the person opens is the pane
+  in use, since they opened it to read.
+- A document opened again is shown where it is, in its own session. `show` of a document
+  follows the same rules.
+- **A session closing closes its documents** (`desk/sessions.rs`): each as its own close would,
+  so a file's unsaved text stays its draft. A document closing shows the next of its session,
+  and the last one leaves the terminal whole.
+- A session made whole (⇧⌘\) keeps its documents out of sight, and the next split brings them
+  back. A session takes no other pane: a tab dragged onto it stays a tab.
+- A document asked from no session (another terminal app's agent, the person with the board
+  or nothing in sight, a call whose terminal has closed) joins a session all the same: the one
+  its project shows, else its last (`desk/sessions.rs`). Only **a project with no terminal**
+  keeps its documents in one tab of their own, a stack as a session's is, and its first
+  terminal takes them as they were: a project with a session has no tab of documents that is
+  not one.
+- A terminal and the board are tabs of their own, as before: a terminal is a session, and the
+  board is one per project. An agent that opens either from a terminal leaves the window to what
+  it shows. A worker the person ran from the board is known by its terminal
+  (`desk/workers.rs`), and its documents join that session.
+- The tabs a run before left are brought to this shape as the app starts: a document split
+  beside a terminal is that terminal's first document, on the side it stood, and one alone in
+  a tab joins a session of its project (one tab of documents where it has no terminal).
 
-The window follows: a tab opened aside does not take the window (it is drawn beside the tab in
-sight), and a window still laid out as the layout kept it takes the layout's next split, where
-one the person changed since is told to the layout instead.
+A session is always a tab of the caller's own project in the window it works in. A pane of
+another project is no session, a file tab holds only a file under its project's folder as it
+really is, and a tab is listed, read, shown and closed by its own project's calls alone.
+
+The window follows without waiting (`browser/session.rs`): it lays a tab out from the layout as
+last told, so a session picked in the side, or a project switched to, is drawn at once with its
+own document in sight, and the layout hears of it after. Nothing is opened, read or loaded
+again by a switch: a session's panes stay as they were, out of sight.

@@ -26,6 +26,7 @@ pub enum Kind {
     Page,
     Terminal,
     Board,
+    File,
 }
 
 impl Kind {
@@ -34,6 +35,7 @@ impl Kind {
             Self::Page => "page",
             Self::Terminal => "terminal",
             Self::Board => "board",
+            Self::File => "file",
         }
     }
 
@@ -41,6 +43,7 @@ impl Kind {
         match name {
             "terminal" => Self::Terminal,
             "board" => Self::Board,
+            "file" => Self::File,
             _ => Self::Page,
         }
     }
@@ -57,7 +60,8 @@ pub struct Pane {
     pub title: String,
     /// A page's address.
     pub url: Option<String>,
-    /// A terminal's folder, and the program it was opened with.
+    /// A terminal's folder, or the file an editor's tab holds; and the program a terminal was
+    /// opened with.
     pub cwd: Option<PathBuf>,
     pub command: Option<String>,
     pub opened: u64,

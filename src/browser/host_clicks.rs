@@ -170,6 +170,7 @@ impl On<'_> {
         let keys = self.deck.as_ref().map(Deck::keys).unwrap_or_default();
         // Not drawn: its window is about to go.
         self.close_all(keys, false);
+        self.tree_left();
         *self.deck = None;
     }
 
@@ -187,11 +188,7 @@ impl On<'_> {
                 None => Err("the window is not open".to_string()),
             };
             if closed.is_ok() {
-                let what = match key.kind() {
-                    "web" => CLOSED_PAGE,
-                    "board" => CLOSED_BOARD,
-                    _ => CLOSED_TERMINAL,
-                };
+                let what = crate::browser::told::closed(key.kind());
                 self.shared.heard(&key.name(), Heard::Closed(what));
             }
         }
@@ -345,9 +342,3 @@ pub(super) fn act(deck: &mut Option<Deck>, said: Click, shared: &Shared) -> Resu
     open.refresh(shared);
     Ok(())
 }
-
-/// What the person's closing says, to whoever listens.
-const CLOSED_PAGE: &str = "The person closed this browser tab.";
-const CLOSED_TERMINAL: &str = "The person closed this tab: its program runs on, out of sight.";
-const CLOSED_BOARD: &str =
-    "The person closed the board's tab: the board is kept, and `board` shows it again.";

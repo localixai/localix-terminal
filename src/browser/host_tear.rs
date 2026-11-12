@@ -233,13 +233,8 @@ impl Looping {
             .map(|arranged| arranged.tabs.clone())
             .unwrap_or_default();
         let keys: Vec<Key> = (tabs.iter())
-            .find(|tab| tab.panes.contains(&name))
-            .map(|tab| {
-                tab.panes
-                    .iter()
-                    .filter_map(|pane| Key::parse(pane))
-                    .collect()
-            })
+            .find(|tab| tab.all.contains(&name))
+            .map(|tab| tab.all.iter().filter_map(|pane| Key::parse(pane)).collect())
             .unwrap_or_else(|| vec![key]);
         let Some(source) = self.windows.deck(from) else {
             return false;

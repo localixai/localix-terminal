@@ -22,7 +22,7 @@ pub fn schema() -> Value {
     );
     put(
         "kind",
-        json!({"type": "string", "enum": ["browser", "terminal", "board"], "description": "open: the kind of tab."}),
+        json!({"type": "string", "enum": ["browser", "terminal", "board", "file"], "description": "open: the kind of tab."}),
     );
     put(
         "tabs",
@@ -105,6 +105,7 @@ pub fn schema() -> Value {
         "yield_ms",
         json!({"type": "integer", "minimum": 100, "maximum": MAX_YIELD_MS, "description": "The longest the call waits, in ms (a page waits at most 15000)."}),
     );
+    p.extend(file_fields());
     p.extend(board_fields());
     p.insert("ask".into(), ask_field());
     json!({"type": "object", "required": ["action"], "properties": p})
@@ -116,6 +117,23 @@ pub(super) fn ask_field() -> Value {
         (sign in, a code, a decision), as one line. It waits in their Event Center until they press \
         Done, which reaches you as their note, or comment; one a tab, a new one replaces it, \
         `\"\"` takes it back. Never for news or progress: the Event Center is for what wants them."})
+}
+
+/// The fields of opening a file in an editor's tab.
+fn file_fields() -> Map<String, Value> {
+    let mut p = Map::new();
+    let mut put = |name: &str, value: Value| {
+        p.insert(name.to_string(), value);
+    };
+    put(
+        "path",
+        json!({"type": "string", "description": "file: a text file of the project (UTF-8, up to 2 MB) to open in an editor, relative to the caller's directory; a file has one tab, shown when opened again."}),
+    );
+    put(
+        "line",
+        json!({"type": "integer", "description": "file, open: the line to show the person."}),
+    );
+    p
 }
 
 /// The fields of acting on a board's tab.

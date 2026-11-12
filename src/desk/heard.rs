@@ -26,6 +26,14 @@ impl Desk {
                     return self.closed_later(key, None, false);
                 }
                 let owner = self.owner_of(key).filter(|_| !person);
+                if key.starts_with('f') {
+                    // Its page went with its tab: its watch and worker go off the window's loop.
+                    crate::lock(&self.registry).release(key);
+                    let (desk, file) = (Arc::clone(self), key.to_string());
+                    self.write_later(move || {
+                        desk.forget_file(&file);
+                    });
+                }
                 if let Some(id) = key.strip_prefix('w').and_then(|n| n.parse::<u32>().ok()) {
                     crate::lock(&self.registry).release(key);
                     self.forget_page(id, 1);
@@ -97,6 +105,7 @@ impl Desk {
             Heard::Reopened => self.reopened(),
             Heard::Asked(asked) => self.person_asked(key, asked),
             Heard::Center(did) => self.person_on_center(did),
+            Heard::Tree(did) => self.person_on_tree(key, did),
         }
     }
 
@@ -179,6 +188,7 @@ impl Desk {
                             None => Err(format!("{} is no folder of it", folder.display())),
                         }
                     }
+                    Asked::File(path) => desk.person_file(&call, path),
                     Asked::Board => (desk.board(&call, &json!({"op": "show"})))
                         .map(|_| ())
                         .map_err(|failure| failure.message().to_string()),

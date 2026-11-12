@@ -128,5 +128,6 @@ fn kind(kind: TabKind) -> &'static str {
         TabKind::Page => "web",
         TabKind::Terminal => "term",
         TabKind::Board => "board",
+        TabKind::File => "file",
     }
 }

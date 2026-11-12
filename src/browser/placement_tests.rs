@@ -116,6 +116,7 @@ fn what_the_person_set_is_kept_in_a_file_between_launches() {
         }),
         side: Some(false),
         side_width: Some(260.0),
+        files: Some(true),
     };
     kept.write(&file).unwrap();
     let read = Kept::read(&file);

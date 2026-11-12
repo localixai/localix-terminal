@@ -1,9 +1,14 @@
-//! The menus a right click opens, as the system's (menu.rs). A tab's, on the strip: what its
-//! kind can do (a page's address, reloaded, duplicated or opened in the person's own browser),
-//! its project's folder shown in the Finder, and closing ("other" and "to the right" are the tabs
-//! of the same project: one project's menu never closes another's tabs); and a panel's, in it,
-//! of the items its page sends (the terminal's Copy and Paste, a board card's moves), its pick
-//! handed back to the page.
+//! The menus a right click opens, as the system's (menu.rs). A tab's, where the person clicked
+//! (the side, or the documents' row): what its kind can do (a page's address, reloaded,
+//! duplicated or opened in the person's own browser), its place shown in the Finder (a file's
+//! own, else its project's folder), and closing. "Other" and "to the right" are the tabs it
+//! stands among: a document's are the documents of its row, any other tab's the rows of the
+//! side of its project, so one project's menu never closes another's tabs, a file's never a
+//! terminal, and a session's never its own documents. And a panel's, in it, of the items its
+//! page sends (the terminal's Copy and Paste, a board card's moves), its pick handed back to
+//! the page.
+
+use std::path::{Path, PathBuf};
 
 use super::On;
 use crate::browser::choice::{self, Entry};
@@ -135,6 +140,22 @@ fn groups(key: Key, url: &str, around: Around) -> Vec<Vec<Item>> {
     groups
 }
 
+/// The tabs "other" and "to the right" speak of for tab `key`: among the documents of its row
+/// (`stack`) when it is one, else among the rows of the side of its project (`rows`).
+fn beside(key: Key, stack: Option<&[Key]>, rows: &[Key]) -> (Vec<Key>, Vec<Key>) {
+    let among = stack.unwrap_or(rows);
+    let others = among.iter().copied().filter(|&other| other != key);
+    let this = among.iter().position(|&other| other == key);
+    let right = this.map_or(&[][..], |this| &among[this + 1..]);
+    (others.collect(), right.to_vec())
+}
+
+/// The file tab `key` shows, by the path it says (`detail`) in its project's `folder`: none
+/// for a tab of another kind.
+fn own_file(key: Key, folder: Option<&Path>, detail: &str) -> Option<PathBuf> {
+    (key.kind() == "file").then(|| Some(folder?.join(detail)))?
+}
+
 impl On<'_> {
     /// The menu of tab `key`, at `at` of the strip, and what the person picks done.
     pub(super) fn tab_menu(&mut self, key: Key, at: (u32, u32)) {
@@ -147,20 +168,15 @@ impl On<'_> {
             return;
         };
         let group = listed[this].group.clone();
-        let same: Vec<(usize, Key)> = (listed.iter().enumerate())
-            .filter(|(_, tab)| tab.group == group)
-            .filter_map(|(at, tab)| Some((at, Key::parse(&tab.id)?)))
+        // The rows of the side of its project: a document is none, its session stands for it.
+        let led = open.led(self.shared, &listed);
+        let rows: Vec<Key> = (listed.iter())
+            .filter(|tab| tab.group == group)
+            .filter(|tab| led.get(&tab.id).is_none_or(|of| *of == tab.id))
+            .filter_map(|tab| Key::parse(&tab.id))
             .collect();
-        let others: Vec<Key> = same
-            .iter()
-            .map(|&(_, other)| other)
-            .filter(|&other| other != key)
-            .collect();
-        let right: Vec<Key> = same
-            .iter()
-            .filter(|&&(at, _)| at > this)
-            .map(|&(_, other)| other)
-            .collect();
+        let stack = open.stack_of(key);
+        let (others, right) = beside(key, stack.as_deref(), &rows);
         let url = listed[this].detail.clone();
         // A terminal's own folder (where its shell is now), else its project's.
         let folder = (crate::lock(&self.shared.folders).get(&key.name()).cloned()).or_else(|| {
@@ -168,8 +184,15 @@ impl On<'_> {
                 .find(|place| place.key == group)
                 .map(|place| place.folder.clone())
         });
+        // A file's own place, while it is there: the Finder selects it, and a terminal "here"
+        // opens in its folder.
+        let file = own_file(key, folder.as_deref(), &url).filter(|file| file.is_file());
+        let here = file
+            .as_deref()
+            .and_then(Path::parent)
+            .map(Path::to_path_buf);
         // A tab of the shown one's project (or the window's own) can go beside it; one of the
-        // halves can make the window whole.
+        // halves can make the window whole. A document is in its session's half already.
         let shown = open.shown_key();
         let halves = open
             .pair()
@@ -177,7 +200,9 @@ impl On<'_> {
         let alike = (listed.iter().find(|tab| tab.shown))
             .is_some_and(|tab| tab.group == group || group.is_empty() || tab.group.is_empty());
         // Any tab can be split: another goes beside the shown one, the shown one beside the next.
-        let split = if halves {
+        let split = if stack.is_some() {
+            None
+        } else if halves {
             Some(true)
         } else if (Some(key) != shown && shown.is_some() && alike)
             || (Some(key) == shown && !others.is_empty())
@@ -216,12 +241,12 @@ impl On<'_> {
             }
             Item::CopyAddress => platform::copy(&url),
             Item::NewTerminal => {
-                let asked = Asked::Terminal(folder.clone());
+                let asked = Asked::Terminal(here.or(folder));
                 self.shared.heard(&group, Heard::Asked(asked));
             }
             Item::Reveal => {
-                if let Some(folder) = folder {
-                    platform::reveal(&folder);
+                if let Some(place) = file.or(folder) {
+                    platform::reveal(&place);
                 }
             }
             Item::Split if Some(key) == shown => self.split_view(),

@@ -5,12 +5,17 @@ use serde::Serialize;
 
 use crate::ledger::Row as PaneId;
 
-/// A tab's panes: one alone, or a branch of trees side by side (`across`) or one above the
-/// other, each with its share of the branch.
+#[path = "stack.rs"]
+mod stack;
+
+/// A tab's panes: one alone, a stack of them one over the other with one in sight (a
+/// session's documents, `stack.rs`), or a branch of trees side by side (`across`) or one above
+/// the other, each with its share of the branch.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "node", rename_all = "snake_case")]
 pub enum Tree {
     Leaf { pane: PaneId },
+    Stack { panes: Vec<PaneId>, shown: PaneId },
     Branch { across: bool, children: Vec<Share> },
 }
 
@@ -34,6 +39,7 @@ impl Tree {
     pub fn panes(&self) -> Vec<PaneId> {
         match self {
             Self::Leaf { pane } => vec![*pane],
+            Self::Stack { panes, .. } => panes.clone(),
             Self::Branch { children, .. } => (children.iter())
                 .flat_map(|child| child.tree.panes())
                 .collect(),
@@ -44,54 +50,46 @@ impl Tree {
     pub fn holds(&self, pane: PaneId) -> bool {
         match self {
             Self::Leaf { pane: it } => *it == pane,
+            Self::Stack { panes, .. } => panes.contains(&pane),
             Self::Branch { children, .. } => children.iter().any(|child| child.tree.holds(pane)),
         }
     }
 
-    /// Pane `new` beside pane `at`: after it (right of it, or under it) or before. In a branch
-    /// of the same way it is one more child, sharing `at`'s share; else `at` becomes a branch of
-    /// the two, half each. Whether `at` is one of its.
+    /// Whether it is pane `pane` alone, or the stack `pane` is in: what a pane is put beside.
+    fn is(&self, pane: PaneId) -> bool {
+        !matches!(self, Self::Branch { .. }) && self.holds(pane)
+    }
+
+    /// Pane `new` beside pane `at` (beside the whole stack `at` is in): after it (right of it,
+    /// or under it) or before. In a branch of the same way it is one more child, sharing `at`'s
+    /// share; else `at` becomes a branch of the two, half each. Whether `at` is one of its.
     pub fn split(&mut self, at: PaneId, new: PaneId, across: bool, after: bool) -> bool {
-        match self {
-            Self::Leaf { pane } if *pane == at => {
-                let (first, second) = if after { (at, new) } else { (new, at) };
-                *self = Self::Branch {
-                    across,
-                    children: vec![
-                        Share {
-                            share: 0.5,
-                            tree: Self::leaf(first),
-                        },
-                        Share {
-                            share: 0.5,
-                            tree: Self::leaf(second),
-                        },
-                    ],
-                };
-                true
+        let share = |share: f64, tree: Self| Share { share, tree };
+        if let Self::Branch {
+            across: way,
+            children,
+        } = self
+        {
+            let place = children.iter().position(|child| child.tree.is(at));
+            if let (Some(place), true) = (place, *way == across) {
+                let half = children[place].share / 2.0;
+                children[place].share = half;
+                let at_place = if after { place + 1 } else { place };
+                children.insert(at_place, share(half, Self::leaf(new)));
+                return true;
             }
-            Self::Leaf { .. } => false,
-            Self::Branch {
-                across: way,
-                children,
-            } => {
-                let place = (children.iter()).position(|child| child.tree == Self::leaf(at));
-                if let (Some(place), true) = (place, *way == across) {
-                    let half = children[place].share / 2.0;
-                    children[place].share = half;
-                    let at_place = if after { place + 1 } else { place };
-                    children.insert(
-                        at_place,
-                        Share {
-                            share: half,
-                            tree: Self::leaf(new),
-                        },
-                    );
-                    return true;
-                }
-                (children.iter_mut()).any(|child| child.tree.split(at, new, across, after))
-            }
+            return (children.iter_mut()).any(|child| child.tree.split(at, new, across, after));
         }
+        if !self.is(at) {
+            return false;
+        }
+        let (it, new) = (self.clone(), Self::leaf(new));
+        let (first, second) = if after { (it, new) } else { (new, it) };
+        *self = Self::Branch {
+            across,
+            children: vec![share(0.5, first), share(0.5, second)],
+        };
+        true
     }
 
     /// Pane `new` in the place of pane `old`, with its share. Whether `old` is one of its.
@@ -102,6 +100,16 @@ impl Tree {
                 true
             }
             Self::Leaf { .. } => false,
+            Self::Stack { panes, shown } => {
+                let Some(at) = panes.iter().position(|pane| *pane == old) else {
+                    return false;
+                };
+                panes[at] = new;
+                if *shown == old {
+                    *shown = new;
+                }
+                true
+            }
             Self::Branch { children, .. } => {
                 (children.iter_mut()).any(|child| child.tree.replace(old, new))
             }
@@ -109,10 +117,12 @@ impl Tree {
     }
 
     /// The tree without pane `pane`: its share goes to the rest of its branch, and a branch left
-    /// with one child is that child. None when `pane` was all of it.
+    /// with one child is that child; out of a stack, the pane after it is in sight when it was
+    /// (else the one before). None when `pane` was all of it.
     pub fn without(self, pane: PaneId) -> Option<Self> {
         match self {
             Self::Leaf { pane: it } => (it != pane).then_some(self),
+            Self::Stack { panes, shown } => stack::without(panes, shown, pane),
             Self::Branch { across, children } => {
                 let mut kept: Vec<Share> = (children.into_iter())
                     .filter_map(|child| {

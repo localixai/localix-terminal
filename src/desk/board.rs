@@ -145,7 +145,7 @@ impl Desk {
             },
         );
         let project = call.project.name.clone();
-        let aside = self.lands_beside(call).is_some();
+        let aside = self.quiet(call);
         let panel = self.board_panel(n, (&key, aside), &project, id);
         let kept = Kept {
             key,
@@ -178,7 +178,7 @@ impl Desk {
         self.own(&kept.key, call, crate::ledger::Kind::Board, facts);
         // The old panel let go first: it shares the new one's id.
         drop(kept.panel.take());
-        let aside = self.lands_beside(call).is_some();
+        let aside = self.quiet(call);
         kept.panel = self.board_panel(n, (&kept.key, aside), &kept.project, project);
         if let Some(panel) = &kept.panel {
             panel.paint(&kept.frame());

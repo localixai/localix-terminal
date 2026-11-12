@@ -2,6 +2,8 @@ target/
 .DS_Store
 .llx/
 dist/
+# The packages the editor's vendored scripts are built from (scripts/editor).
+scripts/editor/node_modules/
 .localix/
 # The plugin API declarations Claude Code writes beside a plugin it loads from a folder.
 plugins/claude-code/.claude-plugin/types/

@@ -66,6 +66,9 @@ fn the_page_draws_its_bars_as_tall_as_the_window_lays_them_out() {
     assert_eq!(rule_height(&page, "#bar"), px(BAR));
     assert_eq!(rule_height(&page, "html[data-part=nav] #browse"), px(NAV));
     assert_eq!(rule_height(&page, "#tabs"), px(HEIGHT - BAR));
+    // The documents' row is that row of tabs again, filling its own view.
+    assert_eq!(DOCS, HEIGHT - BAR);
+    assert!(page.contains("\nhtml[data-part=docs] #tabs{padding:0 8px;height:100%;"));
     assert_eq!((BAR, NAV, HEIGHT), (38.0, 40.0, 70.0));
 }
 
@@ -108,4 +111,16 @@ fn an_empty_place_is_one_quiet_line_and_an_empty_window_its_first_commands() {
     }
     // No picture and no motion of its own: the page draws nothing it does not say.
     assert!(!PAGE.contains("img-src") && !PAGE.contains("@keyframes wind"));
+}
+
+#[test]
+fn the_documents_row_scrolls_and_never_narrows_a_tab() {
+    // A tab is as wide as its name, up to a tab of the side's: more than fit scroll sideways.
+    assert!(PAGE.contains("html[data-part=docs] #tabs .t{flex:none;max-width:220px;"));
+    assert!(PAGE.contains("overflow-x:auto;overflow-y:hidden;scrollbar-width:none"));
+    // The one in sight is brought into view, a wheel turned up and down moves the row, and an
+    // edge with more past it fades.
+    for part in ["function docInView(", "function docEdges(", "\"wheel\""] {
+        assert!(PAGE.contains(part), "{part}");
+    }
 }

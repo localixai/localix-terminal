@@ -1,77 +1,57 @@
-//! What is opened from a terminal of the window lands beside that terminal: an agent running in
-//! it asks for a page or a terminal, and the tab is the two of them, the terminal on the left,
-//! still the pane in use. The call is known by the terminal its program descends from, so
-//! nothing is asked of the agent.
+//! A session and its documents (docs/windows.md): a terminal's tab holds the files and pages
+//! opened in it, a stack on the terminal's right with one of them in sight, so each session
+//! keeps its own and the side lists the sessions alone. A document joins the session it was
+//! asked from: an agent's, the terminal its program runs in (the call is known by that
+//! terminal, so nothing is asked of the agent); the person's, the session they look at.
 //!
-//! There is one place beside a terminal. The next pane opened from it takes that place and its
-//! width, and the one before becomes a tab of its own right after. The place is the agent's only
-//! while the person leaves it so: a tab they put beside the terminal themselves is not replaced,
-//! and a split they made whole stays whole till they put one of the agent's panes back.
+//! An agent's document is the one in sight unless the person is in a document themselves:
+//! then it waits behind, a tab over the stack. The terminal keeps the keys either way. What
+//! the person opens is the pane in use, since they opened it to read.
 //!
-//! The links are of this run: a terminal's program does not outlive the app.
+//! A document asked from no session joins one of its project all the same: the one shown,
+//! else its last (sessions.rs); only a project with no terminal keeps documents in a tab of
+//! their own, until its first session takes them. A session is always a tab of the caller's
+//! own project, in the window it works in.
 
-use std::collections::{HashMap, HashSet};
-
-use super::actions::{Kind, parse};
 use super::layout::told;
 use super::{Call, Desk};
 use crate::feed::{Entity, Write};
 use crate::layout::{self, Tree};
-use crate::ledger::Row;
+use crate::ledger::{self, Kind, Row};
 
-/// Which pane was opened from which terminal, and where the person said no.
-#[derive(Debug, Default)]
-pub(super) struct Links {
-    /// Each pane opened from a terminal, and that terminal.
-    from: HashMap<Row, Row>,
-    /// The terminals whose split the person made whole: nothing lands beside them.
-    whole: HashSet<Row>,
-}
-
-impl Links {
-    /// Pane `pane` was opened from terminal `anchor`.
-    fn opened(&mut self, pane: Row, anchor: Row) {
-        self.from.insert(pane, anchor);
-    }
-
-    /// Whether pane `pane` was opened from terminal `anchor`.
-    fn of(&self, anchor: Row, pane: Row) -> bool {
-        self.from.get(&pane) == Some(&anchor)
-    }
-
-    /// Pane `pane` closed: it is no one's, and no place.
-    pub(super) fn forget(&mut self, pane: Row) {
-        self.from.remove(&pane);
-        self.from.retain(|_, anchor| *anchor != pane);
-        self.whole.remove(&pane);
-    }
-
-    /// Whether nothing is kept: no pane was opened from a terminal still open.
-    #[cfg(test)]
-    pub(super) fn is_empty(&self) -> bool {
-        self.from.is_empty() && self.whole.is_empty()
-    }
-}
-
-/// Where a pane opened from terminal `anchor` lands, its tab being `tree`.
+/// The session a document joins: the tab of its pane `anchor`. `person`, the person opened the
+/// document, and it is the pane in use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Landing {
-    /// On the terminal's right: the tab was the terminal alone.
-    Beside,
-    /// In the place of this pane, opened from the terminal before it.
-    Instead(Row),
-    /// In a tab of its own: the person arranged the terminal's tab, or made it whole.
-    Apart,
+pub(super) struct Beside {
+    pub(super) anchor: Row,
+    pub(super) person: bool,
 }
 
-fn landing(links: &Links, tree: &Tree, anchor: Row) -> Landing {
-    match tree.panes().as_slice() {
-        [only] if *only == anchor && !links.whole.contains(&anchor) => Landing::Beside,
-        [one, other] | [other, one] if *one == anchor && links.of(anchor, *other) => {
-            Landing::Instead(*other)
-        }
-        _ => Landing::Apart,
+/// Whether a pane of `kind` is a document: what a session holds, and no tab of the side.
+pub(super) fn document(kind: Kind) -> bool {
+    matches!(kind, Kind::Page | Kind::File)
+}
+
+/// Whether pane `pane` is of a kind `wanted` takes.
+pub(super) fn is(
+    db: &crate::store::Connection,
+    pane: Row,
+    wanted: fn(Kind) -> bool,
+) -> Result<bool, String> {
+    Ok(ledger::get(db, pane)?.is_some_and(|pane| wanted(pane.kind)))
+}
+
+/// Whether a document may join the tab of `tree` by its pane `anchor`: it holds documents
+/// already, or is a terminal alone. A board, or panes the person put side by side, hold none.
+pub(super) fn takes(
+    db: &crate::store::Connection,
+    tree: &Tree,
+    anchor: Row,
+) -> Result<bool, String> {
+    if !tree.stacked().is_empty() {
+        return Ok(true);
     }
+    Ok(*tree == Tree::leaf(anchor) && is(db, anchor, |kind| kind == Kind::Terminal)?)
 }
 
 impl Desk {
@@ -87,58 +67,128 @@ impl Desk {
             .map(|(_, id)| format!("t{id}"))
     }
 
-    /// The terminal what `call` opens lands beside: the one it came from, when that is a
-    /// terminal of its project and the caller is the project's own agent, or the worker the
-    /// person ran in that terminal. Another named agent is one of several the same terminal
-    /// may run, and they would take the one place in turn; what
-    /// the person opens, or the app opens again, has its own place. None where the person
-    /// chose tabs in Settings.
-    pub(super) fn anchor_of(&self, call: &Call) -> Option<Row> {
-        let named = (call.agent)
-            .filter(|name| self.worker_in(call.from, call.project.id).as_deref() != Some(*name));
-        if named.is_some() || call.person || call.again.is_some() {
-            return None;
+    /// The session a document `call` opens was asked from, by one of its panes. An agent's: the
+    /// terminal its call came from, when that is a terminal of its project. The person's: the
+    /// pane their call names, else the one they look at (`seen_in`). What the app opens again
+    /// in the tab it had stays there.
+    pub(super) fn anchor_of(&self, call: &Call) -> Option<Beside> {
+        if let Some(row) = call.again {
+            let placed = (self.feed.store()).read(|db| layout::tab_of(db, row));
+            if !call.person || placed.ok().flatten().is_some() {
+                return None;
+            }
         }
-        if (self.browser.as_ref()).is_some_and(|browser| !browser.opens_beside()) {
-            return None;
+        // Only a pane of the caller's own project is a session of it.
+        let own = |key: &str| {
+            let (row, project) = crate::lock(&self.ledger).get(key).copied()?;
+            (project == call.project.id).then_some(row)
+        };
+        if call.person {
+            let anchor = match call.from {
+                Some(key) => own(key)?,
+                None => return self.seen_in(call.project.id, call.window),
+            };
+            return Some(Beside {
+                anchor,
+                person: true,
+            });
         }
-        let key = call.from.filter(|key| key.starts_with('t'))?;
-        let (row, project) = crate::lock(&self.ledger).get(key).copied()?;
-        (project == call.project.id).then_some(row)
+        let anchor = call.from.filter(|key| key.starts_with('t')).and_then(own)?;
+        Some(Beside {
+            anchor,
+            person: false,
+        })
     }
 
-    /// The terminal a pane `call` opens now would land beside, as the layout is: what the window
-    /// is told before the pane exists, so the new tab does not take the terminal's place.
-    pub(super) fn lands_beside(&self, call: &Call) -> Option<Row> {
-        let anchor = self.anchor_of(call)?;
+    /// The session the person looks at in `project`, by the pane in use in the window, as the
+    /// window says (the layout hears of a tab shown only with what follows it); with no window
+    /// here, or another project in it, by the pane in focus of the tab the layout shows in
+    /// `window` (none: the one in use).
+    pub(super) fn seen_in(
+        &self,
+        project: crate::projects::ProjectId,
+        window: Option<layout::WindowId>,
+    ) -> Option<Beside> {
+        let person = |anchor: Row| Beside {
+            anchor,
+            person: true,
+        };
+        let shown = (self.browser.as_ref())
+            .and_then(crate::browser::Browser::listing)
+            .and_then(|tabs| tabs.into_iter().find(|tab| tab.shown))
+            .and_then(|tab| crate::lock(&self.ledger).get(&tab.id).copied())
+            .filter(|(_, of)| *of == project);
+        if let Some((row, _)) = shown {
+            return Some(person(row));
+        }
+        let wanted = window.or_else(|| self.in_use());
+        let seen: Option<Row> = (self.feed.store())
+            .read(|db| {
+                let first = layout::windows(db)?.first().map(|window| window.id);
+                let Some(window) = wanted.or(first) else {
+                    return Ok(None);
+                };
+                let space = (layout::workspaces(db, window)?.into_iter())
+                    .find(|space| space.project == project);
+                let Some(tab) = space.and_then(|space| space.shown) else {
+                    return Ok(None);
+                };
+                Ok(layout::tab(db, tab)?
+                    .and_then(|tab| tab.focused.or_else(|| tab.tree.panes().first().copied())))
+            })
+            .ok()?;
+        seen.map(person)
+    }
+
+    /// Whether what `call` opens leaves the window to what it shows: an agent's call from a
+    /// terminal of its project, where the person may be typing.
+    pub(super) fn quiet(&self, call: &Call) -> bool {
+        let own = |key: &str| {
+            (crate::lock(&self.ledger).get(key)).is_some_and(|(_, of)| *of == call.project.id)
+        };
+        !call.person && call.again.is_none() && call.from.is_some_and(own)
+    }
+
+    /// The session a new document of `call` joins, as the layout is: the one it was asked
+    /// from, else one of its project all the same (sessions.rs). It is what the window is told
+    /// before the pane exists, so the new tab does not take the place of the session it joins.
+    pub(super) fn opens_in(&self, call: &Call) -> Option<Beside> {
+        (self.lands_beside(call)).or_else(|| self.session_for(call))
+    }
+
+    /// The session `call` asks its document from, when that tab takes one as the layout is.
+    pub(super) fn lands_beside(&self, call: &Call) -> Option<Beside> {
+        let beside = self.anchor_of(call)?;
+        let anchor = beside.anchor;
         let wanted = call.window.or_else(|| self.in_use());
-        let tree = (self.feed.store())
+        let taken = (self.feed.store())
             .read(|db| {
                 let Some(tab) = layout::tab_of(db, anchor)? else {
-                    return Ok(None);
+                    return Ok(false);
                 };
                 let Some(tab) = layout::tab(db, tab)? else {
-                    return Ok(None);
+                    return Ok(false);
                 };
-                // A pane opens in the window in use: a terminal of another window is no place.
+                // A pane opens in the window in use: a session of another window is no place.
                 let window = layout::workspace(db, tab.workspace)?.map(|space| space.window);
-                Ok((wanted.is_none() || wanted == window).then_some(tab.tree))
+                Ok((wanted.is_none() || wanted == window) && takes(db, &tab.tree, anchor)?)
             })
-            .ok()??;
-        (landing(&crate::lock(&self.links), &tree, anchor) != Landing::Apart).then_some(anchor)
+            .ok()?;
+        taken.then_some(beside)
     }
 
-    /// Pane `pane` put beside terminal `anchor` in its tab, in the same change as what opened
-    /// it: on its right, or in the place of the pane opened from it before, which becomes a tab
-    /// right after. The tab's panes as they were, or none when the pane lands apart (and nothing
-    /// is changed).
+    /// Document `pane` put in the session of `beside`, in the same change as what opened it:
+    /// the last of its documents, or shown among them when it is one already. The person's is
+    /// the one in sight and in focus, in a tab no longer whole; an agent's is in sight unless
+    /// the person is in a document of that session, and the focus stays. The tab's panes as
+    /// they were, or none when the tab takes no document (and nothing is changed).
     pub(super) fn place_beside(
-        &self,
         write: &Write<'_, '_>,
         pane: Row,
-        anchor: Row,
+        beside: Beside,
         now: u64,
     ) -> Result<Option<Vec<Row>>, String> {
+        let Beside { anchor, person } = beside;
         let tab_of = |pane: Row| -> Result<Option<layout::Tab>, String> {
             match layout::tab_of(write.tx(), pane)? {
                 Some(id) => layout::tab(write.tx(), id),
@@ -149,49 +199,51 @@ impl Desk {
             return Ok(None);
         };
         let before = tab.tree.panes();
-        if pane == anchor {
+        if pane == anchor || !takes(write.tx(), &tab.tree, anchor)? {
             return Ok(None);
         }
-        if before.contains(&pane) {
-            return Ok(Some(before));
-        }
-        let landing = landing(&crate::lock(&self.links), &tab.tree, anchor);
-        if landing == Landing::Apart {
-            // Still that terminal's: the person putting it beside gives the place back.
-            crate::lock(&self.links).opened(pane, anchor);
-            return Ok(None);
-        }
-        // Out of the tab it was in (one shown again), which may close and move the others up.
-        Self::unplace_pane(write, pane, now)?;
-        let Some(tab) = tab_of(anchor)? else {
-            return Ok(None);
-        };
+        let stacked = tab.tree.stacked();
+        // The document the person is in, which an agent's does not cover.
+        let reading = tab.focused.filter(|focused| stacked.contains(focused));
         let mut tree = tab.tree.clone();
-        let mut focused = tab.focused.or(Some(anchor));
-        match landing {
-            Landing::Instead(old) if tree.replace(old, pane) => {
-                if focused == Some(old) {
-                    focused = Some(pane);
-                }
-                layout::set_tree(write.tx(), tab.id, &tree, focused)?;
-                let after = Some(tab.place + 1);
-                layout::open_tab(
-                    write.tx(),
-                    tab.workspace,
-                    &Tree::leaf(old),
-                    None,
-                    after,
-                    now,
-                )?;
+        let mut tab = tab;
+        if before.contains(&pane) {
+            if !stacked.contains(&pane) {
+                return Ok(Some(before));
             }
-            Landing::Beside | Landing::Instead(_) | Landing::Apart => {
-                if !tree.split(anchor, pane, true, true) {
-                    return Ok(None);
-                }
-                layout::set_tree(write.tx(), tab.id, &tree, focused)?;
+        } else {
+            // Out of the tab it was in (one shown again), which may close and move the others up.
+            Self::unplace_pane(write, pane, now)?;
+            let Some(again) = tab_of(anchor)? else {
+                return Ok(None);
+            };
+            tab = again;
+            tree = tab.tree.clone();
+            if !tree.stack(pane) {
+                return Ok(None);
             }
         }
-        crate::lock(&self.links).opened(pane, anchor);
+        let focused = match (person, reading) {
+            (true, _) => {
+                tree.show(pane);
+                Some(pane)
+            }
+            (false, Some(reading)) => {
+                tree.show(reading);
+                Some(reading)
+            }
+            (false, None) => {
+                tree.show(pane);
+                tab.focused.or(Some(anchor))
+            }
+        };
+        if tree != tab.tree || focused != tab.focused {
+            layout::set_tree(write.tx(), tab.id, &tree, focused)?;
+        }
+        if person {
+            layout::set_whole(write.tx(), tab.id, false)?;
+            layout::show_tab(write.tx(), tab.workspace, Some(tab.id))?;
+        }
         let changed = [
             Entity::Tab { id: tab.id },
             Entity::Workspace { id: tab.workspace },
@@ -200,30 +252,35 @@ impl Desk {
         Ok(Some(before))
     }
 
-    /// Tab `key` shown as `call` asks. From a terminal it comes beside that terminal, which
-    /// stays the pane in use while the window shows it; else the window shows the tab.
+    /// Tab `key` shown as `call` asks. A document asked from a session joins it and is shown
+    /// there: an agent's leaves the window to the person while they look at that session; else
+    /// the window shows the tab.
     pub(super) fn reveal(&self, call: &Call, key: &str) -> Result<(), String> {
         let row = crate::lock(&self.ledger).get(key).map(|(row, _)| *row);
-        let beside = match (row, self.lands_beside(call)) {
-            (Some(row), Some(anchor)) => {
+        let session = match key.starts_with(['w', 'f']) {
+            true => self.lands_beside(call),
+            false => None,
+        };
+        let joined = match (row, session) {
+            (Some(row), Some(session)) => {
                 let now = crate::board::now();
                 (self.feed)
-                    .write(|write| self.place_beside(write, row, anchor, now))
+                    .write(|write| Self::place_beside(write, row, session, now))
                     .unwrap_or_else(|why| {
-                        log::warn!("{key} is not shown beside its terminal: {why}");
+                        log::warn!("{key} is not shown in its session: {why}");
                         None
                     })
             }
             _ => None,
         };
-        if self.browser.is_none() && beside.is_none() {
+        if self.browser.is_none() && joined.is_none() {
             return Err("there is no window here to show it in".into());
         }
-        if !self.bring(key, beside.as_deref()) {
+        if !self.bring(key, joined.as_deref(), call.person) {
             return Err(format!("the window has no tab {key} to show"));
         }
         // The layout's too: its tab the one its workspace shows, the pane in focus.
-        if let (Some(row), None) = (row, &beside)
+        if let (Some(row), None) = (row, &joined)
             && let Err(why) = self.show_pane(row)
         {
             log::warn!("{key} is not shown in the layout: {why}");
@@ -231,15 +288,23 @@ impl Desk {
         Ok(())
     }
 
-    /// Tab `key` in sight. Put beside a terminal (`beside`: the panes that tab had), it is
-    /// there already while the window shows one of them: the window lays the tab out as the
-    /// layout says, and what it shows is not taken from the person. Else the window shows the
-    /// tab. Whether it is in sight now (true where there is no window).
-    pub(super) fn bring(&self, key: &str, beside: Option<&[Row]>) -> bool {
+    /// Tab `key` in sight. An agent's document put in a session (`joined`: the panes that tab
+    /// had) is there already while the window shows one of them: the window lays the tab out as
+    /// the layout says, and what it shows is not taken from the person. Else, and for what the
+    /// `person` opened, the window shows the tab. Whether it is in sight now (true where there
+    /// is no window).
+    ///
+    /// The window is told the layout first, ahead of the feed (which tells it again, the same):
+    /// a document shown before the window knows its session would take the whole window for a
+    /// moment, then move to its half.
+    pub(super) fn bring(&self, key: &str, joined: Option<&[Row]>, person: bool) -> bool {
         let Some(browser) = self.browser.as_ref() else {
             return true;
         };
-        if let Some(before) = beside {
+        if joined.is_some() {
+            self.tell_arranged();
+        }
+        if let (Some(before), false) = (joined, person) {
             let seen = (browser.listing().unwrap_or_default().into_iter())
                 .find(|tab| tab.shown)
                 .and_then(|tab| crate::lock(&self.ledger).get(&tab.id).map(|(row, _)| *row));
@@ -248,53 +313,6 @@ impl Desk {
             }
         }
         browser.act(key, false).is_ok()
-    }
-
-    /// The person split terminal `shown` and pane `beside` (either way round): with a pane
-    /// opened from the terminal, the place beside it is that agent's again.
-    pub(super) fn split_again(&self, shown: Row, beside: Row) {
-        let mut links = crate::lock(&self.links);
-        for (anchor, pane) in [(shown, beside), (beside, shown)] {
-            if links.of(anchor, pane) {
-                links.whole.remove(&anchor);
-            }
-        }
-    }
-
-    /// The person made the tab of `panes` whole: a terminal of it with its agent's pane beside
-    /// stays whole from now. Only while both are open: a pane closing makes its tab whole too,
-    /// and that is no one's wish.
-    pub(super) fn made_whole(&self, panes: &[Row]) {
-        let [one, other] = panes else {
-            return;
-        };
-        if !self.is_open(*one) || !self.is_open(*other) {
-            return;
-        }
-        let mut links = crate::lock(&self.links);
-        for (anchor, pane) in [(*one, *other), (*other, *one)] {
-            if links.of(anchor, pane) {
-                links.whole.insert(anchor);
-            }
-        }
-    }
-
-    /// Whether pane `row` is open now: it has a key this run, and its page is still in the
-    /// window, or its session still runs.
-    fn is_open(&self, row: Row) -> bool {
-        let key = (crate::lock(&self.ledger).iter())
-            .find(|(_, (kept, _))| *kept == row)
-            .map(|(key, _)| key.clone());
-        let Some(key) = key else {
-            return false;
-        };
-        match parse(&key).map(|tab| (tab.kind, tab.id)) {
-            Some((Kind::Web, _)) => {
-                (self.browser.as_ref()).is_none_or(|browser| browser.pages().contains(&key))
-            }
-            Some((Kind::Term, id)) => crate::lock(&self.sessions).contains_key(&id),
-            _ => true,
-        }
     }
 }
 

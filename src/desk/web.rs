@@ -41,25 +41,30 @@ impl Desk {
         }
     }
 
-    /// Open a tab on `args["url"]` (the search page without one); its id and first snapshot.
-    pub(super) fn open_web(&self, call: &Call, args: &Value) -> Result<(u32, Output), String> {
+    /// A tab made on `args["url"]` (the search page without one): its id and the address it
+    /// loads. The page has not loaded yet: the tab is owned and in its session first (open.rs),
+    /// so the window never draws it as a tab of no session while it loads.
+    pub(super) fn start_web(&self, call: &Call, args: &Value) -> Result<(u32, String), String> {
         let page = self.page()?;
         let url = self.address(call, text(args, "url").unwrap_or(SEARCH_PAGE))?;
-        let id = {
-            // One tab is made at a time, and the window's loop makes it: the lock is held for
-            // that, not for the page's load, so tabs opened together load together.
-            let _change = crate::lock(&self.tabs_change);
-            if let Some(browser) = &self.browser {
-                let aside = self.lands_beside(call).is_some();
-                browser.opening(&crate::projects::key(call.project.id), aside);
-            }
-            page.start(&url).map_err(|e| e.to_string())?
-        };
-        let tab = page.pinned(id);
+        // One tab is made at a time, and the window's loop makes it: the lock is held for
+        // that, not for the page's load, so tabs opened together load together.
+        let _change = crate::lock(&self.tabs_change);
+        if let Some(browser) = &self.browser {
+            let aside = self.opens_in(call).is_some();
+            browser.opening(&crate::projects::key(call.project.id), aside);
+        }
+        let id = page.start(&url).map_err(|e| e.to_string())?;
+        Ok((id, url))
+    }
+
+    /// Tab `id`, made on `url`, once its first page has loaded: its first snapshot.
+    pub(super) fn read_new(&self, id: u32, url: &str) -> Result<Output, String> {
+        let tab = self.page()?.pinned(id);
         let _ = tab.driver().map(|driver| driver.wait_new());
         let read = self.in_tab(id, &serde_json::json!({}), None)?;
         let report = format!("Opened {url}.\n{}", read.report).trim().to_string();
-        Ok((id, self.read_whole(id, Output { report, ..read })))
+        Ok(self.read_whole(id, Output { report, ..read }))
     }
 
     /// `args` carried out in tab `id`, while no other call works in it.

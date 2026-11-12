@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src {{scripts}}">
+<title>{{title}}</title>
+<style>
+/* The editor as the window's own: the frame's sheet (frame.css) has the ink, fill and accent
+   ladders; what is set here is the editor's ground and the colours of a language's words. On the
+   window's glass (macOS) the page is clear and the glass shows through, as a terminal's; elsewhere,
+   and where the person reduces transparency (data-reduced), it is the editor's own ground. */
+:root{--bg:#ffffff;--mono:ui-monospace,SFMono-Regular,Menlo,Monaco,"Cascadia Code","DejaVu Sans Mono",monospace;
+  --s-word:#cf222e;--s-text:#0a3069;--s-note:#6e7781;--s-value:#0550ae;--s-call:#8250df;--s-kind:#953800;--s-tag:#116329;--s-bad:#cf222e}
+@media (prefers-color-scheme: dark){:root{--bg:#1e1e1e;
+  --s-word:#ff7b72;--s-text:#a5d6ff;--s-note:#8b949e;--s-value:#79c0ff;--s-call:#d2a8ff;--s-kind:#ffa657;--s-tag:#7ee787;--s-bad:#ff7b72}}
+/* Increase Contrast: a comment reads as firmly as the secondary ink. */
+@media (prefers-contrast:more){:root{--s-note:var(--ink-2)}}
+:root{--ground:var(--bg)}
+html:not([data-glass]){background:var(--bg)!important}
+html[data-reduced]{background:var(--bg)!important}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;display:flex;flex-direction:column;color:var(--fg);font:13px/16px var(--ui-font,var(--ui-sys));
+  -webkit-font-smoothing:antialiased;cursor:default;overflow:hidden}
+/* What the disk did under the person's text, said in one quiet row above it, with what they can
+   do about it. */
+#bar{display:flex;align-items:center;gap:8px;min-height:36px;padding:6px 8px 6px 16px;box-shadow:0 .5px 0 var(--ov-3);color:var(--ink-2)}
+#bar[hidden]{display:none}
+#said{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#bar button{font:inherit;color:var(--ink);background:var(--ov-2);border:0;border-radius:var(--r-2);height:24px;padding:0 10px;cursor:default}
+#bar button:hover{background:var(--ov-3)}
+#bar button:active{background:var(--ov-4)}
+#bar button:focus-visible{outline:2px solid var(--acc-4);outline-offset:1px}
+#e{flex:1;min-height:0}
+/* Each rule of the text is under `#e`: the editor's library styles its own parts by a class of
+   its own, and a rule that named only the part would lose to it. */
+#e .cm-editor{height:100%;font:var(--mono-size,13px)/1.5 var(--mono);color:var(--fg);background:transparent}
+#e .cm-editor.cm-focused{outline:none}
+#e .cm-scroller{font-family:inherit;line-height:inherit;overflow:auto}
+#e .cm-content{padding:8px 0;caret-color:var(--fg)}
+#e .cm-line{padding:0 16px 0 8px}
+#e .cm-gutters{background:transparent;border:0;color:var(--ink-3);user-select:none;-webkit-user-select:none}
+#e .cm-lineNumbers .cm-gutterElement{padding:0 8px 0 16px;min-width:40px}
+/* Scrolled sideways, the text and what is drawn over it end at the line numbers. */
+#e .cm-scroller[data-cut] .cm-content{clip-path:inset(0 0 0 var(--cut))}
+#e .cm-scroller[data-cut] .cm-layer{clip-path:inset(0 -30000000px -30000000px var(--edge))}
+#e .cm-activeLineGutter{background:transparent;color:var(--ink-2)}
+#e .cm-activeLine{background:var(--ov-1)}
+#e .cm-cursor{border-left:1.5px solid var(--fg)}
+#e .cm-selectionBackground{background:var(--ov-3)}
+#e .cm-focused>.cm-scroller>.cm-selectionLayer .cm-selectionBackground{background:var(--acc-2)}
+html[data-inactive] #e .cm-focused>.cm-scroller>.cm-selectionLayer .cm-selectionBackground{background:var(--ov-3)}
+#e .cm-selectionMatch{background:var(--ov-2)}
+#e .cm-matchingBracket,#e .cm-focused .cm-matchingBracket{background:var(--ov-3);color:inherit}
+#e .cm-nonmatchingBracket,#e .cm-focused .cm-nonmatchingBracket{background:transparent;color:var(--s-bad)}
+#e .cm-searchMatch{background:var(--acc-2)}
+#e .cm-searchMatch-selected{background:var(--acc-4)}
+/* The find row: the window's own fields and buttons, under the text. */
+#e .cm-panels{background:transparent;color:var(--ink-2);font:13px/16px var(--ui-font,var(--ui-sys))}
+#e .cm-panels-bottom{border-top:0;box-shadow:0 -.5px 0 var(--ov-3)}
+#e .cm-search{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 36px 8px 16px}
+#e .cm-search br{display:none}
+#e .cm-search label{display:inline-flex;align-items:center;gap:4px;font-size:12px}
+#e .cm-textfield{font:inherit;color:var(--fg);background:var(--ov-1);border:0;box-shadow:var(--hair-in);border-radius:var(--r-2);height:24px;padding:0 8px;margin:0}
+#e .cm-textfield:focus{outline:2px solid var(--acc-4);outline-offset:-1px}
+#e .cm-button{font:inherit;color:var(--ink);background:var(--ov-2);background-image:none;border:0;border-radius:var(--r-2);height:24px;padding:0 10px;margin:0;cursor:default}
+#e .cm-button:hover{background:var(--ov-3)}
+#e .cm-button:active{background:var(--ov-4);background-image:none}
+#e .cm-panel.cm-search [name=close]{top:8px;right:8px;width:24px;height:24px;border-radius:var(--r-2);color:var(--ink-2);font-size:16px;cursor:default}
+#e .cm-panel.cm-search [name=close]:hover{background:var(--ov-2);color:var(--fg)}
+</style>
+</head>
+<body>
+<div id="bar" role="status" hidden><span id="said"></span></div>
+<div id="e"></div>
+{{vendored}}<script>{{glue}}</script>
+</body>
+</html>

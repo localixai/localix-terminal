@@ -110,10 +110,12 @@ impl Told {
     }
 }
 
-/// Project `arranged`'s split as the layout keeps it: the tab it shows when that one is split,
-/// else its first split tab; of its two panes, the one in focus is the one in use.
+/// Project `arranged`'s split of two tabs as the layout keeps it, which the side lists as one
+/// while another tab is shown: the tab it shows when that one is split, else its first split
+/// tab; of its two panes, the one in focus is the one in use. A session and its document are
+/// no such pair (session.rs): the side lists the session alone.
 pub(super) fn kept_of(arranged: &super::Arranged) -> Option<Kept> {
-    let split = |tab: &&super::Arranging| tab.panes.len() == 2;
+    let split = |tab: &&super::Arranging| tab.panes.len() == 2 && tab.docs.is_empty();
     let shown = (arranged.tabs.iter()).filter(split).find(|tab| {
         arranged
             .shown
@@ -302,6 +304,26 @@ pub(super) fn halves(width: f64, left: f64, share: f64) -> ((f64, f64), (f64, f6
     let first = (room * share.clamp(0.0, 1.0)).round();
     let second = room - first;
     ((left, first), (left + first + GAP, second))
+}
+
+/// The halves laid out while a list is open over the pages (`over`: a menu, a dialog, an
+/// address's suggestions): where the strip lies over the pages (`raised`) the window stays as
+/// it is, split; where it cannot, the pages stand aside for the list, the split with them.
+pub(super) fn under<T>(halves: Option<T>, over: bool, raised: bool) -> Option<T> {
+    halves.filter(|_| raised || !over)
+}
+
+/// Where the browser's toolbar lies across the window, its left and width: over the half in
+/// use (`shown`) of `halves`, else over the pages' `whole` part. What its page says of a
+/// point is from there.
+pub(super) fn span<K: PartialEq + Copy>(
+    halves: Option<[(K, f64, f64); 2]>,
+    shown: Option<K>,
+    whole: (f64, f64),
+) -> (f64, f64) {
+    (halves.iter().flatten())
+        .find(|half| Some(half.0) == shown)
+        .map_or(whole, |half| (half.1, half.2))
 }
 
 #[cfg(test)]

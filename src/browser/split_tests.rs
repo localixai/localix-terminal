@@ -126,6 +126,7 @@ fn changing_the_pair_forgets_a_pending_size_and_bad_saved_shares_are_ignored() {
                 across: true,
                 shares,
                 focused: Some("w1".into()),
+                ..Default::default()
             }],
         };
         assert_eq!(share_of(&arranged, (w(1), t(2))), None);
@@ -257,4 +258,30 @@ fn a_split_the_person_just_made_is_not_undone_by_what_the_layout_kept_before() {
         Follow::Stay
     );
     assert_eq!(followed(None, None, Some(&late), "t1"), Follow::Stay);
+}
+
+#[test]
+fn a_split_stays_under_a_list_open_over_it_and_stands_aside_where_nothing_lies_over_pages() {
+    let halves = Some(["t1", "f2"]);
+    // Nothing is open: the window is as it is.
+    assert_eq!(under(halves, false, true), halves);
+    assert_eq!(under(halves, false, false), halves);
+    // A menu, a dialog or an address's suggestions over the pages: both halves stay under it.
+    assert_eq!(under(halves, true, true), halves);
+    // Where the strip cannot lie over the pages, they stand aside for the list.
+    assert_eq!(under(halves, true, false), None);
+    // A whole window has no halves either way.
+    assert_eq!(under(None::<[&str; 2]>, true, true), None);
+}
+
+#[test]
+fn the_toolbar_spans_the_half_in_use_and_the_whole_part_of_a_window_not_split() {
+    let halves = Some([("t1", 280.0, 509.0), ("w1", 790.0, 510.0)]);
+    // Over the page in the right half: its left and width, where its menus and lists open.
+    assert_eq!(span(halves, Some("w1"), (280.0, 1020.0)), (790.0, 510.0));
+    assert_eq!(span(halves, Some("t1"), (280.0, 1020.0)), (280.0, 509.0));
+    // Whole, or showing a tab in neither half: the pages' whole part.
+    assert_eq!(span(None, Some("w1"), (280.0, 1020.0)), (280.0, 1020.0));
+    assert_eq!(span(halves, Some("w9"), (280.0, 1020.0)), (280.0, 1020.0));
+    assert_eq!(span(halves, None, (280.0, 1020.0)), (280.0, 1020.0));
 }

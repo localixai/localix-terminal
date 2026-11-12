@@ -81,6 +81,8 @@ pub(in super::super) enum Cmd {
     /// The person clicked in the browser's toolbar: said as the strip says it, its points the
     /// toolbar's.
     NavClicked(String),
+    /// The person clicked in the documents' row: said as the strip says it, its points the row's.
+    DocsClicked(String),
     /// The person's settings changed: the window takes them.
     Restyle,
     /// A comment the person made on a page: pictured, then held.
@@ -91,9 +93,14 @@ pub(in super::super) enum Cmd {
     Offered(&'static str, bool),
     /// The window goes to the project of this key (one the app just made, the person's pick).
     Go(String),
+    /// The file at this path opened by the app the person has for its kind.
+    Outside(std::path::PathBuf),
     /// The layout of the windows' projects (`Browser::arranged`), and the windows open, the main
     /// one first: drawn as it is.
     Arranged(Vec<i64>, Vec<Arranged>),
+    /// News of a project's tree of files (its key): the call that draws it in a side that
+    /// shows that tree.
+    Tree(String, String),
     /// The app opened window `i64` (`Browser::new_window`): the window in use from now on, its
     /// deck made with the first tab it is given.
     NewWindow(i64),
@@ -170,7 +177,9 @@ impl Cmd {
             | Cmd::Capture { tab: Some(id), .. } => web(*id),
             Cmd::Act(Click::Show(key) | Click::Close(key), _) => Route::Pane(key.name()),
             Cmd::Pressed(window, ..) => Route::Pressed(*window),
-            Cmd::Strip | Cmd::Arranged(..) | Cmd::Restyle | Cmd::Offered(..) => Route::All,
+            Cmd::Strip | Cmd::Arranged(..) | Cmd::Tree(..) | Cmd::Restyle | Cmd::Offered(..) => {
+                Route::All
+            }
             Cmd::Eval { .. }
             | Cmd::Navigate { .. }
             | Cmd::Frame(..)
@@ -183,8 +192,10 @@ impl Cmd {
             | Cmd::Clicked(_)
             | Cmd::SideClicked(_)
             | Cmd::NavClicked(_)
+            | Cmd::DocsClicked(_)
             | Cmd::Noted(_)
             | Cmd::Go(_)
+            | Cmd::Outside(_)
             | Cmd::Adopt
             | Cmd::Dressed(_)
             | Cmd::Listing(_)
@@ -209,6 +220,7 @@ impl Cmd {
             | Cmd::Clicked(_)
             | Cmd::SideClicked(_)
             | Cmd::NavClicked(_)
+            | Cmd::DocsClicked(_)
             | Cmd::Close
             | Cmd::NewTab { .. }
             | Cmd::Adopt
@@ -222,7 +234,9 @@ impl Cmd {
             | Cmd::Capture { .. }
             | Cmd::Paint(_)
             | Cmd::PanelMenu(..)
+            | Cmd::Outside(_)
             | Cmd::Restyle
+            | Cmd::Tree(..)
             | Cmd::Noted(_)
             | Cmd::Offered(..)
             | Cmd::NewWindow(_)

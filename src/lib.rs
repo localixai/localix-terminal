@@ -21,8 +21,10 @@ pub mod bundle;
 pub mod cli;
 pub mod client;
 pub mod desk;
+pub mod editor;
 pub(crate) mod fds;
 pub mod feed;
+pub mod files;
 pub mod follow;
 #[cfg(feature = "test-server")]
 pub mod harness;

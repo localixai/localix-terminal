@@ -172,11 +172,14 @@ pub(super) fn on_browser(
         | Cmd::Clicked(_)
         | Cmd::SideClicked(_)
         | Cmd::NavClicked(_)
+        | Cmd::DocsClicked(_)
         | Cmd::Restyle
         | Cmd::Strip
         | Cmd::Offered(..)
         | Cmd::Go(_)
+        | Cmd::Outside(_)
         | Cmd::Arranged(..)
+        | Cmd::Tree(..)
         | Cmd::NewWindow(_)
         | Cmd::Dressed(_)
         | Cmd::Listing(_)

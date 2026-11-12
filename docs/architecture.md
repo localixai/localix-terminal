@@ -57,7 +57,10 @@ idempotent consumers that reconcile from the owner, and clients that are poked a
   change does. A live owner calls `feed.record(&entity, op)` under the lock of its change, so notices
   are in the order of the changes.
 - **Consuming.** `feed.consume(consumer)` starts it on a thread of its own: it reconciles, then reads
-  pages past its cursor and moves the cursor after each notice. A handler that fails is tried again
+  pages past its cursor and moves the cursor after each notice. Once the notices at hand are
+  handled it is told so (`caught_up`), before the last counts as read: what one change says in
+  several notices (a tab opened: its pane, its tab, its workspace, its ledger) a consumer may
+  owe until then and derive once, as the window's does. A handler that fails is tried again
   with a doubling pause; after five attempts the notice is set aside and the consumer reconciles. A
   consumer behind what the feed keeps jumps to the oldest kept notice and reconciles.
 - **Restarts.** The cursors are in the store, so each consumer goes on from where it was. Every

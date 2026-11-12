@@ -15,12 +15,16 @@ impl On<'_> {
         let shown = listed.iter().position(|tab| tab.shown);
         let group = open.shown_project(self.shared);
         // The tabs the person sees listed: the project's shown, and the window's own (of none).
+        // A session's documents are not listed: from one of them, the keys go from its session.
+        let led = open.led(self.shared, &listed);
         let tabs: Vec<Key> = Deck::project_tabs(&listed, &group)
+            .filter(|tab| !led.contains_key(&tab.id))
             .filter_map(|tab| Key::parse(&tab.id))
             .collect();
         let here = shown
             .and_then(|at| listed.get(at))
-            .and_then(|tab| tabs.iter().position(|key| key.name() == tab.id));
+            .map(|tab| led.get(&tab.id).unwrap_or(&tab.id))
+            .and_then(|id| tabs.iter().position(|key| key.name() == *id));
         let step = |forward: bool| {
             let count = tabs.len();
             let at = match (here, forward) {

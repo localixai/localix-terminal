@@ -18,12 +18,15 @@ impl On<'_> {
     pub(super) fn command(&mut self, command: Cmd) {
         // How the window is drawn after it (`Drawn`).
         let drawn = command.drawn();
-        let streamed =
-            if let Cmd::Clicked(said) | Cmd::SideClicked(said) | Cmd::NavClicked(said) = &command {
-                Self::streamed(said)
-            } else {
-                false
-            };
+        let streamed = if let Cmd::Clicked(said)
+        | Cmd::SideClicked(said)
+        | Cmd::NavClicked(said)
+        | Cmd::DocsClicked(said) = &command
+        {
+            Self::streamed(said) || crate::browser::tree::said(said).is_some()
+        } else {
+            false
+        };
         // What is drawn on the way (the act, the settle after it) is drawn once, at the end.
         let held = drawn == Drawn::Settles && !streamed;
         if let (true, Some(open)) = (held, self.deck.as_ref()) {
@@ -87,7 +90,17 @@ impl On<'_> {
             }
             Cmd::Offered(id, on) => self.offered(id, on),
             Cmd::Go(project) => self.go_project(&project),
+            Cmd::Outside(file) => {
+                if let Ok(address) = url::Url::from_file_path(&file) {
+                    platform::open_outside(address.as_str());
+                }
+            }
             Cmd::Arranged(_, arranged) => self.arranged(arranged),
+            Cmd::Tree(project, news) => {
+                if let Some(open) = self.deck.as_ref() {
+                    open.tell_tree(self.shared, Some((&project, &news)));
+                }
+            }
             // Opened by the loop before it got here (`Windows::open`).
             Cmd::NewWindow(_) => {}
             Cmd::Presence(event) => self.presence(event),
@@ -101,12 +114,17 @@ impl On<'_> {
             Cmd::Pressed(window, x, y) => self.pressed(window, x, y),
             // The side's points are the strip's, once moved down by the strip's height: the
             // menus a click there opens are placed in the strip's view.
+            Cmd::SideClicked(said) if self.tree_said(&said) => {}
             Cmd::SideClicked(said) => {
                 let top = self.deck.as_ref().map_or(0.0, |open| open.top());
                 self.clicked(&strip::moved(&said, (0.0, top)));
             }
             Cmd::NavClicked(said) => {
                 let at = self.deck.as_ref().map_or((0.0, 0.0), |open| open.nav_at());
+                self.clicked(&strip::moved(&said, at));
+            }
+            Cmd::DocsClicked(said) => {
+                let at = self.deck.as_ref().map_or((0.0, 0.0), |open| open.docs_at());
                 self.clicked(&strip::moved(&said, at));
             }
             Cmd::Restyle => self.restyled(),

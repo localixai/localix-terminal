@@ -20,9 +20,10 @@ pub fn set_tree(
 ) -> Result<(), String> {
     tx.execute("DELETE FROM pane_nodes WHERE tab = ?1", [id])
         .map_err(|why| failed(&why))?;
+    let sight = tree.visible();
     let focused = focused
-        .filter(|pane| tree.holds(*pane))
-        .or_else(|| tree.panes().first().copied());
+        .filter(|pane| sight.contains(pane))
+        .or_else(|| sight.first().copied());
     write_node(tx, id, None, 0, 1.0, tree, focused)
 }
 
@@ -43,6 +44,25 @@ fn write_node(
                 params![tab, parent, place, share, pane, focused == Some(*pane)],
             )
             .map_err(|why| failed(&why))?;
+        }
+        Tree::Stack { panes, shown } => {
+            tx.execute(
+                "INSERT INTO pane_nodes (tab, parent, place, share, across)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![tab, parent, place, share, STACKED],
+            )
+            .map_err(|why| failed(&why))?;
+            let stack = tx.last_insert_rowid();
+            for (place, pane) in panes.iter().enumerate() {
+                // The one in sight has the stack's room, the rest none of it.
+                let share = if pane == shown { 1.0 } else { 0.0 };
+                tx.execute(
+                    "INSERT INTO pane_nodes (tab, parent, place, share, pane, focused)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![tab, stack, place, share, pane, focused == Some(*pane)],
+                )
+                .map_err(|why| failed(&why))?;
+            }
         }
         Tree::Branch { across, children } => {
             tx.execute(
@@ -68,12 +88,16 @@ fn write_node(
     Ok(())
 }
 
+/// A stack's `across`: neither side by side (1) nor one above the other (0), but one over the
+/// other.
+const STACKED: i64 = 2;
+
 /// One node as kept.
 struct Node {
     id: i64,
     parent: Option<i64>,
     share: f64,
-    across: Option<bool>,
+    across: Option<i64>,
     pane: Option<PaneId>,
     focused: bool,
 }
@@ -105,7 +129,17 @@ fn tree_from(nodes: &[Node]) -> Option<(Tree, Option<PaneId>)> {
 fn tree_of(nodes: &[Node], node: &Node) -> Option<Tree> {
     match (node.pane, node.across) {
         (Some(pane), _) => Some(Tree::leaf(pane)),
+        (None, Some(STACKED)) => {
+            let kept = || nodes.iter().filter(|child| child.parent == Some(node.id));
+            let panes: Vec<PaneId> = kept().filter_map(|child| child.pane).collect();
+            let shown = kept()
+                .find(|child| child.share > 0.0)
+                .and_then(|child| child.pane);
+            let shown = shown.or_else(|| panes.first().copied())?;
+            Some(Tree::Stack { panes, shown })
+        }
         (None, Some(across)) => {
+            let across = across == 1;
             let children: Vec<Share> = (nodes.iter())
                 .filter(|child| child.parent == Some(node.id))
                 .filter_map(|child| {
@@ -131,15 +165,15 @@ fn tree_of(nodes: &[Node], node: &Node) -> Option<Tree> {
 /// # Errors
 /// The store refused it.
 pub fn tab(db: &Connection, id: TabId) -> Result<Option<Tab>, String> {
-    let row: Option<(WorkspaceId, usize)> = db
+    let row: Option<(WorkspaceId, usize, bool)> = db
         .query_row(
-            "SELECT workspace, place FROM tabs WHERE id = ?1",
+            "SELECT workspace, place, whole FROM tabs WHERE id = ?1",
             [id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .optional()
         .map_err(|why| failed(&why))?;
-    let Some((workspace, place)) = row else {
+    let Some((workspace, place, whole)) = row else {
         return Ok(None);
     };
     let nodes = db
@@ -158,7 +192,21 @@ pub fn tab(db: &Connection, id: TabId) -> Result<Option<Tab>, String> {
         place,
         tree,
         focused,
+        whole,
     }))
+}
+
+/// Tab `id` shows its pane in focus alone (`whole`), or all it has in sight.
+///
+/// # Errors
+/// The store refused it.
+pub fn set_whole(tx: &Transaction<'_>, id: TabId, whole: bool) -> Result<(), String> {
+    tx.execute(
+        "UPDATE tabs SET whole = ?2 WHERE id = ?1",
+        params![id, whole],
+    )
+    .map(drop)
+    .map_err(|why| failed(&why))
 }
 
 /// Workspace `workspace`'s open tabs, in their places, each with its tree: two queries, however
@@ -169,11 +217,16 @@ pub fn tab(db: &Connection, id: TabId) -> Result<Option<Tab>, String> {
 pub fn tabs(db: &Connection, workspace: WorkspaceId) -> Result<Vec<Tab>, String> {
     let places = db
         .prepare_cached(
-            "SELECT id, place FROM tabs WHERE workspace = ?1 AND closed IS NULL ORDER BY place, id",
+            "SELECT id, place, whole FROM tabs WHERE workspace = ?1 AND closed IS NULL
+             ORDER BY place, id",
         )
         .map_err(|why| failed(&why))?
         .query_map([workspace], |row| {
-            Ok((row.get::<_, TabId>(0)?, row.get::<_, usize>(1)?))
+            Ok((
+                row.get::<_, TabId>(0)?,
+                row.get::<_, usize>(1)?,
+                row.get::<_, bool>(2)?,
+            ))
         })
         .map_err(|why| failed(&why))?
         .collect::<rusqlite::Result<Vec<_>>>()
@@ -197,7 +250,7 @@ pub fn tabs(db: &Connection, workspace: WorkspaceId) -> Result<Vec<Tab>, String>
     }
     Ok(places
         .into_iter()
-        .filter_map(|(id, place)| {
+        .filter_map(|(id, place, whole)| {
             let (tree, focused) = tree_from(nodes.get(&id)?)?;
             Some(Tab {
                 id,
@@ -205,6 +258,7 @@ pub fn tabs(db: &Connection, workspace: WorkspaceId) -> Result<Vec<Tab>, String>
                 place,
                 tree,
                 focused,
+                whole,
             })
         })
         .collect())

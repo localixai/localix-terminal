@@ -76,7 +76,8 @@ normal tests in CI.
   split is one tab of two panes). `desk/layout.rs` is its one owner: a pane placed in a tab of its
   own as it opens (in the same transaction as its ledger row), taken out as it closes, put beside
   another, a project or a tab shown; each change with its notices (`Window`, `Workspace`, `Tab`).
-  `desk/beside.rs` is the place beside a terminal: what an agent opens from a terminal of the
+  `desk/beside.rs` is the place beside a terminal (and `desk/sessions.rs` the session of what
+  is asked from none): what an agent opens from a terminal of the
   window lands on that terminal's right, the call known by the terminal its program descends
   from (`terminal/lineage.rs`, the connection's process from `wire/peer.rs`), and the links
   between a pane and its terminal kept while both are open (`docs/windows.md`, Agents).
@@ -156,12 +157,25 @@ normal tests in CI.
   terminal starts with the caller's environment, but for the variables its integration names
   its own in `LLX_DESK_SCRUB` (the Claude Code plugin's launcher lists Claude Code's session
   variables), so the core knows no agent's names.
+- **`files.rs`, `files/`** are a project's files: a folder listed one at a time (`files.rs`),
+  heard from the system while it is in sight (`watch.rs` over `fsevents.rs` and `inotify.rs`,
+  no timer), the folders a person left open (`kept.rs`), one file as an editor holds it with a
+  stamp of what the disk held (`text.rs`), and what was left unsaved (`drafts.rs`). They know
+  nothing of the window. `desk/files.rs` reads and watches the trees in sight and tells the
+  window only what is new, through the feed; the side draws them (`browser/tree.rs`, `tree.js`,
+  `host_tree.rs`).
+- **`editor.rs`, `editor/`** are the editor's page: a vendored editor core and one script a
+  language (`vendor/`, built by `scripts/editor` from pinned packages, each run by its SHA-384),
+  with the page's own script. A page loads the core and the language of its file, never the
+  others. `desk/edit.rs` opens a file into a tab, held to its caller's project (`within`), and
+  `desk/edit_disk.rs` is that tab against the disk: the news of a change, and a save that
+  writes only over what the page was last told.
 - **`desk/`** is the `window` tool. A `Call` (its project and agent, directory, environment) and a
   JSON object in,
   text out. Its arguments are checked against its schema (`args.rs`) before anything is done: a field
   it does not know, or one a tab does not take, is refused with what it takes. A page is acted on by
   the refs of its outline (`[e12]`: `click`, `fill`, `select`, in `web.rs`), never by coordinates. The registry says who owns which tab (`w1`, `t2`) and holds what the person said about it;
-  nothing acts on a tab its caller does not own. A board is a kind of tab like a page or a terminal:
+  nothing acts on a tab its caller does not own. A board and a file are kinds of tab like a page or a terminal:
   `open` gives it, `interact` acts on it with an `op`, so the tools stay one surface.
 - **`store.rs`, `store/schema.rs`** are what outlives the app: one SQLite database (`paths::database`), one writer,
   its schema the list of steps it applies in order: `projects`, and under each its `panes` (with

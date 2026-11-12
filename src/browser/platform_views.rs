@@ -199,6 +199,10 @@ pub(in super::super) fn follow(_webview: &wry::WebView, _follow: Follow) {}
 #[cfg(target_os = "macos")]
 pub(in super::super) use super::super::pane::{Pane, stack};
 
+/// Whether the strip and its lists lie over the pages (AppKit), or the pages stand aside for
+/// an open list.
+pub(in super::super) const OVER_PAGES: bool = cfg!(target_os = "macos");
+
 /// Elsewhere the strip cannot be put over the pages: they stand aside while a list is open.
 #[cfg(not(target_os = "macos"))]
 pub(in super::super) fn stack(_views: &[&wry::WebView]) -> bool {

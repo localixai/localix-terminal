@@ -307,6 +307,7 @@ pub(super) fn fresh() -> Arc<Shared> {
         kept: Mutex::new(crate::browser::placement::recalled()),
         offers: crate::browser::offer::Offers::default(),
         folders: Mutex::default(),
+        trees: Mutex::default(),
     })
 }
 
@@ -335,6 +336,8 @@ mod tab_menu;
 mod tear;
 #[path = "host_tear_commit.rs"]
 mod tear_commit;
+#[path = "host_tree.rs"]
+mod tree;
 use clicks::act;
 
 /// What a command is carried out with, on the event loop.

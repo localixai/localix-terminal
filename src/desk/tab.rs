@@ -9,6 +9,7 @@ pub(super) enum Kind {
     Web,
     Term,
     Board,
+    File,
 }
 
 impl Kind {
@@ -17,6 +18,7 @@ impl Kind {
             Self::Web => "browser",
             Self::Term => "terminal",
             Self::Board => "board",
+            Self::File => "file",
         }
     }
 
@@ -24,7 +26,7 @@ impl Kind {
         match self {
             Self::Web => &WEB_FIELDS,
             Self::Term => &TERM_FIELDS,
-            Self::Board => &[],
+            Self::Board | Self::File => &[],
         }
     }
 
@@ -33,7 +35,7 @@ impl Kind {
         let own = self.fields().iter().map(|field| (*field).to_string());
         match self {
             Self::Web => own.chain(DIALOG.map(String::from)).collect(),
-            Self::Term => own.collect(),
+            Self::Term | Self::File => own.collect(),
             Self::Board => super::args::board_field_names().to_vec(),
         }
     }
@@ -48,6 +50,11 @@ impl Kind {
             }
             Self::Term => "Text is `input`, keys are `keys` ([\"Enter\"], [\"Ctrl-C\"]).",
             Self::Board => "A board is acted on with an `op`: add, take, review, block, release…",
+            Self::File => {
+                "A file's tab is read: the text as the person sees it, what they left unsaved \
+                 with it. Change the file on disk with your own tools: the tab follows it. \
+                 `open` it again with `line` to show a line."
+            }
         }
     }
 }
@@ -83,11 +90,14 @@ pub(super) fn unread(kind: Kind, args: &Value) -> Result<(), String> {
         return Ok(());
     }
     let listed: Vec<String> = takes.iter().map(|field| format!("`{field}`")).collect();
+    let listed = match listed.is_empty() {
+        true => "no field of its own".to_string(),
+        false => listed.join(", "),
+    };
     Err(format!(
-        "a {} tab takes no {}: nothing was done. It takes {}. {}",
+        "a {} tab takes no {}: nothing was done. It takes {listed}. {}",
         kind.name(),
         stray.join(", "),
-        listed.join(", "),
         kind.instead()
     ))
 }
@@ -106,6 +116,7 @@ pub(super) fn parse(key: &str) -> Option<Tab> {
         'w' => Kind::Web,
         't' => Kind::Term,
         'b' => Kind::Board,
+        'f' => Kind::File,
         _ => return None,
     };
     let digits = key.get(1..)?;

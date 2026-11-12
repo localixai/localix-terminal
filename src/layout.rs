@@ -12,7 +12,7 @@ use crate::projects::ProjectId;
 mod nodes;
 mod tree;
 
-pub use nodes::{set_tree, tab, tabs};
+pub use nodes::{set_tree, set_whole, tab, tabs};
 pub use tree::{LEAST, Share, Tree};
 
 pub type WindowId = i64;
@@ -44,6 +44,8 @@ pub struct Tab {
     pub place: usize,
     pub tree: Tree,
     pub focused: Option<PaneId>,
+    /// Whether it shows its pane in focus alone, the rest of what it has in sight put by.
+    pub whole: bool,
 }
 
 /// What the store said, as the layout's callers take it.

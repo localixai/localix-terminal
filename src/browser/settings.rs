@@ -33,17 +33,6 @@ pub(super) enum Transparency {
     High,
 }
 
-/// Where a page, terminal or board an agent opens from a terminal of the window lands.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub(super) enum Opens {
-    /// On that terminal's right, in its tab.
-    #[default]
-    Beside,
-    /// In a tab of its own.
-    Tab,
-}
-
 /// The fonts offered, each a CSS stack that falls back to the system's.
 const UI_FONTS: [(&str, &str, &str); 4] = [
     (
@@ -92,7 +81,6 @@ pub(super) struct Settings {
     pub ui_font: String,
     pub code_font: String,
     pub font_size: u8,
-    pub agent_opens: Opens,
     pub updates: super::updates::Updates,
     /// The shortcuts the person changed, by id: a chord, or none (taken off).
     pub shortcuts: BTreeMap<String, Option<String>>,
@@ -106,7 +94,6 @@ impl Default for Settings {
             ui_font: "system".into(),
             code_font: "system".into(),
             font_size: 13,
-            agent_opens: Opens::Beside,
             updates: super::updates::Updates::Auto,
             shortcuts: BTreeMap::new(),
         }
@@ -149,10 +136,6 @@ impl Settings {
         if let Some(updates) = change.get("updates") {
             self.updates =
                 serde_json::from_value(updates.clone()).map_err(|why| why.to_string())?;
-        }
-        if let Some(opens) = change.get("agent_opens") {
-            self.agent_opens =
-                serde_json::from_value(opens.clone()).map_err(|why| why.to_string())?;
         }
         if let Some(font) = text("ui_font") {
             if !UI_FONTS.iter().any(|(id, _, _)| *id == font) {
@@ -249,7 +232,6 @@ impl Settings {
                 "ui_font": default.ui_font,
                 "code_font": default.code_font,
                 "size": default.font_size,
-                "agent_opens": default.agent_opens,
                 "updates": default.updates,
             },
             "ui_fonts": fonts(&UI_FONTS),
@@ -311,11 +293,6 @@ fn kept() -> &'static Mutex<Settings> {
 /// The settings now.
 pub(super) fn now() -> Settings {
     crate::lock(kept()).clone()
-}
-
-/// Whether what an agent opens from a terminal lands beside it, as the person chose.
-pub(super) fn opens_beside() -> bool {
-    crate::lock(kept()).agent_opens == Opens::Beside
 }
 
 /// `change` made and kept; the settings after it.

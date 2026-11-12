@@ -11,6 +11,8 @@ struct Seen {
     name: &'static str,
     handled: Arc<Mutex<Vec<u64>>>,
     reconciled: Arc<AtomicU32>,
+    /// How many times it was told it had caught up, and what it had handled each time.
+    caught_up: Arc<Mutex<Vec<usize>>>,
     fails: Box<dyn FnMut(&Notice) -> bool + Send>,
     gate: Option<Arc<(Mutex<bool>, Condvar)>>,
 }
@@ -22,6 +24,7 @@ impl Seen {
             name,
             handled: Arc::clone(&handled),
             reconciled: Arc::clone(&reconciled),
+            caught_up: Arc::default(),
             fails: Box::new(|_| false),
             gate: None,
         };
@@ -57,6 +60,11 @@ impl Consumer for Seen {
 
     fn reconcile(&mut self) {
         self.reconciled.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn caught_up(&mut self) {
+        let handled = crate::lock(&self.handled).len();
+        crate::lock(&self.caught_up).push(handled);
     }
 }
 
@@ -101,6 +109,30 @@ fn each_consumer_reads_every_notice_in_order_at_its_own_pace() {
     feed.record(&card("c4"), Op::Deleted);
     assert!(feed.settled(SOON));
     assert_eq!(*late_seen.lock().unwrap(), [4]);
+    feed.stop();
+}
+
+#[test]
+fn a_consumer_is_told_once_when_the_notices_of_one_change_are_handled() {
+    let feed = Feed::new(Arc::new(Store::memory().unwrap()), Duration::from_millis(1));
+    let (seen, handled, _) = Seen::new("seen");
+    let caught_up = Arc::clone(&seen.caught_up);
+    feed.consume(Box::new(seen)).unwrap();
+    // One change that says three things: what a consumer derives from them it derives once.
+    feed.write(|write| {
+        for id in ["c1", "c2", "c3"] {
+            write.record(&card(id), Op::Upserted)?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    assert!(feed.settled(SOON));
+    assert_eq!(*handled.lock().unwrap(), [1, 2, 3]);
+    // Told before the feed counts it as having read them: nothing is still owed then.
+    assert_eq!(*caught_up.lock().unwrap(), [3]);
+    feed.record(&card("c4"), Op::Upserted);
+    assert!(feed.settled(SOON));
+    assert_eq!(*caught_up.lock().unwrap(), [3, 4]);
     feed.stop();
 }
 

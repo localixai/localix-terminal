@@ -10,8 +10,9 @@ mod scale {
     /// The sizes of the scale, in points (the line each takes is in the table of docs/ui.md).
     const SIZES: [u32; 6] = [10, 11, 12, 13, 15, 22];
 
-    const PAGES: [&str; 4] = [
+    const PAGES: [&str; 5] = [
         "src/browser/frame.css",
+        "src/browser/tree.css",
         "src/browser/strip.html",
         "src/browser/settings.html",
         "src/board/page.html",

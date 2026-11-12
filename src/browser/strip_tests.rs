@@ -1,5 +1,7 @@
 //! Tests of `strip`.
 
+#[path = "strip/docs_tests.rs"]
+mod documents;
 #[path = "strip/input_tests.rs"]
 mod input;
 #[path = "strip/page_tests.rs"]
@@ -18,6 +20,7 @@ fn the_tabs_reach_the_page_as_data() {
             group: "proj".into(),
             agent: None,
             waits: None,
+            of: None,
         },
         Item {
             key: Key::Term(2),
@@ -26,6 +29,7 @@ fn the_tabs_reach_the_page_as_data() {
             group: "proj".into(),
             agent: None,
             waits: None,
+            of: None,
         },
     ];
     let script = script(&items, Key::Term(2), None, &none());
@@ -73,6 +77,7 @@ fn an_empty_title_reads_as_what_the_tab_is() {
         group: String::new(),
         agent: None,
         waits: None,
+        of: None,
     }];
     let script = script(&items, Key::Web(1), None, &none());
     assert!(script.contains("\"title\":\"New tab\""), "{script}");
@@ -86,6 +91,7 @@ fn item(key: Key, title: &str, group: &str) -> Item {
         group: group.into(),
         agent: None,
         waits: None,
+        of: None,
     }
 }
 
@@ -235,6 +241,7 @@ fn a_terminal_running_an_agent_carries_its_mark_and_what_it_does() {
         group: "proj".into(),
         agent: None,
         waits: None,
+        of: None,
     }];
     let script = script(&items, Key::Term(3), Some(true), &none());
     let data: serde_json::Value = serde_json::from_str(
@@ -261,6 +268,7 @@ fn a_shell_running_an_agent_in_front_carries_its_mark() {
         group: "proj".into(),
         agent: Some("codex"),
         waits: None,
+        of: None,
     }];
     let drawn = script(&items, Key::Term(4), Some(true), &none());
     assert!(drawn.contains(r#""agent":"codex""#), "{drawn}");
@@ -277,6 +285,7 @@ fn a_tab_that_waits_for_the_person_carries_the_words_of_what_waits() {
             group: "proj".into(),
             agent: Some("claude"),
             waits: waits.map(str::to_string),
+            of: None,
         }];
         script(&items, Key::Web(1), Some(true), &none())
     };

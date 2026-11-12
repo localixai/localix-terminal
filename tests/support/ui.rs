@@ -34,6 +34,8 @@ fn arranging(shares: Vec<f64>) -> Vec<Arranged> {
             across: true,
             shares,
             focused: Some("t70".into()),
+            all: vec!["t70".into(), "t71".into()],
+            ..Arranging::default()
         }],
     }]
 }

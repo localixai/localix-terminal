@@ -36,6 +36,8 @@ pub(super) struct Kept {
     pub side: Option<bool>,
     /// The side's width as the person last dragged it.
     pub side_width: Option<f64>,
+    /// The side shows the project's files under its tabs, or the person put them away.
+    pub files: Option<bool>,
 }
 
 impl Kept {

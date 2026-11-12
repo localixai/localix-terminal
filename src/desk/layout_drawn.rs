@@ -92,6 +92,7 @@ impl Desk {
                     Kind::Page => TabKind::Page,
                     Kind::Terminal => TabKind::Terminal,
                     Kind::Board => TabKind::Board,
+                    Kind::File => TabKind::File,
                 },
                 detail: (tab.url.clone())
                     .or_else(|| tab.cwd.as_ref().map(|cwd| cwd.display().to_string()))
@@ -110,35 +111,65 @@ impl Desk {
     }
 }
 
-/// Tab `tab` by its panes' keys; none when none of its panes has one.
+/// Tab `tab` by its panes' keys: the ones in sight, its documents, and whether it is kept
+/// whole; none when none of its panes in sight has a key.
 fn arranging(
     tab: &layout::Tab,
     keys: &std::collections::HashMap<Row, String>,
 ) -> Option<crate::browser::Arranging> {
     let (across, shares) = match &tab.tree {
-        Tree::Leaf { .. } => (true, vec![1.0]),
+        Tree::Leaf { .. } | Tree::Stack { .. } => (true, vec![1.0]),
         Tree::Branch { across, children } => {
             (*across, children.iter().map(|child| child.share).collect())
         }
     };
-    let panes: Vec<String> = (tab.tree.panes().into_iter())
-        .filter_map(|pane| keys.get(&pane).cloned())
-        .collect();
+    let named = |panes: Vec<Row>| -> Vec<String> {
+        (panes.into_iter())
+            .filter_map(|pane| keys.get(&pane).cloned())
+            .collect()
+    };
+    let panes = named(tab.tree.visible());
     let focused = tab.focused.and_then(|pane| keys.get(&pane).cloned());
     (!panes.is_empty()).then_some(crate::browser::Arranging {
         panes,
         across,
         shares,
         focused,
+        docs: named(tab.tree.stacked()),
+        all: named(tab.tree.panes()),
+        whole: tab.whole,
     })
 }
 
 /// The feed's consumer that keeps the window current, and the one part that tells it what follows:
 /// each change of a window, a workspace, a tab or a pane's key, and it is told the layout again;
 /// of a project's ledger, that project's past (its history menu, its address field); of the
-/// projects, the switcher's list. It pulls; the notice carries nothing of it.
+/// projects, the switcher's list; of a project's files, what changed in its tree. It pulls; the
+/// notice carries nothing of it. One change says several of these at once (a tab opened: its
+/// pane, its tab, its workspace, its ledger): each is owed until the notices are handled, and
+/// told once then.
 pub(super) struct Drawn {
-    pub(super) desk: std::sync::Weak<Desk>,
+    desk: std::sync::Weak<Desk>,
+    owed: Owed,
+}
+
+impl Drawn {
+    /// The consumer for `desk`'s window, nothing owed.
+    pub(super) fn of(desk: &std::sync::Arc<Desk>) -> Self {
+        Self {
+            desk: std::sync::Arc::downgrade(desk),
+            owed: Owed::default(),
+        }
+    }
+}
+
+/// What the window is to be told once the notices at hand are handled.
+#[derive(Debug, Default)]
+struct Owed {
+    arranged: bool,
+    places: bool,
+    ledgers: std::collections::BTreeSet<ProjectId>,
+    files: std::collections::BTreeSet<ProjectId>,
 }
 
 impl crate::feed::Consumer for Drawn {
@@ -151,22 +182,39 @@ impl crate::feed::Consumer for Drawn {
     }
 
     fn handle(&mut self, notice: &crate::feed::Notice) -> Result<(), String> {
-        let Some(desk) = self.desk.upgrade() else {
-            return Ok(());
-        };
         match &notice.entity {
             Entity::Window { .. }
             | Entity::Workspace { .. }
             | Entity::Tab { .. }
-            | Entity::Pane { .. } => desk.tell_arranged(),
-            Entity::Ledger { project } => desk.tell_ledger(*project),
-            Entity::Projects => desk.tell_places(),
+            | Entity::Pane { .. } => self.owed.arranged = true,
+            Entity::Ledger { project } => drop(self.owed.ledgers.insert(*project)),
+            Entity::Projects => self.owed.places = true,
+            Entity::Files { project } => drop(self.owed.files.insert(*project)),
             Entity::Said { .. }
             | Entity::Board { .. }
             | Entity::Terminal { .. }
             | Entity::Ask { .. } => {}
         }
         Ok(())
+    }
+
+    fn caught_up(&mut self) {
+        let owed = std::mem::take(&mut self.owed);
+        let Some(desk) = self.desk.upgrade() else {
+            return;
+        };
+        if owed.arranged {
+            desk.tell_arranged();
+        }
+        for project in owed.ledgers {
+            desk.tell_ledger(project);
+        }
+        if owed.places {
+            desk.tell_places();
+        }
+        for project in owed.files {
+            desk.tell_files(project);
+        }
     }
 
     fn reconcile(&mut self) {

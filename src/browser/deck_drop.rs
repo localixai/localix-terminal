@@ -7,6 +7,25 @@ use super::{Deck, Landing, Over};
 const DEAD_MIDDLE: f64 = 0.18;
 
 impl Deck {
+    /// The two tabs side by side, left and right, when the window is split.
+    pub(in super::super) fn pair(&self) -> Option<(Key, Key)> {
+        self.pair_with(self.split.beside)
+    }
+
+    /// The two halves' tabs, left and right, were `beside` the tab beside the shown one.
+    pub(in super::super) fn pair_with(
+        &self,
+        beside: Option<super::super::split::Beside>,
+    ) -> Option<(Key, Key)> {
+        super::super::split::pair(self.shown_key(), beside, |key| self.there(key))
+    }
+
+    /// Split the window, tab `key` beside the one shown, on the right; or make it whole (none).
+    pub(in super::super) fn split_with(&mut self, key: Option<Key>) {
+        self.split.beside = key.map(|key| super::super::split::Beside { key, right: true });
+        self.split.grabbed = None;
+    }
+
     /// The tab in the half at `x`, `y` of the window (points from its top left), when the window
     /// is split and the press is on a page.
     pub(in super::super) fn half_at(&self, x: f64, y: f64) -> Option<Key> {

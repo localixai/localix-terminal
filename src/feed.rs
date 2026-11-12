@@ -58,6 +58,8 @@ pub enum Entity {
     Ledger { project: crate::projects::ProjectId },
     /// The projects the desk knows: which, and which was used last (the project switcher).
     Projects,
+    /// A project's tree of files: a folder opened or shut, or changed on disk while in sight.
+    Files { project: crate::projects::ProjectId },
 }
 
 impl Entity {
@@ -70,6 +72,7 @@ impl Entity {
             Entity::Board { .. }
             | Entity::Ledger { .. }
             | Entity::Projects
+            | Entity::Files { .. }
             | Entity::Window { .. }
             | Entity::Workspace { .. }
             | Entity::Tab { .. } => true,
@@ -120,6 +123,10 @@ pub trait Consumer: Send {
     /// Re-derive from the owners what notices would have said: when the consumer starts, after a
     /// notice set aside, and after it fell behind what the feed keeps.
     fn reconcile(&mut self) {}
+    /// Every notice written so far that it could read has been handled: what it put off while
+    /// they came (one redraw for the several notices of one change) is done now. Called before
+    /// the feed counts the last of them as read.
+    fn caught_up(&mut self) {}
 }
 
 /// One consumer's state, for diagnostics.

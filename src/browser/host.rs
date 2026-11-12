@@ -135,6 +135,8 @@ pub(super) struct Shared {
     pub(super) offers: super::offer::Offers,
     /// Where each terminal is now (its program's folder), by tab key: its menu works there.
     pub(super) folders: Mutex<HashMap<String, std::path::PathBuf>>,
+    /// The trees of files the windows show (tree.rs).
+    pub(super) trees: Mutex<super::tree::Trees>,
 }
 
 /// Told what the person did to a tab (its key; `window` for the whole window), in words.

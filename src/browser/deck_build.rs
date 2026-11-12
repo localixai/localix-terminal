@@ -136,6 +136,10 @@ impl Deck {
             Some(_) => Some(strip_page(&frame.native, look, proxy.clone(), Part::Line)?),
             None => None,
         };
+        let docs = match &strip {
+            Some(_) => Some(strip_page(&frame.native, look, proxy.clone(), Part::Docs)?),
+            None => None,
+        };
         let (side_open, side_width) = {
             let kept = crate::lock(&shared.kept);
             (
@@ -151,6 +155,8 @@ impl Deck {
             side,
             nav,
             line,
+            docs,
+            stacks: std::sync::Mutex::default(),
             split: super::super::split::Split::default(),
             drop: None,
             landing: None,
@@ -187,6 +193,7 @@ fn strip_page(
         Part::Side => page.replacen("<html", "<html data-part=\"side\"", 1),
         Part::Nav => page.replacen("<html", "<html data-part=\"nav\"", 1),
         Part::Line => page.replacen("<html", "<html data-part=\"line\"", 1),
+        Part::Docs => page.replacen("<html", "<html data-part=\"docs\"", 1),
     };
     let loaded = proxy.clone();
     let builder = own_page(WebViewBuilder::new())
@@ -200,12 +207,7 @@ fn strip_page(
         ))
         .with_transparent(look == Look::Glass)
         .with_ipc_handler(move |request| {
-            let said = request.body().clone();
-            let _ = proxy.send_event(match part {
-                Part::Strip | Part::Line => Cmd::Clicked(said),
-                Part::Side => Cmd::SideClicked(said),
-                Part::Nav => Cmd::NavClicked(said),
-            });
+            let _ = proxy.send_event(posted(part, request.body().clone()));
         })
         // Its tabs are drawn once its page can draw them, all it was told told again.
         .with_on_page_load_handler(move |_, _| {
@@ -214,3 +216,20 @@ fn strip_page(
         });
     build_own(builder, native).map_err(|error| error.to_string())
 }
+
+/// What a page of `part` posted (`said`), as the window hears it. A point it says is of its own
+/// view, so each part that lies elsewhere than the strip says whose points they are, and the
+/// window moves them to where that part lies (host_dispatch.rs). The line between the halves
+/// says no point of its own.
+fn posted(part: Part, said: String) -> Cmd {
+    match part {
+        Part::Strip | Part::Line => Cmd::Clicked(said),
+        Part::Side => Cmd::SideClicked(said),
+        Part::Nav => Cmd::NavClicked(said),
+        Part::Docs => Cmd::DocsClicked(said),
+    }
+}
+
+#[cfg(test)]
+#[path = "deck_build_tests.rs"]
+mod tests;

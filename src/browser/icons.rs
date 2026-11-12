@@ -25,6 +25,9 @@ const WEB: &str = icon!(
 const TERM: &str = icon!(r#"<path d="m4 5.5 2.5 2.5L4 10.5M8.5 10.5H12"/>"#);
 const BOARD: &str =
     icon!(r#"<rect x="2.5" y="3" width="11" height="10" rx="1.4"/><path d="M6.2 3v10M9.8 3v10"/>"#);
+const FILE: &str = icon!(
+    r#"<path d="M4.5 2.5h4.6l2.9 2.9v7c0 .6-.5 1.1-1.1 1.1H4.5c-.6 0-1-.5-1-1.1V3.6c0-.6.4-1.1 1-1.1zM9 2.6v2.9h2.9"/>"#
+);
 const SETTINGS: &str = icon!(
     r#"<path d="M6.71 3.17 7.02 1.47h1.96l.31 1.7 1.21.5 1.43-.98 1.38 1.38-.98 1.43.5 1.21 1.7.31v1.96l-1.7.31-.5 1.21.98 1.43-1.38 1.38-1.43-.98-1.21.5-.31 1.7H7.02l-.31-1.7-1.21-.5-1.43.98-1.38-1.38.98-1.43-.5-1.21-1.7-.31V7.02l1.7-.31.5-1.21-.98-1.43 1.38-1.38 1.43.98z"/><circle cx="8" cy="8" r="2.1"/>"#
 );
@@ -34,6 +37,7 @@ pub(super) fn of_kind(kind: &str) -> &'static str {
     match kind {
         "term" => TERM,
         "board" => BOARD,
+        "file" => FILE,
         "settings" => SETTINGS,
         _ => WEB,
     }
