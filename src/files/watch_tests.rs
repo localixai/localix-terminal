@@ -64,6 +64,9 @@ fn a_change_in_a_folder_nobody_listens_to_wakes_no_one() {
     dir.file("target/debug/a.o", "");
     dir.file("src/main.rs", "");
     let (watch, told) = watched(&dir, &["", "src"]);
+    // FSEvents may tell of what was written just before the watch began (the root and src
+    // above): that news is let go first.
+    while told.recv_timeout(QUIET).is_ok() {}
     for at in 0..50 {
         dir.file(&format!("target/debug/{at}.o"), "");
     }
