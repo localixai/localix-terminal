@@ -146,6 +146,11 @@
 
 ### Changed
 
+- **A tab that shows a file has that file's picture**, the one the tree gives it by its name,
+  where it had the same plain glyph for every file: a file in the editor, and a page named for
+  the film, sound or picture it shows. A page with a title of its own keeps the globe.
+- The README shows a still of the window in place of the recorded demo, for now.
+
 - The strip's glyphs are redrawn so that none shows a brighter spot where its lines meet: each is
   one stroked path, painted once (the sidebar's fold button, a page's globe, the board, the
   search glass, the desktop size). The gear has six even teeth, the bell a flared rim, and the

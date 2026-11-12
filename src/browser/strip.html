@@ -204,6 +204,11 @@ html:not([data-glass]) #sug,html:not([data-glass]) #menu{background:var(--ground
 .t.on{color:var(--fg);background:color-mix(in srgb,currentColor 10%,transparent)}
 .i{flex:none;opacity:.6}
 .i svg{width:12px;height:12px}
+/* A tab that shows a file has that file's picture, the tree's own: its colours are its own, so
+   it is neither stroked nor dimmed as a line glyph is, but in a window that is not the key one. */
+.i.pic{opacity:1}
+.i.pic svg{width:14px;height:14px;fill:initial;stroke:none}
+html[data-inactive] .i.pic{opacity:.6}
 .n{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .x{flex:none;width:20px;height:20px;border-radius:var(--r-1);display:grid;place-items:center;opacity:0;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 .x svg{width:10px;height:10px;stroke-width:1.5}
@@ -433,8 +438,8 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
   <div id="sl" role="listbox" aria-label="Tabs" tabindex="0"></div>
   <div id="fh" role="button" tabindex="0" aria-expanded="false" aria-controls="ft" title="Show the files"><span class="ch"></span><span>Files</span></div>
   <div id="ft" role="tree" aria-label="Files" tabindex="0"><div id="fr"></div></div>
-  <svg id="fp" aria-hidden="true"></svg>
 </div>
+<svg id="fp" aria-hidden="true"></svg>
 <div id="grip" role="separator" aria-orientation="vertical" aria-label="Sidebar width" tabindex="0" title="Drag or use arrow keys to resize; Home resets"></div>
 <div id="gh"></div>
 <div id="line" role="separator" aria-orientation="vertical" aria-label="Split width" tabindex="0" title="Drag or use arrow keys to resize; Home evens the halves"></div>
@@ -514,8 +519,8 @@ function tabItem(tab, on) {
   item.dataset.key = tab.key;
   item.title = tab.title;
   const icon = document.createElement("span");
-  icon.className = "i";
-  icon.append(glyph(GLYPHS[tab.kind] ? tab.kind : "web"));
+  icon.className = tab.picture ? "i pic" : "i";
+  icon.append(tab.picture ? pictured(tab.picture) : glyph(GLYPHS[tab.kind] ? tab.kind : "web"));
   const name = document.createElement("span");
   name.className = "n";
   name.textContent = tab.title;
@@ -547,7 +552,7 @@ function docsNow() {
   const keys = docRow ? docRow.keys : [];
   const tabs = keys.map((key) => docTabs.find((tab) => tab.key === key)).filter(Boolean);
   const on = docRow ? docRow.on : "";
-  return { keys, tabs, on, sig: JSON.stringify([on, tabs.map((tab) => [tab.key, tab.title, tab.kind, tab.waits])]) };
+  return { keys, tabs, on, sig: JSON.stringify([on, tabs.map((tab) => [tab.key, tab.title, tab.kind, tab.waits, tab.picture])]) };
 }
 function drawDocs() {
   if (docHeld) return void (docLate = true);
@@ -983,7 +988,7 @@ function paintSide() {
   const rows = listed.filter((tab) => !typed || (tab.title + " " + (tab.name || "") + " " + holds(tab)).toLowerCase().includes(typed));
   const list = document.getElementById("sl");
   const pair = splitPair && rows.filter((tab) => splitPair.includes(tab.key)).length === 2 ? splitPair : null;
-  const now = JSON.stringify([typed, rows.map((tab) => [tab.key, tab.title, tab.name, tab.agent, tab.kind, holds(tab), placeKey(listed.indexOf(tab))]), listedShown, pair]);
+  const now = JSON.stringify([typed, rows.map((tab) => [tab.key, tab.title, tab.name, tab.agent, tab.kind, tab.picture, holds(tab), placeKey(listed.indexOf(tab))]), listedShown, pair]);
   if (now === sig) return;
   sig = now;
   if (!rows.length) {
@@ -1037,10 +1042,11 @@ function patchRow(item, tab, half) {
   const title = (tab.agent ? tab.name + " — " + tab.title : tab.title) + (waits ? " — waits for you" : "") + placeKey(listed.indexOf(tab));
   if (item.title !== title) item.title = title;
   const icon = item.querySelector(".ic");
-  const look = tab.agent ? "agent " + tab.agent : GLYPHS[tab.kind] ? tab.kind : "web";
+  const look = tab.agent ? "agent " + tab.agent : tab.picture ? "file " + tab.picture : GLYPHS[tab.kind] ? tab.kind : "web";
   if (icon.dataset.look !== look) {
     icon.dataset.look = look;
-    icon.replaceChildren(tab.agent ? agentMark(tab.agent) : glyph(GLYPHS[tab.kind] ? tab.kind : "web"));
+    icon.classList.toggle("pic", !tab.agent && !!tab.picture);
+    icon.replaceChildren(tab.agent ? agentMark(tab.agent) : tab.picture ? pictured(tab.picture) : glyph(GLYPHS[tab.kind] ? tab.kind : "web"));
   }
   const dot = icon.querySelector(":scope > .d");
   if (waits && !on && !dot) icon.append(Object.assign(document.createElement("span"), { className: "d" }));
@@ -1486,6 +1492,15 @@ if (document.documentElement.dataset.part === "line") {
   });
 }
 /*TREE_JS*/
+// The pictures came: a tab that shows a file draws its own again.
+picturesCame.push(() => {
+  const part = document.documentElement.dataset.part;
+  if (part === "docs") return void (docSig = null, drawDocs());
+  if (part !== "side") return;
+  for (const icon of document.querySelectorAll("#sl .ic")) delete icon.dataset.look;
+  sig = null;
+  drawSide();
+});
 looked(window.__deskLook);
 // The strip is the window's own: no page's menu (Reload, AutoFill) but in the address field.
 document.addEventListener("contextmenu", (event) => {

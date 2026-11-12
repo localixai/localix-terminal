@@ -115,6 +115,10 @@ person's accent and the system's selection and focus colours, never a site's fix
   wide as that pane and no wider:
   - it is the strip's own row of tabs (`.t`), each as wide as its name needs, 220 pt at most;
   - the document in sight has the shown tab's neutral fill; the others are `--ink-2`;
+  - a tab that shows a file (a file in the editor, a page named for the film, sound or picture
+    it shows) has the picture the tree gives that file, 14 pt, in its own colours: not dimmed
+    as a line glyph is, but in a window that is not the key one. Every other tab keeps its
+    kind's line glyph;
   - a tab's close button shows on the one in sight and on the one pointed at;
   - a hairline closes the row; the row is not there when the session has no document;
   - it lies over the pages and is no titlebar: a press on its empty part moves nothing;

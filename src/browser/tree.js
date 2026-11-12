@@ -6,6 +6,33 @@
 // A name is written in the row itself (a new entry's in a row of its own); an entry is dragged
 // into a folder of the tree, or out over the pages, where the window says what takes it; and
 // what the app would not do is said under the entry it was asked of.
+// The pictures (file_icons.rs), each a drawing given as text and read as data, never as script:
+// a tree's entry has one, and so has a tab that shows a file. One copy of each is kept out of
+// sight, made the first time something names it; what shows a picture points at it, so a thousand
+// files of one kind are one drawing. Whoever draws them is told when they come (`picturesCame`).
+const keptPictures = document.getElementById("fp"), placedPictures = new Set();
+const picturesCame = [];
+let pictures = {};
+function pictured(name) {
+  const mark = document.createElementNS(SVG, "svg"), use = document.createElementNS(SVG, "use");
+  if (!placedPictures.has(name)) {
+    const drawing = new DOMParser().parseFromString(pictures[name] || "", "image/svg+xml").documentElement;
+    if (drawing.nodeName !== "svg") return mark;
+    const symbol = document.createElementNS(SVG, "symbol");
+    symbol.id = "fi-" + name;
+    symbol.setAttribute("viewBox", drawing.getAttribute("viewBox") || "0 0 32 32");
+    symbol.append(...[...drawing.childNodes].map((node) => document.importNode(node, true)));
+    keptPictures.append(symbol);
+    placedPictures.add(name);
+  }
+  use.setAttribute("href", "#fi-" + name);
+  mark.append(use);
+  return mark;
+}
+window.FI = (given) => {
+  pictures = given;
+  for (const came of picturesCame) came();
+};
 if (document.documentElement.dataset.part === "side") {
   const ROW = 24, OVER = 8, INDENT = 12;
   const head = document.getElementById("fh"), box = document.getElementById("ft"), sheet = document.getElementById("fr");
@@ -190,32 +217,11 @@ if (document.documentElement.dataset.part === "side") {
     else if (top + ROW > box.scrollTop + box.clientHeight) box.scrollTop = top + ROW - box.clientHeight;
     draw();
   }
-  // The pictures (file_icons.rs), each a drawing given as text and read as data, never as script.
-  // One copy of each is kept out of sight, made the first time a row names it; a row's own picture
-  // points at it, so a thousand files of one kind are one drawing.
-  const NS = "http://www.w3.org/2000/svg", kept = document.getElementById("fp"), placed = new Set();
-  let pictures = {};
-  function pictured(name) {
-    const mark = document.createElementNS(NS, "svg"), use = document.createElementNS(NS, "use");
-    if (!placed.has(name)) {
-      const drawing = new DOMParser().parseFromString(pictures[name] || "", "image/svg+xml").documentElement;
-      if (drawing.nodeName !== "svg") return mark;
-      const symbol = document.createElementNS(NS, "symbol");
-      symbol.id = "fi-" + name;
-      symbol.setAttribute("viewBox", drawing.getAttribute("viewBox") || "0 0 32 32");
-      symbol.append(...[...drawing.childNodes].map((node) => document.importNode(node, true)));
-      kept.append(symbol);
-      placed.add(name);
-    }
-    use.setAttribute("href", "#fi-" + name);
-    mark.append(use);
-    return mark;
-  }
-  window.FI = (given) => {
-    pictures = given;
+  // The pictures came: every row's is drawn again.
+  picturesCame.push(() => {
     for (const row of drawn.values()) delete row.children[1].dataset.i;
     draw();
-  };
+  });
   // Whether the files show.
   window.FO = (shown) => {
     document.documentElement.toggleAttribute("data-files", shown);

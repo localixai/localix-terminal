@@ -16,6 +16,7 @@ pub(super) use input::{Click, Keyed, Tool, click, moved};
 use serde_json::json;
 
 use super::agents;
+use super::{file_icons, guard};
 
 /// The bar's height, in points: the window's buttons, the open projects, where the shown tab is,
 /// and the window's own buttons (a compact unified toolbar's, frame_macos.rs).
@@ -134,7 +135,7 @@ pub(super) fn went(body: &str) -> Option<String> {
         (false, _) => None,
     };
     address
-        .and_then(|address| super::guard::loadable(&address))
+        .and_then(|address| guard::loadable(&address))
         .or_else(|| {
             url::Url::parse_with_params(SEARCH, [("q", typed)])
                 .ok()
@@ -214,6 +215,19 @@ pub(super) fn script(
             }
             if let Some(waits) = &item.waits {
                 tab["waits"] = json!(waits);
+            }
+            // A tab that shows a file carries the picture the tree gives that file: a file in
+            // the editor by the path it shows, a page by the file it is named for.
+            let file = match kind {
+                "file" => (item.detail.rsplit('/').next())
+                    .filter(|name| !name.is_empty())
+                    .or(Some(title))
+                    .map(str::to_owned),
+                "web" => guard::file_named(&item.detail).filter(|name| name == title),
+                _ => None,
+            };
+            if let Some(file) = file {
+                tab["picture"] = json!(file_icons::of(&file));
             }
             tab["group"] = json!(item.group);
             if let Some(of) = &item.of {
@@ -371,7 +385,7 @@ pub(super) const PAGE: &str = include_str!("strip.html");
 
 /// The SHA-384 of the page's one script, its resize helper, the dialog's script and the tree's in:
 /// the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "/SpYN3otoU4z/59tadRwAllNl3eDqSbn7BABqP4Q4Wx0SCuXPg2lXXTRX9GoB92O";
+const SCRIPT_SHA384: &str = "9AvWjSFwLmIeEJm6EcHPdhD/856Kim4Ohe2eLxCt1mX90n/Y0/92P2Xdkr9ANkjT";
 
 /// The strip's page: the trusted UI's resize helper, the window's dialog (dialog.rs) and the side's
 /// tree of files (tree.rs) inlined, so it opens without external resources, its bars as tall as the window lays them out (`BAR`, `NAV`, `ROW`: its style, not

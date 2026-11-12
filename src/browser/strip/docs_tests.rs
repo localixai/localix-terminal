@@ -28,3 +28,34 @@ fn a_sessions_document_names_its_session_and_the_row_lists_the_documents_in_sigh
     );
     assert_eq!(docs(None), "DR(null)");
 }
+
+#[test]
+fn a_tab_that_shows_a_file_carries_that_files_picture() {
+    let listed = |items: &[Item]| -> serde_json::Value {
+        let drawn = script(
+            items,
+            Key::Term(2),
+            Some(true),
+            &Projects {
+                shown: "proj",
+                places: vec![],
+            },
+        );
+        serde_json::from_str(drawn.strip_prefix("S(").unwrap().strip_suffix(')').unwrap()).unwrap()
+    };
+    // A file in the editor: the picture the tree gives its name, by the path it shows.
+    let mut file = item(Key::parse("f1").unwrap(), "main.rs", "proj");
+    file.detail = "src/main.rs".into();
+    // A page named for the file its address shows (a film, a picture): that file's picture.
+    let mut film = item(Key::Web(3), "first cut.mp4", "proj");
+    film.detail = "http://127.0.0.1:4000/desk-1/first%20cut.mp4".into();
+    // A page with a title of its own is a page, whatever its address ends in.
+    let mut site = item(Key::Web(4), "Shop", "proj");
+    site.detail = "https://shop.test/index.html".into();
+    let data = listed(&[file, film, site, item(Key::Term(2), "zsh", "proj")]);
+    assert_eq!(data["tabs"][0]["picture"], file_icons::of("main.rs"));
+    assert_eq!(data["tabs"][1]["picture"], file_icons::of("first cut.mp4"));
+    assert!(data["tabs"][2].get("picture").is_none());
+    assert!(data["tabs"][3].get("picture").is_none());
+    assert_ne!(file_icons::of("main.rs"), file_icons::of("first cut.mp4"));
+}

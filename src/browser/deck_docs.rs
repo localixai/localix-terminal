@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use tao::dpi::LogicalSize;
 
+use super::super::file_icons;
 use super::super::host::Shared;
 use super::super::session;
 use super::super::strip::{self, DOCS, Key};
@@ -83,6 +84,7 @@ impl Deck {
         let stacks = crate::lock(&self.stacks);
         let row = session::row(&stacks, self.shown_key(), self.pair());
         let script = strip::docs(row.map(|(on, keys)| (on, keys.as_slice())));
+        self.say((Part::Docs, docs), "pictures", file_icons::script());
         self.say((Part::Docs, docs), "docs", &script);
     }
 
