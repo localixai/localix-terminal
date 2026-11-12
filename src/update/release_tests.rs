@@ -116,11 +116,11 @@ fn a_release_s_files_are_under_its_tag() {
     let from = From::default();
     assert_eq!(
         from.latest,
-        "https://api.github.com/repos/rsaryev/localix-terminal/releases/latest"
+        "https://api.github.com/repos/localixai/localix-terminal/releases/latest"
     );
     assert_eq!(
         from.file(Version(0, 2, 0), "SHA256SUMS"),
-        "https://github.com/rsaryev/localix-terminal/releases/download/v0.2.0/SHA256SUMS"
+        "https://github.com/localixai/localix-terminal/releases/download/v0.2.0/SHA256SUMS"
     );
     // Another place holds both under one address (a mirror, a test's folder).
     let other = From::at("file:///tmp/releases/");

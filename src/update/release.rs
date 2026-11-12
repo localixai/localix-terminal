@@ -5,7 +5,7 @@
 use serde::Deserialize;
 
 /// The repository whose releases the app is updated from, as install.sh names it.
-pub const REPO: &str = "rsaryev/localix-terminal";
+pub const REPO: &str = "localixai/localix-terminal";
 
 /// The longest notes kept, in bytes: what a person reads of a release, not its whole history.
 pub(super) const NOTES_MOST: usize = 6000;

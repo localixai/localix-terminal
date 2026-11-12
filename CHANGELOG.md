@@ -34,7 +34,7 @@
   belong to a project and come back as you left them, where Claude Code, Codex or any CLI agent
   runs as it ships, with the browser, the board and the Store beside it.
 - **The app is Localix Terminal and its command is `llxterm`.** The repository is
-  `rsaryev/localix-terminal`, the bundle is `io.github.rsaryev.localix-terminal`, the plugin and
+  `localixai/localix-terminal`, the bundle is `io.github.rsaryev.localix-terminal`, the plugin and
   the MCP server are `llxterm`, the skills are `llxterm:window`, `llxterm:board` and
   `llxterm:end`, and the variables a terminal is given start with `LLXTERM_`. The data and
   settings live in `~/.local/share/llxterm` and `~/.config/llxterm`. A release's archives are

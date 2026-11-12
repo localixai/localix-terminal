@@ -49,7 +49,7 @@ LLXTERM_DISPLAY_TESTS=1 cargo test --test browser   # real windows: needs a disp
    Mac app on GitHub's Mac runner, signed and notarized with the project's Developer ID: one disk image
    (`Localix-Terminal-macos.dmg`) and one zip (`Localix-Terminal-macos.zip`, which `install.sh` fetches), for Apple
    Silicon only. It publishes them with the Linux archive and `SHA256SUMS`, each with a build
-   provenance attestation (`gh attestation verify FILE -R rsaryev/localix-terminal`).
+   provenance attestation (`gh attestation verify FILE -R localixai/localix-terminal`).
 
 Releases build with the exact Rust that `RUSTUP_TOOLCHAIN` names in `release.yml`; move it to a
 newer stable once CI passed on it. `TEAM_ID` in `install.sh` is the Apple team that signs the app:

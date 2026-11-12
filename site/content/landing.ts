@@ -3,7 +3,7 @@ import type { Block, Card, LandingContent, Media } from '@/shared/config';
 // The landing's words. The design is the template's; this file is the site's. The stills are
 // the app's own window; what a terminal shows here was printed by the app, from real calls.
 const DOCS = '/docs';
-const GITHUB = 'https://github.com/rsaryev/localix-terminal';
+const GITHUB = 'https://github.com/localixai/localix-terminal';
 
 const terminal = (blocks: Block[], label: string): Media => ({ kind: 'terminal', blocks, label });
 /** The window's stills, all of one size: what each shows, in words. */

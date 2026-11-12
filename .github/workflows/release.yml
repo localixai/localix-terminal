@@ -5,7 +5,7 @@
 # the program and its licence, built on the project's own runner, whose system is Ubuntu 22.04: the
 # job checks that the program needs no newer glibc than 2.35. SHA256SUMS lists them all, and
 # install.sh checks against it; each file also carries a build provenance attestation (`gh
-# attestation verify FILE -R rsaryev/localix-terminal`). The notes are the CHANGELOG.md section of that
+# attestation verify FILE -R localixai/localix-terminal`). The notes are the CHANGELOG.md section of that
 # version.
 #
 # Releases build with one exact Rust (RUSTUP_TOOLCHAIN below), so a tag built again builds the

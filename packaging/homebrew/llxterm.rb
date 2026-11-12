@@ -6,10 +6,10 @@ cask "llxterm" do
   version "@VERSION@"
   sha256 "@SHA256@"
 
-  url "https://github.com/rsaryev/localix-terminal/releases/download/v#{version}/Localix-Terminal-macos.dmg"
+  url "https://github.com/localixai/localix-terminal/releases/download/v#{version}/Localix-Terminal-macos.dmg"
   name "Localix Terminal"
   desc "Terminal for you and your coding agents"
-  homepage "https://github.com/rsaryev/localix-terminal"
+  homepage "https://github.com/localixai/localix-terminal"
 
   livecheck do
     url :url

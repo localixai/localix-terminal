@@ -2,7 +2,7 @@ import type { SiteConfig } from '@/shared/config';
 
 // What the site knows about itself: the product's name, where the site is published, the
 // repository, the builds a reader downloads.
-const GITHUB = 'https://github.com/rsaryev/localix-terminal';
+const GITHUB = 'https://github.com/localixai/localix-terminal';
 const RELEASE = `${GITHUB}/releases/latest/download`;
 const DESCRIPTION =
   'Terminal sessions that belong to a project and come back as you left them. Claude Code, Codex or any CLI agent runs in them as it ships, and uses the same browser, board and Store you do.';

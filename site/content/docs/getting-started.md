@@ -7,10 +7,10 @@ Install the app, open a folder as a project, and open a terminal or start an age
 macOS 12+ on Apple Silicon, or Linux with WebKitGTK.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rsaryev/localix-terminal/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/localixai/localix-terminal/main/install.sh | sh
 ```
 
-On macOS that is **Localix Terminal.app** in `~/Applications`. Or take [`Localix-Terminal-macos.dmg`](https://github.com/rsaryev/localix-terminal/releases/latest/download/Localix-Terminal-macos.dmg), open it and drag the app to Applications: it is signed and notarized by Apple. It is a regular Mac app, with a Dock icon, a menu bar and ⌘Q.
+On macOS that is **Localix Terminal.app** in `~/Applications`. Or take [`Localix-Terminal-macos.dmg`](https://github.com/localixai/localix-terminal/releases/latest/download/Localix-Terminal-macos.dmg), open it and drag the app to Applications: it is signed and notarized by Apple. It is a regular Mac app, with a Dock icon, a menu bar and ⌘Q.
 
 The script checks `SHA256SUMS` before it writes anything; `LLXTERM_VERSION=0.1.0` picks another release.
 
@@ -27,7 +27,7 @@ sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0
 Rust 1.89+; on Linux also `libwebkit2gtk-4.1-dev` and `libgtk-3-dev`.
 
 ```sh
-cargo install --locked --git https://github.com/rsaryev/localix-terminal && llxterm setup command
+cargo install --locked --git https://github.com/localixai/localix-terminal && llxterm setup command
 ```
 
 On macOS, `cargo build --release && scripts/bundle-macos.sh` makes `target/release/bundle/macos/Localix Terminal.app`, signed ad hoc for this Mac.

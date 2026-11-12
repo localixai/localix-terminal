@@ -6,7 +6,7 @@ rust-version = "1.89"
 description = "Localix Terminal, the terminal for you and your coding agents: sessions that belong to a project and come back as you left them, with a browser, a board and a Store that agents use too"
 license = "MIT"
 publish = false
-repository = "https://github.com/rsaryev/localix-terminal"
+repository = "https://github.com/localixai/localix-terminal"
 readme = "README.md"
 keywords = ["terminal", "coding-agents", "pty", "browser", "kanban"]
 

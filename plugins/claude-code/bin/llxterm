@@ -39,5 +39,5 @@ for program in \
   [ -x "$program" ] && exec "$program" "$@"
 done
 
-say "Localix Terminal is not installed: get it from https://github.com/rsaryev/localix-terminal/releases and open it once"
+say "Localix Terminal is not installed: get it from https://github.com/localixai/localix-terminal/releases and open it once"
 exit 127

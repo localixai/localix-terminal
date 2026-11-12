@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/rsaryev/localix-terminal/releases/latest/download/Localix-Terminal-macos.dmg"><strong>Download for macOS</strong></a> ·
+  <a href="https://github.com/localixai/localix-terminal/releases/latest/download/Localix-Terminal-macos.dmg"><strong>Download for macOS</strong></a> ·
   <a href="#install">Install</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="ARCHITECTURE.md">Architecture</a> ·
@@ -99,11 +99,11 @@ holds the window, the `llxterm` command, the MCP server and (on macOS) the Claud
 and puts each in place for you.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rsaryev/localix-terminal/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/localixai/localix-terminal/main/install.sh | sh
 ```
 
 On macOS that is **Localix Terminal.app** in `~/Applications`; or take
-[`Localix-Terminal-macos.dmg`](https://github.com/rsaryev/localix-terminal/releases/latest/download/Localix-Terminal-macos.dmg),
+[`Localix-Terminal-macos.dmg`](https://github.com/localixai/localix-terminal/releases/latest/download/Localix-Terminal-macos.dmg),
 open it and drag the app to Applications (it is signed and notarized by Apple). It is a regular
 Mac app: Dock icon, menu bar, ⌘Q. Opened, it links `llxterm` into `~/.local/bin` and brings the
 window to you: what the project had open, or, with nothing left open, New Page, New Terminal,
@@ -134,7 +134,7 @@ in it: trust the project's folder there (`/permissions trust`) and the tool appe
 - **From source**, Rust 1.89+ (on Linux also `libwebkit2gtk-4.1-dev` and `libgtk-3-dev`):
 
   ```sh
-  cargo install --locked --git https://github.com/rsaryev/localix-terminal && llxterm setup command
+  cargo install --locked --git https://github.com/localixai/localix-terminal && llxterm setup command
   ```
 
 </details>

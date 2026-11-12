@@ -1,13 +1,13 @@
 #!/bin/sh
 # Installs Localix Terminal, the app, which is all there is to install:
-#   curl -fsSL https://raw.githubusercontent.com/rsaryev/localix-terminal/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/localixai/localix-terminal/main/install.sh | sh
 # macOS: Localix Terminal.app into ~/Applications. Linux: the program into ~/.local/share/llxterm, the
 # `llxterm` command and the app's desktop entry put in place by the program itself
 # (`llxterm setup command`). LLXTERM_VERSION=0.1.0 picks a release. The download's checksum is
 # verified against the release's SHA256SUMS before anything is written.
 set -eu
 
-REPO=rsaryev/localix-terminal
+REPO=localixai/localix-terminal
 # The Apple Developer team that signs the Mac app (ten letters and digits). When set, the app must
 # carry a Developer ID certificate of this team, not only a valid signature; empty, any signed app
 # Apple notarized passes. The release workflow checks that it names the team that signs releases.

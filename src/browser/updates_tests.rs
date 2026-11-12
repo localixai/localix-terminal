@@ -154,7 +154,7 @@ fn only_an_update_that_is_ready_is_offered_under_its_version() {
     }
     assert_eq!(
         notes("0.2.0"),
-        "https://github.com/rsaryev/localix-terminal/releases/tag/v0.2.0"
+        "https://github.com/localixai/localix-terminal/releases/tag/v0.2.0"
     );
 }
 

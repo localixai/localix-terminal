@@ -8,14 +8,14 @@ The desk itself knows no model; this plugin is Claude Code's side of it.
 
 ## Install
 
-1. Install **Localix Terminal**, the app (https://github.com/rsaryev/localix-terminal#install), and open it once.
+1. Install **Localix Terminal**, the app (https://github.com/localixai/localix-terminal#install), and open it once.
 2. In the app, **Settings → Integrations → Claude Code → Add** installs this plugin from the app
    itself, of the app's version, and keeps it in step when the app updates (`llxterm setup
    claude-code` does the same in a terminal). The plugin's `bin/llxterm` (on the Bash tool's
    `PATH`) runs the app's program: on the `PATH`, in `~/.local/bin`, or in the app. Nothing is
    downloaded.
    Without the app's button, the plugin of this repository installs at Claude Code's prompt
-   with `/plugin install llxterm --marketplace rsaryev/localix-terminal`; the app still has to be
+   with `/plugin install llxterm --marketplace localixai/localix-terminal`; the app still has to be
    installed, as the plugin runs its program.
 3. Optional: **Hold Claude to its board card** (`finish_cards`, off by default): Claude stopping with
    its own card still in Doing is asked once to finish it first.
