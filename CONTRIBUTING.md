@@ -63,5 +63,16 @@ Running Release by hand from the Actions tab is a dry run: it builds, signs and 
 files and publishes nothing; they stay on the run as artifacts. The Apple secrets live in the
 `release` environment of the repository, and only the macos job uses them.
 
+`scripts/e2e.sh [--update] [dark|light]` is the end-to-end run, at a Mac: it builds this tree,
+starts its app beside yours (its own socket, data and settings in a scratch folder, so your app
+keeps running and your setup is left alone), and uses it on the demo project in
+`scripts/e2e/project` as a person and an agent do: a board worked by two agents, an agent in a
+terminal, a file, a page, the Store and Settings, in dark and in light. Each step is checked by
+what the `window` tool reports, what is written to the project and what the window offers to
+assistive tools, and each scene is pictured into `target/e2e`. Run it before a release and after
+a change a person sees, and look at the pictures; `--update` also copies the README's
+(`assets/*-dark.png`, `assets/*-light.png`), to be committed. It hides the other apps while it
+runs, so leave the Mac alone for the two minutes it takes.
+
 The workflows run on pushes, tags and by hand only, never on a pull request: the Linux jobs run on the
 project's self-hosted runners, which a fork's code must never reach.

@@ -34,7 +34,7 @@ pub(crate) const GLUE: &str = concat!(
     include_str!("terminal/emulator.js")
 );
 pub(crate) const GLUE_SHA384: &str =
-    "yPRMEAPzu/nLU7aswrWPEXHT+4EEod0M/43H/Uv3gy6UsKQ+ZFd1SVULEj3ToDj8";
+    "PfqxqwYTOgtcf9rkgFnWEaw5YUTwRSdnqOQo4XnA0ekYyzNQ+DuZDYxSGT0UjU06";
 
 /// The page that shows a session in xterm.js, titled `title`, in the window's light or dark.
 /// Its policy runs its own scripts only, by their hashes.

@@ -115,8 +115,10 @@ screen is not finished, and the person should not be the first to see it.
   --compact --include-bounds` gives each control's name, role and rectangle: use it to check
   that a thing is centred, aligned, the size meant, and named for assistive tools. Its own
   `screenshot` does not work on this machine; its `click` does.
-- **Use what is there**: these two tools, nothing built for the occasion. No Swift scripts, no
-  capture harness.
+- **Use what is there**: these two tools and the end-to-end run (`scripts/e2e.sh`, which
+  starts this tree's app beside the person's and pictures each scene in dark and light into
+  `target/e2e`), nothing built for the occasion. No Swift scripts, no second capture harness.
+  A scene a change adds is a step of that run, with its check.
 - **Walk the states** the change can be in, at least dark and light, key and inactive, and
   pointed at; say plainly which of the listed states were not looked at.
 - **A system prompt is the person's to answer** (a folder's access, a permission). Never press

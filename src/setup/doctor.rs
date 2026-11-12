@@ -33,9 +33,10 @@ pub(super) fn news(before: &[String], now: &[String]) -> Vec<String> {
 
 /// The doctor from here on, on a thread of its own (it runs the person's programs and their
 /// login shell): a round now and one every hour, what is new of each given to `note`. A test
-/// build has no doctor: the tools it would write into are the person's.
+/// build has no doctor, nor has an app run apart from the person's: the tools it would write
+/// into are the person's, and would name a program they do not use.
 pub fn keep_well(note: impl Fn(&[String]) + Send + 'static) -> std::io::Result<()> {
-    if cfg!(feature = "test-server") {
+    if cfg!(feature = "test-server") || crate::paths::apart() {
         return Ok(());
     }
     let (sooner, asked) = sync_channel(1);

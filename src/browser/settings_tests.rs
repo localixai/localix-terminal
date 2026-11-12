@@ -98,7 +98,7 @@ fn the_page_is_told_what_each_appearance_is_by_default() {
         .change(&json!({"theme": "dark", "font_size": 17}))
         .unwrap();
     let defaults = &settings.page()["defaults"];
-    assert_eq!(defaults["theme"], "system");
+    assert_eq!(defaults["theme"], "dark");
     assert_eq!(defaults["transparency"], "standard");
     assert_eq!(defaults["ui_font"], "system");
     assert_eq!(defaults["code_font"], "system");

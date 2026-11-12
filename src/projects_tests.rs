@@ -73,3 +73,29 @@ fn two_projects_of_one_name_are_told_apart_by_the_folder_above() {
     assert_eq!(labels[&2], "app — side");
     assert_eq!(labels[&3], "shop");
 }
+
+#[test]
+fn the_project_opened_last_is_one_whose_folder_is_still_there() {
+    let scratch = Scratch::new();
+    let store = Store::open(&scratch.path().join("desk.sqlite")).unwrap();
+    let kept = scratch.path().join("kept");
+    let gone = scratch.path().join("gone");
+    std::fs::create_dir_all(&kept).unwrap();
+    std::fs::create_dir_all(&gone).unwrap();
+    let (kept, gone) = (canonical(&kept).unwrap(), canonical(&gone).unwrap());
+    store
+        .write(|tx| {
+            let first = find_or_make(tx, &kept, 1)?;
+            opened(tx, first.id, 10)?;
+            let second = find_or_make(tx, &gone, 2)?;
+            opened(tx, second.id, 20)
+        })
+        .unwrap();
+    assert_eq!(store.read(last_there).unwrap().unwrap().path, gone);
+    // Its folder deleted, the one opened before it is the last: the window still has a project
+    // to open with.
+    std::fs::remove_dir_all(&gone).unwrap();
+    assert_eq!(store.read(last_there).unwrap().unwrap().path, kept);
+    std::fs::remove_dir_all(&kept).unwrap();
+    assert_eq!(store.read(last_there).unwrap(), None);
+}

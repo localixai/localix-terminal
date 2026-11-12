@@ -16,9 +16,9 @@ use super::shortcuts::{self, Chord};
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(super) enum Theme {
-    #[default]
     System,
     Light,
+    #[default]
     Dark,
 }
 
@@ -89,7 +89,7 @@ pub(super) struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            theme: Theme::System,
+            theme: Theme::default(),
             transparency: Transparency::Standard,
             ui_font: "system".into(),
             code_font: "system".into(),

@@ -133,6 +133,18 @@ pub fn recent(db: &Connection, most: usize) -> Result<Vec<Project>, String> {
     read.collect::<Result<_, _>>().map_err(text)
 }
 
+/// The project opened last whose folder is still there; none when no project's is. A folder
+/// deleted or on a disk not attached is passed over: the window opens with a project the
+/// person can work in, not with an error about one that is gone.
+///
+/// # Errors
+/// SQLite could not.
+pub fn last_there(db: &Connection) -> Result<Option<Project>, String> {
+    Ok(recent(db, usize::MAX)?
+        .into_iter()
+        .find(|project| project.path.is_dir()))
+}
+
 /// Project `id` forgotten, with everything that is its own (its tabs, pages, board, events).
 ///
 /// # Errors

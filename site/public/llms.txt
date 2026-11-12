@@ -1,0 +1,8 @@
+# Localix Terminal
+
+> Localix Terminal is an open source terminal for a person and their coding agents: its sessions belong to a project and come back as they were left, and Claude Code, Codex or any CLI agent runs in them as it ships and uses the same browser, board and Store the person does.
+
+It is one native app for macOS and Linux with no model and no account of its own. A project is a
+folder; its terminal sessions, tabs, history and board are its own. An agent works in the window
+with one command, `llx-desk window '<json>'`, also served as an MCP tool. The app and its command
+carry the project's earlier name, LLX Desk and `llx-desk`.

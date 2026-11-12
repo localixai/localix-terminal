@@ -60,6 +60,9 @@ one neutral coat over it (an `NSBox` fill). The chrome pages are clear over it.
   such a desktop the quiet ink (`--ink-2`) keeps 4.5 to 1 at Standard and Low, and at High the
   main ink keeps 4.5 to 1 and the quiet one 3 to 1 (WCAG 2, 1.4.3 and 1.4.11). The light
   material is the system's sidebar, nearly opaque by itself: its coat is 35%, 10% and none.
+- **A terminal's colours are read on the window's ground**: a program picks them for a dark
+  terminal or a light one, not for this window, so each is darkened or lightened until it
+  keeps 4.5 to 1 with the ground (half of that for dim text).
 - **No decoration over the glass.** No pools of colour, sheens, vignettes, noise or gradients.
   Apple says to remove custom backgrounds from toolbars and sidebars and let the material speak.
   Decoration reads as dirt on a light desktop, and as a fake wallpaper in full screen.

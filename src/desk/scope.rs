@@ -125,10 +125,10 @@ impl Desk {
         }
     }
 
-    /// The project used last: the window opens on it, as the person left it.
+    /// The project the person used last, while its folder is still there; else the one before
+    /// it, and Home when none is left.
     pub(super) fn last_project(&self) -> Result<Project, String> {
-        let recent = (self.feed.store()).read(|db| projects::recent(db, 1))?;
-        match recent.into_iter().next() {
+        match (self.feed.store()).read(projects::last_there)? {
             Some(project) => self.project(&project.path),
             None => self.home_project(),
         }

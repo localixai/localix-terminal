@@ -10,7 +10,8 @@ use std::path::{Path, PathBuf};
 
 /// The directory of the lock and the socket: `llx-desk-<uid>` in the user's temporary
 /// directory as the system names it (not `$TMPDIR`, which a sandbox or a wrapper may change).
-/// A test build takes it from `LLX_DESK_TEST_DIR` and from nowhere else.
+/// `LLX_DESK_RUNTIME` names another, for an app apart from the person's. A test build takes it
+/// from `LLX_DESK_TEST_DIR` and from nowhere else.
 pub fn runtime() -> PathBuf {
     if cfg!(feature = "test-server") {
         // Without its directory a test build has none: nothing is created there, and nothing
@@ -24,7 +25,26 @@ pub fn runtime() -> PathBuf {
     }
     // SAFETY: getuid takes nothing and cannot fail.
     let uid = unsafe { libc::getuid() };
-    under(&user_temp(), uid)
+    runtime_from(std::env::var_os("LLX_DESK_RUNTIME"), &user_temp(), uid)
+}
+
+/// `asked`, when it names a directory, else `temp/llx-desk-<uid>`. An app given a runtime
+/// directory of its own is another app beside the person's: it has its own lock and socket, so
+/// neither hears the other's callers (the end-to-end run starts one so).
+pub(crate) fn runtime_from(asked: Option<std::ffi::OsString>, temp: &Path, uid: u32) -> PathBuf {
+    named(asked).unwrap_or_else(|| under(temp, uid))
+}
+
+/// The directory `asked` names: none when it is empty.
+pub(crate) fn named(asked: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    asked.filter(|dir| !dir.is_empty()).map(PathBuf::from)
+}
+
+/// Whether this app runs apart from the person's (`LLX_DESK_RUNTIME` names its directory). Such
+/// an app leaves the person's setup alone: the command's link and the agents' entries stay
+/// those of the app they use.
+pub fn apart() -> bool {
+    named(std::env::var_os("LLX_DESK_RUNTIME")).is_some()
 }
 
 /// `base/llx-desk-<uid>`.
@@ -60,7 +80,12 @@ fn user_temp() -> PathBuf {
 
 /// The variables that move the desk's files: a server started for a caller (the app, through
 /// LaunchServices, which gives it none of the caller's) is given these, so both find the same.
-pub const MOVED_BY: [&str; 3] = ["LLX_DESK_HOME", "LLX_DESK_DATA", "XDG_CONFIG_HOME"];
+pub const MOVED_BY: [&str; 4] = [
+    "LLX_DESK_RUNTIME",
+    "LLX_DESK_HOME",
+    "LLX_DESK_DATA",
+    "XDG_CONFIG_HOME",
+];
 
 /// `$LLX_DESK_HOME`, else the runtime directory: where the log, the pictures and the
 /// comments go.

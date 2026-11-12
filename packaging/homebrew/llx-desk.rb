@@ -8,7 +8,7 @@ cask "llx-desk" do
 
   url "https://github.com/rsaryev/llx-desk/releases/download/v#{version}/LLX-Desk-macos.dmg"
   name "LLX Desk"
-  desc "Project-first development environment, built for working with agents"
+  desc "Terminal for you and your coding agents"
   homepage "https://github.com/rsaryev/llx-desk"
 
   livecheck do

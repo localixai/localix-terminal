@@ -4,6 +4,12 @@
 
 ### Added
 
+- **An end-to-end run** (`scripts/e2e.sh`): this tree's app is started beside the person's and
+  used as a person and an agent use it, in dark and in light; each step is checked, and each
+  scene is pictured. The README's pictures are its output, of a demo project.
+- **`LLX_DESK_RUNTIME`** names the directory of an app's lock and socket: an app given one runs
+  apart from the person's, and leaves their setup (the command's link, the agents' entries)
+  alone.
 - **The Store.** A tab (⇧⌘S, the "+" menu, `open` with `kind: "store"`) that lists plugins,
   skills and MCP servers for coding agents: the Claude Code and Codex plugin marketplaces, Agent
   Skills and the MCP Registry, read when the Store is opened and at most once an hour, kept in
@@ -23,9 +29,28 @@
 
 ### Changed
 
+- **The project is Localix Terminal, the terminal for you and your coding agents.** The README,
+  the landing page and the package's description say what it is: a terminal whose sessions
+  belong to a project and come back as you left them, where Claude Code, Codex or any CLI agent
+  runs as it ships, with the browser, the board and the Store beside it. The app and its command
+  keep their names, LLX Desk and `llx-desk`.
+- **The window is dark by default.** It followed the system's appearance until the theme was
+  chosen; Settings → Appearance still offers System and Light, and a theme already chosen stays.
 - **A kind of tab that draws itself is one description.** The window, the "+" menu, the
   shortcuts, the tool's schema and the ledger read a kind's name, key, picture and fields from
   the kind itself (`kind.rs`), so a new kind is added in one place.
+
+### Fixed
+
+- **The window opens though the project used last is gone.** With that project's folder deleted
+  (or on a disk not attached), the app started in the background showed no window when it was
+  opened again, from the Dock or with `open -a`, and said nothing. It now opens with the last
+  project whose folder is there, else Home.
+- **The app's warnings are written to its log** (`app.log`): they were said to no one.
+- **A terminal's colours are read on the window's ground.** A program that picks colours for a
+  dark terminal (a yellow, a pale grey) was faint in the light theme; each colour now keeps a
+  contrast of 4.5 to 1 with the ground.
+- **The Store's tiles follow the theme**: light ones in the light theme, where they were dark.
 
 ## 0.1.6
 

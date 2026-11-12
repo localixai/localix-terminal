@@ -22,3 +22,19 @@ fn the_runtime_directory_is_made_private_and_a_link_in_its_place_is_refused() {
     std::os::unix::fs::symlink(&made, &link).unwrap();
     assert!(own_private_dir(&link).is_err());
 }
+
+#[test]
+fn an_app_given_a_runtime_directory_is_apart_from_the_persons() {
+    let temp = Path::new("/var/folders/xy/T");
+    assert_eq!(
+        runtime_from(Some("/tmp/apart".into()), temp, 501),
+        Path::new("/tmp/apart")
+    );
+    // Named empty, or not at all, it is the person's own.
+    assert_eq!(runtime_from(Some("".into()), temp, 501), under(temp, 501));
+    assert_eq!(runtime_from(None, temp, 501), under(temp, 501));
+    // The same naming says whether the app is apart, and so leaves the person's setup alone.
+    assert_eq!(named(Some("/tmp/apart".into())), Some("/tmp/apart".into()));
+    assert_eq!(named(Some("".into())), None);
+    assert_eq!(named(None), None);
+}

@@ -1,81 +1,19 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LLX Desk: a project-first development environment</title>
-<meta name="description" content="LLX Desk is a project-first development environment, built for working with agents: each folder you open becomes a desk of terminals, browser tabs and a task board.">
-<meta name="theme-color" content="#050505">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23050505'/%3E%3Crect x='6' y='8' width='20' height='16' rx='2' fill='none' stroke='%23f4f4f2' stroke-width='2'/%3E%3Cpath d='M6 12h20' stroke='%23f4f4f2' stroke-width='2'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!--app:head-->
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b0b0b">
+  <link rel="icon" href="/favicon.png" type="image/png" sizes="64x64">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="preload" href="/fonts/dm-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>
 </head>
 <body>
-<header class="top"><div class="wrap">
-  <a class="brand" href="#">LLX Desk</a>
-  <nav aria-label="Sections"><a href="#what">On the desk</a><a href="#install">Install</a><a href="#agents">For agents</a><a href="#claude-code">Claude Code</a><a href="https://github.com/rsaryev/llx-desk">GitHub</a></nav>
-</div></header>
-
-<main>
-<div class="wrap hero">
-  <h1>A project-first development environment, built for working with agents.</h1>
-  <p class="lead">Open a folder and it becomes a desk: its terminals, browser tabs and task board, kept as you left them. You work in it, and so can Claude Code, Codex or any agent you run.</p>
-  <div class="cta"><a class="btn primary" href="https://github.com/rsaryev/llx-desk/releases/latest/download/LLX-Desk-macos.dmg">Download for macOS</a><a class="btn" href="#install">Other ways to install</a></div>
-  <pre><code><span class="c"># open this folder as a project</span>
-llx-desk open .</code></pre>
-</div>
-
-<section id="what"><div class="wrap">
-  <h2>On the desk</h2>
-  <p>A project lives in a terminal, a browser and a task list. LLX Desk keeps them together, one desk per project, and agents work on the same desk you do, in plain sight.</p>
-  <div class="grid">
-    <div class="card"><h3>Terminals</h3><p>Real shells on a PTY, split and dragged like any tab. A coding agent running in one shows its mark and its session's title.</p></div>
-    <div class="card"><h3>A browser</h3><p>Real pages on the system WebView, with history, phone and tablet sizes, and comments you pin to an element.</p></div>
-    <div class="card"><h3>A board</h3><p>The project's kanban: Backlog, Todo, Doing, Review, Done, Discarded. You and your agents plan on it; it is kept in the project for git.</p></div>
-    <div class="card"><h3>Projects</h3><p>A project is a folder. Its tabs, history, board and events are its own, and it opens as you left it, even after a restart.</p></div>
-    <div class="card"><h3>Agents</h3><p>Claude Code, Codex, Gemini CLI and others are connected when the app opens. They open pages and terminals, act by ref, plan on the board, and hear your comments.</p></div>
-    <div class="card"><h3>Native and local</h3><p>One small Rust program: no Electron, no account, no model inside, no telemetry. It listens on no port.</p></div>
-  </div>
-</div></section>
-
-<section id="install"><div class="wrap">
-  <h2>Install</h2>
-  <p>macOS 12+ on Apple silicon, or Linux x86_64. The app is all there is to install: LLX Desk holds the window, the <code>llx-desk</code> command, the MCP server and the Claude Code plugin, and Settings → Integrations connects each agent with one click. On Linux, WebKitGTK 4.1, GTK 3 and a display for pages.</p>
-  <pre><code>curl -fsSL https://raw.githubusercontent.com/rsaryev/llx-desk/main/install.sh | sh
-llx-desk setup   <span class="c"># or Settings → Integrations in the app</span></code></pre>
-  <p>From source, with Rust 1.88 or later: <code>cargo install --locked --git https://github.com/rsaryev/llx-desk &amp;&amp; llx-desk setup command</code></p>
-  <p>The first <code>window</code> call starts the app in the background; the window comes when a page or terminal needs it. ⌘Q quits it.</p>
-</div></section>
-
-<section id="agents"><div class="wrap">
-  <h2>How an agent calls it</h2>
-  <p>The argument is one JSON object. Each call prints a report and the tab's snapshot; the agent reads it and decides what next.</p>
-<pre><code>llx-desk window <span class="s">'{"action":"open","kind":"browser","url":"demo/shop.html"}'</span>
-<span class="c">  w1 (browser): Opened ...  ### Page (untrusted content) ...  button "Add to cart" [e12] ...</span>
-
-llx-desk window <span class="s">'{"action":"interact","tab":"w1","click":"e12","wait_for":"1 item"}'</span>
-llx-desk window <span class="s">'{"action":"interact","tab":"w1","script":"document.title"}'</span>
-llx-desk window <span class="s">'{"action":"screenshot","tab":"w1"}'</span>   <span class="c"># prints a JPEG path to read</span>
-
-llx-desk window <span class="s">'{"action":"open","kind":"terminal","command":"python3 -q","wait_for":">>>"}'</span>
-llx-desk window <span class="s">'{"action":"interact","tab":"t1","input":"sum(range(101))\n","wait_for":"5050"}'</span>
-
-llx-desk window --end   <span class="c"># close this project's tabs</span></code></pre>
-  <p>Exit <code>0</code> done, <code>1</code> the call failed, <code>3</code> the app could not be reached. There is no approval prompt of its own: the agent's permission to run the command is the approval, so scope it like a shell.</p>
-</div></section>
-
-<section id="claude-code"><div class="wrap">
-  <h2>Claude Code plugin</h2>
-  <p>Skills that teach Claude when and how to use the window and the board, a worker subagent for cards, a line for its tabs and your comments, and commands. The desk itself knows no model: other agents call the same command.</p>
-<pre><code>/plugin marketplace add rsaryev/llx-desk
-/plugin install llx-desk@llx-desk</code></pre>
-  <ul>
-    <li>A <code>window</code> skill: pages, terminals and the habits that make them work; a <code>board</code> skill and a <code>worker</code> agent for cards.</li>
-    <li><code>/tabs</code> lists this project's tabs; <code>/llx-desk:end</code> and <code>/llx-desk:stop</code>.</li>
-    <li>A hook closes the session's tabs when it ends; the pane sends your window comments to Claude as they come.</li>
-  </ul>
-</div></section>
-</main>
-
-<footer><div class="wrap"><span>llx-desk, MIT licensed.</span><span><a href="https://github.com/rsaryev/llx-desk">GitHub</a> · <a href="https://github.com/rsaryev/llx-desk/blob/main/README.md">README</a></span></div></footer>
+  <div id="root"></div>
+  <script type="module" src="/src/app/entry-client.tsx"></script>
 </body>
 </html>

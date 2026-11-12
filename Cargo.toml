@@ -3,12 +3,12 @@ name = "llx-desk"
 version = "0.1.6"
 edition = "2024"
 rust-version = "1.89"
-description = "A project-first development environment, built for working with agents: terminals, browser tabs and a task board per project"
+description = "Localix Terminal, the terminal for you and your coding agents: sessions that belong to a project and come back as you left them, with a browser, a board and a Store that agents use too"
 license = "MIT"
 publish = false
 repository = "https://github.com/rsaryev/llx-desk"
 readme = "README.md"
-keywords = ["terminal", "browser", "kanban", "agents", "developer-tools"]
+keywords = ["terminal", "coding-agents", "pty", "browser", "kanban"]
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }

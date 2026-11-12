@@ -30,12 +30,14 @@ function alpha(colour, a) {
     : colour.match(/[\d.]+/g).slice(0, 3).map(Number);
   return "rgba(" + n.join(",") + "," + a + ")";
 }
-// The page's colours; the ground is the window's, so the terminal paints none. The cursor is the
-// text's colour (an outline in a pane not in use); a selection is the accent at 40%.
+// The page's colours; the ground is the window's, so the terminal paints none: its ground is
+// the page's colour made clear, which is what a colour's contrast is measured against. The
+// cursor is the text's colour (an outline in a pane not in use); a selection is the accent at
+// 40%.
 function theme() {
   const fg = css("--fg"), bg = css("--bg");
   const colours = {
-    background: "rgba(0,0,0,0)", foreground: fg, cursor: css("--cursor"), cursorAccent: bg,
+    background: alpha(bg, 0), foreground: fg, cursor: css("--cursor"), cursorAccent: bg,
     selectionBackground: system() ? alpha(system(), 0.4) : "rgba(118,167,250,.4)",
     selectionInactiveBackground: alpha(fg, 0.18),
     scrollbarSliderBackground: fg + "66", scrollbarSliderHoverBackground: fg + "e6",
@@ -64,6 +66,9 @@ try {
 const term = new Terminal({
   scrollback: 5000, allowTransparency: true, allowProposedApi: false,
   cursorBlink: false, cursorStyle: "block", cursorInactiveStyle: "outline",
+  // A program that picks its own colours picks them for a dark ground or a light one, not
+  // for this window's: what would not be read on it is darkened or lightened until it is.
+  minimumContrastRatio: 4.5,
   // A link the program writes (OSC 8) opens as the links found in the text do: with ⌘-click, as
   // a tab of the window. xterm's own handler would ask with a dialog and open a window the
   // panel denies.

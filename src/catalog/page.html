@@ -84,9 +84,13 @@ svg{flex:none;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:
 .card:hover{background:var(--ov-1)}
 .card[aria-selected="true"]{background:var(--ov-2)}
 .tile{flex:none;width:44px;height:44px;border-radius:22%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:15px;line-height:1;
-  background:radial-gradient(120% 90% at 85% 110%,oklch(.55 .17 var(--hue,0) / .42),transparent 62%),linear-gradient(#121215,#09090b);
+  background:radial-gradient(120% 90% at 85% 110%,oklch(.8 .12 var(--hue,0) / .5),transparent 62%),linear-gradient(#fff,#f1f1f3);
+  color:oklch(.45 .15 var(--hue,0));box-shadow:inset 0 0 0 1px oklch(0 0 0 / .08)}
+.tile:not([style]){color:#52525b}
+@media (prefers-color-scheme: dark){
+.tile{background:radial-gradient(120% 90% at 85% 110%,oklch(.55 .17 var(--hue,0) / .42),transparent 62%),linear-gradient(#121215,#09090b);
   color:oklch(.86 .11 var(--hue,0));box-shadow:inset 0 0 0 1px oklch(1 0 0 / .07)}
-.tile:not([style]){color:#d4d4d8}
+.tile:not([style]){color:#d4d4d8}}
 .card .w{flex:1;min-width:0}
 .name{display:flex;align-items:center;gap:4px;min-width:0;font-weight:500}
 .name>span:first-child{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -10,6 +10,7 @@ mod idem;
 mod methods;
 #[cfg(feature = "test-server")]
 mod probes;
+mod said;
 
 use std::fs::File;
 use std::io;
@@ -150,9 +151,10 @@ pub struct Begin {
 /// The size of `app.log` past which the next start moves it aside.
 const LOG_MOST: u64 = 1 << 20;
 
-/// The server's output (its log, a panic's words) into `app.log` in the home when no terminal
-/// shows it: started by LaunchServices or by a client, it has nowhere else to go.
+/// The server's output (its warnings, a panic's words) into `app.log` in the home when no
+/// terminal shows it: started by LaunchServices or by a client, it has nowhere else to go.
 pub fn log_to_home() {
+    said::listen();
     // SAFETY: isatty only asks what descriptor 2 is.
     if unsafe { libc::isatty(2) } == 1 {
         return;
