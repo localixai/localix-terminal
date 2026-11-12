@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/localixai/.github/main/profile/logo.svg" width="72" height="72" alt="Localix Terminal">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo.svg">
+    <img src="assets/logo-light.svg" width="72" height="72" alt="Localix Terminal">
+  </picture>
 </p>
 
 <h1 align="center">Localix Terminal</h1>
