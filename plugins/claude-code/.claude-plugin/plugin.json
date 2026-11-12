@@ -1,6 +1,6 @@
 {
   "name": "llx-desk",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "A window of real browser pages, terminals and a kanban board that Claude works in and you watch, with a line for its tabs, its cards and your comments",
   "author": {
     "name": "rsaryev"

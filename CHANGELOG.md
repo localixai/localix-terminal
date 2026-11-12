@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.6
+
 ### Added
 
 - **A session's documents are put in order by dragging.** A tab of the row over them is carried

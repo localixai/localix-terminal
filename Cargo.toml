@@ -1,6 +1,6 @@
 [package]
 name = "llx-desk"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2024"
 rust-version = "1.89"
 description = "A project-first development environment, built for working with agents: terminals, browser tabs and a task board per project"
