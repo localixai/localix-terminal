@@ -49,6 +49,9 @@
 
 ### Fixed
 
+- **A fetch keeps to its size limit with any curl.** Before curl 8.4, `--max-filesize` is
+  skipped for an answer whose size is not told first (a `file://` URL, a chunked answer), so a
+  Store index larger than allowed was read whole. The answer's length is now checked too.
 - **The window opens though the project used last is gone.** With that project's folder deleted
   (or on a disk not attached), the app started in the background showed no window when it was
   opened again, from the Dock or with `open -a`, and said nothing. It now opens with the last

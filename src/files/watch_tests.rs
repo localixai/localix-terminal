@@ -67,10 +67,9 @@ fn a_change_in_a_folder_nobody_listens_to_wakes_no_one() {
     for at in 0..50 {
         dir.file(&format!("target/debug/{at}.o"), "");
     }
-    assert!(
-        told.recv_timeout(QUIET).is_err(),
-        "nothing listened to changed"
-    );
+    if let Ok(change) = told.recv_timeout(QUIET) {
+        panic!("nothing listened to changed, yet {change:?} was told");
+    }
     // Listened to from now on, it is heard.
     let dirs: BTreeSet<PathBuf> = [dir.path().join("target/debug")].into();
     watch.listen(&dirs);

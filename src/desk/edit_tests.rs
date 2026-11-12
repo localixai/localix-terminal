@@ -175,6 +175,9 @@ fn a_save_over_anothers_write_writes_nothing_and_tells_what_the_disk_holds() {
     let desk = desk();
     let me = caller(&desk, scratch.path(), None);
     let key = (desk.open_file(&me.call(), &file, None)).unwrap_or_else(|no| panic!("{}", no.why));
+    // Unwatched: else the folder's notice may reach the tab first, tell it the other write, and
+    // the save after it is no conflict. That notice is the next test's.
+    crate::lock(&desk.edits).get_mut(&key).unwrap().watch = None;
     std::fs::write(&file, "another hand\n").unwrap();
 
     let mine = posted(&json!({"t": "save", "text": "mine\n"}));

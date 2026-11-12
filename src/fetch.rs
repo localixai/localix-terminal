@@ -132,6 +132,12 @@ pub fn changed(url: &str, dir: &Path, ask: &Ask<'_>) -> Result<Fetched, String> 
         return Ok(Fetched::Same);
     }
     let read = read.map_err(|why| not_fetched(url, &why.to_string()))?;
+    // curl's --max-filesize alone does not hold it: before curl 8.4 it is skipped for an answer
+    // whose size is not told first (a file://, a chunked one).
+    if read.len() > ask.most {
+        let why = format!("the answer is larger than {} bytes", ask.most);
+        return Err(not_fetched(url, &why));
+    }
     let text =
         String::from_utf8(read).map_err(|why| format!("{url} answered what is no text ({why})"))?;
     let etag = Some(etag.trim().to_string()).filter(|etag| sendable(etag));
