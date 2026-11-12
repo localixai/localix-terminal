@@ -10,9 +10,8 @@ use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 
-use super::fetch;
 use super::release::{From, Release, checksum};
-use super::run;
+use crate::fetch;
 
 /// The Apple Developer team that signs the Mac app, as install.sh names it (a test holds the
 /// two to each other).
@@ -58,31 +57,7 @@ fn sha256(file: &Path) -> Result<String, String> {
 fn run(program: &str, args: &[&std::ffi::OsStr]) -> Result<(), String> {
     let mut command = Command::new(program);
     command.args(args);
-    run::within(command, TOOL_MOST, &|| {})
-}
-
-/// The names of what `archive` holds, a line each, read by way of a file in `dir`.
-fn listed(archive: &Path, dir: &Path) -> Result<String, String> {
-    let list = dir.join("listing");
-    let failed = |why: std::io::Error| format!("{}: {why}", list.display());
-    let out = std::fs::File::create(&list).map_err(failed)?;
-    let zip = archive.extension().is_some_and(|kind| kind == "zip");
-    let mut command = Command::new(if zip { "/usr/bin/zipinfo" } else { "tar" });
-    command.arg(if zip { "-1" } else { "-tzf" }).arg(archive);
-    run::within_into(command, out.into(), TOOL_MOST, &|| {})?;
-    let names = std::fs::read_to_string(&list).map_err(failed);
-    let _ = std::fs::remove_file(&list);
-    names
-}
-
-/// Whether every one of `names` (an archive's, a line each) unpacks inside the folder it is
-/// unpacked in: none from the root, none a step up.
-fn inside(names: &str) -> Result<(), String> {
-    let out = |name: &&str| name.starts_with('/') || name.split('/').any(|part| part == "..");
-    match names.lines().find(out) {
-        Some(name) => Err(format!("the archive holds `{name}`, outside its folder")),
-        None => Ok(()),
-    }
+    fetch::within(command, TOOL_MOST, &|| {})
 }
 
 /// What the archive `name` unpacks to: the app (a zip), or the program (a tarball).
@@ -121,7 +96,7 @@ pub(super) fn stage(
         return Err(format!("{name} does not match its checksum"));
     }
     // Before a file of it is written: nothing is known yet of whose archive it is.
-    inside(&listed(&archive, dir)?)?;
+    fetch::inside(&fetch::listed(&archive, dir, TOOL_MOST)?)?;
     let into = dir.join("unpacked");
     std::fs::create_dir_all(&into).map_err(made)?;
     match name.ends_with(".zip") {

@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// What a program said and how it ended.
-pub(super) struct Ran {
+pub(crate) struct Ran {
     pub ok: bool,
     pub out: String,
 }
@@ -34,7 +34,8 @@ const VAR_MARK: &str = "__LLX_VAR__";
 /// The variables of the login shell kept beside its PATH: where the person's agents keep their
 /// configuration when they moved it from its place under the home directory. An agent's own
 /// command is run with them, so it writes where the agent in their terminal reads.
-const HOMES: [&str; 5] = [
+pub(super) const HOMES: [&str; 6] = [
+    "CLAUDE_CONFIG_DIR",
     "CODEX_HOME",
     "GEMINI_CLI_HOME",
     "COPILOT_HOME",
@@ -214,9 +215,25 @@ pub(super) fn run_with(
     most: Duration,
     input: Option<&str>,
 ) -> Result<Ran, String> {
-    let mut command = Command::new(program);
     let vars = crate::lock(&KNOWN).vars.clone();
-    command.args(args).env("PATH", path).envs(vars);
+    run_given(program, args, path, &vars, most, input)
+}
+
+/// As [`run_with`], with the variables `vars` (an agent's homes, as the caller knows them) in
+/// place of the ones the login shell said.
+pub(super) fn run_given(
+    program: &Path,
+    args: &[&str],
+    path: &str,
+    vars: &[(String, String)],
+    most: Duration,
+    input: Option<&str>,
+) -> Result<Ran, String> {
+    let mut command = Command::new(program);
+    command
+        .args(args)
+        .env("PATH", path)
+        .envs(vars.iter().cloned());
     within_given(command, most, input)
         .map_err(|why| format!("{} {} {why}", program.display(), args.join(" ")))
 }

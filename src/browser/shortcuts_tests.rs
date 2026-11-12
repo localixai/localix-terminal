@@ -41,8 +41,8 @@ fn every_default_is_a_chord_and_no_two_share_one() {
         );
     }
     assert_eq!(clashes(&resolved), Vec::<&str>::new());
-    let ids: std::collections::HashSet<_> = SHORTCUTS.iter().map(|s| s.id).collect();
-    assert_eq!(ids.len(), SHORTCUTS.len());
+    let ids: std::collections::HashSet<_> = every().iter().map(|s| s.id).collect();
+    assert_eq!(ids.len(), every().len());
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn each_group_is_one_menu_listed_once_with_the_apps_own_last() {
     );
     assert_eq!(groups.last(), Some(&"LLX Desk"));
     assert!(
-        SHORTCUTS
+        every()
             .iter()
             .any(|s| s.does == "quit" && s.keys == "cmd+q")
     );
@@ -101,14 +101,14 @@ fn each_group_is_one_menu_listed_once_with_the_apps_own_last() {
 #[test]
 fn what_needs_a_page_is_in_the_catalog() {
     for does in OF_PAGE {
-        assert!(SHORTCUTS.iter().any(|s| s.does == does), "{does}");
+        assert!(every().iter().any(|s| s.does == does), "{does}");
     }
     assert!(of_page("reload") && !of_page("key address") && !of_page("send"));
 }
 
 #[test]
 fn one_rule_says_what_a_shortcuts_keys_are_for_the_buttons_and_the_menus() {
-    let page = SHORTCUTS.iter().find(|s| s.id == "new-page").unwrap();
+    let page = every().into_iter().find(|s| s.id == "new-page").unwrap();
     let text =
         |changed: &BTreeMap<String, Option<String>>| chord_of(changed, page).map(|c| c.text());
     assert_eq!(text(&BTreeMap::new()).as_deref(), Some("cmd+t"));

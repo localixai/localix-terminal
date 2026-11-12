@@ -190,6 +190,7 @@ pub(super) fn on_browser(
         | Cmd::Opened
         | Cmd::Presented(_)
         | Cmd::Confirm(..)
+        | Cmd::Ask(..)
         | Cmd::Exit(_) => return,
     }
     open.refresh(shared);

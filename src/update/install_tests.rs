@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use super::super::fetch::tests::folder;
 use super::*;
+use crate::fetch::tests::folder;
 
 /// A release of `version` laid out under `dir` as the host serves it, its archive `name` a
 /// tarball of a program that says `says`. Answers where to read it from, and the release.
@@ -143,27 +143,6 @@ fn an_app_no_one_signed_is_not_trusted() {
         "{why}"
     );
     let _ = std::fs::remove_dir_all(dir);
-}
-
-#[test]
-fn an_archive_that_would_write_outside_its_folder_is_not_unpacked() {
-    assert_eq!(
-        inside("LLX Desk.app/\nLLX Desk.app/Contents/MacOS/llx-desk\n"),
-        Ok(())
-    );
-    assert_eq!(inside("llx-desk\n./LICENSE\n"), Ok(()));
-    // A name with two dots in it is a name; a step up is not.
-    assert_eq!(inside("llx-desk..old\n"), Ok(()));
-    for entry in [
-        "../.zshrc",
-        "LLX Desk.app/../../x",
-        "/etc/hosts",
-        "a/..",
-        "..",
-    ] {
-        let why = inside(&format!("llx-desk\n{entry}\n")).unwrap_err();
-        assert!(why.contains("outside"), "{entry}: {why}");
-    }
 }
 
 #[test]

@@ -49,8 +49,8 @@ impl Deck {
             out.push(WindowTab {
                 id: key.name(),
                 kind: match key.kind() {
-                    kind @ ("board" | "file") => kind,
-                    _ => "terminal",
+                    "term" | "settings" => "terminal",
+                    kind => kind,
                 }
                 .into(),
                 title: title.to_string(),

@@ -4,9 +4,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use super::fetch::tests::folder;
 use super::install::tests::published;
 use super::*;
+use crate::fetch::tests::folder;
 
 const NAME: &str = "llx-desk-x86_64-unknown-linux-gnu.tar.gz";
 

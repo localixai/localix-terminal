@@ -9,6 +9,7 @@ use crate::view::{ViewError, ViewResult};
 use serde_json::Value;
 
 use crate::WindowTab;
+use crate::kind::{Given, Question};
 
 use super::super::panel::Panel;
 use super::super::strip::{Click, Key};
@@ -53,6 +54,7 @@ impl Browser {
         let proxy = self.proxy.clone();
         let panel = Panel::new(id, Box::new(move |cmd| proxy.send_event(cmd).is_ok()));
         let slot = Arc::clone(&panel.slot);
+        let html = super::super::agents::marked(html);
         let open = Cmd::Panel((id, title.to_string(), html, slot));
         if self.proxy.send_event(open).is_err() {
             panel.slot.alive.store(false, Ordering::SeqCst);
@@ -136,6 +138,16 @@ impl Browser {
             return false;
         }
         answer.recv().unwrap_or(false)
+    }
+
+    /// A tab's question asked of the person in the window's dialog: what they gave when they
+    /// went on. Waits for their answer; none (they did not, or the window's loop is gone) is no.
+    pub fn ask(&self, question: &Question) -> Option<Given> {
+        let (reply, answer) = mpsc::sync_channel(1);
+        self.proxy
+            .send_event(Cmd::Ask(question.clone(), reply))
+            .ok()?;
+        answer.recv().ok().flatten()
     }
 
     /// The person opened the app: the window comes back, if they put it away, and takes their

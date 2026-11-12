@@ -8,7 +8,10 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
     // Foundations: nothing of the crate.
     ("bundle", &[]),
     ("fds", &[]),
+    ("fetch", &[]),
+    ("kind", &[]),
     ("out", &[]),
+    ("page", &[]),
     ("paths", &[]),
     ("served", &[]),
     ("shots", &[]),
@@ -19,29 +22,37 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
     ("projects", &["store"]),
     ("ledger", &["projects", "store"]),
     ("layout", &["ledger", "projects", "store"]),
-    ("board", &["projects", "store"]),
+    ("board", &["page", "projects", "store"]),
     ("files", &["projects", "store"]),
     ("feed", &["layout", "projects", "store"]),
     ("secrets", &["paths"]),
-    ("terminal", &["fds"]),
+    ("terminal", &["fds", "page"]),
     // An editor's page and what it is told: it knows no file but the text it is handed.
-    ("editor", &[]),
+    ("editor", &["page"]),
     ("setup", &["bundle", "fds", "paths", "store"]),
     // The app kept up to date: it knows where the app is, and nothing of the window or the desk.
-    ("update", &["bundle", "paths"]),
+    ("update", &["bundle", "fetch", "paths"]),
+    // The Store's catalogue: what is published, kept and searched, and put into the agents
+    // through the places `setup` knows. It knows no window and no desk.
+    (
+        "catalog",
+        &["fetch", "kind", "page", "paths", "setup", "store"],
+    ),
     // The answers are kept in the store and given to the window through `browser::Answers`.
     ("offers", &["browser", "store"]),
     // The window: Settings → Integrations reaches setup, its Updates the updater; it draws what
     // it is sent.
     (
         "browser",
-        &["bundle", "paths", "setup", "shots", "update", "view"],
+        &[
+            "bundle", "kind", "page", "paths", "setup", "shots", "update", "view",
+        ],
     ),
     // The window tool, over the window, the terminals and the kept owners.
     (
         "desk",
         &[
-            "board", "browser", "editor", "feed", "files", "layout", "ledger", "offers",
+            "board", "browser", "editor", "feed", "files", "kind", "layout", "ledger", "offers",
             "projects", "secrets", "served", "shots", "store", "terminal", "update", "view",
         ],
     ),
@@ -57,8 +68,8 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
     (
         "cli",
         &[
-            "board", "browser", "bundle", "client", "follow", "mcp", "out", "paths", "secrets",
-            "server", "setup", "shots",
+            "board", "browser", "bundle", "catalog", "client", "follow", "kind", "mcp", "out",
+            "paths", "secrets", "server", "setup", "shots",
         ],
     ),
     ("mcp", &["client", "out"]),

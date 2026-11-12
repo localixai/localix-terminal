@@ -55,11 +55,17 @@ fn plugin_in(plugins: &Value) -> Option<(String, bool)> {
     Some((version.to_string(), mine["enabled"] == true))
 }
 
-/// Claude Code's own folder: `CLAUDE_CONFIG_DIR`, else `~/.claude`.
+/// Claude Code's own folder, as this process's variables name it.
 fn records() -> Option<PathBuf> {
-    (std::env::var_os("CLAUDE_CONFIG_DIR").filter(|dir| !dir.is_empty()))
-        .map(PathBuf::from)
-        .or_else(|| Some(super::home().ok()?.join(".claude")))
+    Some(dir(&super::home().ok()?, |name| std::env::var(name).ok()))
+}
+
+/// Claude Code's own folder for the person whose home is `home` and whose variables `var`
+/// reads: `CLAUDE_CONFIG_DIR`, else `~/.claude`.
+pub(super) fn dir(home: &Path, var: impl Fn(&str) -> Option<String>) -> PathBuf {
+    var("CLAUDE_CONFIG_DIR")
+        .filter(|dir| !dir.trim().is_empty())
+        .map_or_else(|| home.join(".claude"), PathBuf::from)
 }
 
 /// Whether Claude Code's records, read without starting it, say the plugin is in place.

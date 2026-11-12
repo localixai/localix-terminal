@@ -49,7 +49,7 @@ fn profile(root: &Path) -> Option<String> {
 }
 
 /// `file` as the person reads it: under their home, from `~`.
-pub(super) fn shown(file: &Path, home: &Path) -> String {
+pub(in crate::setup) fn shown(file: &Path, home: &Path) -> String {
     match file.strip_prefix(home) {
         Ok(under) => format!("~/{}", under.display()),
         Err(_) => file.display().to_string(),

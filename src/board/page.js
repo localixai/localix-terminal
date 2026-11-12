@@ -1,10 +1,7 @@
-"use strict";
 // The board in the window. The desk paints the whole board (B) whenever it changes, and says when
 // it refused what the person did (E); what the person does is posted back as one JSON action
 // ("k" and it), which the desk applies, keeps and paints again. Everything the board holds came
 // from an agent or the person: it is set as text, never parsed as markup.
-const post = (text) => window.ipc && window.ipc.postMessage(text);
-const act = (action) => post("k" + JSON.stringify(action));
 const COLUMNS = [["backlog", "Backlog"], ["todo", "Todo"], ["doing", "Doing"], ["review", "Review"], ["done", "Done"], ["discarded", "Discarded"]];
 const ORDER = COLUMNS.map(([column]) => column);
 const TITLES = Object.fromEntries(COLUMNS);
@@ -29,31 +26,8 @@ let boardSig = null, paintFrame = 0, paintTimer = 0, repaint = false, composing 
 // Columns the person folded or opened; an empty Review or Done folds by itself until then.
 const folds = new Map();
 
-// An element: its tag with classes (`div.card.sel`), its fields, and its children.
-function el(spec, fields, ...kids) {
-  const [tag, ...classes] = spec.split(".");
-  const node = document.createElement(tag);
-  if (classes.length) node.className = classes.join(" ");
-  for (const [name, value] of Object.entries(fields || {})) {
-    if (value === undefined || value === null || value === false) continue;
-    if (name === "text") node.textContent = value;
-    else if (name.startsWith("on")) node.addEventListener(name.slice(2), value);
-    else if (name === "style") node.style.cssText = value;
-    else node.setAttribute(name, value === true ? "" : value);
-  }
-  for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) node.append(kid);
-  return node;
-}
-// A small picture, drawn as the window's strip draws its own.
-function icon(d, size = 12) {
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  for (const [name, value] of [["width", size], ["height", size], ["viewBox", "0 0 12 12"], ["aria-hidden", "true"]]) svg.setAttribute(name, value);
-  const path = document.createElementNS(ns, "path");
-  path.setAttribute("d", d);
-  svg.append(path);
-  return svg;
-}
+// A small picture on the board's 12-point grid, drawn as the window's strip draws its own.
+const icon = (d, size = 12) => svgPath(d, 12, size);
 const GLYPH = {
   close: "m3 3 6 6M9 3 3 9", check: "m2.5 6.3 2.3 2.2L9.5 3.5", back: "M4.5 3 2 5.5 4.5 8M2 5.5h5.5a2.5 2.5 0 0 1 0 5H6",
   fold: "M7.5 3 4.5 6l3 3", open: "M4.5 3l3 3-3 3",
@@ -147,8 +121,7 @@ const agentItems = (card) => (board.agents || []).length
   : [{ label: "No Agents Installed", off: true }];
 // The agents' menu under the control `at` was clicked on.
 function runWith(card, at) {
-  const box = at.getBoundingClientRect();
-  systemMenu(box.left, box.bottom + 4, agentItems(card));
+  menuUnder(at, agentItems(card));
 }
 
 function cardView(card) {
@@ -332,7 +305,7 @@ function writer(op, card, keep, label, button) {
   };
   box.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); } });
   return el("div", {}, box, el("div.row", { style: "margin-top:6px" },
-    el("span.hint", { text: "⌘↩ sends", style: "margin-right:auto" }), el("button.btn.main", { text: button, onclick: send })));
+    el("span.hint", { text: "⌘↩ sends", style: "margin-right:auto" }), el("button.btn.go", { text: button, onclick: send })));
 }
 
 const section = (label, ...kids) => el("div.sec", {}, el("label", { text: label }), ...kids);
@@ -358,7 +331,7 @@ function inspector(card) {
   text.addEventListener("blur", () => save(card, "note", text.value));
   // Where it is: the status, a click on it the system's menu of the columns.
   const status = el("button.status", { "data-col": card.column, title: "Move the card to another column", "aria-haspopup": "menu",
-    onclick: (e) => { const at = e.currentTarget.getBoundingClientRect(); systemMenu(at.left, at.bottom + 4, moves(card)); } },
+    onclick: (e) => menuUnder(e.currentTarget, moves(card)) },
     el("span.dot"), TITLES[card.column], icon(GLYPH.chevron, 10));
   const trash = removing
     ? el("button.btn.danger", { onclick: () => { act({ op: "remove", card: card.id }); close(); } }, icon(GLYPH.trash, 12), "Delete")
@@ -383,21 +356,6 @@ function inspector(card) {
   ];
 }
 
-// A menu as the system's (the window shows it, panel.rs): its items, each with what it does;
-// the window hands the one picked back to `chosen`. A submenu is `{label, items}`, a line `{line}`.
-let offered = [];
-function systemMenu(x, y, entries) {
-  offered = [];
-  const items = (list) => list.filter(Boolean).map((entry) => {
-    if (entry.line) return { line: true };
-    if (entry.items) return { label: entry.label, items: items(entry.items) };
-    offered.push(entry.run || (() => {}));
-    return { label: entry.label, marked: !!entry.marked, off: !!entry.off };
-  });
-  const said = items(entries);
-  post("m " + Math.round(x) + " " + Math.round(y) + " " + JSON.stringify(said));
-}
-window.chosen = (place) => { const run = offered[place]; offered = []; if (run) run(); return null; };
 
 // Where a card can go: its column checked.
 const moves = (card) => COLUMNS.map(([column, name]) => ({

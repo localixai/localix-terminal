@@ -28,18 +28,18 @@ const XTERM: &str = include_str!("terminal/vendor/xterm.js");
 const XTERM_SHA384: &str = "f/1U6Z9wM4D71a5eRXEZnyOTMOvjqxr2XLwh+Go1OvIl3L3tOcvUrzudnhbECwl4";
 const XTERM_CSS: &str = include_str!("terminal/vendor/xterm.css");
 
-/// The emulator page's own script, and its SHA-384: the page's policy runs it by that hash.
-pub(crate) const GLUE: &str = include_str!("terminal/emulator.js");
+/// The emulator page's own script after the pages' kit, and their SHA-384: the page's policy runs it by that hash.
+pub(crate) const GLUE: &str = concat!(
+    include_str!("page/kit.js"),
+    include_str!("terminal/emulator.js")
+);
 pub(crate) const GLUE_SHA384: &str =
-    "bCXMZDQGoan5Kb6YrBPkOwyOoqtTNR0N5DiUo80jh4xVvRmjUwTgWcWKn5n1Pjy7";
+    "yPRMEAPzu/nLU7aswrWPEXHT+4EEod0M/43H/Uv3gy6UsKQ+ZFd1SVULEj3ToDj8";
 
 /// The page that shows a session in xterm.js, titled `title`, in the window's light or dark.
 /// Its policy runs its own scripts only, by their hashes.
 pub fn page(title: &str) -> String {
-    let title = title
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;");
+    let title = crate::page::escaped(title);
     let scripts = format!("'sha384-{XTERM_SHA384}' 'sha384-{GLUE_SHA384}'");
     fill(
         include_str!("terminal/emulator.html"),

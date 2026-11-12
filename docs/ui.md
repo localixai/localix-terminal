@@ -218,6 +218,10 @@ define colours of its own beyond its `--ground`.
   control or a row. Both turn a full point under Increase Contrast and lighten in an inactive
   window.
 - **Spacing** keeps a 4 pt grid: 8 between related things, 12 to 20 between groups.
+- **A row that holds more than fits scrolls sideways** (`.across`): it has no bar of its own,
+  an edge with more past it fades over 24 pt, a wheel turned up and down moves it, and the
+  chosen item is kept in view. A row never wraps, narrows its items or puts the rest under a
+  menu. The window's row of documents and the Store's tabs, categories and facts are this row.
 - **Elevation** has three steps, each with the hairline:
   - `--sh-hair` for every floating surface;
   - `--sh-pop` for menus, suggestions and popovers;
@@ -288,7 +292,13 @@ define colours of its own beyond its `--ground`.
   - asked again while it is up, it is not stacked; another waits its turn behind it;
   - one the person asked for takes the keys, on its default button. One the app raises on its
     own leaves the keys where they are, so a Return typed into a terminal never answers it;
-  - the card is solid with a hairline over a veil, and takes no blur.
+  - the card is solid with a hairline over a veil, and takes no blur;
+  - a question may list what the act does (an install's steps), under the sentence, and ask
+    for what it needs typed: each field under its name, in the window's one text field
+    (`.field`). The default button waits for what is required, the keys going to the first
+    field left empty; Return in a field is the default button;
+  - a tab's page asks through the same dialog (`kind::Tab::ask`) and never draws one of its
+    own: the Store's installs, a source added and a source removed are asked this way.
 - **News is announced once.** An update that is ready is a dialog once a version: both versions
   under the mark, what the release says is new (the one part that scrolls), Restart to Update
   and Later. Later puts it off: its row under the toolbar (the offer bar) comes back another

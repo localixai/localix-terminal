@@ -133,10 +133,7 @@ fn vendored(name: &str) -> Option<&'static Script> {
 
 /// The page that edits a file titled `title`, with the grammar of `language`.
 pub fn page(title: &str, language: Option<Language>) -> String {
-    let title = title
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;");
+    let title = crate::page::escaped(title);
     let held = language.map_or(&[][..], |language| language.scripts);
     let run: Vec<&Script> = (std::iter::once("core").chain(held.iter().copied()))
         .filter_map(vendored)

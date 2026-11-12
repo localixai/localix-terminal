@@ -197,6 +197,8 @@ pub enum TabKind {
     Terminal,
     Board,
     File,
+    /// A kind that draws itself, by its name.
+    Made(&'static str),
 }
 
 /// A tab of a project's past, as the history menu lists it: its row in the ledger, what it is,
@@ -259,6 +261,8 @@ pub enum Asked {
     Text(std::path::PathBuf),
     /// The project's board, opened or shown.
     Board,
+    /// The project's tab of a kind that draws itself, by the kind's name, opened or shown.
+    Kind(&'static str),
     /// A coding agent's program, in a terminal of theirs in the project's folder: its command.
     Agent(&'static str),
     /// A coding agent started on a card of the board, in a terminal of theirs in the project's
@@ -320,6 +324,8 @@ pub(super) fn closed(kind: &str) -> &'static str {
         "file" => {
             "The person closed this file's tab: text left unsaved in it is kept with the file."
         }
-        _ => "The person closed this tab: its program runs on, out of sight.",
+        "term" | "settings" => "The person closed this tab: its program runs on, out of sight.",
+        made => crate::kind::named(made)
+            .map_or("The person closed this tab.", |kind| kind.about().closed),
     }
 }

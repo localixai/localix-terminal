@@ -1,6 +1,8 @@
 //! Opening tabs: one or several at once, each a page, a terminal, the board or a file, each owned
 //! from the moment it exists.
 
+use std::sync::Arc;
+
 use serde_json::Value;
 
 use super::actions::Kind;
@@ -18,23 +20,26 @@ fn open_fields(kind: Kind) -> &'static [&'static str] {
     match kind {
         Kind::Web => &["url"],
         Kind::Term => &["command", "workdir", "wait_for", "yield_ms"],
-        Kind::Board => &[],
+        Kind::Board | Kind::Made(_) => &[],
         Kind::File => &["path", "line"],
     }
 }
 
-/// The kind of tab `spec` asks for.
-fn kind_of(spec: &Value) -> Result<Kind, String> {
+/// The kind of tab `spec` asks for; `kinds` are those that draw themselves.
+fn kind_of(spec: &Value, kinds: &[Arc<dyn crate::kind::Kind>]) -> Result<Kind, String> {
     Ok(match text(spec, "kind") {
         Some("browser") => Kind::Web,
         Some("terminal") => Kind::Term,
         Some("board") => Kind::Board,
         Some("file") => Kind::File,
-        Some(other) => {
-            return Err(format!(
-                "no kind of tab `{other}`: browser, terminal, board or file"
-            ));
-        }
+        Some(other) => match kinds.iter().find(|kind| kind.about().id == other) {
+            Some(made) => Kind::Made(made.about()),
+            None => {
+                let mut known = vec!["browser", "terminal", "board", "file"];
+                known.extend(kinds.iter().map(|kind| kind.about().id));
+                return Err(format!("no kind of tab `{other}`: {}", known.join(", ")));
+            }
+        },
         None if text(spec, "command").is_some() => Kind::Term,
         None if text(spec, "path").is_some() => Kind::File,
         None => Kind::Web,
@@ -45,11 +50,11 @@ fn kind_of(spec: &Value) -> Result<Kind, String> {
 /// in a terminal's `command` inside `tabs`) is refused, never dropped: it opened the search page,
 /// and read as a page that would not do as told. A field of the tool that `open` does not read
 /// (`size`, `ask`) is let be, as it always was.
-fn opened_as_asked(spec: &Value) -> Result<(), String> {
+fn opened_as_asked(spec: &Value, kinds: &[Arc<dyn crate::kind::Kind>]) -> Result<(), String> {
     let given = spec
         .as_object()
         .ok_or("each of `tabs` is an object: `kind` and its fields")?;
-    let kind = kind_of(spec)?;
+    let kind = kind_of(spec, kinds)?;
     let takes = open_fields(kind);
     let stray: Vec<String> = (given.iter())
         .filter(|(_, value)| !value.is_null())
@@ -89,7 +94,7 @@ impl Desk {
             return Err(format!("open at most {MOST_AT_ONCE} tabs at once").into());
         }
         for spec in &asked {
-            opened_as_asked(spec)?;
+            opened_as_asked(spec, &self.made.kinds)?;
         }
         let opened: Vec<Result<(String, Output), Failure>> = std::thread::scope(|scope| {
             let opening: Vec<_> = asked
@@ -129,13 +134,18 @@ impl Desk {
 
     /// One tab of an `open`, owned from the moment it exists.
     fn open_one(&self, call: &Call, spec: &Value) -> Result<(String, Output), Failure> {
-        let kind = kind_of(spec)?;
+        let kind = kind_of(spec, &self.made.kinds)?;
         let (id, out) = match kind {
             Kind::Web => return self.open_page(call, spec),
             Kind::Term => self.open_term(call, spec)?,
             // The owner's one board, shown: opened the first time, the same tab after.
             Kind::Board => {
                 let out = self.board(call, &serde_json::json!({"op": "show"}))?;
+                return Ok((kind.name().to_string(), out));
+            }
+            // The project's one tab of a kind that draws itself, the same way.
+            Kind::Made(about) => {
+                let out = self.made(call, about, &serde_json::json!({}))?;
                 return Ok((kind.name().to_string(), out));
             }
             // A file's one tab in the project, shown: opened the first time, the same tab after.

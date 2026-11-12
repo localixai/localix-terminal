@@ -1,6 +1,7 @@
 //! An agent's configuration read for the server's command, as each agent keeps it: JSON (with
-//! the comments some of them leave in it), TOML, YAML. Only that one value is looked for, so no
-//! parser of the whole format is needed, and the file is never written from here.
+//! the comments some of them leave in it), TOML, YAML. Only the values asked for are looked
+//! for (a TOML table's string, list of strings or flag), so no parser of the whole format is
+//! needed, and the file is never written from here.
 
 use serde_json::Value;
 
@@ -40,7 +41,7 @@ pub(super) fn has(text: &str, path: &[&str]) -> bool {
 }
 
 /// `text` as JSON, with or without comments.
-fn json(text: &str) -> Option<Value> {
+pub(in crate::setup) fn json(text: &str) -> Option<Value> {
     serde_json::from_str(text)
         .or_else(|_| serde_json::from_str(&uncommented(text)))
         .ok()
@@ -91,25 +92,38 @@ fn at_path<'a>(config: &'a Value, path: &[&str]) -> Option<&'a Value> {
     path.iter().try_fold(config, |value, key| value.get(*key))
 }
 
-/// The heading of the server's table in Codex's TOML.
-const TOML_TABLE: &str = "[mcp_servers.llx-desk]";
+/// The server's table in Codex's TOML.
+const TOML_TABLE: &str = "mcp_servers.llx-desk";
 
-/// `command` in the server's TOML table (from its heading to the next table), a string of
-/// either kind.
+/// `command` in the server's TOML table.
 fn toml_command(text: &str) -> Option<String> {
-    let (_, rest) = text.split_once(TOML_TABLE)?;
-    let table = rest.split_once("\n[").map_or(rest, |(table, _)| table);
-    let line = table
-        .lines()
-        .find(|line| line.trim_start().starts_with("command"))?;
-    let value = line.split_once('=')?.1.trim();
-    // A literal string, in single quotes, is its text as written; a basic one escapes as JSON
-    // does. Whatever follows the string (a comment) is not its.
+    toml_value(text, TOML_TABLE, "command")?
+        .as_str()
+        .map(String::from)
+}
+
+/// Key `key` of table `table` in a TOML text (from the table's heading, `[table]`, to the next
+/// heading), when it is a string of either kind, a list of basic strings or a flag on one line,
+/// as the agents' own commands write them. Whatever follows the value (a comment) is not its.
+pub(in crate::setup) fn toml_value(text: &str, table: &str, key: &str) -> Option<Value> {
+    let heading = format!("[{table}]");
+    let mut lines = text.lines().skip_while(|line| line.trim() != heading);
+    lines.next()?;
+    let value = lines
+        .take_while(|line| !line.trim_start().starts_with('['))
+        .find_map(|line| {
+            let (name, value) = line.split_once('=')?;
+            (name.trim() == key).then(|| value.trim())
+        })?;
+    // A literal string, in single quotes, is its text as written; a basic one, a list of them
+    // and a flag read as JSON reads them.
     if let Some(literal) = value.strip_prefix('\'') {
-        return literal.split_once('\'').map(|(text, _)| text.to_string());
+        return literal
+            .split_once('\'')
+            .map(|(text, _)| Value::String(text.to_string()));
     }
     serde_json::Deserializer::from_str(value)
-        .into_iter::<String>()
+        .into_iter::<Value>()
         .next()?
         .ok()
 }

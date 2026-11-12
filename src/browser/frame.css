@@ -89,6 +89,21 @@ html[data-glass],html[data-glass] body{background:transparent}
 html[data-reduced],html:not([data-glass]){background:var(--ground)}
 html[data-reduced] body{background:transparent}
 @media (prefers-reduced-transparency:reduce),(forced-colors:active){html{background:var(--ground)}html body{background:transparent}}
+/* What is hidden shows nowhere, whatever a rule says its box is: a button put away with
+   `hidden` stays away. */
+[hidden]{display:none!important}
+/* A row that holds more than fits scrolls sideways with no bar of its own, and an edge with
+   more past it fades out (data-more, kept by the pages' `across`). */
+.across{overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior-x:contain}
+.across::-webkit-scrollbar{display:none}
+.across[data-more=left]{-webkit-mask-image:linear-gradient(to right,transparent,#000 24px);mask-image:linear-gradient(to right,transparent,#000 24px)}
+.across[data-more=right]{-webkit-mask-image:linear-gradient(to left,transparent,#000 24px);mask-image:linear-gradient(to left,transparent,#000 24px)}
+.across[data-more=both]{-webkit-mask-image:linear-gradient(to right,transparent,#000 24px,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(to right,transparent,#000 24px,#000 calc(100% - 24px),transparent)}
+/* A text field: one look wherever words are typed (a dialog's field, a page's search). */
+:where(.field){display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border-radius:var(--r-3);background:var(--ov-1);box-shadow:var(--hair-in);cursor:text}
+:where(.field):has(input:focus-visible){outline:3px solid var(--acc-3)}
+:where(.field) input{flex:1;min-width:0;font:inherit;color:inherit;background:none;border:0;outline:0;padding:0;box-shadow:none;user-select:text;-webkit-user-select:text}
+:where(.field) input::placeholder{color:-apple-system-placeholder-text}
 /* The push button, one for every page: quiet, with a hairline; `.go` is a place's one accent.
    In :where(), so a page that stands its buttons on another ground says only what differs. */
 :where(.btn){font:inherit;font-size:13px;line-height:16px;font-weight:500;height:24px;padding:0 12px;display:inline-flex;align-items:center;border:0;border-radius:var(--r-2);color:inherit;background:var(--ov-1);box-shadow:var(--hair-in);transition:background-color var(--t-out) var(--ease)}

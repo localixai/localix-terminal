@@ -44,6 +44,7 @@ impl On<'_> {
             Keyed::NewPage => return asked(Asked::Page(None)),
             Keyed::NewTerminal => return asked(Asked::Terminal(None)),
             Keyed::NewBoard => return asked(Asked::Board),
+            Keyed::NewKind(kind) => return asked(Asked::Kind(kind)),
             Keyed::Close => {
                 if let Some(key) = shown.and_then(|at| Key::parse(&listed.get(at)?.id)) {
                     self.close(key);

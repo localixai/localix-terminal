@@ -7,16 +7,13 @@ use serde_json::{Value, json};
 
 use super::Board;
 
-/// The page's script, and its SHA-384: the page's policy runs it by that hash.
-const SCRIPT: &str = include_str!("page.js");
-const SCRIPT_SHA384: &str = "3LJ4H3m/oprg1HXxMWGrg3ceFLE3MaOWNRv2UbV9p6R+Py9SoSNUyLCDVv0/iUHN";
+/// The page's script after the pages' kit, and their SHA-384: the page's policy runs it by that hash.
+const SCRIPT: &str = concat!(include_str!("../page/kit.js"), include_str!("page.js"));
+const SCRIPT_SHA384: &str = "HtWdY0SK4h1KqDc4KhYcoZUm1jvj2lMySy236tX1aM5rouap7GZTrVKIvMM4lE4+";
 
 /// The page, titled `title`.
 pub fn page(title: &str) -> String {
-    let title = title
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;");
+    let title = crate::page::escaped(title);
     // The script first: the words put in after it are never read as a place for it.
     include_str!("page.html")
         .replacen("{{script}}", SCRIPT, 1)
@@ -35,12 +32,12 @@ pub fn frame(board: &Board, key: &str, project: &str, now: u64, agents: &Value) 
         "cards": board.cards,
         "agents": agents,
     });
-    format!("B({state})")
+    format!("B({})", crate::page::json(&state))
 }
 
 /// The frame that says the desk refused what the person did, and why.
 pub fn refused(why: &str) -> String {
-    format!("E({})", json!(why))
+    format!("E({})", crate::page::json(&json!(why)))
 }
 
 #[cfg(test)]

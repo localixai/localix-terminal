@@ -63,9 +63,25 @@ The window is a calm macOS tool, not a web app. Every control earns its place by
 Most of what a person sends back is a detail of placement. Settle each of these before the first
 build, not after the first screenshot.
 
-- **Reuse before drawing.** Look for the primitive first: the tokens and `.btn` in `frame.css`,
-  the icon button, the dialog (`dialog.rs`, `dialog.css`, `dialog.js`), the offer row, a menu's
-  row. A page never defines its own copy of a shared control.
+- **Reuse before drawing.** Look for the primitive first: the tokens, `.btn` and the text field
+  (`.field`) in `frame.css`, the icon button, the dialog (`dialog.rs`, `dialog.css`,
+  `dialog.js`), the offer row, a menu's row. A page never defines its own copy of a shared
+  control.
+- **A page never draws a dialog, a sheet, a veil or a menu of its own.** A tab's kind asks the
+  person through `kind::Tab::ask` (a title, a sentence, points, fields to type into), which is
+  the window's one dialog; a menu is the system's (`m` and its entries, as the board's page
+  asks). If the primitive lacks what the question needs, extend the primitive for every
+  caller; do not build beside it.
+- **A page's script starts from the pages' kit** (`src/page/kit.js`: `post`, `act`, `el`,
+  `svgPath`, `systemMenu`, `menuUnder`, `chosen`) and its module from `page.rs` (`escaped`,
+  `json`, the hash check `digest`). A helper two pages need goes into the kit; neither page
+  keeps a copy.
+- **A row that holds more than fits scrolls sideways** (`across` in `src/page/across.js`,
+  `.across` in `frame.css`): no bar of its own, an edge with more past it fades, the chosen
+  one stays in view. It never wraps, narrows its items or puts the rest under a "More" menu.
+- **Before writing any control's CSS or markup, search for it**: `grep` `frame.css`, the
+  `src/browser/*.css` sheets and the other pages for the class or the look. Say in the
+  hand-back which primitive each new control reuses, and why where one was extended.
 - **A thing takes the size of what it holds.** A card or a dialog has a fixed width and a
   greatest height; what is long scrolls inside it, and its title and buttons stay put. Nothing
   stretches to the window's height or width because it can.

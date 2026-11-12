@@ -141,6 +141,17 @@ pub(super) struct Serving {
     pub opened: bool,
 }
 
+/// The kinds of tab that draw themselves, listed once before the window and the desk are made:
+/// both read the list, and neither names a kind.
+fn list_kinds() {
+    let mut kinds: Vec<std::sync::Arc<dyn crate::kind::Kind>> = Vec::new();
+    match crate::catalog::kind::Store::open(&crate::paths::data()) {
+        Ok(store) => kinds.push(store),
+        Err(why) => log::warn!("there is no Store in this run: {why}"),
+    }
+    crate::kind::install(kinds);
+}
+
 /// Serve on `bound` until the server stops; its exit code. With a display the window's event
 /// loop owns this thread and the server runs beside it; the process ends with the code it
 /// returns.
@@ -149,6 +160,7 @@ pub(super) fn serving(bound: crate::server::Bound, serve: Serving) -> u8 {
     let windowless = serve.windowless
         || cfg!(feature = "test-server")
         || std::env::var_os("LLX_DESK_NO_WINDOW").is_some_and(|v| !v.is_empty());
+    list_kinds();
     let begin = crate::server::Begin {
         headless: serve.headless,
         opened: serve.opened,

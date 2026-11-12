@@ -169,14 +169,6 @@ pub(super) fn watch(shared: &Arc<Shared>, proxy: &EventLoopProxy<Cmd>, tab: u32,
         });
 }
 
-/// `text` with what would be markup spelled out.
-fn escaped(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
 /// The place `url` names, as the line says it: its host, with a port that is not the scheme's
 /// own; what is no address, as written.
 fn place(url: &str) -> String {
@@ -187,13 +179,13 @@ fn place(url: &str) -> String {
             None => host,
         })
     });
-    escaped(&named.unwrap_or_else(|| url.to_owned()))
+    crate::page::escaped(&named.unwrap_or_else(|| url.to_owned()))
 }
 
 /// The file `url` names, as the line says it: the last part of its path, as written before it
 /// was spelled for an address; an address that names none, its place.
 fn named(url: &str) -> String {
-    super::guard::file_named(url).map_or_else(|| place(url), |name| escaped(&name))
+    super::guard::file_named(url).map_or_else(|| place(url), |name| crate::page::escaped(&name))
 }
 
 /// The document a tab shows for what did not come, or came as nothing a page shows: one quiet

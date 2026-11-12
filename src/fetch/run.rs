@@ -1,4 +1,4 @@
-//! A system tool run for an update (`curl`, `ditto`, `codesign`): within a deadline, stopped
+//! A system tool run (`curl`, `tar`, `ditto`, `codesign`): within a deadline, stopped
 //! when it is late, its failure told in the last line it said.
 
 use std::io::Read;
@@ -7,17 +7,13 @@ use std::time::{Duration, Instant};
 
 /// `command` run within `most`, quiet; `while_running` is called as it runs (a download's
 /// progress is read then). An error says how it failed: what it said last, or how it ended.
-pub(super) fn within(
-    command: Command,
-    most: Duration,
-    while_running: &dyn Fn(),
-) -> Result<(), String> {
+pub fn within(command: Command, most: Duration, while_running: &dyn Fn()) -> Result<(), String> {
     within_into(command, Stdio::null(), most, while_running)
 }
 
 /// [`within`], what the command says written to `out` (a file: a pipe nobody reads would
 /// hold a long answer back).
-pub(super) fn within_into(
+pub fn within_into(
     mut command: Command,
     out: Stdio,
     most: Duration,

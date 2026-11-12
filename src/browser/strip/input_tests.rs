@@ -166,7 +166,7 @@ fn the_side_says_what_the_strip_says_its_menus_placed_below_the_strip() {
 #[test]
 fn every_shortcut_is_a_click_the_strip_knows() {
     // A row of places does its click with the place after it (`key tab 3`).
-    for shortcut in &crate::browser::shortcuts::SHORTCUTS {
+    for shortcut in crate::browser::shortcuts::every() {
         let does = match shortcut.keys.ends_with("+digit") {
             true => format!("{} 1", shortcut.does),
             false => shortcut.does.to_string(),

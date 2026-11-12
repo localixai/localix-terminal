@@ -159,7 +159,7 @@ impl Settings {
             .map(Vec::as_slice)
         {
             let id = id.as_str().ok_or("a shortcut is named by its id")?;
-            let known = shortcuts::SHORTCUTS.iter().find(|s| s.id == id);
+            let known = shortcuts::every().into_iter().find(|s| s.id == id);
             let known = known.ok_or_else(|| format!("no shortcut {id}"))?;
             let chord = match chord.as_str() {
                 Some(keys) => {

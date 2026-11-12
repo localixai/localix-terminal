@@ -15,8 +15,10 @@ use serde_json::{Value, json};
 
 use super::State;
 use super::shell::{failure, find, login_var, run_with};
-use place::{Place, shown};
+use place::Place;
+pub(super) use place::shown;
 use read::Kept;
+pub(super) use read::{json, toml_value};
 
 /// The name of the server in an agent's configuration.
 pub(super) const NAME: &str = "llx-desk";
@@ -135,6 +137,16 @@ pub(super) fn host(id: &str) -> Option<&'static Host> {
     HOSTS.iter().find(|host| host.id == id)
 }
 
+/// The configuration file of agent `id` (one that takes MCP servers), for the person whose home
+/// is `home` and whose variables `var` reads.
+pub(super) fn config_of(
+    id: &str,
+    home: &Path,
+    var: impl Fn(&str) -> Option<String>,
+) -> Option<PathBuf> {
+    host(id).map(|host| host.place.config(home, var))
+}
+
 impl Host {
     /// Its configuration file: where the person's login shell says the agent keeps it.
     fn config(&self, home: &Path) -> PathBuf {
@@ -235,7 +247,7 @@ impl Host {
 
 /// `text` in `file` all at once: written beside it and renamed over it, so a failure half way
 /// leaves the person's file as it was. A link (a dotfile manager's) is followed, so it stays one.
-fn write_over(file: &Path, text: &str) -> std::io::Result<()> {
+pub(super) fn write_over(file: &Path, text: &str) -> std::io::Result<()> {
     use std::io::Write as _;
     use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
     let real = std::fs::canonicalize(file).unwrap_or_else(|_| file.to_path_buf());
@@ -270,6 +282,19 @@ pub(super) fn snippet(exe: &Path) -> Value {
 /// OpenCode's configuration with the server put in (a local one, its command line) or taken
 /// out, the rest as it was.
 fn opencode(text: &str, exe: &Path, on: bool) -> Result<String, String> {
+    let line = json!([exe.display().to_string(), "mcp"]);
+    let entry = on.then(|| json!({"type": "local", "command": line, "enabled": true}));
+    opencode_server(text, NAME, entry)
+}
+
+/// OpenCode's configuration with its MCP server `name` set to `entry`, or taken out when there is
+/// none, the rest as it was. A configuration that has no such server to take out is given back
+/// as it was, not written again.
+pub(super) fn opencode_server(
+    text: &str,
+    name: &str,
+    entry: Option<Value>,
+) -> Result<String, String> {
     let mut config: Value = match text.trim() {
         "" => json!({}),
         text => serde_json::from_str(text)
@@ -278,19 +303,14 @@ fn opencode(text: &str, exe: &Path, on: bool) -> Result<String, String> {
     let config = config
         .as_object_mut()
         .ok_or("the OpenCode configuration is no JSON object")?;
-    if on {
+    if let Some(entry) = entry {
         let servers = config.entry("mcp").or_insert_with(|| json!({}));
         let servers = servers.as_object_mut().ok_or("its `mcp` is no object")?;
-        let line = json!([exe.display().to_string(), "mcp"]);
-        servers.insert(
-            NAME.into(),
-            json!({"type": "local", "command": line, "enabled": true}),
-        );
+        servers.insert(name.into(), entry);
     } else {
-        // Out of a configuration that has no server: as it was, not written again.
         let removed = (config.get_mut("mcp"))
             .and_then(Value::as_object_mut)
-            .and_then(|servers| servers.remove(NAME));
+            .and_then(|servers| servers.remove(name));
         if removed.is_none() {
             return Ok(text.to_string());
         }

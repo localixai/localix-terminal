@@ -4,6 +4,8 @@
 mod documents;
 #[path = "strip/input_tests.rs"]
 mod input;
+#[path = "strip/kinds_tests.rs"]
+mod kinds;
 #[path = "strip/page_tests.rs"]
 mod policy;
 

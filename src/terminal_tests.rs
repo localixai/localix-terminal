@@ -14,11 +14,7 @@ fn the_page_is_in_the_windows_light_or_dark() {
     assert!(!page.contains("{{theme}}"));
 }
 
-fn digest(text: &str) -> String {
-    use base64::Engine;
-    use sha2::{Digest, Sha384};
-    base64::engine::general_purpose::STANDARD.encode(Sha384::digest(text))
-}
+use crate::page::digest;
 
 #[test]
 fn the_terminal_page_runs_the_vendored_scripts_by_their_hashes_and_nothing_else() {

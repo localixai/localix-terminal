@@ -1,16 +1,11 @@
 //! Tests of `page`.
 
-use sha2::Digest as _;
-
 use super::*;
 
 #[test]
 fn the_page_runs_its_one_script_by_its_hash_and_its_title_is_text() {
     let page = page("board · <b>shop</b>");
-    let digest = base64::Engine::encode(
-        &base64::engine::general_purpose::STANDARD,
-        sha2::Sha384::digest(SCRIPT.as_bytes()),
-    );
+    let digest = crate::page::digest(SCRIPT);
     assert_eq!(
         SCRIPT_SHA384, digest,
         "page.js changed: put its new SHA-384 here"

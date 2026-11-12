@@ -156,6 +156,19 @@ pub(super) fn marks() -> String {
     serde_json::Value::Object(marks).to_string()
 }
 
+/// `page` with the agents' marks in the place it keeps for them (a JSON script element of id
+/// `marks`, empty as written): how a tab's own page draws the agents as the strip does. A page
+/// without the place comes back as it is.
+pub(super) fn marked(page: String) -> String {
+    const PLACE: &str = "id=\"marks\">{}<";
+    if !page.contains(PLACE) {
+        return page;
+    }
+    // Inside a script element only `</script` ends it: no `<` of the data reaches the parser.
+    let filled = format!("id=\"marks\">{}<", marks().replace('<', "\\u003c"));
+    page.replacen(PLACE, &filled, 1)
+}
+
 /// What the agents are looked for on, and what was found there when the pages last asked.
 struct Known {
     /// The `PATH`: the process's, then the person's login shell's once it has said (an app

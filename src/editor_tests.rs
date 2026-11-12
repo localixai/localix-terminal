@@ -4,11 +4,7 @@
 use super::vendored::SCRIPTS;
 use super::*;
 
-fn digest(text: &str) -> String {
-    use base64::Engine;
-    use sha2::{Digest, Sha384};
-    base64::engine::general_purpose::STANDARD.encode(Sha384::digest(text))
-}
+use crate::page::digest;
 
 fn policy(page: &str) -> &str {
     page.split("content=\"default-src 'none'; style-src 'unsafe-inline'; script-src ")

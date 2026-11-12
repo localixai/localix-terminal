@@ -2,8 +2,6 @@
 //! data, its empty places, its bars as tall as the window lays them out; and the side's
 //! width held as the layout holds it.
 
-use sha2::Digest as _;
-
 use super::*;
 
 #[test]
@@ -21,10 +19,7 @@ fn the_page_runs_its_one_script_by_its_hash() {
         .split("<script>")
         .nth(1)
         .and_then(|s| s.split("</script>").next());
-    let digest = base64::Engine::encode(
-        &base64::engine::general_purpose::STANDARD,
-        sha2::Sha384::digest(script.unwrap_or_default()),
-    );
+    let digest = crate::page::digest(script.unwrap_or_default());
     assert_eq!(
         SCRIPT_SHA384, digest,
         "strip.html's script changed: put its new SHA-384 here"
@@ -117,10 +112,14 @@ fn an_empty_place_is_one_quiet_line_and_an_empty_window_its_first_commands() {
 fn the_documents_row_scrolls_and_never_narrows_a_tab() {
     // A tab is as wide as its name, up to a tab of the side's: more than fit scroll sideways.
     assert!(PAGE.contains("html[data-part=docs] #tabs .t{flex:none;max-width:220px;"));
-    assert!(PAGE.contains("overflow-x:auto;overflow-y:hidden;scrollbar-width:none"));
-    // The one in sight is brought into view, a wheel turned up and down moves the row, and an
-    // edge with more past it fades.
-    for part in ["function docInView(", "function docEdges(", "\"wheel\""] {
-        assert!(PAGE.contains(part), "{part}");
+    // The row is the pages' one sideways row: the one in sight is brought into view, a wheel
+    // turned up and down moves it, and an edge with more past it fades.
+    let page = page("{}");
+    for part in ["across(row, \".t.on\")", "function across(", "\"wheel\""] {
+        assert!(page.contains(part), "{part}");
     }
+    assert!(
+        crate::browser::frame::CSS
+            .contains(".across{overflow-x:auto;overflow-y:hidden;scrollbar-width:none")
+    );
 }

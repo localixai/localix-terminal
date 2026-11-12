@@ -10,6 +10,10 @@
 //! under the strip.
 
 mod input;
+mod made;
+
+pub use made::made;
+use made::{MADE, made_of};
 
 pub(super) use input::{Click, Keyed, Tool, click, moved};
 
@@ -61,7 +65,6 @@ pub const FILE: u32 = 1 << 25;
 /// The panel of the window's own Settings, a tab like a terminal's (`s1`): the place between the
 /// terminals and the boards.
 pub(super) const SETTINGS: u32 = BOARD;
-
 /// A tab: one of the browser's (its id) or a panel (its id): a terminal session's screen, a
 /// board, or a file being edited.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,6 +77,7 @@ impl Key {
     pub(super) fn name(self) -> String {
         match self {
             Key::Web(id) => format!("w{id}"),
+            Key::Term(id) if id > MADE => made::key(id),
             Key::Term(id) if id > FILE => format!("f{}", id - FILE),
             Key::Term(id) if id > BOARD => format!("b{}", id - BOARD),
             Key::Term(SETTINGS) => "s1".to_string(),
@@ -85,6 +89,7 @@ impl Key {
     pub(super) fn kind(self) -> &'static str {
         match self {
             Key::Web(_) => "web",
+            Key::Term(id) if id > MADE => made_of(id).map_or("term", |(about, _)| about.id),
             Key::Term(id) if id > FILE => "file",
             Key::Term(id) if id > BOARD => "board",
             Key::Term(SETTINGS) => "settings",
@@ -103,8 +108,11 @@ impl Key {
             "t" if id < BOARD => Some(Key::Term(id)),
             "s" if id == 1 => Some(Key::Term(SETTINGS)),
             "b" if id > 0 && id < FILE - BOARD => Some(Key::Term(BOARD + id)),
-            "f" if id > 0 => FILE.checked_add(id).map(Key::Term),
-            _ => None,
+            "f" if id > 0 && id < MADE - FILE => Some(Key::Term(FILE + id)),
+            made => {
+                let (at, _) = crate::kind::lettered(made.chars().next()?)?;
+                self::made(at, id).map(Key::Term)
+            }
         }
     }
 }
@@ -197,7 +205,8 @@ pub(super) fn script(
                 "web" => "New tab",
                 "board" => "Board",
                 "file" => "File",
-                _ => "Terminal",
+                "term" | "settings" => "Terminal",
+                made => crate::kind::named(made).map_or("Tab", |kind| kind.about().title),
             };
             let title = item.title.trim();
             let title = if title.is_empty() { empty } else { title };
@@ -385,7 +394,7 @@ pub(super) const PAGE: &str = include_str!("strip.html");
 
 /// The SHA-384 of the page's one script, its resize helper, the dialog's script and the tree's in:
 /// the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "9AvWjSFwLmIeEJm6EcHPdhD/856Kim4Ohe2eLxCt1mX90n/Y0/92P2Xdkr9ANkjT";
+const SCRIPT_SHA384: &str = "yYlS2wuCSP0nuvMNrIlwtf1mszIYQi5qaJ+jbkqH2+im6EoamaSRoeQzzow4/pCK";
 
 /// The strip's page: the trusted UI's resize helper, the window's dialog (dialog.rs) and the side's
 /// tree of files (tree.rs) inlined, so it opens without external resources, its bars as tall as the window lays them out (`BAR`, `NAV`, `ROW`: its style, not
@@ -393,6 +402,7 @@ const SCRIPT_SHA384: &str = "9AvWjSFwLmIeEJm6EcHPdhD/856Kim4Ohe2eLxCt1mX90n/Y0/9
 pub(super) fn page(marks: &str) -> String {
     // Inside a script element only `</script` ends it: no `<` of the data reaches the parser.
     PAGE.replacen("/*RESIZE_HANDLES*/", include_str!("resize.js"), 1)
+        .replacen("/*ACROSS_JS*/", include_str!("../page/across.js"), 1)
         .replacen("/*DIALOG_JS*/", include_str!("dialog.js"), 1)
         .replacen("/*DIALOG_CSS*/", include_str!("dialog.css"), 1)
         .replacen("/*TREE_JS*/", include_str!("tree.js"), 1)
@@ -406,6 +416,7 @@ pub(super) fn page(marks: &str) -> String {
             &format!("id=\"marks\">{}<", marks.replace('<', "\\u003c")),
             1,
         )
+        .replacen("id=\"kinds\">[]<", &made::kinds(), 1)
 }
 
 #[cfg(test)]

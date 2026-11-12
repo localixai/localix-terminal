@@ -1,6 +1,7 @@
 // The window's dialog (dialog.rs): one look for everything the app asks or announces. Built
 // element by element; every word is set as text. `DLG(dialog)` shows it, `DLG(null)` takes it
-// away; the answer goes back as `dialog yes` or `dialog no`.
+// away; the answer goes back as `dialog yes` or `dialog no`, a yes with what was typed into its
+// fields after it as one JSON object.
 const DLG_MARKS = {
   ask: [["path", { d: "M6 6.2a2 2 0 1 1 3.1 1.7c-.7.5-1.1.9-1.1 1.7" }], ["path", { d: "M8 11.9v.1" }]],
   app: [["rect", { x: 2.5, y: 3, width: 11, height: 10, rx: 1.6 }], ["path", { d: "M2.5 6h11M6 6v7" }]],
@@ -70,9 +71,9 @@ function DLG(dialog) {
   card.append(dlgStage(dialog), says);
   if (dialog.notes.length) {
     const notes = dlgNode("section", "notes");
-    notes.setAttribute("aria-label", "What’s New");
+    notes.setAttribute("aria-label", dialog.heading);
     notes.tabIndex = 0;
-    notes.append(dlgNode("h3", "", "What’s New"));
+    notes.append(dlgNode("h3", "", dialog.heading));
     for (const note of dialog.notes) {
       if (note.head != null) notes.append(dlgNode("h4", "", note.head));
       else if (note.item != null) notes.append(dlgNode("div", "pt", note.item));
@@ -80,19 +81,52 @@ function DLG(dialog) {
     }
     card.append(notes);
   }
+  // What it needs typed: a field each, its name over it.
+  const inputs = dialog.fields.map((field) => {
+    const input = dlgNode("input");
+    input.type = field.secret ? "password" : "text";
+    input.name = field.name;
+    input.placeholder = field.hint;
+    input.required = field.required;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    return input;
+  });
+  if (inputs.length) {
+    const fields = dlgNode("div", "fields");
+    dialog.fields.forEach((field, at) => {
+      const row = dlgNode("label");
+      const box = dlgNode("span", "field");
+      box.append(inputs[at]);
+      row.append(dlgNode("span", "", field.label), box);
+      fields.append(row);
+    });
+    card.append(fields);
+  }
   const acts = dlgNode("div", "acts");
   const no = dlgNode("button", "btn", dialog.no);
   const yes = dlgNode("button", "btn go", dialog.yes);
+  yes.id = "dlg-yes";
   no.addEventListener("click", () => window.ipc.postMessage("dialog no"));
-  yes.addEventListener("click", () => window.ipc.postMessage("dialog yes"));
+  // A yes waits for what is required: the keys go to the first field left empty.
+  yes.addEventListener("click", () => {
+    const empty = inputs.find((input) => input.required && !input.value.trim());
+    if (empty) return empty.focus();
+    if (!inputs.length) return window.ipc.postMessage("dialog yes");
+    const given = {};
+    for (const input of inputs) if (input.value.trim()) given[input.name] = input.value.trim();
+    window.ipc.postMessage("dialog yes " + JSON.stringify(given));
+  });
   acts.append(no, yes);
   card.append(acts);
   root.append(card);
   document.body.append(root);
-  // A dialog the person asked for takes the keys, on the button that does it.
-  if (dialog.asked) yes.focus();
+  // A dialog the person asked for takes the keys: in its first field, else on the button that
+  // does it.
+  if (dialog.asked) (inputs[0] ?? yes).focus();
 }
-// While a dialog is up the keys are its own: Escape is its other button, and Tab stays within it.
+// While a dialog is up the keys are its own: Escape is its other button, Return in a field is
+// the one that does it, and Tab stays within it.
 document.addEventListener("keydown", (event) => {
   const root = document.getElementById("dlg");
   if (!root) return;
@@ -100,8 +134,11 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     event.preventDefault();
     window.ipc.postMessage("dialog no");
+  } else if (event.key === "Enter" && event.target instanceof HTMLInputElement) {
+    event.preventDefault();
+    document.getElementById("dlg-yes")?.click();
   } else if (event.key === "Tab") {
-    const stops = [...root.querySelectorAll("button,.notes")];
+    const stops = [...root.querySelectorAll("button,.notes,input")];
     const at = stops.indexOf(document.activeElement);
     event.preventDefault();
     stops[(at + (event.shiftKey ? stops.length - 1 : 1) + stops.length) % stops.length]?.focus();

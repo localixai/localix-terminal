@@ -146,3 +146,18 @@ fn an_agent_s_program_continues_its_last_session_of_a_folder_with_its_own_words(
         }
     }
 }
+
+#[test]
+fn a_page_that_keeps_a_place_for_the_marks_gets_them_and_another_is_left_as_it_is() {
+    let page = "<p>x</p><script type=\"application/json\" id=\"marks\">{}</script>";
+    let filled = marked(page.to_owned());
+    let data = (filled.split_once("id=\"marks\">").map(|(_, rest)| rest))
+        .and_then(|rest| rest.split_once("</script>"))
+        .map(|(data, _)| data)
+        .unwrap();
+    assert!(!data.contains('<'), "no `<` of a mark reaches the parser");
+    let marks: serde_json::Value = serde_json::from_str(data).unwrap();
+    assert!(marks["claude"].as_str().unwrap().starts_with("<svg"));
+    assert!(marks["codex"].as_str().unwrap().contains("currentColor"));
+    assert_eq!(marked("<p>plain</p>".to_owned()), "<p>plain</p>");
+}

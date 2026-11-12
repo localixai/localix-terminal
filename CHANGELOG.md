@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Added
+
+- **The Store.** A tab (⇧⌘S, the "+" menu, `open` with `kind: "store"`) that lists plugins,
+  skills and MCP servers for coding agents: the Claude Code and Codex plugin marketplaces, Agent
+  Skills and the MCP Registry, read when the Store is opened and at most once an hour, kept in
+  an index of its own and searched on the Mac as you type. A listing is installed into Claude
+  Code, Codex, Gemini CLI, GitHub Copilot or OpenCode, each agent shown with where it stands
+  (not found, installed, a newer one listed). Before anything is written or run the Store says
+  what the install would do and asks for what the listing needs, in the window's own dialog;
+  a skill is copied, an MCP
+  server becomes an entry of the agent's own configuration, a plugin is installed by the
+  agent's own program. Installed and Updates list what the Store put in place, and it removes
+  only that. Its rows of tabs, of categories and of a listing's facts scroll sideways when
+  they do not fit, as the window's row of documents does, with an edge that fades where there
+  is more.
+- **Agents use the Store through `window`.** `store` searches and reads listings; `install`
+  shows the person what it would do and waits for their answer. Nothing is installed on an
+  agent's word, and only the person removes.
+
+### Changed
+
+- **A kind of tab that draws itself is one description.** The window, the "+" menu, the
+  shortcuts, the tool's schema and the ledger read a kind's name, key, picture and fields from
+  the kind itself (`kind.rs`), so a new kind is added in one place.
+
 ## 0.1.6
 
 ### Added

@@ -8,12 +8,16 @@
 //! every hour while it runs (`doctor.rs`, a round of `opened` and `auto`): nobody has to set
 //! anything up. What the person takes out stays out
 //! (`declined`, kept in the store) until they put it back.
+//!
+//! What it knows of the agents (their configuration's places and formats, their programs on the
+//! login PATH) it lends the Store through `reach`, so neither keeps a copy of the other's.
 
 mod claude;
 mod command;
 mod declined;
 mod doctor;
 mod mcp_hosts;
+pub(crate) mod reach;
 mod shell;
 
 use std::path::PathBuf;

@@ -251,10 +251,43 @@ normal tests in CI.
   `scripts/dmg.sh` makes the release files from it, the disk image and the zip (notarized with
   `--notarize`, as the release workflow does). The app is for Apple Silicon only.
   `packaging/homebrew/llx-desk.rb` is the cask a tap takes, filled in per release.
+- **`kind.rs`** is the port of a kind of tab that draws itself: a page of its own in a panel,
+  painted by frames, acted on by `window` calls and by what the person does in its page. A kind
+  says all the window and the desk need of it in one description (`About`: its name, the letter
+  of its keys, its picture, its shortcut, the tool's fields and guide) and answers through one
+  trait (`Kind`). The kinds are listed once where the app starts (`cli.rs`); the strip, the "+"
+  menu, the shortcut table, the tool's schema, the ledger (`Kind::Made`) and `desk/made.rs`
+  (a project's one tab of each kind: its key, its pane, its panel, a thread for what its page
+  posts) read that list and name no kind. A new kind is a module that implements `Kind` and one
+  line in the list.
+- **`catalog.rs`, `catalog/`** are the Store. `model.rs` is its vocabulary, which names no
+  source and no agent (`Listing`, `Recipe`, `Need`, `Plan`). A `Source` (`source.rs`,
+  `source/`) reads one place listings come from into batches, resuming from the mark it left;
+  the `Index` (`index.rs`, `index/`) keeps them in a SQLite file of its own with full-text
+  search, a derived file that is rebuilt rather than migrated; a `Target` (`target.rs`,
+  `target/`) puts a listing into one agent through the places and programs `setup` knows, says
+  what it would do first (`plan`), and reads files only to say what is installed (`has`).
+  `archive.rs` fetches and unpacks a repository's archive, refusing what would leave its
+  folder. `kind.rs` and `kind/` are the Store's tab over these ports (`person.rs` what the
+  person does in the page, `agent.rs` the tool's `store` field, `work.rs` what takes time, on
+  threads of its own); `installed.rs` is its note of what it installed, set right against the
+  agents' files. An install, a source added and a source removed are asked in the window's
+  own dialog (`kind::Tab::ask`, `asking.rs`) and done only on the person's yes, an agent's
+  install among them. A new source or a new agent is one file behind its port.
+- **`page.rs`, `page/kit.js`** are what the app's own pages share, whatever draws them: the
+  script each page runs before its own (what it posts to the app, how it builds an element
+  and a line glyph, the system's menu and the pick handed back), joined to the page's script
+  so the two run under one hash, and how a title and data are put into a page so that neither
+  is read as markup or script. The board, the Store and the terminal use the kit; a test
+  fails when one of them defines again what it gives. `page/across.js` is the one row that
+  scrolls sideways (the window's row of documents, the Store's tabs, categories and facts).
+- **`fetch.rs`, `fetch/`** fetch over the network with the system's `curl` (HTTPS only, a size
+  cap, a deadline, an ETag for what has not changed) and unpack archives; the updater and the
+  Store both use it.
 - **`update.rs`, `update/`** keep the app up to date. `Updater` is the one owner of how far an
   update is (`Stage`: idle, checking, fetching, ready, failed); Settings, the offer bar and the
   app menu read it and ask it, and none keeps a copy. `release.rs` reads the latest release and
-  its checksums, `fetch.rs` fetches with the system's `curl` (HTTPS only), `install.rs` holds the
+  its checksums, `crate::fetch` fetches it, `install.rs` holds the
   archive to its checksum and, on macOS, the app in it to the signing team and the notarization,
   then swaps it with the app in place (the old one moved aside, back if the swap fails);
   `place.rs` says where the app is and starts it again once this process ended. Only an app

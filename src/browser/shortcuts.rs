@@ -4,7 +4,7 @@
 
 mod catalog;
 
-pub(super) use catalog::{SHORTCUTS, Shortcut};
+pub(super) use catalog::{Shortcut, every};
 #[cfg(any(target_os = "macos", test))]
 pub(super) use catalog::{groups, of_page};
 
@@ -200,8 +200,7 @@ fn chord_of(changed: &BTreeMap<String, Option<String>>, shortcut: &Shortcut) -> 
 pub(super) fn resolved(
     changed: &BTreeMap<String, Option<String>>,
 ) -> Vec<(&'static Shortcut, Option<Chord>)> {
-    SHORTCUTS
-        .iter()
+    (every().into_iter())
         .map(|shortcut| (shortcut, chord_of(changed, shortcut)))
         .collect()
 }
@@ -209,7 +208,7 @@ pub(super) fn resolved(
 /// Shortcut `id`'s keys as the person has them now (`cmd+t`), none when they took it off or the
 /// catalog has no such shortcut.
 pub(super) fn keys_of(id: &str) -> Option<String> {
-    let shortcut = SHORTCUTS.iter().find(|shortcut| shortcut.id == id)?;
+    let shortcut = every().into_iter().find(|shortcut| shortcut.id == id)?;
     let changed = super::settings::now().shortcuts;
     chord_of(&changed, shortcut).map(|chord| chord.text())
 }

@@ -148,7 +148,9 @@ pub(super) fn announcement(told: &Told) -> Option<(String, super::dialog::Dialog
              you are asked first.",
             told.current
         ),
+        heading: "What’s New".into(),
         notes: super::dialog::notes(&release.notes),
+        fields: vec![],
         yes: "Restart to Update".into(),
         no: "Later".into(),
         asked: false,

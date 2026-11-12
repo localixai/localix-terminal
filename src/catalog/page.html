@@ -1,0 +1,182 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha384-{{hash}}'">
+<title>{{title}}</title>
+<style>
+/* The Store as the window's own: the frame's sheet (frame.css) has the ink, fill and accent
+   ladders, the radii, the timings and the push button; what is set here is the Store's own
+   layout. One bar on top: the search and the person's library, and under them the catalogue's
+   kinds as tabs. Below it one column that scrolls: a shelf with its categories, a listing, or
+   the sources. On the glass the page is clear; elsewhere it stands on a solid ground. */
+:root{--solid:#f5f5f7;--raised:#ffffff;--ground:var(--solid);--mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace}
+@media (prefers-color-scheme: dark){:root{--solid:#1c1c1e;--raised:#2c2c2f}}
+/* No colour of its own: the Store's one emphasis is the text's colour (a solid button, a ring,
+   a count), never the system's accent. */
+html:root:root{--accent:var(--fg);--on-acc:var(--solid)}
+html:not([data-glass]){background:var(--solid)!important}
+html[data-glass]{--raised:color-mix(in srgb,#fff 74%,transparent)}
+@media (prefers-color-scheme: dark){html[data-glass]{--raised:color-mix(in srgb,#fff 8%,transparent)}}
+html[data-reduced]{background:var(--solid)!important;--raised:#fff}
+@media (prefers-color-scheme: dark){html[data-reduced]{--raised:#2c2c2f}}
+*{box-sizing:border-box}
+body{margin:0;height:100vh;display:flex;color:var(--fg);font:13px/16px var(--ui-font,var(--ui-sys));
+  -webkit-font-smoothing:antialiased;cursor:default;user-select:none;-webkit-user-select:none;overflow:hidden}
+button,input{font:inherit;color:inherit}
+input{cursor:text}
+:focus{outline:none}
+/* Selected text is marked in grey, as the rest of the page's emphasis is. */
+html ::selection{background:var(--ov-4)}
+:focus-visible:not(.field input){box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 50%,transparent)!important}
+svg{flex:none;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+#page{flex:1;min-width:0;display:flex;flex-direction:column}
+/* The bar: the Store's name, the search, and the person's library at the right. */
+.bar{flex:none;padding:12px 16px 8px 12px;display:flex;gap:8px;align-items:center}
+/* The search: the window's text field (frame.css `.field`), as wide as it may be. */
+.find{flex:0 1 520px;min-width:0}
+.find svg{color:var(--ink-3)}
+#lib{margin-left:auto;flex:none;display:flex}
+.nav{flex:none;height:28px;padding:0 8px;border:0;border-radius:var(--r-2);background:transparent;color:var(--ink-2);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.nav:hover{background:var(--ov-1);color:var(--fg)}
+.nav:active{background:var(--ov-2)}
+.nav[aria-current="page"]{background:var(--ov-2);color:var(--fg);font-weight:500}
+.n{color:var(--ink-3);font-size:11px;line-height:14px;font-weight:400;font-variant-numeric:tabular-nums}
+#lib .n{color:var(--ink-2)}
+/* A row of tabs: the one shown is underlined. The catalogue's kinds and a shelf's categories. */
+.tabs{flex:none;display:flex;align-items:stretch;min-width:0}
+.tabs .row{flex:0 1 auto;min-width:0;display:flex}
+.tab{position:relative;flex:none;height:32px;padding:0 10px;border:0;border-radius:var(--r-2);background:transparent;color:var(--ink-2);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.tab:hover{color:var(--fg)}
+.tab[aria-selected="true"]{color:var(--fg);font-weight:500}
+.tab[aria-selected="true"]::after{content:"";position:absolute;left:8px;right:8px;bottom:0;height:2px;border-radius:1px;background:var(--fg)}
+#tabs{padding:0 8px;border-bottom:.5px solid var(--ov-3)}
+/* What the Store has to say once: why a source was not read, what an add came to. It goes by itself. */
+#said{flex:none;margin:8px 24px 0;padding:8px 12px;border-radius:var(--r-3);background:var(--ov-1);box-shadow:var(--hair-in);color:var(--ink-2);font-size:12px;line-height:15px;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text}
+/* How far a read of the sources is: a ring at the end of the search field that fills, with what is read as its tooltip. */
+#prog{flex:none;width:16px;height:16px;margin-left:8px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity var(--t-out) var(--ease) .25s}
+#prog[data-on]{opacity:1;transition:none}
+#prog svg{width:16px;height:16px;stroke-width:1.6}
+#prog .t{stroke:var(--ov-3)}
+#prog .v{stroke:var(--accent);transform-origin:50% 50%;transform:rotate(-90deg);transition:stroke-dasharray var(--t-move) var(--ease)}
+#list{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:20px 24px 24px;scrollbar-gutter:stable}
+/* A place's name and one line of what it is, with what can be done to it at the right. */
+.head{display:flex;align-items:flex-start;gap:12px;margin:0 8px 16px}
+.head .w{flex:1;min-width:0}
+.head h2{margin:0;font-size:17px;line-height:22px;font-weight:600;overflow-wrap:anywhere}
+.head p{margin:2px 0 0;color:var(--ink-2);overflow-wrap:anywhere}
+.head .do{flex:none;display:flex;align-items:center;gap:8px}
+.sub{display:flex;align-items:baseline;gap:8px;margin:24px 8px 8px}
+.sub h3{margin:0;font-size:13px;line-height:16px;font-weight:600}
+.sub .gap{flex:1}
+.label{margin:20px 8px 4px;font-size:11px;line-height:14px;font-weight:600;color:var(--ink-3)}
+.cats{margin:0 0 8px;border-bottom:.5px solid var(--ov-3)}
+.cats .tab{padding:0 8px}
+.cats .end{flex:none;display:flex}
+.pick{gap:2px}
+.pick svg{color:var(--ink-3)}
+.ico{flex:none;width:28px;height:28px;border:0;border-radius:var(--r-2);background:transparent;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-2)}
+.ico:hover{background:var(--ov-2);color:var(--fg)}
+.ico:active{background:var(--ov-3)}
+.ico:disabled{opacity:.3;background:transparent;color:var(--ink-2)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:2px 16px}
+.card{height:68px;padding:0 8px;border-radius:var(--r-3);display:flex;align-items:center;gap:12px;min-width:0}
+.card:hover{background:var(--ov-1)}
+.card[aria-selected="true"]{background:var(--ov-2)}
+.tile{flex:none;width:44px;height:44px;border-radius:22%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:15px;line-height:1;
+  background:radial-gradient(120% 90% at 85% 110%,oklch(.55 .17 var(--hue,0) / .42),transparent 62%),linear-gradient(#121215,#09090b);
+  color:oklch(.86 .11 var(--hue,0));box-shadow:inset 0 0 0 1px oklch(1 0 0 / .07)}
+.tile:not([style]){color:#d4d4d8}
+.card .w{flex:1;min-width:0}
+.name{display:flex;align-items:center;gap:4px;min-width:0;font-weight:500}
+.name>span:first-child{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sure{flex:none;display:inline-flex;color:var(--ink-3)}
+.sure svg{width:14px;height:14px;stroke-width:1.3}
+.card .u{color:var(--ink-2);font-size:12px;line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.card .m{color:var(--ink-3);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.has{flex:none;display:flex;align-items:center;gap:4px;color:var(--ink-3);font-size:11px;line-height:14px;padding:0 4px}
+.has svg{width:12px;height:12px}
+/* Work under way on a listing: a line that runs in its button's place. */
+.doing{flex:none;width:52px;height:24px;display:flex;align-items:center}
+.doing i{position:relative;display:block;width:100%;height:2px;border-radius:1px;background:var(--ov-2);overflow:hidden}
+.doing i::after{content:"";position:absolute;inset:0;background:var(--accent);transform:scaleX(.4);transform-origin:0 50%}
+@media (prefers-reduced-motion:no-preference){.doing i::after{animation:run 1.1s var(--ease) infinite}}
+@keyframes run{from{transform:translateX(-45%) scaleX(.4)}to{transform:translateX(105%) scaleX(.4)}}
+.empty{padding:24px 8px;color:var(--ink-3);text-align:center;font-size:12px;line-height:15px}
+/* What waits: one quiet row with its two acts. */
+.note-row{display:flex;align-items:center;gap:8px;min-height:40px;margin:0 0 8px;padding:8px 8px 8px 12px;border-radius:var(--r-3);background:var(--ov-1);box-shadow:var(--hair-in)}
+.note-row span{flex:1;min-width:0}
+/* The categories of everything, under Discover. */
+.kinds{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:2px 16px}
+.kind{height:28px;padding:0 8px;border:0;border-radius:var(--r-2);background:transparent;display:flex;align-items:center;gap:8px;text-align:left}
+.kind:hover{background:var(--ov-1)}
+.kind:active{background:var(--ov-2)}
+.kind span:first-child{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* A source: what it is, how much it lists and when it was read, and its menu. */
+.src{min-height:52px;padding:6px 4px 6px 8px;border-radius:var(--r-3);display:flex;align-items:center;gap:12px;min-width:0}
+.src:hover{background:var(--ov-1)}
+.src .tile{width:36px;height:36px}
+.src .w{flex:1;min-width:0}
+.src .t{display:flex;align-items:baseline;gap:6px;min-width:0;font-weight:500}
+.src .t span:first-child{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.src .t .n{flex:none}
+.src .s{color:var(--ink-2);font-size:12px;line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.src .p{color:var(--ink-3);font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+/* The listing opened: it takes the place of the shelf, which is as it was when it shuts. */
+#one{flex:1;min-height:0;display:flex;flex-direction:column}
+#one .body{flex:1;min-height:0;overflow-y:auto;padding:20px 24px 24px;scrollbar-gutter:stable}
+.top{display:flex;align-items:center;gap:20px;margin:0 8px}
+.top .tile{width:88px;height:88px;font-size:30px}
+.top .w{flex:1;min-width:0}
+#one h1{margin:0;font-size:20px;line-height:24px;font-weight:600;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text}
+#one .meta{margin-top:4px;color:var(--ink-2);font-size:12px;line-height:15px;overflow-wrap:anywhere}
+#one p{margin:0 0 12px;color:var(--ink);overflow-wrap:anywhere;white-space:pre-wrap;user-select:text;-webkit-user-select:text}
+#one a{color:var(--fg);cursor:pointer;text-decoration:underline;text-decoration-color:var(--ov-4);text-underline-offset:2px;border-radius:var(--r-1)}
+#one a:hover{text-decoration-color:currentColor}
+#one .sum{max-width:720px;margin:16px 8px 0}
+#one .said{margin:8px 8px 0;color:var(--ink-2);font-size:12px;line-height:15px}
+.facts{display:flex;margin:20px 8px 0;padding:12px 0;border-top:.5px solid var(--ov-3);border-bottom:.5px solid var(--ov-3)}
+.fact{flex:none;min-width:96px;max-width:224px;padding:0 16px;display:flex;flex-direction:column;gap:2px}
+.fact:first-child{padding-left:0}
+.fact+.fact{border-left:.5px solid var(--ov-3)}
+.fact dt{color:var(--ink-3);font-size:10px;line-height:13px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.fact dd{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text;-webkit-user-select:text}
+#one .like{margin:24px 0 0}
+#one .like .sub{margin-top:0}
+.act{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-height:24px;margin-top:10px}
+.act .at{display:inline-flex;align-items:center;gap:4px;color:var(--ink-2);font-size:12px;line-height:15px}
+.act .at svg{width:12px;height:12px}
+.in{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.mk{flex:none;width:16px;height:16px;display:flex}
+.mk svg{width:16px;height:16px;stroke:none;fill:currentColor}
+.btn{flex:none;white-space:nowrap}
+.btn:disabled{opacity:.45}
+/* The one solid button of a place: the text's colour as its fill, the ground's as its words. */
+.btn.go{background:var(--fg);color:var(--solid);box-shadow:none}
+.btn.go svg{color:inherit}
+.btn.plain{background:transparent;box-shadow:none;color:var(--ink-2)}
+.btn.plain:hover:not(:disabled){background:var(--ov-1);color:var(--fg)}
+/* A narrow pane: the library is its glyphs alone, and the Store's name gives way. */
+#page[data-w="narrow"] #lib .nav>span:not(.n){display:none}
+#page[data-w="narrow"] #list{padding:16px 8px}
+#page[data-w="narrow"] .grid{grid-template-columns:minmax(0,1fr)}
+</style>
+</head>
+<body>
+<div id="page">
+  <div class="bar">
+    <button class="ico" id="shut" disabled aria-label="Back" title="Back"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.8 3.5 5.3 8l4.5 4.5"/></svg></button>
+    <label class="find field"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7.2 3a4.2 4.2 0 1 0 0 8.4a4.2 4.2 0 1 0 0 -8.4zM10.3 10.3l3 3"/></svg><input id="q" type="search" aria-label="Search the Store" placeholder="Search plugins, skills and servers" autocomplete="off" spellcheck="false"><span id="prog" role="progressbar" aria-label="Reading the sources" aria-valuemin="0" aria-valuemax="100"><svg viewBox="0 0 16 16" aria-hidden="true"><circle class="t" cx="8" cy="8" r="5.5"/><circle class="v" cx="8" cy="8" r="5.5" pathLength="100" stroke-dasharray="0 100"/></svg></span></label>
+    <nav id="lib" aria-label="Your Library"></nav>
+  </div>
+  <div class="tabs" id="tabs"><div class="row" id="kinds" role="tablist" aria-label="Store Sections"></div></div>
+  <div id="said" role="status" hidden></div>
+  <div id="list" tabindex="0" aria-label="Listings"></div>
+  <section id="one" hidden aria-label="Listing">
+    <div class="body" id="one-body"></div>
+  </section>
+</div>
+<script type="application/json" id="marks">{}</script>
+<script>{{script}}</script>
+</body>
+</html>

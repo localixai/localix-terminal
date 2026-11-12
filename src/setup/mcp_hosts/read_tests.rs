@@ -1,4 +1,4 @@
-//! Tests of `read`: a configuration with comments in it.
+//! Tests of `read`: a configuration with comments in it, and a TOML table's values.
 
 use super::{Kept, uncommented};
 
@@ -27,4 +27,35 @@ fn json_with_comments_is_read_as_the_agent_reads_it() {
     // Text that is no JSON either way has no entry.
     assert_eq!(Kept::Json(AT).entry("// only a comment"), None);
     assert_eq!(Kept::Json(AT).entry("{ nope"), None);
+}
+
+#[test]
+fn a_toml_tables_value_is_read_as_codex_writes_it() {
+    let text = r#"model = "o4"
+
+[mcp_servers.weather]
+command = "npx"
+args = ["-y", "@acme/weather@1.0.0"]
+
+[mcp_servers.weather.env]
+command = "not this table's"
+
+[mcp_servers.literal]
+command = 'C:\tools\x.exe'
+
+[plugins."pdf@acme"]
+enabled = true
+"#;
+    let value = |table, key| super::toml_value(text, table, key);
+    assert_eq!(value("mcp_servers.weather", "command"), Some("npx".into()));
+    let args = serde_json::json!(["-y", "@acme/weather@1.0.0"]);
+    assert_eq!(value("mcp_servers.weather", "args"), Some(args));
+    assert_eq!(
+        value("mcp_servers.literal", "command"),
+        Some(r"C:\tools\x.exe".into())
+    );
+    assert_eq!(value("plugins.\"pdf@acme\"", "enabled"), Some(true.into()));
+    assert_eq!(value("mcp_servers.weather", "url"), None);
+    assert_eq!(value("mcp_servers", "command"), None);
+    assert_eq!(value("model", "model"), None);
 }

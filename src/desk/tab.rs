@@ -1,6 +1,8 @@
 //! Tab keys and the fields each kind accepts at the tool boundary.
 
 use super::args::{TERM_FIELDS, WEB_FIELDS};
+use std::sync::Arc;
+
 use serde_json::Value;
 
 /// What a tab is, from its key.
@@ -10,6 +12,8 @@ pub(super) enum Kind {
     Term,
     Board,
     File,
+    /// A kind that draws itself (`crate::kind`), by what it says of itself.
+    Made(&'static crate::kind::About),
 }
 
 impl Kind {
@@ -19,6 +23,7 @@ impl Kind {
             Self::Term => "terminal",
             Self::Board => "board",
             Self::File => "file",
+            Self::Made(about) => about.id,
         }
     }
 
@@ -26,7 +31,7 @@ impl Kind {
         match self {
             Self::Web => &WEB_FIELDS,
             Self::Term => &TERM_FIELDS,
-            Self::Board | Self::File => &[],
+            Self::Board | Self::File | Self::Made(_) => &[],
         }
     }
 
@@ -37,6 +42,9 @@ impl Kind {
             Self::Web => own.chain(DIALOG.map(String::from)).collect(),
             Self::Term | Self::File => own.collect(),
             Self::Board => super::args::board_field_names().to_vec(),
+            Self::Made(about) => (about.fields.iter())
+                .map(|(name, _)| (*name).to_string())
+                .collect(),
         }
     }
 
@@ -50,6 +58,7 @@ impl Kind {
             }
             Self::Term => "Text is `input`, keys are `keys` ([\"Enter\"], [\"Ctrl-C\"]).",
             Self::Board => "A board is acted on with an `op`: add, take, review, block, release…",
+            Self::Made(about) => about.instead,
             Self::File => {
                 "A file's tab is read: the text as the person sees it, what they left unsaved \
                  with it. Change the file on disk with your own tools: the tab follows it. \
@@ -76,7 +85,7 @@ pub(super) fn unread(kind: Kind, args: &Value) -> Result<(), String> {
     };
     let named = |field: &str| {
         field == "op"
-            && kind != Kind::Board
+            && !matches!(kind, Kind::Board | Kind::Made(_))
             && (given.get("op").and_then(Value::as_str)).is_some_and(|op| {
                 op != "op" && given.contains_key(op) && takes.iter().any(|t| t == op)
             })
@@ -109,15 +118,18 @@ pub(super) struct Tab {
     pub(super) id: u32,
 }
 
-/// `w3` or `t2` as a tab.
-pub(super) fn parse(key: &str) -> Option<Tab> {
+/// `w3` or `t2` as a tab; `kinds` are those that draw themselves, each with its own letter.
+pub(super) fn parse(key: &str, kinds: &[Arc<dyn crate::kind::Kind>]) -> Option<Tab> {
     let key = key.trim().to_ascii_lowercase();
     let kind = match key.chars().next()? {
         'w' => Kind::Web,
         't' => Kind::Term,
         'b' => Kind::Board,
         'f' => Kind::File,
-        _ => return None,
+        letter => {
+            let made = kinds.iter().find(|kind| kind.about().letter == letter)?;
+            Kind::Made(made.about())
+        }
     };
     let digits = key.get(1..)?;
     if !digits.bytes().all(|byte| byte.is_ascii_digit()) {

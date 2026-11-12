@@ -4,7 +4,8 @@
 //! window is the person's: they may show, close or comment on any tab.
 //!
 //! Here, the desk itself and how a call is answered; `open`, `interact` and the rest are
-//! in `actions`, a page's tab in `web`, a terminal's in `term`, the board's in `board`.
+//! in `actions`, a page's tab in `web`, a terminal's in `term`, the board's in `board`, and
+//! the tab of a kind that draws itself (`crate::kind`) in `made`.
 
 mod actions;
 mod args;
@@ -31,6 +32,7 @@ mod layout_resize;
 mod layout_split;
 mod ledger;
 mod lifecycle;
+mod made;
 mod open;
 mod registry;
 mod relay;
@@ -103,6 +105,8 @@ pub struct Desk {
     /// Each project's board, once it has been asked for.
     boards: Mutex<HashMap<ProjectId, board::Kept>>,
     next_board: AtomicU32,
+    /// The kinds of tab that draw themselves, and each project's tab of one (made.rs).
+    made: made::Tabs,
     /// Where an owner's board news waits for the person to be quiet.
     board_news: Mutex<Option<std::sync::mpsc::SyncSender<ProjectId>>>,
     /// The projects called for in this run, by canonical folder: each found or made once.
@@ -172,6 +176,7 @@ impl Desk {
                 vault: crate::secrets::Vault::default(),
                 boards: Mutex::default(),
                 next_board: AtomicU32::new(1),
+                made: made::Tabs::new(),
                 board_news: Mutex::default(),
                 projects: Mutex::default(),
                 me: Weak::clone(weak),
@@ -346,12 +351,6 @@ impl Desk {
         self.feed.stop();
         let sessions = std::mem::take(&mut *crate::lock(&self.sessions));
         sessions.values().for_each(|session| session.close());
-    }
-
-    /// Whether a board or a terminal is in the window: it shows the window as much as a page does.
-    pub(super) fn panels_open(&self) -> bool {
-        !crate::lock(&self.sessions).is_empty()
-            || (crate::lock(&self.boards).values()).any(|kept| kept.panel.is_some())
     }
 
     /// The window and every owner's tabs, for `llx-desk status`.

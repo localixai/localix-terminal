@@ -36,6 +36,11 @@ impl Desk {
                         state: Some(self.file_text(&tab.key)?),
                         shot: None,
                     },
+                    Kind::Made(about) => Output {
+                        report: "It is read as text, below.".into(),
+                        state: Some(self.made_text(about)),
+                        shot: None,
+                    },
                 })
             }
             Some("close") => self.close(call, args),
@@ -44,6 +49,10 @@ impl Desk {
                 // A board shown is opened again when the window went with its tab.
                 if tab.kind == Kind::Board {
                     return self.board(call, &json!({"op": "show"}));
+                }
+                // So is a tab of a kind that draws itself.
+                if let Kind::Made(about) = tab.kind {
+                    return self.made(call, about, &json!({}));
                 }
                 self.reveal(call, &tab.key)?;
                 let read = self.read(&tab)?;
@@ -73,8 +82,8 @@ impl Desk {
     /// The owner's tab named `key`.
     fn tab(&self, call: &Call, key: Option<&str>) -> Result<Tab, String> {
         let key = key.ok_or("`tab` is needed: an id from `open` or `list`")?;
-        let tab =
-            parse(key).ok_or_else(|| format!("`{key}` is not a tab id: they look like w1, t2"))?;
+        let tab = parse(key, &self.made.kinds)
+            .ok_or_else(|| format!("`{key}` is not a tab id: they look like w1, t2"))?;
         if tab.kind == Kind::Web {
             self.prune_pages();
         }
@@ -85,6 +94,8 @@ impl Desk {
             _ if tab.kind == Kind::Board && self.board_of(call.project.id, &tab.key) => Ok(tab),
             // A file has one tab in a project too, whoever opened it.
             _ if tab.kind == Kind::File && self.file_of(call.project.id, &tab.key) => Ok(tab),
+            // And so has a kind that draws itself.
+            _ if self.made_of(call.project.id, &tab) => Ok(tab),
             // A call from another directory is another owner's: say whose, so the agent sees it
             // left its project (a `cd` into a scratch directory) rather than lost the tab.
             _ => Err(format!(
@@ -115,6 +126,10 @@ impl Desk {
                 report: self.file_summary(&tab.key),
                 state: Some(self.file_text(&tab.key)?),
                 shot: None,
+            }),
+            Kind::Made(about) => Ok(Output {
+                state: Some(self.made_text(about)),
+                ..Output::default()
             }),
         }
     }
@@ -157,6 +172,8 @@ impl Desk {
             Kind::Board => return self.board(call, args),
             // A file's tab is read: every field that would act on it was refused already.
             Kind::File => self.read(tab)?,
+            // What a kind that draws itself is told is its own to answer.
+            Kind::Made(about) => return self.made(call, about, args),
             Kind::Web => {
                 let mark = self.told_mark();
                 let answering = self.answering(tab.id, args)?;
@@ -196,7 +213,7 @@ impl Desk {
     /// window lost is let go by `prune_pages`); a terminal or a board first, since its row of the
     /// ledger keeps the screen of a session that closing then takes away.
     pub(super) fn close_tab(&self, key: &str) -> Result<String, String> {
-        let tab = parse(key).ok_or_else(|| format!("`{key}` is not a tab id"))?;
+        let tab = parse(key, &self.made.kinds).ok_or_else(|| format!("`{key}` is not a tab id"))?;
         match tab.kind {
             Kind::Web => {
                 let closed = self.close_web(tab.id)?;
@@ -214,6 +231,10 @@ impl Desk {
             Kind::File => {
                 self.let_go(&tab.key);
                 self.close_file(&tab.key)
+            }
+            Kind::Made(_) => {
+                self.let_go(&tab.key);
+                self.close_made(&tab.key)
             }
         }
     }
@@ -247,11 +268,14 @@ impl Desk {
             .unwrap_or_default();
         let mut out = String::new();
         for key in keys {
-            let Some(tab) = parse(&key) else { continue };
+            let Some(tab) = parse(&key, &self.made.kinds) else {
+                continue;
+            };
             let known = window.iter().find(|w| w.id == key);
             let detail = match (tab.kind, known) {
                 (Kind::Board, _) => self.board_summary(&tab.key),
                 (Kind::File, _) => self.file_summary(&tab.key),
+                (Kind::Made(about), _) => self.made_summary(about),
                 (_, Some(w)) => format!("{} {}", w.title, w.detail).trim().to_string(),
                 (Kind::Term, None) => self
                     .session(tab.id)

@@ -93,6 +93,7 @@ impl Desk {
                     Kind::Terminal => TabKind::Terminal,
                     Kind::Board => TabKind::Board,
                     Kind::File => TabKind::File,
+                    Kind::Made(name) => TabKind::Made(name),
                 },
                 detail: (tab.url.clone())
                     .or_else(|| tab.cwd.as_ref().map(|cwd| cwd.display().to_string()))

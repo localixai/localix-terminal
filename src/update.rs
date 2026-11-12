@@ -6,11 +6,9 @@
 //! updated: a build of another making (from source, a package) says why not and asks nothing
 //! of the network.
 
-mod fetch;
 mod install;
 mod place;
 mod release;
-mod run;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -244,7 +242,7 @@ impl Updater {
                 None
             }
         };
-        let latest = fetch::text(&given.from.latest, &given.dir, LATEST_MOST);
+        let latest = crate::fetch::text(&given.from.latest, &given.dir, LATEST_MOST);
         let release = latest.and_then(|json| Release::read(&json))?;
         crate::lock(&self.0.state).1 = Some(crate::now());
         // Not newer, or with no build for this system (a release of other systems alone): no

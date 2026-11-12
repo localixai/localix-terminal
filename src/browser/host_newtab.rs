@@ -46,21 +46,33 @@ impl On<'_> {
                 ),
             })
             .collect();
-        let entries = [
+        // After the board, each kind that draws itself.
+        let kinds = crate::kind::abouts();
+        let mut entries = vec![
             keyed("New Page", "web", "new-page"),
             keyed("New Terminal", "term", "new-terminal"),
             keyed("Board", "board", "board"),
-            Entry::Line { line: true },
-            Entry::Sub {
-                label: "Agents".into(),
-                items: agents,
-            },
         ];
+        entries.extend(
+            kinds
+                .iter()
+                .map(|about| keyed(about.title, about.id, about.command())),
+        );
+        entries.push(Entry::Line { line: true });
+        entries.push(Entry::Sub {
+            label: "Agents".into(),
+            items: agents,
+        });
+        let own = 3 + kinds.len();
         let asked = match open.pick(at, &entries) {
             Some(0) => Asked::Page(None),
             Some(1) => Asked::Terminal(None),
             Some(2) => Asked::Board,
-            Some(at) => match found.get(at - 3).copied().flatten() {
+            Some(at) if at < own => match kinds.get(at - 3) {
+                Some(about) => Asked::Kind(about.id),
+                None => return,
+            },
+            Some(at) => match found.get(at - own).copied().flatten() {
                 Some(command) => Asked::Agent(command),
                 None => return,
             },

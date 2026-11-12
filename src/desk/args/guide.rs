@@ -2,6 +2,8 @@
 //! states (args.rs) is not said again here: the description is what every call's model reads
 //! whole, and some hosts keep only its first 4096 bytes.
 
+use std::fmt::Write as _;
+
 const WEB_GUIDE: &str = "Web pages. `open` with `url`: a site (http or https; for a search, its results page's \
 address), or an HTML file's path, served as a site with no server to start. The snapshot is \
 the page's outline, each control with its ref, `[e12]`. In `interact`, `fill` types into \
@@ -55,7 +57,16 @@ The kinds:";
 
 /// The tool's description: what it does, and each kind of tab's guide.
 pub fn description() -> String {
-    format!(
+    let mut said = format!(
         "{DESCRIPTION}\n- browser (`w` tabs): {WEB_GUIDE}\n- terminal (`t` tabs): {TERM_GUIDE}\n- board (`b` tab): {BOARD_GUIDE}\n- file (`f` tabs): {FILE_GUIDE}"
-    )
+    );
+    for about in crate::kind::abouts() {
+        let _ = write!(
+            said,
+            "
+- {} (`{}` tab): {}",
+            about.id, about.letter, about.guide
+        );
+    }
+    said
 }

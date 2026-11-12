@@ -41,8 +41,27 @@ pub(super) fn of_kind(kind: &str) -> &'static str {
         "board" => BOARD,
         "file" => FILE,
         "settings" => SETTINGS,
-        _ => WEB,
+        "web" => WEB,
+        made => of_made(made).unwrap_or(WEB),
     }
+}
+
+/// The picture of the kind that draws itself named `kind`, made of its glyph once and kept.
+fn of_made(kind: &str) -> Option<&'static str> {
+    static MADE: std::sync::Mutex<Vec<(&'static str, &'static str)>> =
+        std::sync::Mutex::new(Vec::new());
+    let about = crate::kind::named(kind)?.about();
+    let mut made = crate::lock(&MADE);
+    if let Some((_, picture)) = made.iter().find(|(id, _)| *id == about.id) {
+        return Some(picture);
+    }
+    let glyph: String = (about.glyph.chars())
+        .filter(|c| c.is_ascii_alphanumeric() || " .,-".contains(*c))
+        .collect();
+    let picture: &'static str =
+        Box::leak(format!(icon!(r#"<path d="{}"/>"#), glyph).into_boxed_str());
+    made.push((about.id, picture));
+    Some(picture)
 }
 
 #[cfg(test)]

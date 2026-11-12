@@ -89,7 +89,7 @@ pub use page::Page;
 pub use panel::{Fitted, Pane, Panel};
 pub use platform::trash;
 pub use strip::HOME;
-pub use strip::{BOARD, FILE};
+pub use strip::{BOARD, FILE, made};
 pub use tabs::MAX_TABS;
 pub use told::{Branch, EntryDid, Leaf, Tree, TreeDid};
 pub(crate) use toolbar::owns;

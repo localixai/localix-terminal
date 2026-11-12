@@ -3,6 +3,7 @@
 use std::sync::mpsc::SyncSender;
 
 use crate::WindowTab;
+use crate::kind::{Given, Question};
 
 use super::super::strip::{Click, Key};
 use super::super::windows::Route;
@@ -138,6 +139,9 @@ pub(in super::super) enum Cmd {
     Presented(SyncSender<&'static str>),
     /// Ask the person; the reply is whether they went on.
     Confirm(Confirm, SyncSender<bool>),
+    /// A tab's question (`kind::Tab::ask`); the reply is what the person gave when they went
+    /// on, none when they did not.
+    Ask(Question, SyncSender<Option<Given>>),
     Exit(i32),
 }
 
@@ -208,6 +212,7 @@ impl Cmd {
             | Cmd::Opened
             | Cmd::Presented(_)
             | Cmd::Confirm(..)
+            | Cmd::Ask(..)
             | Cmd::Exit(_) => Route::Current,
         }
     }
@@ -252,6 +257,7 @@ impl Cmd {
             | Cmd::Opened
             | Cmd::Presented(_)
             | Cmd::Confirm(..)
+            | Cmd::Ask(..)
             | Cmd::Exit(_) => Drawn::Itself,
         }
     }

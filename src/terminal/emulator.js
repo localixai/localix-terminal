@@ -1,4 +1,3 @@
-"use strict";
 // The session in xterm.js: the program's own output is written into it (W), the whole screen
 // again when the page is new or behind (R); what the person types and pastes goes to the session,
 // and the grid follows the pane, the session's terminal resized with it.
@@ -88,7 +87,6 @@ term.open(document.getElementById("t"));
 // What this page posts (panel.rs): the keys and pastes as a terminal sends them (k), its size
 // once it is ready (r) and when the pane changes (s), and its menu asked for where the person
 // right-clicked, with the items of its menu.
-const post = (text) => window.ipc && window.ipc.postMessage(text);
 // An address is opened in a new tab (o) by ⌘-click only: a click alone selects or moves the cursor.
 function openTab(event, uri) {
   if (event.metaKey) post("o " + uri);
@@ -194,24 +192,12 @@ const MENU = [
     { label: "Clear", run: clearScreen },
   ],
 ];
-let offered = [];
 addEventListener("contextmenu", (event) => {
   event.preventDefault();
   const groups = MENU.map((group) => group.filter((item) => !item.when || item.when()))
     .filter((group) => group.length);
-  // What is picked is a place among the items alone: the lines are not counted.
-  offered = groups.flat();
-  const items = groups.flatMap((group, i) => [
-    ...(i ? [{ line: true }] : []),
-    ...group.map((item) => ({ label: item.label, paste: !!item.paste })),
-  ]);
-  post("m " + Math.round(event.clientX) + " " + Math.round(event.clientY) + " " + JSON.stringify(items));
+  systemMenu(event.clientX, event.clientY, groups.flatMap((group, i) => [...(i ? [{ line: true }] : []), ...group]));
 });
-window.chosen = (place, text) => {
-  const item = offered[place];
-  const answer = item ? item.run(text) : undefined;
-  return typeof answer === "string" ? answer : null;
-};
 // The grid follows the pane; the session is told (term.onResize) and its pty resized. The
 // first fit is immediate, before the page says it is ready. Live resize and font changes
 // coalesce to one measurement per frame, with a timeout for WebViews running out of sight.

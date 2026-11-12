@@ -1,6 +1,6 @@
 #!/bin/bash
 # The release files of the Mac app: LLX-Desk-macos.dmg (the disk image people open, the app and a
-# link to /Applications in it) and LLX-Desk-macos.zip (the app, which install.sh fetches), in dist.
+# link to /Applications in it, in the window packaging/macos/dmg lays out) and LLX-Desk-macos.zip (the app, which install.sh fetches), in dist.
 # CI and a person at this Mac run the same script.
 #   scripts/dmg.sh [--universal] [--notarize] [--out dist]
 # --universal builds both Macs' programs and joins them with lipo (releases are Apple silicon only
@@ -189,12 +189,16 @@ fi
 rm -f "$out/LLX-Desk-macos.zip" "$out/LLX-Desk-macos.dmg"
 ditto -c -k --keepParent "$app" "$out/LLX-Desk-macos.zip"
 
-# The disk image: the app and a link to /Applications to drag it to. APFS, since macOS 26.4 beta
-# cannot mount an HFS+ image.
+# The disk image: the app and a link to /Applications to drag it to, in the window that
+# scripts/dmg-layout.sh laid out: its picture and Finder's record of the window, both hidden. The
+# record finds the picture by the volume's name, so the name here is the one that script uses.
+# APFS, since macOS 26.4 beta cannot mount an HFS+ image.
 stage="$work/stage"
-mkdir -p "$stage"
+mkdir -p "$stage/.background"
 ditto "$app" "$stage/LLX Desk.app"
 ln -s /Applications "$stage/Applications"
+cp packaging/macos/dmg/background.tiff "$stage/.background/background.tiff"
+cp packaging/macos/dmg/DS_Store "$stage/.DS_Store"
 hdiutil create -quiet -volname "LLX Desk" -srcfolder "$stage" -fs APFS -format UDZO -ov \
   "$out/LLX-Desk-macos.dmg"
 if [ "$sign" != - ]; then
@@ -212,6 +216,8 @@ mkdir -p "$mount"
 hdiutil attach -nobrowse -readonly -noautoopen -quiet -mountpoint "$mount" "$out/LLX-Desk-macos.dmg"
 [ -d "$mount/LLX Desk.app" ] || { echo "the disk image has no LLX Desk.app" >&2; exit 1; }
 [ -L "$mount/Applications" ] || { echo "the disk image has no link to /Applications" >&2; exit 1; }
+[ -s "$mount/.DS_Store" ] && [ -s "$mount/.background/background.tiff" ] ||
+  { echo "the disk image has no window layout" >&2; exit 1; }
 codesign --verify --deep --strict --verbose=2 "$mount/LLX Desk.app"
 if [ "$notarize" = 1 ]; then
   spctl --assess --type execute -vv "$mount/LLX Desk.app"

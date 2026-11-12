@@ -1,5 +1,5 @@
 /* The window's dialog (dialog.rs): a veil over the whole window and one card on it, as wide as a
-   system alert and no taller than its words; what is new scrolls inside it. Its mark draws once
+   system alert and no taller than its words; its list scrolls inside it. Its mark draws once
    as it arrives; under Reduce Motion it stands drawn. Its buttons are the shared ones. */
 #dlg{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:rgba(0,0,0,.18);animation:dlg-veil var(--t-fade) var(--ease) both}
 @media (prefers-color-scheme: dark){#dlg{background:rgba(0,0,0,.34)}}
@@ -39,6 +39,10 @@ html[data-reduced] #dlg .card{--paper:var(--card)}
 #dlg .notes p{margin:0 0 6px}
 #dlg .notes .pt{position:relative;margin:0 0 5px;padding-left:12px}
 #dlg .notes .pt::before{content:"";position:absolute;left:2px;top:7px;width:3px;height:3px;border-radius:var(--r-pill);background:var(--ink-3)}
+/* What it needs typed: each field (frame.css `.field`) under its name. */
+#dlg .fields{flex:none;display:flex;flex-direction:column;gap:8px;padding:12px 12px 0}
+#dlg .fields label{display:flex;flex-direction:column;gap:4px;font-size:11px;line-height:14px;color:var(--ink-2);overflow-wrap:anywhere}
+#dlg .fields .field{font-size:13px;line-height:16px;color:var(--ink)}
 /* The acts: the one that does it is the place's one accent; the other is quiet. */
 #dlg .acts{flex:none;display:flex;justify-content:flex-end;gap:8px;padding:14px 12px 12px}
 #dlg .btn:focus-visible{outline:3px solid var(--acc-3);outline-offset:1px}

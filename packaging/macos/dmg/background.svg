@@ -1,0 +1,6 @@
+<!-- The ground of the window the disk image opens as, 640 by 400 points: light, with one arrow
+     from the app's place to Applications'. scripts/dmg-layout.sh draws background.tiff from it. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
+  <rect width="640" height="400" fill="#f6f6f7"/>
+  <path d="M292 180h56m-10-10 10 10-10 10" fill="none" stroke="#000" stroke-opacity=".36" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

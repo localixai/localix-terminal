@@ -111,6 +111,14 @@ impl Desk {
             Kind::Board => (self.board(call, &serde_json::json!({"op": "show"})))
                 .map(|_| ())
                 .map_err(|failure| failure.message().to_string()),
+            Kind::Made(name) => {
+                let about = (self.made.kinds.iter().map(|kind| kind.about()))
+                    .find(|about| about.id == name)
+                    .ok_or_else(|| format!("this build has no kind of tab `{name}`"))?;
+                (self.made(call, about, &serde_json::json!({})))
+                    .map(|_| ())
+                    .map_err(|failure| failure.message().to_string())
+            }
             Kind::File => {
                 let path = tab.cwd.as_deref().ok_or("its file was not kept")?;
                 (self.open_file(call, path, None))

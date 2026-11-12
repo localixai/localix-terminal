@@ -32,7 +32,7 @@ const fn at(
 
 /// Every shortcut, in the order Settings lists them. The chords follow the system's browsers and
 /// editors, so the hand already knows them.
-pub(in super::super) const SHORTCUTS: [Shortcut; 29] = [
+const SHORTCUTS: [Shortcut; 29] = [
     at(
         "open-folder",
         "Open Folder\u{2026}",
@@ -131,6 +131,34 @@ pub(in super::super) const SHORTCUTS: [Shortcut; 29] = [
     at("quit", "Quit LLX Desk", "LLX Desk", "cmd+q", "quit"),
 ];
 
+/// Every shortcut there is: the catalog's, and after the board's the command of each kind that
+/// draws itself (`crate::kind`), which opens its tab. A kind's is made once and kept.
+pub(in super::super) fn every() -> Vec<&'static Shortcut> {
+    static MADE: std::sync::Mutex<Vec<&'static Shortcut>> = std::sync::Mutex::new(Vec::new());
+    let mut made = crate::lock(&MADE);
+    let kinds: Vec<&'static Shortcut> = (crate::kind::abouts().into_iter())
+        .map(|about| {
+            if let Some(known) = made.iter().find(|known| known.id == about.command()) {
+                return *known;
+            }
+            let does: &'static str = Box::leak(about.keyed().into_boxed_str());
+            let shortcut: &'static Shortcut = Box::leak(Box::new(at(
+                about.command(),
+                about.title,
+                "Tabs",
+                about.keys,
+                does,
+            )));
+            made.push(shortcut);
+            shortcut
+        })
+        .collect();
+    let after = SHORTCUTS.iter().position(|shortcut| shortcut.id == "board");
+    let after = after.map_or(SHORTCUTS.len(), |at| at + 1);
+    let (before, rest) = SHORTCUTS.split_at(after);
+    before.iter().chain(kinds).chain(rest).collect()
+}
+
 /// What only a web page shown can do: walk its history, load it again, size it, comment on it.
 /// Over a terminal, the board or the settings these are off (their menu items greyed).
 #[cfg(any(target_os = "macos", test))]
@@ -148,7 +176,7 @@ pub(in super::super) fn of_page(does: &str) -> bool {
 /// app's menu bar (the first, the app's own).
 #[cfg(any(target_os = "macos", test))]
 pub(in super::super) fn groups() -> Vec<&'static str> {
-    let mut groups: Vec<&'static str> = SHORTCUTS.iter().map(|shortcut| shortcut.group).collect();
+    let mut groups: Vec<&'static str> = every().iter().map(|shortcut| shortcut.group).collect();
     groups.dedup();
     groups
 }

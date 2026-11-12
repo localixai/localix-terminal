@@ -4,6 +4,8 @@
 //! shown are what the address field suggests. The desk writes it (desk/ledger.rs); nothing here
 //! knows the window. Where a pane is shown (its tab) is the layout's (layout.rs).
 
+mod names;
+
 use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -27,6 +29,9 @@ pub enum Kind {
     Terminal,
     Board,
     File,
+    /// A kind that draws itself (`crate::kind`), by its name: the ledger keeps the name and
+    /// knows nothing more of it.
+    Made(&'static str),
 }
 
 impl Kind {
@@ -36,6 +41,7 @@ impl Kind {
             Self::Terminal => "terminal",
             Self::Board => "board",
             Self::File => "file",
+            Self::Made(name) => name,
         }
     }
 
@@ -44,7 +50,8 @@ impl Kind {
             "terminal" => Self::Terminal,
             "board" => Self::Board,
             "file" => Self::File,
-            _ => Self::Page,
+            "page" | "" => Self::Page,
+            made => Self::Made(names::known(made)),
         }
     }
 }

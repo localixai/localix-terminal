@@ -141,6 +141,8 @@ pub(in super::super) enum Keyed {
     NewPage,
     NewTerminal,
     NewBoard,
+    /// The project's tab of a kind that draws itself, by the kind's name.
+    NewKind(&'static str),
     /// The tab shown closes.
     Close,
     /// The tab closed last opens again.
@@ -174,13 +176,13 @@ impl Keyed {
             "projects" => Self::Projects,
             "open folder" => Self::OpenFolder,
             "close project" => Self::CloseProject,
-            words => Self::Tab(
-                words
-                    .strip_prefix("tab ")?
-                    .parse()
-                    .ok()
-                    .filter(|at| (1..=8).contains(at))?,
-            ),
+            words => match words.strip_prefix("new ") {
+                Some(kind) => Self::NewKind(crate::kind::named(kind)?.about().id),
+                None => {
+                    let at = words.strip_prefix("tab ")?.parse().ok();
+                    Self::Tab(at.filter(|at| (1..=8).contains(at))?)
+                }
+            },
         })
     }
 }

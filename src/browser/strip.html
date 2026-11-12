@@ -64,7 +64,6 @@ body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
 #bar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;height:{{bar}}px;padding:0 8px;box-sizing:border-box}
 #lead{display:flex;align-items:center;gap:4px;min-width:0}
 /* A button fit() puts into "»" is hidden. */
-[hidden]{display:none!important}
 /* Back, forward and reload, bare as in Safari's toolbar. */
 #nav{flex:none;display:flex;align-items:center;gap:2px}
 #rl svg{width:15px;height:15px}
@@ -104,17 +103,13 @@ html[data-part=line].held,html[data-part=line].held *{cursor:col-resize!importan
 /* The documents' row (data-part=docs): the same page in a view of its own over the documents of
    the session shown. It is the row of tabs alone, each as wide as its name needs and no wider
    than a tab of the side; the one in sight is lit. More than fit never narrow: the row scrolls
-   sideways with no bar of its own, and an edge with more past it fades out (data-more). The
+   sideways with no bar of its own, and an edge with more past it fades out (`.across`). The
    hairline under the row is the head's, so it does not fade with the tabs. */
 html[data-part=docs] body>*:not(#head),html[data-part=docs] #head>*:not(#tabs){display:none!important}
 html[data-part=docs],html[data-part=docs] body,html[data-part=docs] #head{height:100%;overflow:hidden}
 html[data-part=docs]:not([data-glass]) body{background:var(--ground)}
 html[data-part=docs] #head{box-shadow:inset 0 -.5px 0 var(--ov-3)}
-html[data-part=docs] #tabs{padding:0 8px;height:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior:contain;position:relative}
-html[data-part=docs] #tabs::-webkit-scrollbar{display:none}
-html[data-part=docs] #tabs[data-more=left]{-webkit-mask-image:linear-gradient(to right,transparent,#000 24px);mask-image:linear-gradient(to right,transparent,#000 24px)}
-html[data-part=docs] #tabs[data-more=right]{-webkit-mask-image:linear-gradient(to left,transparent,#000 24px);mask-image:linear-gradient(to left,transparent,#000 24px)}
-html[data-part=docs] #tabs[data-more=both]{-webkit-mask-image:linear-gradient(to right,transparent,#000 24px,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(to right,transparent,#000 24px,#000 calc(100% - 24px),transparent)}
+html[data-part=docs] #tabs{padding:0 8px;height:100%;position:relative}
 html[data-part=docs] #tabs .t{flex:none;max-width:220px;justify-content:flex-start;padding:0 6px 0 10px}
 html[data-part=docs] #tabs .t .x{position:static}
 /* A document carried along the row: the card a carried tab of the side is as it lifts, over
@@ -444,9 +439,11 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
 <div id="gh"></div>
 <div id="line" role="separator" aria-orientation="vertical" aria-label="Split width" tabindex="0" title="Drag or use arrow keys to resize; Home evens the halves"></div>
 <script type="application/json" id="marks">{}</script>
+<script type="application/json" id="kinds">[]</script>
 <script>
 "use strict";
 /*RESIZE_HANDLES*/
+/*ACROSS_JS*/
 /*DIALOG_JS*/
 // The strip's small pictures, drawn as the buttons are; never text characters. Built element by
 // element, as everything on the strip is: no markup is ever parsed. Lines that meet are one
@@ -566,38 +563,14 @@ function drawDocs() {
   // Another document in sight, or other documents: the one in sight is in view. A title that
   // changed moves nothing, so the row stays where the person scrolled it.
   const seen = JSON.stringify([on, keys]);
-  if (seen !== docSeen) docInView(row);
+  if (seen !== docSeen) rowInView(row, row.querySelector(".t.on"));
   docSeen = seen;
-  docEdges();
-}
-// The tab of the document in sight brought into the part of the row that shows, clear of an
-// edge's fade, by the shortest way; at once, since it follows a press or an opening.
-function docInView(row) {
-  const lit = row.querySelector(".t.on");
-  if (!lit) return;
-  const tab = lit.getBoundingClientRect(), box = row.getBoundingClientRect();
-  if (tab.left < box.left + 24) row.scrollLeft += tab.left - box.left - 24;
-  else if (tab.right > box.right - 24) row.scrollLeft += tab.right - box.right + 24;
-}
-// Which edges of the row have tabs past them (data-more: left, right, both; none: all fit).
-function docEdges() {
-  const row = document.getElementById("tabs");
-  const left = row.scrollLeft > 1, right = row.scrollLeft + row.clientWidth < row.scrollWidth - 1;
-  const more = left && right ? "both" : left ? "left" : right ? "right" : "";
-  if (more) row.dataset.more = more;
-  else delete row.dataset.more;
+  rowEdges(row);
 }
 if (document.documentElement.dataset.part === "docs") {
   const row = document.getElementById("tabs");
-  // A wheel that only turns up and down moves the row sideways; a trackpad moves it as it is.
-  row.addEventListener("wheel", (event) => {
-    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-    row.scrollLeft += event.deltaY;
-    event.preventDefault();
-  }, { passive: false });
-  row.addEventListener("scroll", docEdges, { passive: true });
-  // The pane the row lies over was made wider or narrower: the one in sight stays in view.
-  addEventListener("resize", () => (docInView(row), docEdges()));
+  // More than fit scroll sideways, and the one in sight stays in view as the pane is resized.
+  across(row, ".t.on");
   // A document carried along the row: it follows the pointer, kept within the row, and the
   // others move aside as its middle passes theirs; let go, it settles where it is and its
   // session keeps the order (`place KEY BEFORE|end`). A press that moves less than a few
@@ -662,7 +635,7 @@ if (document.documentElement.dataset.part === "docs") {
       tab.classList.remove("carry");
       tab.style.transition = tab.style.transform = "";
       docHeld = false;
-      docEdges();
+      rowEdges(document.getElementById("tabs"));
       if (docLate) {
         docLate = false;
         drawDocs();
@@ -828,10 +801,16 @@ const HINTED = { bk: "back", fw: "forward", rl: "reload", fs: "page-size", cm: "
   hs: "history", ev: "events", mn: "collapse", sc: "sidebar", sd: "send", sn: "new-page", sg: "settings", url: "address", sq: "find-tab",
   pj: "projects" };
 // What opens a tab where none is left: each command with its key (shortcuts.rs, as Settings sets it).
+// The kinds of tab that draw themselves (kind.rs), given as data at load: each one's name, what
+// it is called, what it holds, its picture and the message of its command.
+const KINDS = JSON.parse(document.getElementById("kinds").textContent);
+for (const kind of KINDS) GLYPHS[kind.id] = [["path", { d: kind.glyph }]];
+const kindOf = (id) => KINDS.find((kind) => kind.id === id);
 const STARTS = [
   ["new-page", "New Page", "key new page"],
   ["new-terminal", "New Terminal", "key new terminal"],
   ["board", "Board", "key new board"],
+  ...KINDS.map((kind) => [kind.id, kind.title, kind.key]),
   ["open-folder", "Open Folder\u2026", "key open folder"],
 ];
 let STARTED = [];
@@ -929,6 +908,7 @@ function side(data) {
 const holds = (tab) => {
   if (tab.kind === "board") return "Board of cards";
   if (tab.kind === "settings") return "Appearance and shortcuts";
+  if (kindOf(tab.kind)) return kindOf(tab.kind).holds;
   if (tab.kind === "file") return tab.detail || "File";
   if (tab.kind === "term") return tab.detail || (tab.agent ? "Starting" : "Terminal");
   const what = (tab.detail || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
@@ -1742,7 +1722,7 @@ function M(rows) {
       icon.append(glyph(GLYPHS[row.kind] ? row.kind : "web"));
       const name = document.createElement("span");
       name.className = "n";
-      name.textContent = row.title || row.detail || ({ term: "Terminal", board: "Board", settings: "Settings" }[row.kind] || "New tab");
+      name.textContent = row.title || row.detail || ({ term: "Terminal", board: "Board", settings: "Settings" }[row.kind] || (kindOf(row.kind) || {}).title || "New tab");
       const head = document.createElement("span");
       head.className = "h";
       head.append(icon, name);

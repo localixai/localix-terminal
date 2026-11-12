@@ -100,6 +100,7 @@ impl On<'_> {
             }
             // Asked on the window, which runs on until the answer comes.
             Cmd::Confirm(question, reply) => self.confirm(&question, reply),
+            Cmd::Ask(question, reply) => self.question(&question, reply),
             Cmd::Clicked(said) => self.clicked(&said),
             Cmd::Pressed(window, x, y) => self.pressed(window, x, y),
             // The side's points are the strip's, once moved down by the strip's height: the

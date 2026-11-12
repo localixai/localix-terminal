@@ -26,6 +26,10 @@ impl Desk {
                     return self.closed_later(key, None, false);
                 }
                 let owner = self.owner_of(key).filter(|_| !person);
+                // The tab of a kind that draws itself went with its page.
+                if self.forget_made(key) {
+                    crate::lock(&self.registry).release(key);
+                }
                 if key.starts_with('f') {
                     // Its page went with its tab: its watch and worker go off the window's loop.
                     crate::lock(&self.registry).release(key);
@@ -199,6 +203,12 @@ impl Desk {
                     Asked::Board => (desk.board(&call, &json!({"op": "show"})))
                         .map(|_| ())
                         .map_err(|failure| failure.message().to_string()),
+                    Asked::Kind(kind) => match desk.kind_named(kind) {
+                        Some(about) => (desk.made(&call, about, &json!({})))
+                            .map(|_| ())
+                            .map_err(|failure| failure.message().to_string()),
+                        None => Err(format!("there is no kind of tab `{kind}`")),
+                    },
                     Asked::Again(row) => desk.again(&call, &group, *row),
                     Asked::Project => desk.reopen_project(&call, &group),
                     Asked::Window => desk.new_window(&call, &group),

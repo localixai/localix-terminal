@@ -2,6 +2,7 @@
 //! `llx-desk window` with no argument) and the small readers of its arguments.
 
 mod guide;
+mod kinds;
 
 pub use guide::description;
 
@@ -108,6 +109,7 @@ pub fn schema() -> Value {
     p.extend(file_fields());
     p.extend(board_fields());
     p.insert("ask".into(), ask_field());
+    (crate::kind::abouts().into_iter()).for_each(|about| kinds::fields(&mut p, about));
     json!({"type": "object", "required": ["action"], "properties": p})
 }
 
@@ -242,10 +244,15 @@ pub(super) const WEB_FIELDS: [&str; 12] = [
 ];
 pub(super) const TERM_FIELDS: [&str; 4] = ["input", "keys", "wait_for", "yield_ms"];
 
-/// The schema, built once: every call is checked against it.
-fn built() -> &'static Value {
-    static SCHEMA: OnceLock<Value> = OnceLock::new();
-    SCHEMA.get_or_init(schema)
+/// The schema, built once (the kinds are listed before the first call): every call is checked
+/// against it.
+fn built() -> std::sync::Arc<Value> {
+    // A test's thread has its own kinds, so its own schema.
+    if cfg!(test) {
+        return std::sync::Arc::new(schema());
+    }
+    static SCHEMA: OnceLock<std::sync::Arc<Value>> = OnceLock::new();
+    std::sync::Arc::clone(SCHEMA.get_or_init(|| std::sync::Arc::new(schema())))
 }
 
 /// Whether the schema names a field `name`.
