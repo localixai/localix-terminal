@@ -3,7 +3,7 @@ import type { Block, Card, LandingContent, Media } from '@/shared/config';
 // The landing's words. The design is the template's; this file is the site's. The stills are
 // the app's own window; what a terminal shows here was printed by the app, from real calls.
 const DOCS = '/docs';
-const GITHUB = 'https://github.com/rsaryev/llx-desk';
+const GITHUB = 'https://github.com/rsaryev/localix-terminal';
 
 const terminal = (blocks: Block[], label: string): Media => ({ kind: 'terminal', blocks, label });
 /** The window's stills, all of one size: what each shows, in words. */
@@ -98,8 +98,8 @@ const landing: LandingContent = {
     title: 'Start in three steps',
     aside: 'Free · MIT license',
     steps: [
-      { title: 'Install', text: `The download, or [one line in a terminal](${DOCS}/getting-started). The app is all there is: it holds the window, the \`llx-desk\` command and the MCP server.` },
-      { title: 'Open a project', text: '`llx-desk open .` in a folder, or Open Folder… (⌘O) in the window.' },
+      { title: 'Install', text: `The download, or [one line in a terminal](${DOCS}/getting-started). The app is all there is: it holds the window, the \`llxterm\` command and the MCP server.` },
+      { title: 'Open a project', text: '`llxterm open .` in a folder, or Open Folder… (⌘O) in the window.' },
       { title: 'Open a terminal', text: 'Your shell, or an agent you have installed: it starts in a terminal of the project, already connected to the window.' },
     ],
     links: [

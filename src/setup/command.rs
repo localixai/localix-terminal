@@ -1,4 +1,4 @@
-//! The `llx-desk` command on the person's PATH: a link in `~/.local/bin` to this program (in the
+//! The `llxterm` command on the person's PATH: a link in `~/.local/bin` to this program (in the
 //! app, the program of the bundle), that directory added to their login shell's profile when
 //! the shell does not have it. No password: it is all the person's own.
 
@@ -11,7 +11,7 @@ use super::shell::{login_path, on_path, within};
 
 /// Where the link goes.
 pub(super) fn link_path(home: &Path) -> PathBuf {
-    home.join(".local").join("bin").join("llx-desk")
+    home.join(".local").join("bin").join("llxterm")
 }
 
 /// Whether the command is this program, and on the PATH of a new terminal.
@@ -28,7 +28,7 @@ pub(super) fn state(exe: &Path, home: &Path) -> State {
     }
 }
 
-/// `exe` as `llx-desk` on the person's PATH; what was done, in words.
+/// `exe` as `llxterm` on the person's PATH; what was done, in words.
 pub(super) fn put_on_path(exe: &Path, home: &Path) -> Result<String, String> {
     let at = link_path(home);
     let linked = link(exe, &at)?;
@@ -67,7 +67,7 @@ pub(super) fn take_off_path(exe: &Path, home: &Path) -> Result<String, String> {
 }
 
 /// `link` made a link to `exe`: made, kept when it is one already, or put in place of another
-/// llx-desk (an older app's link, a dangling one, or a copy of the program). Anything else there
+/// llxterm (an older app's link, a dangling one, or a copy of the program). Anything else there
 /// is left alone.
 pub(super) fn link(exe: &Path, link: &Path) -> Result<String, String> {
     let shown = link.display();
@@ -82,15 +82,15 @@ pub(super) fn link(exe: &Path, link: &Path) -> Result<String, String> {
             return Ok(format!("{shown} is linked already"));
         }
         // A link that leads nowhere is replaced; one that leads to a program is, when it is an
-        // llx-desk.
-        Ok(_) if link.exists() && !is_llx_desk(link) => {
+        // llxterm.
+        Ok(_) if link.exists() && !is_llxterm(link) => {
             return Err(format!("{shown} is another program: left as it is"));
         }
         Ok(_) => {}
         Err(why) if why.kind() == std::io::ErrorKind::NotFound => {}
         Err(why) => return Err(format!("{shown}: {why}")),
     }
-    // A new link moved over the old: there is always an `llx-desk` there.
+    // A new link moved over the old: there is always an `llxterm` there.
     let new = link.with_extension(format!("new{}", std::process::id()));
     let _ = std::fs::remove_file(&new);
     std::os::unix::fs::symlink(exe, &new).map_err(|why| format!("{}: {why}", new.display()))?;
@@ -101,7 +101,7 @@ pub(super) fn link(exe: &Path, link: &Path) -> Result<String, String> {
 /// Where the desktop entry goes (Linux).
 #[cfg(target_os = "linux")]
 fn desktop_file(home: &Path) -> PathBuf {
-    home.join(".local/share/applications/llx-desk.desktop")
+    home.join(".local/share/applications/llxterm.desktop")
 }
 
 /// The line of the desktop entry that runs `exe`.
@@ -118,7 +118,7 @@ pub(super) fn desktop_entry(exe: &Path, home: &Path) -> Result<String, String> {
         std::fs::create_dir_all(dir).map_err(|why| format!("{}: {why}", dir.display()))?;
     }
     let entry = format!(
-        "[Desktop Entry]\nType=Application\nName=LLX Desk\nComment=Pages and terminals agents work in, and you watch\n{}\nTerminal=false\nCategories=Development;\n",
+        "[Desktop Entry]\nType=Application\nName=Localix Terminal\nComment=Pages and terminals agents work in, and you watch\n{}\nTerminal=false\nCategories=Development;\n",
         desktop_exec(exe)
     );
     std::fs::write(&file, entry).map_err(|why| format!("{}: {why}", file.display()))?;
@@ -137,11 +137,11 @@ pub(super) fn take_off_entry(exe: &Path, home: &Path) -> Result<String, String> 
     Ok(format!("{} is gone", file.display()))
 }
 
-/// Whether the program at `file` is an llx-desk, by what its `--version` says.
-fn is_llx_desk(file: &Path) -> bool {
+/// Whether the program at `file` is an llxterm, by what its `--version` says.
+fn is_llxterm(file: &Path) -> bool {
     let mut asked = std::process::Command::new(file);
     asked.arg("--version");
-    within(asked, Duration::from_secs(5)).is_ok_and(|ran| ran.out.starts_with("llx-desk "))
+    within(asked, Duration::from_secs(5)).is_ok_and(|ran| ran.out.starts_with("llxterm "))
 }
 
 /// The profile a login shell of `shell` reads: zsh's `.zprofile`; bash's first of `.bash_profile`,
@@ -164,7 +164,7 @@ pub(super) fn profile_of(shell: &str, home: &Path) -> PathBuf {
 /// The line that puts ~/.local/bin on the PATH, at the end of `profile`, once; whether it was
 /// added now.
 pub(super) fn add_to_profile(profile: &Path) -> Result<bool, String> {
-    const MARK: &str = "# Added by LLX Desk: its command, llx-desk, in ~/.local/bin.";
+    const MARK: &str = "# Added by Localix Terminal: its command, llxterm, in ~/.local/bin.";
     let had = std::fs::read_to_string(profile).unwrap_or_default();
     if had.contains(MARK) {
         return Ok(false);

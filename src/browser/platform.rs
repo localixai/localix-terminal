@@ -27,7 +27,7 @@ pub(super) fn unseen() -> bool {
 /// runs as the app (inside its bundle) or shows a window. Otherwise (a program run from a
 /// terminal with no window yet: a test, an app with nothing to show) it is a background app
 /// macOS never activates: one started from the terminal the person types in would take their
-/// keys at launch. Nothing llx-desk does activates it but the person's own acts (appkit.rs).
+/// keys at launch. Nothing llxterm does activates it but the person's own acts (appkit.rs).
 #[cfg(target_os = "macos")]
 pub(super) fn dock(
     target: &EventLoopWindowTarget<super::host::Cmd>,
@@ -116,7 +116,7 @@ pub(super) fn collapse_button(
     super::nspanel::collapse_to(window, proxy);
 }
 
-/// The keys go back to the app the person was in: llx-desk's window is out of sight.
+/// The keys go back to the app the person was in: llxterm's window is out of sight.
 #[cfg(target_os = "macos")]
 pub(super) fn give_up_keys() {
     super::nspanel::give_up_keys();

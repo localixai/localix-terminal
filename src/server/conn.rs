@@ -228,7 +228,7 @@ fn initialize(shared: &Shared, conn: &Conn, params: &Value) -> Outcome {
     let result = json!({
         "protocolVersion": PROTOCOL,
         "serverInfo": {
-            "name": "llx-desk",
+            "name": "llxterm",
             "version": env!("CARGO_PKG_VERSION"),
             "build": shared.build,
             "pid": std::process::id(),

@@ -38,7 +38,7 @@ fn the_variables_an_integration_names_its_own_stay_out() {
         "CLAUDE_PLUGIN_ROOT",
         "CLAUDE_CODE_USE_BEDROCK",
         "PATH",
-        "LLX_DESK_SCRUB",
+        "LLXTERM_SCRUB",
     ]
     .map(|name| (name.to_string(), "1".to_string()));
     let kept = scrubbed_of(vars.into_iter(), "CLAUDECODE, CLAUDE_PLUGIN_*,*");

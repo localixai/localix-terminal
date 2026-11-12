@@ -1,9 +1,9 @@
 ---
-description: Quit LLX Desk, its window and its terminals
+description: Quit Localix Terminal, its window and its terminals
 disable-model-invocation: true
-allowed-tools: Bash(llx-desk quit:*)
+allowed-tools: Bash(llxterm quit:*)
 ---
 
-!`llx-desk quit 2>&1`
+!`llxterm quit 2>&1`
 
-Say that LLX Desk was asked to quit. The next `llx-desk window` call starts it again.
+Say that Localix Terminal was asked to quit. The next `llxterm window` call starts it again.

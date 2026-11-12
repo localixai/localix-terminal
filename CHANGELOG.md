@@ -7,7 +7,7 @@
 - **An end-to-end run** (`scripts/e2e.sh`): this tree's app is started beside the person's and
   used as a person and an agent use it, in dark and in light; each step is checked, and each
   scene is pictured. The README's pictures are its output, of a demo project.
-- **`LLX_DESK_RUNTIME`** names the directory of an app's lock and socket: an app given one runs
+- **`LLXTERM_RUNTIME`** names the directory of an app's lock and socket: an app given one runs
   apart from the person's, and leaves their setup (the command's link, the agents' entries)
   alone.
 - **The Store.** A tab (⇧⌘S, the "+" menu, `open` with `kind: "store"`) that lists plugins,
@@ -32,8 +32,15 @@
 - **The project is Localix Terminal, the terminal for you and your coding agents.** The README,
   the landing page and the package's description say what it is: a terminal whose sessions
   belong to a project and come back as you left them, where Claude Code, Codex or any CLI agent
-  runs as it ships, with the browser, the board and the Store beside it. The app and its command
-  keep their names, LLX Desk and `llx-desk`.
+  runs as it ships, with the browser, the board and the Store beside it.
+- **The app is Localix Terminal and its command is `llxterm`.** The repository is
+  `rsaryev/localix-terminal`, the bundle is `io.github.rsaryev.localix-terminal`, the plugin and
+  the MCP server are `llxterm`, the skills are `llxterm:window`, `llxterm:board` and
+  `llxterm:end`, and the variables a terminal is given start with `LLXTERM_`. The data and
+  settings live in `~/.local/share/llxterm` and `~/.config/llxterm`. A release's archives are
+  `Localix-Terminal-macos.zip`, `Localix-Terminal-macos.dmg` and
+  `llxterm-x86_64-unknown-linux-gnu.tar.gz`. Nothing is carried over from a copy of 0.1.6 or
+  older: install this one afresh and open its projects again.
 - **The window is dark by default.** It followed the system's appearance until the theme was
   chosen; Settings → Appearance still offers System and Light, and a theme already chosen stays.
 - **A kind of tab that draws itself is one description.** The window, the "+" menu, the
@@ -155,7 +162,7 @@
   by themselves: the shell starts on a file of the app's that reads the person's own files
   first (for bash: `/etc/profile`, then the first of `.bash_profile`, `.bash_login`,
   `.profile`, as a login shell reads them), then marks each command's start and end; nothing
-  of theirs is changed, and `LLX_DESK_SHELL_MARKS=0` in the environment leaves the shell as it
+  of theirs is changed, and `LLXTERM_SHELL_MARKS=0` in the environment leaves the shell as it
   is. A bash with a DEBUG trap of its own is left unmarked, and so is a line that is one
   subshell alone (`( … )`). Any other shell that marks its commands (OSC 133) is read the same
   way.
@@ -186,7 +193,7 @@
   is how a file or a page an agent opens joins its terminal's session (Sessions, above), and
   the keys stay in the terminal. A terminal or the board an agent opens is a tab of its own
   and leaves the window to what you look at.
-- Claude Code in a terminal of LLX Desk opens the pages the person asks for ("open google") as
+- Claude Code in a terminal of Localix Terminal opens the pages the person asks for ("open google") as
   tabs of the window, not in another browser it has the tools of, unless the person names it.
   It is told so by a row at the start of the session, which holds where an organization's
   policy passes over what a plugin adds to the system prompt.
@@ -229,11 +236,11 @@
   arrive as one paste, and the line breaks that end them are Enter after it. Before, each line
   was Enter and a prompt sent its first line alone. One line is typed as ever.
 
-- `llx-desk mcp` speaks the MCP revision an agent asks for: every one from 2024-11-05 to
+- `llxterm mcp` speaks the MCP revision an agent asks for: every one from 2024-11-05 to
   2025-11-25 after the `initialize` handshake, and 2026-07-28 with none, each request naming its
   revision (`server/discover` says which are served; one not served is refused with the list to
   try). It tells the agent what the window is for (pages, terminals, the board), names the tool
-  "LLX Desk Window" and says that it changes things outside the agent. A call the agent cancels
+  "Localix Terminal Window" and says that it changes things outside the agent. A call the agent cancels
   is not answered, and one it follows with a progress token is told every few seconds that it
   still runs, so a long wait is not given up on. Arguments that are not an object, an id that is
   neither text nor a number, a cursor into the one-page tool list and a batch of requests are
@@ -266,7 +273,7 @@
   before notifying its waiters.
 - Normal tests now enforce documented, named Rust modules under 300 working lines in `src/`,
   domain-model independence from adapters, and unchanged existing SQL migrations.
-- The Claude Code plugin asks the program that answered last first, so a `llx-desk` missing from
+- The Claude Code plugin asks the program that answered last first, so a `llxterm` missing from
   the PATH no longer costs a failed start every few seconds, and redraws its line only when
   something changed. A hung app is no longer asked again under each of the program's places, and
   closing the tabs as a session ends waits 1.5 s at most.
@@ -309,7 +316,7 @@
 
 - The mini player, the small floating preview of the tab. The main window's yellow button and ⌘M
   (Window ▸ Minimize) put the window away: nothing of it on screen, its pages still drawing, its
-  tabs kept. Only the Dock icon or `llx-desk open` brings it back, never an agent.
+  tabs kept. Only the Dock icon or `llxterm open` brings it back, never an agent.
   The bar has no mini button and no Event Center button any more; ⇧⌘E and the Window menu open
   the Event Center, under the bar's end.
 
@@ -372,7 +379,7 @@
   the agent's `mcp add` wrote the entry anew, without the timeouts and tool lists you set in it.
 - GitHub Copilot gives a call of the window tool two minutes (it gave 30 seconds, less than a
   terminal may be waited on); an entry added before is added once more with the timeout.
-- After adding the tool, Settings and `llx-desk setup` name the agent's own reload command
+- After adding the tool, Settings and `llxterm setup` name the agent's own reload command
   (`/mcp reload` in Gemini CLI and Copilot) in place of starting it again.
 - On Linux, a terminal opened with a command (an agent from "+") names that program in front, not
   `sh`: the shell that only runs the command is looked past, as macOS's replaces itself.
@@ -408,22 +415,22 @@
 
 ### Also in this release
 
-- **A full app.** The window is an ordinary window of the app, not a panel: a click makes LLX Desk
+- **A full app.** The window is an ordinary window of the app, not a panel: a click makes Localix Terminal
   the app in front, with its menu, and the green button zooms it on the current desktop. A window an agent
-  opens still comes to the front without taking the keys. `llx-desk open` has the system open the
+  opens still comes to the front without taking the keys. `llxterm open` has the system open the
   app and is done, so closing the terminal it ran in leaves the app running.
 - **Apple Silicon only on macOS.** The app is built for Apple Silicon; there is no Intel or
   universal build.
-- **A signed, notarized disk image.** A release carries `LLX-Desk-macos.dmg` (the app and a link
+- **A signed, notarized disk image.** A release carries `Localix-Terminal-macos.dmg` (the app and a link
   to Applications) beside the zip `install.sh` fetches, both made by `scripts/dmg.sh`, signed with
   a Developer ID and notarized by Apple, so Gatekeeper opens them on any Mac. A macOS job in CI
   builds the app and smoke-tests it on every push, and the release builds it on a Mac runner.
 - **Programs in a terminal can ask for the camera, the microphone and the rest.** macOS counts a
-  program run in a terminal as part of LLX Desk: the app now carries what the system asks the
+  program run in a terminal as part of Localix Terminal: the app now carries what the system asks the
   person for each (microphone, camera, location, Bluetooth, contacts, calendars, reminders,
   photos, other apps, the Desktop, Documents and Downloads folders, volumes, administrator
   rights), and is signed with the matching entitlements, so the system asks instead of refusing.
-- **A Homebrew cask.** `packaging/homebrew/llx-desk.rb` is the cask for a tap, filled in with a
+- **A Homebrew cask.** `packaging/homebrew/llxterm.rb` is the cask for a tap, filled in with a
   release's version and checksum.
 - The terminal's cursor is in the text's colour again (an outline in a pane not in use), and the
   terminal draws no overview ruler beside its scrollbar.
@@ -487,7 +494,7 @@
   is left behind waiting for the app.
 - **The mini player only when you ask.** The window opens as an ordinary window and stays one
   when you click another app; the mini (the small floating preview) comes from its button in the
-  bar, the yellow button or ⌘M, as a video's player shrinks to a corner. `LLX_DESK_KEEP_EXPANDED`
+  bar, the yellow button or ⌘M, as a video's player shrinks to a corner. `LLXTERM_KEEP_EXPANDED`
   is gone with the old behaviour.
 
 - **Projects are the scope of everything.** A project is a folder (the nearest one with `.git`),
@@ -498,37 +505,37 @@
   address field's suggestions keep to the project shown; an agent working in another project
   never moves the window, its project gets a dot. A project comes back as it was left, after a
   restart too: its pages at their addresses, a shell in each terminal's folder with the last
-  screen dimmed above. `llx-desk open DIR` opens the window on a folder as a project. Every call
-  names its project (`--project DIR`, `LLX_DESK_PROJECT`, else the folder it runs in); `--as NAME`
+  screen dimmed above. `llxterm open DIR` opens the window on a folder as a project. Every call
+  names its project (`--project DIR`, `LLXTERM_PROJECT`, else the folder it runs in); `--as NAME`
   is an agent of that project. The plugin passes its session's folder. A new database
-  (`llx-desk.sqlite`) and protocol 3: nothing of the old owner strings is carried over.
+  (`llxterm.sqlite`) and protocol 3: nothing of the old owner strings is carried over.
 - The tab's menu fits its kind: Reload, Duplicate, Copy Address, Open in Default Browser (also
   ⇧⌘O) for a page; Copy Folder, Show in Finder for a terminal; Close Other Tabs and Close Tabs
   Below for all.
 
-- **LLX Desk is the app, and the app is all there is to install.** It is the server: the window,
+- **Localix Terminal is the app, and the app is all there is to install.** It is the server: the window,
   the terminals, the board and the database live in it, and it serves one API on a unix socket.
-  The `llx-desk` command, `llx-desk mcp` and the Claude Code plugin are thin faces of that API with
+  The `llxterm` command, `llxterm mcp` and the Claude Code plugin are thin faces of that API with
   nothing of their own. On macOS it is a regular app (Dock icon, menu bar built from the shortcuts,
   ⌘Q); the first call of an agent starts it through LaunchServices, in the background, and nothing
-  an agent does takes your keys. Opened, it links `llx-desk` into `~/.local/bin` and brings the
+  an agent does takes your keys. Opened, it links `llxterm` into `~/.local/bin` and brings the
   window to you, with what the project had open (nothing left open, the window's start of a new
   tab; no terminal opens unasked). The Dock icon brings the window back;
   the main window's close button quits as ⌘Q does (as does the Dock's Quit, or logging out),
   asking first while terminals run a program. `install.sh` installs the app (macOS:
-  `~/Applications`; Linux: the program, the command and a desktop entry, `llx-desk open`).
-- **Settings → Integrations** and `llx-desk setup`: the command line, the Claude Code plugin
+  `~/Applications`; Linux: the program, the command and a desktop entry, `llxterm open`).
+- **Settings → Integrations** and `llxterm setup`: the command line, the Claude Code plugin
   (installed from the app's own bundle, of its version, and refreshed when the app updates), and
   the window tool as an MCP server in Codex, with one click; any other MCP host
-  takes the entry *Copy MCP Entry* gives (`llx-desk setup mcp`).
+  takes the entry *Copy MCP Entry* gives (`llxterm setup mcp`).
 - **The API describes itself**: `api/describe` gives every method with its params as JSON Schema,
   the events, and the window tool's description and schema, from one table the dispatch reads
-  too. `llx-desk mcp` is back as an MCP server on stdio whose one tool is that window tool. Only
+  too. `llxterm mcp` is back as an MCP server on stdio whose one tool is that window tool. Only
   the user's own processes are served.
 - Removed: the plugin's download of a program of its own version (it runs the app's), the
   `window/closed` event (the window no longer closes but to the mini, or by quitting), and the
   handling of servers of the older protocol.
-- **No daemon apart from the app**: `llx-desk status` and `llx-desk quit` replace `serve status`
+- **No daemon apart from the app**: `llxterm status` and `llxterm quit` replace `serve status`
   and `serve stop` (`status` exits 3 when the app is not running); the methods are `app/status`
   and `app/quit`, the event `app/quitting`; the log is `app.log`. `serve` is the app's own
   launch, no longer listed.
@@ -560,7 +567,7 @@
 - **Settings**, a tab of the window: theme (system, light, dark), window transparency (off, low,
   standard, high), interface font, code font and the terminals' font size, all applied at once;
   every shortcut can be recorded anew, taken off, reset, or all reset, and a key another shortcut
-  has asks before it moves. Kept in `~/.config/llx-desk/settings.json`.
+  has asks before it moves. Kept in `~/.config/llxterm/settings.json`.
 - A terminal takes a Mac terminal's keys: ⌘K clears it (a shell draws its prompt again at the
   top), ⌘← ⌘→ go to the line's start and end, ⌥← ⌥→ move by words, ⌘⌫ ⌥⌫ delete to the start and
   the word before, ⌘↑ ⌘↓ scroll to the top and bottom, ⌘A selects all.
@@ -570,7 +577,7 @@
   title the session sets (Claude Code's topic, for one), spinners left off. Any terminal shows its
   program's title there.
 - The core names no agent's variables: what a terminal leaves out of its caller's environment is
-  what the integration lists in `LLX_DESK_SCRUB` (the Claude Code plugin's launcher lists Claude
+  what the integration lists in `LLXTERM_SCRUB` (the Claude Code plugin's launcher lists Claude
   Code's session variables).
 - Leaks and waste found in a review of the whole: a terminal whose program ended, or whose tab the
   person closed, gives its place to a new one at the limit (now 16) instead of refusing it, and
@@ -586,21 +593,21 @@
   a program, read from the call, not from words in it.
 
 - The desk knows no model and no agent. `goal` and its decision model (Jev over OpenRouter, Claude
-  Haiku through Claude Code), the check of a card handed in, `llx-desk key`, `llx-desk mcp` and the
+  Haiku through Claude Code), the check of a card handed in, `llxterm key`, `llxterm mcp` and the
   plugin's MCP server are gone: the desk makes no network call and holds no key. Every agent drives
-  it from its shell with `llx-desk window`, and an integration (the Claude Code plugin today) is its
+  it from its shell with `llxterm window`, and an integration (the Claude Code plugin today) is its
   own side of it. A card handed in goes to Review as it is; only the person accepts.
 - A page is acted on by the refs of its outline (`[e12]`): `click` (one ref or several, in order),
   `fill` (`{"e4": "text"}`, `{{secret:NAME}}` typing a saved secret) and `select`
   (`{"e7": "Large"}`). A ref that is gone or covered stops the rest and says so.
 - A call with a field the `window` tool does not know (`goal`) is refused with the fields it takes,
   and nothing is done, where it used to be ignored.
-- `llx-desk window --board` prints the project's open cards from `.localix/board.json`, with no daemon: what
+- `llxterm window --board` prints the project's open cards from `.localix/board.json`, with no daemon: what
   an integration gives an agent as it starts. The Claude Code plugin's `board` skill loads with it.
-- The Claude Code plugin works through the CLI: its skills allow `Bash(llx-desk:*)`, its worker
-  calls `llx-desk window`, and a worker's call on the board without its name as `who` is refused
+- The Claude Code plugin works through the CLI: its skills allow `Bash(llxterm:*)`, its worker
+  calls `llxterm window`, and a worker's call on the board without its name as `who` is refused
   with the name to pass.
-- `LLX_DESK_PROJECT` names the project a call belongs to, when it is not the one around the
+- `LLXTERM_PROJECT` names the project a call belongs to, when it is not the one around the
   current directory.
 - The Event Center: a bell in the window's toolbar counts what waits for you, and opens a list of
   it, each with its buttons: a card handed in (Accept, Open Board), a blocked card (Unblock), a
@@ -647,8 +654,8 @@
   value too, as the outline shows them.
 - One change feed under the desk: what changes is recorded once, by whoever owns it, and every
   part that cares (the notes to the agent, the Event Center, the board's file) reads it at its own
-  pace. It is kept in a SQLite database (`~/.local/share/llx-desk/desk.db`, moved with
-  `LLX_DESK_DATA`) with the boards and the Event Center's journal, written in the same transaction
+  pace. It is kept in a SQLite database (`~/.local/share/llxterm/desk.db`, moved with
+  `LLXTERM_DATA`) with the boards and the Event Center's journal, written in the same transaction
   as the change it announces, so after a restart each reader goes on from where it was. The
   architecture is described in `docs/architecture.md`.
 - The Event Center keeps a journal: every event it showed, with what you did with it (seen,
@@ -686,7 +693,7 @@
 - **Calls that name what they do not take are refused, with the reason, rather than dropped.** In a
   `tabs` entry of `open`, a field no call has (a typo in `command`) is refused with nothing opened.
   On the CLI, `--follow` and `--json` without `--said`, a JSON argument with `--end`, `--said` or
-  `--board`, `status` or `quit` with any argument, `llx-desk secret NAME` typed on a terminal, and
+  `--board`, `status` or `quit` with any argument, `llxterm secret NAME` typed on a terminal, and
   `--as` or `--project` followed by another option, exit with code 3 and say why. `--said --json`
   still follows, as before.
 
@@ -792,22 +799,22 @@
 - A goal no longer offers to type the values it already typed into a password field (it reads as dots)
   again, nor trades them between fields; a field the page refused is offered its other values.
 - The helper's report ends with what the model was asked: `Model: 5 decisions, $0.0006, 1.9 s.`
-- Secrets: `llx-desk secret NAME < FILE` saves one (0600); a goal's `values` and a terminal's `input`
+- Secrets: `llxterm secret NAME < FILE` saves one (0600); a goal's `values` and a terminal's `input`
   name it as `{{secret:NAME}}`. The daemon types the value, and every answer shows `{{secret:NAME}}`
   where it would be, as typed, in an address, in JSON or in base64; a goal's decision model never sees
   it. What a goal's model is sent has credential shapes masked (provider keys, bearer tokens, a
   password in an address, a value assigned to a credential's name).
 - The expanded window collapses to the mini when the person clicks in another app (macOS): the
   window never takes the app's focus, so a click elsewhere is what losing it means.
-  `LLX_DESK_KEEP_EXPANDED=1` keeps it open beside their work.
+  `LLXTERM_KEEP_EXPANDED=1` keeps it open beside their work.
 - A benchmark of the goal helper (`bench/`): tasks on the demo sites run through the desk in a real
   window, scored by a check of the page's state (`51/54`), with steps, requests, cost and time, one row
-  per run in `bench/SCORES.md` and each run in `bench/runs/`. Paid, so only with `LLX_DESK_BENCH=1`.
+  per run in `bench/SCORES.md` and each run in `bench/runs/`. Paid, so only with `LLXTERM_BENCH=1`.
 - A goal's helper presses keys (`PRESS_KEY`, from the one list a call's `keys` take, `view::KEYS`) and goes
   to an address among its `values` (`GO_TO`), through the same paths as a call's `keys` and `url`; on a
   terminal it presses keys too. It stops on the third try in a row of an action that changes nothing it
   can read, and chooses BLOCKED for an error its values cannot fix.
-- `llx-desk key < FILE` saves the OpenRouter key a goal needs (0600), read when `OPENROUTER_API_KEY` is
+- `llxterm key < FILE` saves the OpenRouter key a goal needs (0600), read when `OPENROUTER_API_KEY` is
   not set: an agent's host often starts the MCP server without the person's shell variables.
 - The MCP server takes over a new build of itself while idle (`exec` on the same pipes) and tells the host
   `notifications/tools/list_changed`; a build that does not answer `--version` is refused.
@@ -815,9 +822,9 @@
   listed with no page behind them.
 - A terminal's `wait_for` waits for the program's output, not the echo of the typed input.
 - `ArrowUp` and the other names a page takes are terminal keys too.
-- One daemon per user: the lock and the socket are at a fixed per-user place that `LLX_DESK_HOME` and
-  `TMPDIR` do not move (`LLX_DESK_HOME` now places only the log, screenshots and comments). A second
-  `serve` exits 0 and prints nothing. `LLX_DESK_NO_WINDOW` is honoured by `serve`.
+- One daemon per user: the lock and the socket are at a fixed per-user place that `LLXTERM_HOME` and
+  `TMPDIR` do not move (`LLXTERM_HOME` now places only the log, screenshots and comments). A second
+  `serve` exits 0 and prints nothing. `LLXTERM_NO_WINDOW` is honoured by `serve`.
 - Protocol v2 between the clients and the daemon: JSON-RPC 2.0 with `initialize`, ids and pipelined calls,
   an idempotency key per call, notifications by subscription, a screenshot as bytes on the connection, a
   request's panic as that request's error. The CLI is a v2 client; `window --said --follow` subscribes to
@@ -825,7 +832,7 @@
   `serve stop` still ends it.
 - The owner of a `window` call from the command line is now found from `CLAUDE_PROJECT_DIR` when Claude
   Code sets it (as the MCP server does), else from the current directory, so both reach the same tabs.
-- `llx-desk mcp`: a stdio MCP server with the tools `open`, `act`, `look`, `screenshot`, `tabs` and
+- `llxterm mcp`: a stdio MCP server with the tools `open`, `act`, `look`, `screenshot`, `tabs` and
   `comments`, one persistent connection to the daemon that is pinged, reconnected and subscribed again by
   itself, calls asked again with their idempotency key, a goal's steps as progress. The Claude Code plugin
   starts it (`.mcp.json`), and its skill prefers the tools, the command line being the fallback.

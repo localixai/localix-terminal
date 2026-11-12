@@ -8,10 +8,10 @@ fn a_warning_is_a_line_with_its_time_and_where_it_was_said() {
     assert_eq!(
         line(
             1_794_500_000,
-            "llx_desk::desk",
+            "llxterm::desk",
             &format_args!("the window did not open: {}", "no folder")
         ),
-        "1794500000 llx_desk::desk: the window did not open: no folder"
+        "1794500000 llxterm::desk: the window did not open: no folder"
     );
 }
 

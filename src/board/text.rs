@@ -112,15 +112,15 @@ impl Board {
         out
     }
 
-    /// The board as an agent's new session starts knowing it (`llx-desk window --board`): none when
+    /// The board as an agent's new session starts knowing it (`llxterm window --board`): none when
     /// nothing on it is open (every card Done or Discarded, or none at all).
     pub fn brief(&self, now: u64) -> Option<String> {
         let open = (self.cards.iter())
             .any(|card| !matches!(card.column, Column::Done | Column::Discarded));
         open.then(|| {
             format!(
-                "This project has a board of cards in the llx-desk window, which the person \
-                 watches: `llx-desk window '{{\"action\": \"open\", \"kind\": \"board\"}}'` \
+                "This project has a board of cards in the llxterm window, which the person \
+                 watches: `llxterm window '{{\"action\": \"open\", \"kind\": \"board\"}}'` \
                  gives its tab (the same each time), and an `interact` on it with an `op` works it \
                  (`take`, `review`, `add`…); only the person moves a card to Done. {DATA} {} card(s) \
                  on it:{}",

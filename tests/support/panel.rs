@@ -3,7 +3,7 @@
 
 use std::time::{Duration, Instant};
 
-use llx_desk::browser::{
+use llxterm::browser::{
     Browser, Driver, Ledger, Panel, Past, Place, TabKind, WebviewDriver, Window,
 };
 use serde_json::{Value, json};
@@ -66,7 +66,7 @@ fn shown(
 }
 
 pub(crate) fn scenario(browser: &Browser, driver: &WebviewDriver) {
-    let page = llx_desk::terminal::page("session 1 · cat");
+    let page = llxterm::terminal::page("session 1 · cat");
     let panel = std::sync::Arc::new(browser.panel(1, "session 1 · cat", page));
     let second = Duration::from_secs(1);
     let wait = Duration::from_secs(10);
@@ -248,7 +248,7 @@ pub(crate) fn glass(browser: &Browser, driver: &WebviewDriver, window: &Window, 
 /// A panel opened before any browser window draws as a shown page does, with animation frames
 /// (an emulator draws in them): WebKit must not take it for a hidden one.
 pub(crate) fn first(browser: &Browser) {
-    let page = llx_desk::terminal::page("session 0 · sh");
+    let page = llxterm::terminal::page("session 0 · sh");
     let panel = browser.panel(9, "session 0 · sh", page);
     let deadline = Instant::now() + Duration::from_secs(10);
     while browser.peek(&panel, "typeof W") != Ok(json!("function")) {
@@ -260,7 +260,7 @@ pub(crate) fn first(browser: &Browser) {
     assert_eq!(showing(browser), Some((tab.clone(), vec![tab.clone()])));
     // Long enough for WebKit to have settled what it thinks of the window.
     std::thread::sleep(Duration::from_millis(300));
-    // A window that never takes the keyboard never makes llx-desk the active app either: the person's
+    // A window that never takes the keyboard never makes llxterm the active app either: the person's
     // full-screen terminal keeps its keys while a test, `exec` or the agent opens one.
     #[cfg(target_os = "macos")]
     for _ in 0..20 {
@@ -310,7 +310,7 @@ pub(crate) fn first(browser: &Browser) {
     browser.group(&tab, "alpha");
     switcher("alpha", false);
     browser.group("t8", "beta <i>");
-    let other = browser.panel(8, "session 8 · sh", llx_desk::terminal::page("sh"));
+    let other = browser.panel(8, "session 8 · sh", llxterm::terminal::page("sh"));
     switcher("alpha", true);
     own(1);
     // The history menu lists the shown project's past, as the app tells it; what became of each
@@ -480,7 +480,7 @@ fn history_menu(browser: &Browser) {
         std::thread::sleep(Duration::from_millis(20));
     }
     let after = browser.listing().unwrap_or_default();
-    let ids = |listed: &[llx_desk::WindowTab]| -> Vec<String> {
+    let ids = |listed: &[llxterm::WindowTab]| -> Vec<String> {
         listed.iter().map(|tab| tab.id.clone()).collect()
     };
     assert_eq!(ids(&after), ids(&before));
@@ -522,7 +522,7 @@ pub(crate) fn active() -> bool {
 pub(crate) fn windows(browser: &Browser) {
     let before = browser.listing().expect("a window is open").len();
     browser.new_window(77);
-    let page = llx_desk::terminal::page("session 41 · sh");
+    let page = llxterm::terminal::page("session 41 · sh");
     let panel = browser.panel(41, "session 41 · sh", page);
     let deadline = Instant::now() + Duration::from_secs(10);
     while browser.peek(&panel, "typeof W") != Ok(json!("function")) {

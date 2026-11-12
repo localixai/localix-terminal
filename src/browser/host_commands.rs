@@ -132,7 +132,7 @@ pub(in super::super) enum Cmd {
         expect(dead_code, reason = "only macOS tells of presses in its windows")
     )]
     Pressed(usize, f64, f64),
-    /// The person opened the app (its Dock icon, `llx-desk open`): the window back, and the app
+    /// The person opened the app (its Dock icon, `llxterm open`): the window back, and the app
     /// they use from then on.
     Opened,
     /// For checks: the window's state, `hidden`, `away` or `expanded`.

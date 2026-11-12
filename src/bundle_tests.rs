@@ -5,11 +5,14 @@ use std::path::Path;
 
 #[test]
 fn the_program_of_a_bundle_names_it_and_any_other_names_none() {
-    let exe = Path::new("/Applications/LLX Desk.app/Contents/MacOS/llx-desk");
-    assert_eq!(of(exe), Some(Path::new("/Applications/LLX Desk.app")));
-    assert_eq!(of(Path::new("/usr/local/bin/llx-desk")), None);
-    assert_eq!(of(Path::new("/x/Contents/MacOS/llx-desk")), None);
-    assert_eq!(of(Path::new("llx-desk")), None);
+    let exe = Path::new("/Applications/Localix Terminal.app/Contents/MacOS/llxterm");
+    assert_eq!(
+        of(exe),
+        Some(Path::new("/Applications/Localix Terminal.app"))
+    );
+    assert_eq!(of(Path::new("/usr/local/bin/llxterm")), None);
+    assert_eq!(of(Path::new("/x/Contents/MacOS/llxterm")), None);
+    assert_eq!(of(Path::new("llxterm")), None);
 }
 
 #[test]
@@ -28,10 +31,14 @@ fn a_run_is_the_app_for_what_the_system_adds_and_the_command_for_the_rest() {
 
 #[test]
 fn an_app_on_a_disk_image_or_translocated_is_not_in_place() {
-    assert!(temporary(Path::new("/Volumes/LLX Desk/LLX Desk.app")));
     assert!(temporary(Path::new(
-        "/private/var/folders/x/AppTranslocation/ABC/d/LLX Desk.app"
+        "/Volumes/Localix Terminal/Localix Terminal.app"
     )));
-    assert!(!temporary(Path::new("/Applications/LLX Desk.app")));
-    assert!(!temporary(Path::new("/Users/me/Applications/LLX Desk.app")));
+    assert!(temporary(Path::new(
+        "/private/var/folders/x/AppTranslocation/ABC/d/Localix Terminal.app"
+    )));
+    assert!(!temporary(Path::new("/Applications/Localix Terminal.app")));
+    assert!(!temporary(Path::new(
+        "/Users/me/Applications/Localix Terminal.app"
+    )));
 }

@@ -12,10 +12,10 @@ pub struct Caller {
 }
 
 impl Caller {
-    /// The caller in `cwd`, named `agent`: its project is `LLX_DESK_PROJECT` when set (an
+    /// The caller in `cwd`, named `agent`: its project is `LLXTERM_PROJECT` when set (an
     /// integration that knows it better), else the project around `cwd` (`projects::root_of`).
     pub fn of(cwd: &std::path::Path, agent: Option<String>) -> Self {
-        let named = std::env::var_os("LLX_DESK_PROJECT")
+        let named = std::env::var_os("LLXTERM_PROJECT")
             .filter(|dir| !dir.is_empty())
             .map(PathBuf::from);
         let project = named.unwrap_or_else(|| crate::projects::root_of(cwd));
@@ -57,16 +57,16 @@ impl Caller {
 }
 
 /// The variables a program the desk starts gets: this process's, but those the caller's
-/// integration names its own in `LLX_DESK_SCRUB` (comma-separated names; `NAME_*` names all that
+/// integration names its own in `LLXTERM_SCRUB` (comma-separated names; `NAME_*` names all that
 /// begin so), which say what session called, not what the person set.
 pub(super) fn scrubbed() -> Vec<(String, String)> {
-    let scrub = std::env::var("LLX_DESK_SCRUB").unwrap_or_default();
+    let scrub = std::env::var("LLXTERM_SCRUB").unwrap_or_default();
     scrubbed_of(std::env::vars(), &scrub)
 }
 
 fn scrubbed_of(vars: impl Iterator<Item = (String, String)>, scrub: &str) -> Vec<(String, String)> {
     let named = |name: &str| {
-        name == "LLX_DESK_SCRUB"
+        name == "LLXTERM_SCRUB"
             || scrub
                 .split(',')
                 .map(str::trim)

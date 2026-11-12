@@ -14,9 +14,9 @@ pub(super) enum Kept {
     Json(&'static [&'static str]),
     /// JSON: the command line (an array, the program first) at this path.
     JsonLine(&'static [&'static str]),
-    /// TOML: `command` in the `[mcp_servers.llx-desk]` table.
+    /// TOML: `command` in the `[mcp_servers.llxterm]` table.
     Toml,
-    /// YAML: `command:` under `llx-desk:`.
+    /// YAML: `command:` under `llxterm:`.
     Yaml,
 }
 
@@ -93,7 +93,7 @@ fn at_path<'a>(config: &'a Value, path: &[&str]) -> Option<&'a Value> {
 }
 
 /// The server's table in Codex's TOML.
-const TOML_TABLE: &str = "mcp_servers.llx-desk";
+const TOML_TABLE: &str = "mcp_servers.llxterm";
 
 /// `command` in the server's TOML table.
 fn toml_command(text: &str) -> Option<String> {

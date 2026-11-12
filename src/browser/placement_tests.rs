@@ -102,7 +102,7 @@ fn a_frame_kept_for_a_screen_that_is_gone_is_not_opened_out_of_reach() {
 
 #[test]
 fn what_the_person_set_is_kept_in_a_file_between_launches() {
-    let dir = std::env::temp_dir().join(format!("llx-desk-kept-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("llxterm-kept-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let file = dir.join("state").join("window.json");
     // Nothing kept yet, or a file that does not read: as on a first launch.

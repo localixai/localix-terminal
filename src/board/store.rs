@@ -2,7 +2,7 @@
 //! transaction as the notice that it changed.
 //!
 //! A project's board is also written out to `.localix/board.json` in its folder, for an
-//! integration to read (`llx-desk window --board`) and for git to keep: an export, made from the
+//! integration to read (`llxterm window --board`) and for git to keep: an export, made from the
 //! row after each change and made again from the rows when the desk starts. The desk reads it back
 //! only once: a project whose board has no row yet takes its file as the board it had before.
 

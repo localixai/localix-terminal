@@ -8,12 +8,12 @@ use super::install::tests::published;
 use super::*;
 use crate::fetch::tests::folder;
 
-const NAME: &str = "llx-desk-x86_64-unknown-linux-gnu.tar.gz";
+const NAME: &str = "llxterm-x86_64-unknown-linux-gnu.tar.gz";
 
-/// An updater of a build of `current`, its app the file `dir/app/llx-desk` (which says `old`),
+/// An updater of a build of `current`, its app the file `dir/app/llxterm` (which says `old`),
 /// reading the releases laid out under `dir`. Every change of what it tells is kept.
 fn updater(dir: &Path, current: &str) -> (Updater, PathBuf, Arc<Mutex<Vec<Stage>>>) {
-    let app = dir.join("app/llx-desk");
+    let app = dir.join("app/llxterm");
     std::fs::create_dir_all(app.parent().unwrap()).unwrap();
     std::fs::write(&app, "old").unwrap();
     let place = app.clone();
@@ -66,12 +66,9 @@ fn a_newer_release_is_fetched_made_ready_and_put_in_place_when_asked() {
     assert_eq!(std::fs::read_to_string(&app).unwrap(), "old");
     let again = updater.apply().unwrap();
     assert!(std::fs::read_to_string(&app).unwrap().contains("echo new"));
+    assert_eq!((again.place, again.old), (app, dir.join("app/llxterm.old")));
     assert_eq!(
-        (again.place, again.old),
-        (app, dir.join("app/llx-desk.old"))
-    );
-    assert_eq!(
-        std::fs::read_to_string(dir.join("app/llx-desk.old")).unwrap(),
+        std::fs::read_to_string(dir.join("app/llxterm.old")).unwrap(),
         "old"
     );
     let _ = std::fs::remove_dir_all(dir);
@@ -97,12 +94,7 @@ fn a_release_that_is_not_newer_is_no_update() {
 #[test]
 fn a_newer_release_with_no_build_for_this_system_is_no_update() {
     let dir = folder("updater-other-systems");
-    published(
-        &dir,
-        "0.2.0",
-        "llx-desk-for-another-system.tar.gz",
-        "theirs",
-    );
+    published(&dir, "0.2.0", "llxterm-for-another-system.tar.gz", "theirs");
     let (updater, _, _) = updater(&dir, "0.1.5");
     updater.check_now();
     let told = updater.told();
@@ -153,13 +145,13 @@ fn what_is_fetched_and_is_not_the_app_is_thrown_away() {
         archive: Some(NAME),
         dir: dir.join("staging"),
         place: Box::new(move || Ok(place.clone())),
-        trusted: |_| Err("it is not signed and notarized as LLX Desk is".into()),
+        trusted: |_| Err("it is not signed and notarized as Localix Terminal is".into()),
     });
     updater.check_now();
     assert_eq!(
         updater.told().stage,
         Stage::Failed {
-            why: "LLX Desk 0.2.0 was fetched, but it is not signed and notarized as LLX Desk is"
+            why: "Localix Terminal 0.2.0 was fetched, but it is not signed and notarized as Localix Terminal is"
                 .into()
         }
     );
@@ -236,7 +228,7 @@ fn an_update_is_put_in_place_once_however_often_it_is_asked() {
     // Asked again while the app ends: refused, and what was done is not said to have failed.
     assert_eq!(
         updater.apply().unwrap_err(),
-        "LLX Desk 0.2.0 is being installed."
+        "Localix Terminal 0.2.0 is being installed."
     );
     assert_eq!(updater.told().stage, Stage::Ready { release });
     assert!(std::fs::read_to_string(&app).unwrap().contains("echo new"));
@@ -247,7 +239,7 @@ fn an_update_is_put_in_place_once_however_often_it_is_asked() {
 fn why_a_build_is_not_updated_is_asked_again_with_the_next_check() {
     let dir = folder("updater-place-again");
     published(&dir, "0.2.0", NAME, "new");
-    let app = dir.join("app/llx-desk");
+    let app = dir.join("app/llxterm");
     std::fs::create_dir_all(app.parent().unwrap()).unwrap();
     std::fs::write(&app, "old").unwrap();
     let asked = Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -259,7 +251,7 @@ fn why_a_build_is_not_updated_is_asked_again_with_the_next_check() {
         dir: dir.join("staging"),
         // Not where a release is the first time it is asked (it was being moved), then it is.
         place: Box::new(move || match count.fetch_add(1, Ordering::SeqCst) {
-            0 => Err("LLX Desk is not in a folder it can be replaced in.".into()),
+            0 => Err("Localix Terminal is not in a folder it can be replaced in.".into()),
             _ => Ok(place.clone()),
         }),
         trusted: |_| Ok(()),

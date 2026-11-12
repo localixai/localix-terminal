@@ -43,7 +43,7 @@ fn the_path_is_what_is_between_the_marks_and_never_what_else_the_shell_said() {
 
 #[test]
 fn a_program_that_cannot_run_says_so_and_a_failure_with_no_word_says_what_it_means() {
-    let missing = std::process::Command::new("/nonexistent/llx-desk-program");
+    let missing = std::process::Command::new("/nonexistent/llxterm-program");
     let why = within(missing, Duration::from_secs(1)).err().unwrap();
     assert!(why.contains("could not be started"), "{why}");
     let mut slow = std::process::Command::new("/bin/sh");

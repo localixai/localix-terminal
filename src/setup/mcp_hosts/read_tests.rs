@@ -2,7 +2,7 @@
 
 use super::{Kept, uncommented};
 
-const AT: &[&str] = &["mcpServers", "llx-desk", "command"];
+const AT: &[&str] = &["mcpServers", "llxterm", "command"];
 
 #[test]
 fn json_with_comments_is_read_as_the_agent_reads_it() {
@@ -11,13 +11,13 @@ fn json_with_comments_is_read_as_the_agent_reads_it() {
   "mcpServers": {
     /* ours,
        over two lines */
-    "llx-desk": { "command": "/Apps/LLX Desk.app/x", "args": ["mcp"] }, // last
+    "llxterm": { "command": "/Apps/Localix Terminal.app/x", "args": ["mcp"] }, // last
     "web": { "url": "https://example.com/a//b", "note": "/* kept */ \\" }
   }
 }"#;
     assert_eq!(
         Kept::Json(AT).entry(text).as_deref(),
-        Some("/Apps/LLX Desk.app/x")
+        Some("/Apps/Localix Terminal.app/x")
     );
     // What looks like a comment inside a string is the string's own.
     let plain = uncommented(text);

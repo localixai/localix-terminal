@@ -1,8 +1,8 @@
 ---
 description: Close this project's tabs
-allowed-tools: Bash(llx-desk window --end:*)
+allowed-tools: Bash(llxterm window --end:*)
 ---
 
-!`llx-desk window --end 2>&1`
+!`llxterm window --end 2>&1`
 
-Tell the person what was closed; if there was no output, say LLX Desk is not running and nothing was closed.
+Tell the person what was closed; if there was no output, say Localix Terminal is not running and nothing was closed.

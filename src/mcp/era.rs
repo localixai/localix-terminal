@@ -79,7 +79,7 @@ fn supported() -> Vec<&'static str> {
 }
 
 fn server_info() -> Value {
-    json!({"name": "llx-desk", "title": "LLX Desk", "version": env!("CARGO_PKG_VERSION")})
+    json!({"name": "llxterm", "title": "Localix Terminal", "version": env!("CARGO_PKG_VERSION")})
 }
 
 /// The `initialize` result: the legacy revision to speak (the one asked when it is known, else

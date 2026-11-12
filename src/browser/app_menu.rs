@@ -18,7 +18,7 @@ use super::menu::{COMMAND, OPTION};
 use super::shortcuts::{self, Chord, Shortcut};
 
 /// The group whose shortcuts are the app's own menu's.
-const APP: &str = "LLX Desk";
+const APP: &str = "Localix Terminal";
 /// What the app's menu says of quitting, which it holds last.
 const QUIT: &str = "quit";
 
@@ -202,7 +202,7 @@ fn app_menu(items: &mut Items<'_>, mine: &[(&Shortcut, Option<Chord>)]) -> Retai
     add(
         &app,
         &item(
-            "About LLX Desk",
+            "About Localix Terminal",
             Some(sel!(orderFrontStandardAboutPanel:)),
             "",
         ),
@@ -214,7 +214,7 @@ fn app_menu(items: &mut Items<'_>, mine: &[(&Shortcut, Option<Chord>)]) -> Retai
         items.add(&app, shortcut, chord.as_ref());
     }
     separator(&app);
-    add(&app, &item("Hide LLX Desk", Some(sel!(hide:)), "h"));
+    add(&app, &item("Hide Localix Terminal", Some(sel!(hide:)), "h"));
     add(
         &app,
         &masked(

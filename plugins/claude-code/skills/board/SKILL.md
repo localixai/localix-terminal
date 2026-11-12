@@ -1,16 +1,16 @@
 ---
 name: board
-description: "Plan and track work on a kanban board the person watches in the llx-desk window (Backlog, Todo, Doing, Review, Done, Discarded), and hand cards to subagents: for a task of several parts, work the person wants to follow or accept piece by piece, or parallel subagents that must not do the same thing twice."
+description: "Plan and track work on a kanban board the person watches in the llxterm window (Backlog, Todo, Doing, Review, Done, Discarded), and hand cards to subagents: for a task of several parts, work the person wants to follow or accept piece by piece, or parallel subagents that must not do the same thing twice."
 user-invocable: false
-allowed-tools: Bash(llx-desk window:*)
+allowed-tools: Bash(llxterm window:*)
 ---
 
-# llx-desk: the board
+# llxterm: the board
 
-The project's board is a tab of the llx-desk window, kept by the desk (and written out to
+The project's board is a tab of the llxterm window, kept by the desk (and written out to
 `.localix/board.json` in the project), so it outlives sessions. As it is now:
 
-!`llx-desk window --board 2>&1`
+!`llxterm window --board 2>&1`
 
 (Nothing above: no open card yet.) Six columns:
 
@@ -35,19 +35,19 @@ limit); a card someone has is theirs alone; only the person accepts. Everything 
 
 ## The calls
 
-The board is a tab like a page, worked with `llx-desk window`: `open` with `kind` board gives its id
+The board is a tab like a page, worked with `llxterm window`: `open` with `kind` board gives its id
 (`b1`, the same tab each time), an `interact` on it with an `op` works it, and one with no `op` reads it.
 
 ```sh
-llx-desk window '{"action": "open", "kind": "board"}'
-llx-desk window - <<'EOF'
+llxterm window '{"action": "open", "kind": "board"}'
+llxterm window - <<'EOF'
 {"action": "interact", "tab": "b1", "op": "add", "cards": [
   {"title": "Cart button overlaps on mobile", "note": "Below 400px. Done when it does not overlap at iPhone SE."}]}
 EOF
-llx-desk window '{"action": "interact", "tab": "b1", "op": "take", "card": "c3"}'
-llx-desk window '{"action": "interact", "tab": "b1", "op": "review", "card": "c3", "note": "Moved the button to a sticky footer; checked at iPhone SE and Pixel 8."}'
-llx-desk window '{"action": "interact", "tab": "b1", "op": "block", "card": "c3", "reason": "Which payment provider: Stripe or Adyen?"}'
-llx-desk window '{"action": "interact", "tab": "b1", "op": "release", "card": "c3", "note": "Layout done, tests still fail on Safari."}'
+llxterm window '{"action": "interact", "tab": "b1", "op": "take", "card": "c3"}'
+llxterm window '{"action": "interact", "tab": "b1", "op": "review", "card": "c3", "note": "Moved the button to a sticky footer; checked at iPhone SE and Pixel 8."}'
+llxterm window '{"action": "interact", "tab": "b1", "op": "block", "card": "c3", "reason": "Which payment provider: Stripe or Adyen?"}'
+llxterm window '{"action": "interact", "tab": "b1", "op": "release", "card": "c3", "note": "Layout done, tests still fail on Safari."}'
 ```
 
 Also `card` (one card and its history), `unblock`, `comment`, `edit` and `remove`; `show` brings the
@@ -65,7 +65,7 @@ board in front of the person. A note with a single quote goes on stdin (`-`), as
 
 1. Plan the cards (`add`) so that cards meant to run in parallel touch different files: a scaffold or
    a shared layer first, then the parts on top of it, each in its own files. Then start one
-   `llx-desk:worker` per card that can go in parallel; cards that change the same files go to one
+   `llxterm:worker` per card that can go in parallel; cards that change the same files go to one
    worker, one after the other.
 2. Give each Agent call a short, distinct description ("cart button") and, in its prompt, the card
    and the same name as the board shows it: "take c3; your name on the board: cart-button". The

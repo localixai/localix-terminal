@@ -1,12 +1,12 @@
 //! The window's three states, through real windows (unseen, as every test's): a shown window
 //! opens as the window, it is put away only when the person asks and comes back only when they
 //! open the app, the agent's acts never change which, putting it away never reflows the page nor
-//! stops it drawing, and llx-desk is never the active app.
+//! stops it drawing, and llxterm is never the active app.
 
 use std::time::{Duration, Instant};
 
-use llx_desk::browser::{Browser, Driver, WebviewDriver, Window};
-use llx_desk::view::Action;
+use llxterm::browser::{Browser, Driver, WebviewDriver, Window};
+use llxterm::view::Action;
 use serde_json::json;
 
 /// Until `want` holds, within ten seconds.

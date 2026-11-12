@@ -5,11 +5,11 @@ use super::*;
 /// The latest release as the host answers, cut to what is read of it and a little more.
 const LATEST: &str = r###"{
   "tag_name": "v0.2.0",
-  "name": "LLX Desk 0.2.0",
+  "name": "Localix Terminal 0.2.0",
   "draft": false,
   "prerelease": false,
-  "body": "- **macOS 12+, Apple silicon:** [LLX-Desk-macos.dmg](https://example.com/x.dmg), signed.\n\n## Added\n\n- The app updates itself.\n",
-  "assets": [{"name": "LLX-Desk-macos.zip", "size": 9000111}, {"name": "SHA256SUMS", "size": 300}]
+  "body": "- **macOS 12+, Apple silicon:** [Localix-Terminal-macos.dmg](https://example.com/x.dmg), signed.\n\n## Added\n\n- The app updates itself.\n",
+  "assets": [{"name": "Localix-Terminal-macos.zip", "size": 9000111}, {"name": "SHA256SUMS", "size": 300}]
 }"###;
 
 #[test]
@@ -44,8 +44,8 @@ fn the_latest_release_is_read_with_its_notes() {
     assert_eq!(release.version, Version(0, 2, 0));
     assert!(release.notes.starts_with("- **macOS 12+"));
     assert!(release.notes.ends_with("- The app updates itself."));
-    assert_eq!(release.size("LLX-Desk-macos.zip"), Some(9_000_111));
-    assert_eq!(release.size("LLX-Desk-macos.dmg"), None);
+    assert_eq!(release.size("Localix-Terminal-macos.zip"), Some(9_000_111));
+    assert_eq!(release.size("Localix-Terminal-macos.dmg"), None);
     // A draft or a pre-release is not one to update to, and neither is what does not read.
     let draft = LATEST.replace(r#""draft": false"#, r#""draft": true"#);
     assert!(Release::read(&draft).is_err());
@@ -77,29 +77,35 @@ fn only_a_newer_release_is_an_update() {
 #[test]
 fn a_file_s_checksum_is_the_one_listed_for_its_name() {
     let sums = "\
-0f3a  llx-desk-x86_64-unknown-linux-gnu.tar.gz
-a3b1c5d7e9f00112233445566778899aabbccddeeff001122334455667788990  LLX-Desk-macos.zip
-ffff  LLX-Desk-macos.dmg
+0f3a  llxterm-x86_64-unknown-linux-gnu.tar.gz
+a3b1c5d7e9f00112233445566778899aabbccddeeff001122334455667788990  Localix-Terminal-macos.zip
+ffff  Localix-Terminal-macos.dmg
 ";
     assert_eq!(
-        checksum(sums, "LLX-Desk-macos.zip").as_deref(),
+        checksum(sums, "Localix-Terminal-macos.zip").as_deref(),
         Some("a3b1c5d7e9f00112233445566778899aabbccddeeff001122334455667788990")
     );
     // The name whole, a checksum whole: 64 hex digits, as the release writes them.
-    assert_eq!(checksum(sums, "LLX-Desk-macos"), None);
-    assert_eq!(checksum(sums, "LLX-Desk-macos.dmg"), None);
-    assert_eq!(checksum("", "LLX-Desk-macos.zip"), None);
+    assert_eq!(checksum(sums, "Localix-Terminal-macos"), None);
+    assert_eq!(checksum(sums, "Localix-Terminal-macos.dmg"), None);
+    assert_eq!(checksum("", "Localix-Terminal-macos.zip"), None);
     // `sha256sum`'s mark of a binary file before the name is the same file.
-    let binary = sums.replace("  LLX-Desk-macos.zip", " *LLX-Desk-macos.zip");
-    assert!(checksum(&binary, "LLX-Desk-macos.zip").is_some());
+    let binary = sums.replace(
+        "  Localix-Terminal-macos.zip",
+        " *Localix-Terminal-macos.zip",
+    );
+    assert!(checksum(&binary, "Localix-Terminal-macos.zip").is_some());
 }
 
 #[test]
 fn each_system_has_its_archive_or_none() {
-    assert_eq!(archive("macos", "aarch64"), Some("LLX-Desk-macos.zip"));
+    assert_eq!(
+        archive("macos", "aarch64"),
+        Some("Localix-Terminal-macos.zip")
+    );
     assert_eq!(
         archive("linux", "x86_64"),
-        Some("llx-desk-x86_64-unknown-linux-gnu.tar.gz")
+        Some("llxterm-x86_64-unknown-linux-gnu.tar.gz")
     );
     assert_eq!(archive("macos", "x86_64"), None);
     assert_eq!(archive("linux", "aarch64"), None);
@@ -110,17 +116,17 @@ fn a_release_s_files_are_under_its_tag() {
     let from = From::default();
     assert_eq!(
         from.latest,
-        "https://api.github.com/repos/rsaryev/llx-desk/releases/latest"
+        "https://api.github.com/repos/rsaryev/localix-terminal/releases/latest"
     );
     assert_eq!(
         from.file(Version(0, 2, 0), "SHA256SUMS"),
-        "https://github.com/rsaryev/llx-desk/releases/download/v0.2.0/SHA256SUMS"
+        "https://github.com/rsaryev/localix-terminal/releases/download/v0.2.0/SHA256SUMS"
     );
     // Another place holds both under one address (a mirror, a test's folder).
     let other = From::at("file:///tmp/releases/");
     assert_eq!(other.latest, "file:///tmp/releases/latest");
     assert_eq!(
-        other.file(Version(0, 2, 0), "LLX-Desk-macos.zip"),
-        "file:///tmp/releases/download/v0.2.0/LLX-Desk-macos.zip"
+        other.file(Version(0, 2, 0), "Localix-Terminal-macos.zip"),
+        "file:///tmp/releases/download/v0.2.0/Localix-Terminal-macos.zip"
     );
 }

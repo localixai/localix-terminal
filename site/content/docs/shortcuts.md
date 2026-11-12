@@ -32,4 +32,4 @@ Theme, how much of the desktop the glass lets through, the interface and code fo
 
 To change a shortcut, click its keys and press new ones. ⌫ takes it off, one already taken asks first, and you can reset one or all.
 
-Settings apply at once and are kept in `~/.config/llx-desk/settings.json`.
+Settings apply at once and are kept in `~/.config/llxterm/settings.json`.

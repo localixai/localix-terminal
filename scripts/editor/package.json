@@ -1,5 +1,5 @@
 {
-  "name": "llx-desk-editor-vendor",
+  "name": "llxterm-editor-vendor",
   "private": true,
   "description": "Builds the editor's vendored scripts in src/editor/vendor: `bun install --frozen-lockfile && bun build.ts`.",
   "dependencies": {

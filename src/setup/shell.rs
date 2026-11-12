@@ -249,7 +249,7 @@ pub(super) fn within(command: Command, most: Duration) -> Result<Ran, String> {
 /// and for its owner only, under a name no other user can guess: the shared temporary directory
 /// is another user's to write in too.
 fn private_file(tag: &str) -> Result<(PathBuf, std::fs::File), String> {
-    let path = std::env::temp_dir().join(format!("llx-desk-setup-{}-{tag}", crate::token()));
+    let path = std::env::temp_dir().join(format!("llxterm-setup-{}-{tag}", crate::token()));
     let file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)

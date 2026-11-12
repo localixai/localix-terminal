@@ -10,17 +10,17 @@ import type { BoardCard, BoardSummary, Desk } from '../types'
 /** What a session in a terminal of the desk is told: the window the person watches is their
  * browser, ahead of any other browser's tools the session has. */
 const BROWSER = [
-  'This session runs in a terminal of LLX Desk, the window the person is watching.',
+  'This session runs in a terminal of Localix Terminal, the window the person is watching.',
   'When they ask to open, show or look at a web page or a site ("open google"), open it as a tab of',
-  'that window with `llx-desk window` (the llx-desk window skill), not with another browser\'s tools',
+  'that window with `llxterm window` (the llxterm window skill), not with another browser\'s tools',
   '(Claude in Chrome, a built-in browser pane, `open <url>`). Use another browser only when the',
   'person names it. What you open lands beside this terminal, in their sight: no `show` is needed.',
 ].join(' ')
 
 const EMPTY: Desk = { app: 'not running', window: '-', terminals: '0', tabs: [], comments: [] }
 // Change the tag when Desk's fields change: it declines what an earlier version stored.
-const desk = atom({ plugin: 'llx-desk', key: 'desk' } as const, EMPTY, { shape: 'desk-2' })
-const board = atom({ plugin: 'llx-desk', key: 'board' } as const, null as BoardSummary | null, { shape: 'board-1' })
+const desk = atom({ plugin: 'llxterm', key: 'desk' } as const, EMPTY, { shape: 'desk-2' })
+const board = atom({ plugin: 'llxterm', key: 'board' } as const, null as BoardSummary | null, { shape: 'board-1' })
 
 /** What every hook is handed as `$`. */
 type Api = Parameters<Events['session.start']>[0]
@@ -88,7 +88,7 @@ async function leftOver($: Api, worker: string | undefined): Promise<string> {
   return left.map(card => card.id).join(', ')
 }
 
-/** How the session reaches the desk, once it has started: a `llx-desk` call. */
+/** How the session reaches the desk, once it has started: a `llxterm` call. */
 let deskRun: ((argv: string[], timeoutMs?: number) => Promise<{ exitCode: number; stdout: string } | undefined>) | undefined
 /** How long a call of the desk may take before it is given up. */
 const CALL_MS = 5000
@@ -105,7 +105,7 @@ const LONG_TURN_MS = 30_000
 const SHOWN_MOST = 120
 
 /** The plugin's worker, as a spawn names it. */
-const WORKER = 'llx-desk:worker'
+const WORKER = 'llxterm:worker'
 /** A worker's name on the board as its task gives it: `your name on the board: cart-button`. */
 const NAMED = /your name on the board:\s*`?([A-Za-z0-9._-]+)/i
 /** How long a follower that ended waits before it is started again. */
@@ -116,8 +116,8 @@ let ended = false
 const nudged = new Set<string>()
 /** The main agent's cards it was last asked to finish, named. */
 let heldMain = ''
-/** A call of the desk on the board's tab, in a shell command: `llx-desk window '{… "tab": "b1" …}'`. */
-const ON_BOARD = /\bllx-desk\s+window\b[\s\S]*"tab"\s*:\s*"b\d+"/
+/** A call of the desk on the board's tab, in a shell command: `llxterm window '{… "tab": "b1" …}'`. */
+const ON_BOARD = /\bllxterm\s+window\b[\s\S]*"tab"\s*:\s*"b\d+"/
 const WHO = /"who"\s*:\s*"([^"]*)"/
 
 /** What a worker that stops with `named` in Doing is asked to do first. */
@@ -133,17 +133,17 @@ export const register: Register = (on, options) => {
     // so they see it beside the session, rather than in a browser the session also has the
     // tools of. Said as a row of the conversation, ahead of the first prompt: a section of the
     // system prompt is passed over where an organization seats its policy.
-    if ((await $.env.get('TERM_PROGRAM')) === 'llx-desk') {
+    if ((await $.env.get('TERM_PROGRAM')) === 'llxterm') {
       await $.session.append({ message: { type: 'user', content: [{ type: 'text', text: BROWSER }] } }).catch(() => undefined)
     }
-    // The program: the one on PATH, else LLX Desk.app's (its link in ~/.local/bin, or the app
+    // The program: the one on PATH, else Localix Terminal.app's (its link in ~/.local/bin, or the app
     // where macOS keeps apps). Never installed from here: the pane only reads.
     const home = await $.env.get('HOME')
     const candidates = [
-      'llx-desk',
-      `${home ?? ''}/.local/bin/llx-desk`,
-      `${home ?? ''}/Applications/LLX Desk.app/Contents/MacOS/llx-desk`,
-      '/Applications/LLX Desk.app/Contents/MacOS/llx-desk',
+      'llxterm',
+      `${home ?? ''}/.local/bin/llxterm`,
+      `${home ?? ''}/Applications/Localix Terminal.app/Contents/MacOS/llxterm`,
+      '/Applications/Localix Terminal.app/Contents/MacOS/llxterm',
     ]
     // Resolved at each call, from the one that last ran (`found`), then the rest in order: a
     // program that could not start once (not installed yet) is tried again, and one missing from
@@ -256,7 +256,7 @@ export const register: Register = (on, options) => {
           // Each note is one JSON string on a line of its own (`--json`): what the pipe hands over
           // comes in pieces of any size, so the lines are put together again before one is read, and
           // a note's own lines (its picture's path last) never come as a turn of their own.
-          const follow = $.process.spawn({ argv: [candidates[found] ?? 'llx-desk', 'window', ...project, '--said', '--follow', '--json'] })
+          const follow = $.process.spawn({ argv: [candidates[found] ?? 'llxterm', 'window', ...project, '--said', '--follow', '--json'] })
           let held = ''
           for await (const piece of follow) {
             if (piece.stream !== 'stdout') continue
@@ -272,7 +272,7 @@ export const register: Register = (on, options) => {
               }
               if (!text) continue
               await update($, desk, d => ({ ...d, comments: [...d.comments, { at: time(), text: words(text) }].slice(-20) }))
-              $.ui.toast(`llx-desk: ${words(text).slice(0, 80)}`)
+              $.ui.toast(`llxterm: ${words(text).slice(0, 80)}`)
               await tell(text)
             }
           }
@@ -390,7 +390,7 @@ export const register: Register = (on, options) => {
     if (!name || !ON_BOARD.test(e.command)) return next(e)
     const said = e.command.match(WHO)?.[1]
     if (said === name) return next(e)
-    return { deny: `llx-desk: you are ${name} on the board: pass "who": "${name}" in every call on it, then run it again.` }
+    return { deny: `llxterm: you are ${name} on the board: pass "who": "${name}" in every call on it, then run it again.` }
   }).catch(($, e, next) => next(e))
 
   // A question the agent asks the person waits for them in the Event Center till it is answered:
@@ -421,7 +421,7 @@ export const register: Register = (on, options) => {
     const b = await read($, board)
     const ideas = b && b.backlog ? ` · ${b.backlog} in backlog` : ''
     const work = b ? `\nBoard: ${b.todo} todo · ${b.doing} doing · ${b.review} in review · ${b.done} done${ideas}` : ''
-    if (d.app === 'not running') return { text: `llx-desk is not running.${work}` }
+    if (d.app === 'not running') return { text: `llxterm is not running.${work}` }
     const tabs = d.tabs.length ? d.tabs.map(tab => `  ${tab}`).join('\n') : '  none open'
     const last = d.comments.slice(-3).map(c => `  ${c.at} ${c.text}`).join('\n')
     const said = last ? `\nLast comments:\n${last}` : ''

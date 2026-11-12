@@ -11,7 +11,7 @@ struct Home(PathBuf);
 impl Home {
     fn new(name: &str) -> Self {
         let home =
-            std::env::temp_dir().join(format!("llx-desk-shell-{}-{name}", std::process::id()));
+            std::env::temp_dir().join(format!("llxterm-shell-{}-{name}", std::process::id()));
         std::fs::create_dir_all(&home).unwrap();
         Self(home)
     }
@@ -29,7 +29,7 @@ fn zsh(home: &Path, zdotdir: Option<&str>, more: &[(&str, &str)]) -> Option<Sess
     let shell = ["/bin/zsh", "/usr/bin/zsh"]
         .into_iter()
         .find(|shell| Path::new(shell).exists())?;
-    super::keep_in(std::env::temp_dir().join("llx-desk-test-shell"));
+    super::keep_in(std::env::temp_dir().join("llxterm-test-shell"));
     let rc = zdotdir.map_or_else(|| home.to_path_buf(), |own| home.join(own));
     std::fs::create_dir_all(&rc).unwrap();
     std::fs::write(rc.join(".zshrc"), "PS1='ready> '\nFROM_RC=yes\n").unwrap();
@@ -82,7 +82,7 @@ fn a_zsh_with_a_folder_of_its_own_keeps_it() {
         return;
     };
     session
-        .type_in("echo zdot=${ZDOTDIR:t} kept=${LLX_DESK_ZDOTDIR-no}\n", &[])
+        .type_in("echo zdot=${ZDOTDIR:t} kept=${LLXTERM_ZDOTDIR-no}\n", &[])
         .unwrap();
     let until = session.wait(None, 0, DEFAULT_WAIT);
     assert!(matches!(until, Until::Finished(_)), "{until:?}");
@@ -93,7 +93,7 @@ fn a_zsh_with_a_folder_of_its_own_keeps_it() {
 #[test]
 fn a_shell_told_not_to_is_left_unmarked() {
     let home = Home::new("off");
-    let Some(session) = zsh(&home.0, None, &[("LLX_DESK_SHELL_MARKS", "0")]) else {
+    let Some(session) = zsh(&home.0, None, &[("LLXTERM_SHELL_MARKS", "0")]) else {
         return;
     };
     session.type_in("echo done\n", &[]).unwrap();
@@ -115,7 +115,7 @@ fn bash_with(home: &Path, profile: &str) -> Option<Session> {
     if !Path::new(shell).exists() {
         return None;
     }
-    super::keep_in(std::env::temp_dir().join("llx-desk-test-shell"));
+    super::keep_in(std::env::temp_dir().join("llxterm-test-shell"));
     std::fs::write(home.join(".bash_profile"), profile).unwrap();
     let vars = vec![
         ("SHELL".to_string(), shell.to_string()),

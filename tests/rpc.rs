@@ -6,13 +6,13 @@ use std::os::unix::net::UnixStream;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use llx_desk::client::{Client, Error, Link};
-use llx_desk::harness::{Home, asked};
-use llx_desk::wire::{PROTOCOL, code};
+use llxterm::client::{Client, Error, Link};
+use llxterm::harness::{Home, asked};
+use llxterm::wire::{PROTOCOL, code};
 use serde_json::{Value, json};
 
 fn home(name: &str) -> Home {
-    Home::new(env!("CARGO_BIN_EXE_llx-desk"), name)
+    Home::new(env!("CARGO_BIN_EXE_llxterm"), name)
 }
 
 /// Agent `agent` of the project at /tmp.
@@ -35,7 +35,7 @@ const OPEN_SLEEPER: &str =
 #[test]
 fn the_handshake_comes_first_and_says_protocol_build_and_capabilities() {
     let home = home("hello");
-    home.start(&[("LLX_DESK_BUILD", "build-a")]);
+    home.start(&[("LLXTERM_BUILD", "build-a")]);
     // Without `initialize` nothing is served.
     let raw = Link::open(
         UnixStream::connect(home.socket()).unwrap(),

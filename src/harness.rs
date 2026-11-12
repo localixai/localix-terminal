@@ -1,6 +1,6 @@
 //! Test support, compiled only into test builds (the `test-server` feature, which nothing but
 //! this crate's own dev-dependency turns on): a server directory of a test's own, and the binary
-//! run against it. The lock and the socket live in `LLX_DESK_TEST_DIR`, and a server of a test
+//! run against it. The lock and the socket live in `LLXTERM_TEST_DIR`, and a server of a test
 //! build never opens a window, so no test touches the person's server or shows a thing.
 #![expect(
     clippy::unwrap_used,
@@ -28,7 +28,7 @@ pub struct Home {
 }
 
 impl Home {
-    /// `exe` is the binary under test (`env!("CARGO_BIN_EXE_llx-desk")`).
+    /// `exe` is the binary under test (`env!("CARGO_BIN_EXE_llxterm")`).
     pub fn new(exe: &'static str, name: &str) -> Self {
         // Short: a unix socket's path is limited to about a hundred bytes.
         let dir = PathBuf::from(format!("/tmp/ldk-{}-{name}", std::process::id()));
@@ -61,10 +61,10 @@ impl Home {
         command
             .args(args)
             .current_dir(cwd)
-            .env("LLX_DESK_TEST_DIR", &self.dir)
-            .env("LLX_DESK_HOME", &self.dir)
+            .env("LLXTERM_TEST_DIR", &self.dir)
+            .env("LLXTERM_HOME", &self.dir)
             .env("XDG_CONFIG_HOME", &self.dir)
-            .env_remove("LLX_DESK_PROJECT");
+            .env_remove("LLXTERM_PROJECT");
         command
     }
 
@@ -95,8 +95,8 @@ impl Home {
             .arg("-c")
             .arg("\"$0\" serve </dev/null >/dev/null 2>&1 &")
             .arg(self.exe)
-            .env("LLX_DESK_TEST_DIR", &self.dir)
-            .env("LLX_DESK_HOME", &self.dir)
+            .env("LLXTERM_TEST_DIR", &self.dir)
+            .env("LLXTERM_HOME", &self.dir)
             .env("XDG_CONFIG_HOME", &self.dir);
         for (name, value) in envs {
             command.env(name, value);

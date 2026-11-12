@@ -87,7 +87,7 @@ fn discovery_says_every_revision_served_and_what_the_server_is() {
     assert_eq!(versions[1..], LEGACY);
     assert!(said["capabilities"]["tools"].is_object());
     let info = &said["_meta"]["io.modelcontextprotocol/serverInfo"];
-    assert_eq!(info["name"], "llx-desk");
+    assert_eq!(info["name"], "llxterm");
     assert_eq!(info["version"], env!("CARGO_PKG_VERSION"));
     assert!(said["ttlMs"].as_u64().is_some() && said["cacheScope"] == "public");
 }

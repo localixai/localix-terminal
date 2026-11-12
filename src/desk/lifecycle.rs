@@ -26,7 +26,7 @@ impl Desk {
                 let sure = running == 0
                     || (desk.browser.as_ref()).is_some_and(|browser| {
                         browser.confirm(&Confirm {
-                            title: "Quit LLX Desk?".into(),
+                            title: "Quit Localix Terminal?".into(),
                             detail: quit_detail(running),
                             yes: "Quit".into(),
                         })
@@ -52,7 +52,7 @@ impl Desk {
                 let sure = running == 0
                     || (desk.browser.as_ref()).is_some_and(|browser| {
                         browser.confirm(&Confirm {
-                            title: "Restart LLX Desk to update?".into(),
+                            title: "Restart Localix Terminal to update?".into(),
                             detail: update_detail(running),
                             yes: "Restart".into(),
                         })

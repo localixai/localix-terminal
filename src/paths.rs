@@ -1,34 +1,34 @@
 //! Where the app lives. Its lock and its socket are at one fixed place per user, found the
-//! same by every process of that user whatever its environment (`LLX_DESK_HOME` and `TMPDIR`
+//! same by every process of that user whatever its environment (`LLXTERM_HOME` and `TMPDIR`
 //! included): there is one app, and every client must reach it. Its files (log, pictures,
-//! comments) go to the home, which `LLX_DESK_HOME` moves and which is the same directory
+//! comments) go to the home, which `LLXTERM_HOME` moves and which is the same directory
 //! otherwise.
 
 use std::io;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-/// The directory of the lock and the socket: `llx-desk-<uid>` in the user's temporary
+/// The directory of the lock and the socket: `llxterm-<uid>` in the user's temporary
 /// directory as the system names it (not `$TMPDIR`, which a sandbox or a wrapper may change).
-/// `LLX_DESK_RUNTIME` names another, for an app apart from the person's. A test build takes it
-/// from `LLX_DESK_TEST_DIR` and from nowhere else.
+/// `LLXTERM_RUNTIME` names another, for an app apart from the person's. A test build takes it
+/// from `LLXTERM_TEST_DIR` and from nowhere else.
 pub fn runtime() -> PathBuf {
     if cfg!(feature = "test-server") {
         // Without its directory a test build has none: nothing is created there, and nothing
         // found is the person's app.
-        return std::env::var_os("LLX_DESK_TEST_DIR")
+        return std::env::var_os("LLXTERM_TEST_DIR")
             .filter(|dir| !dir.is_empty())
             .map_or_else(
-                || PathBuf::from("/nonexistent/llx-desk-a-test-build-needs-LLX_DESK_TEST_DIR"),
+                || PathBuf::from("/nonexistent/llxterm-a-test-build-needs-LLXTERM_TEST_DIR"),
                 PathBuf::from,
             );
     }
     // SAFETY: getuid takes nothing and cannot fail.
     let uid = unsafe { libc::getuid() };
-    runtime_from(std::env::var_os("LLX_DESK_RUNTIME"), &user_temp(), uid)
+    runtime_from(std::env::var_os("LLXTERM_RUNTIME"), &user_temp(), uid)
 }
 
-/// `asked`, when it names a directory, else `temp/llx-desk-<uid>`. An app given a runtime
+/// `asked`, when it names a directory, else `temp/llxterm-<uid>`. An app given a runtime
 /// directory of its own is another app beside the person's: it has its own lock and socket, so
 /// neither hears the other's callers (the end-to-end run starts one so).
 pub(crate) fn runtime_from(asked: Option<std::ffi::OsString>, temp: &Path, uid: u32) -> PathBuf {
@@ -40,16 +40,16 @@ pub(crate) fn named(asked: Option<std::ffi::OsString>) -> Option<PathBuf> {
     asked.filter(|dir| !dir.is_empty()).map(PathBuf::from)
 }
 
-/// Whether this app runs apart from the person's (`LLX_DESK_RUNTIME` names its directory). Such
+/// Whether this app runs apart from the person's (`LLXTERM_RUNTIME` names its directory). Such
 /// an app leaves the person's setup alone: the command's link and the agents' entries stay
 /// those of the app they use.
 pub fn apart() -> bool {
-    named(std::env::var_os("LLX_DESK_RUNTIME")).is_some()
+    named(std::env::var_os("LLXTERM_RUNTIME")).is_some()
 }
 
-/// `base/llx-desk-<uid>`.
+/// `base/llxterm-<uid>`.
 pub(crate) fn under(base: &Path, uid: u32) -> PathBuf {
-    base.join(format!("llx-desk-{uid}"))
+    base.join(format!("llxterm-{uid}"))
 }
 
 /// The per-user temporary directory: on macOS `confstr` names it (what `TMPDIR` is by default),
@@ -81,38 +81,38 @@ fn user_temp() -> PathBuf {
 /// The variables that move the desk's files: a server started for a caller (the app, through
 /// LaunchServices, which gives it none of the caller's) is given these, so both find the same.
 pub const MOVED_BY: [&str; 4] = [
-    "LLX_DESK_RUNTIME",
-    "LLX_DESK_HOME",
-    "LLX_DESK_DATA",
+    "LLXTERM_RUNTIME",
+    "LLXTERM_HOME",
+    "LLXTERM_DATA",
     "XDG_CONFIG_HOME",
 ];
 
-/// `$LLX_DESK_HOME`, else the runtime directory: where the log, the pictures and the
+/// `$LLXTERM_HOME`, else the runtime directory: where the log, the pictures and the
 /// comments go.
 pub fn home() -> PathBuf {
-    std::env::var_os("LLX_DESK_HOME")
+    std::env::var_os("LLXTERM_HOME")
         .filter(|home| !home.is_empty())
         .map_or_else(runtime, PathBuf::from)
 }
 
-/// What the desk keeps across restarts: `LLX_DESK_DATA`, else `~/.local/share/llx-desk`. A test
+/// What the desk keeps across restarts: `LLXTERM_DATA`, else `~/.local/share/llxterm`. A test
 /// build keeps it in its own directory.
 pub fn data() -> PathBuf {
     if cfg!(feature = "test-server") {
         return runtime();
     }
-    if let Some(dir) = std::env::var_os("LLX_DESK_DATA").filter(|dir| !dir.is_empty()) {
+    if let Some(dir) = std::env::var_os("LLXTERM_DATA").filter(|dir| !dir.is_empty()) {
         return PathBuf::from(dir);
     }
     std::env::var_os("HOME").map_or_else(runtime, |home| {
         PathBuf::from(home)
             .join(".local")
             .join("share")
-            .join("llx-desk")
+            .join("llxterm")
     })
 }
 
-/// The person's settings and secrets: `$XDG_CONFIG_HOME/llx-desk`, else `~/.config/llx-desk`.
+/// The person's settings and secrets: `$XDG_CONFIG_HOME/llxterm`, else `~/.config/llxterm`.
 pub fn config() -> Option<PathBuf> {
     config_in(
         std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
@@ -124,12 +124,12 @@ fn config_in(config: Option<PathBuf>, home: Option<PathBuf>) -> Option<PathBuf> 
     config
         .filter(|dir| !dir.as_os_str().is_empty())
         .or_else(|| home.map(|home| home.join(".config")))
-        .map(|dir| dir.join("llx-desk"))
+        .map(|dir| dir.join("llxterm"))
 }
 
 /// The app's database, in [`data`].
 pub fn database() -> PathBuf {
-    data().join("llx-desk.sqlite")
+    data().join("llxterm.sqlite")
 }
 
 pub fn socket() -> PathBuf {

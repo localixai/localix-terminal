@@ -7,10 +7,12 @@ use std::os::unix::fs::PermissionsExt as _;
 #[test]
 fn the_command_is_linked_once_and_another_program_is_left_alone() {
     let scratch = Scratch::new();
-    let exe = scratch.path().join("LLX Desk.app/Contents/MacOS/llx-desk");
+    let exe = scratch
+        .path()
+        .join("Localix Terminal.app/Contents/MacOS/llxterm");
     std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
     std::fs::write(&exe, "").unwrap();
-    let at = scratch.path().join(".local/bin/llx-desk");
+    let at = scratch.path().join(".local/bin/llxterm");
     assert!(link(&exe, &at).unwrap().contains("links to"));
     assert_eq!(std::fs::read_link(&at).unwrap(), exe);
     assert!(link(&exe, &at).unwrap().contains("linked already"));
@@ -28,7 +30,7 @@ fn the_command_is_linked_once_and_another_program_is_left_alone() {
     std::os::unix::fs::symlink(&mine, &at).unwrap();
     assert!(link(&exe, &at).is_err());
     assert_eq!(std::fs::read_link(&at).unwrap(), mine);
-    // A file that is no llx-desk stays.
+    // A file that is no llxterm stays.
     std::fs::remove_file(&at).unwrap();
     std::fs::write(&at, "#!/bin/sh\necho mine\n").unwrap();
     std::fs::set_permissions(&at, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -50,7 +52,7 @@ fn the_profile_gets_the_path_once() {
     assert!(!add_to_profile(&profile).unwrap());
     let text = std::fs::read_to_string(&profile).unwrap();
     assert!(
-        text.starts_with("eval \"$(brew shellenv)\"\n\n# Added by LLX Desk"),
+        text.starts_with("eval \"$(brew shellenv)\"\n\n# Added by Localix Terminal"),
         "{text}"
     );
     assert_eq!(text.matches("export PATH").count(), 1);
@@ -73,7 +75,9 @@ fn a_bash_login_shell_keeps_the_profile_it_reads() {
 #[test]
 fn the_command_is_taken_off_as_state_found_it_and_a_file_is_never_removed() {
     let scratch = Scratch::new();
-    let exe = scratch.path().join("LLX Desk.app/Contents/MacOS/llx-desk");
+    let exe = scratch
+        .path()
+        .join("Localix Terminal.app/Contents/MacOS/llxterm");
     std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
     std::fs::write(&exe, "").unwrap();
     let exe = std::fs::canonicalize(&exe).unwrap();
@@ -81,7 +85,7 @@ fn the_command_is_taken_off_as_state_found_it_and_a_file_is_never_removed() {
     let at = link_path(&home);
     std::fs::create_dir_all(at.parent().unwrap()).unwrap();
     // A link to a link to the program: `state` finds it, and so does taking it off.
-    let middle = scratch.path().join("usr-local-llx-desk");
+    let middle = scratch.path().join("usr-local-llxterm");
     std::os::unix::fs::symlink(&exe, &middle).unwrap();
     std::os::unix::fs::symlink(&middle, &at).unwrap();
     assert!(take_off_path(&exe, &home).unwrap().contains("is gone"));

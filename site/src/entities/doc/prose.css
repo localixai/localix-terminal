@@ -1,36 +1,36 @@
-/* A page's text, from the repository's markdown, drawn by llx-markdown: its stylesheet first, its
+/* A page's text, from the repository's markdown, drawn by flowdown: its stylesheet first, its
    tokens set to the site's, then the page's own measure over it: soft body, white headings and
    code, the landing's hairlines. Code blocks and tables scroll inside their frames, never the page. */
-@import 'llx-markdown/styles.css';
+@import '@localix-ai/flowdown/styles.css';
 
 .prose {
-  --llx-fg: var(--soft);
-  --llx-fg-soft: var(--soft);
-  --llx-fg-faint: var(--muted);
-  --llx-bg: var(--black);
-  --llx-border: var(--line-strong);
-  --llx-border-subtle: var(--line);
-  --llx-border-strong: var(--faint);
-  --llx-link: var(--link);
-  --llx-focus: var(--white);
-  --llx-success: var(--tk-ok);
-  --llx-danger: var(--tk-bad);
-  --llx-warning: var(--tk-flag);
-  --llx-info: var(--tk-key);
-  --llx-important: var(--tk-num);
-  --llx-code-bg: var(--code);
-  --llx-code-fg: var(--panel-text);
-  --llx-code-comment: var(--tk-dim);
-  --llx-code-keyword: var(--tk-key);
-  --llx-code-string: var(--tk-str);
-  --llx-code-number: var(--tk-num);
-  --llx-code-function: var(--tk-flag);
-  --llx-code-type: var(--tk-var);
-  --llx-code-tag: var(--tk-key);
-  --llx-font-heading: var(--display);
-  --llx-font-mono: var(--mono);
-  --llx-radius: var(--radius);
-  --llx-ease: var(--ease-out);
+  --fd-fg: var(--soft);
+  --fd-fg-soft: var(--soft);
+  --fd-fg-faint: var(--muted);
+  --fd-bg: var(--black);
+  --fd-border: var(--line-strong);
+  --fd-border-subtle: var(--line);
+  --fd-border-strong: var(--faint);
+  --fd-link: var(--link);
+  --fd-focus: var(--white);
+  --fd-success: var(--tk-ok);
+  --fd-danger: var(--tk-bad);
+  --fd-warning: var(--tk-flag);
+  --fd-info: var(--tk-key);
+  --fd-important: var(--tk-num);
+  --fd-code-bg: var(--code);
+  --fd-code-fg: var(--panel-text);
+  --fd-code-comment: var(--tk-dim);
+  --fd-code-keyword: var(--tk-key);
+  --fd-code-string: var(--tk-str);
+  --fd-code-number: var(--tk-num);
+  --fd-code-function: var(--tk-flag);
+  --fd-code-type: var(--tk-var);
+  --fd-code-tag: var(--tk-key);
+  --fd-font-heading: var(--display);
+  --fd-font-mono: var(--mono);
+  --fd-radius: var(--radius);
+  --fd-ease: var(--ease-out);
 
   color: color-mix(in oklch, var(--white) 84%, var(--black));
   font-size: 1.125rem;
@@ -40,7 +40,7 @@
 .prose > :first-child {
   margin-top: 0;
 }
-.prose :is(p, ul, ol, .llx-code, .llx-table, .llx-callout, .llx-tabs, .llx-figure) {
+.prose :is(p, ul, ol, .fd-code, .fd-table, .fd-callout, .fd-tabs, .fd-figure) {
   margin: 0 0 1.2rem;
 }
 .prose :is(h2, h3, h4) {
@@ -93,7 +93,7 @@
 .prose li::marker {
   color: var(--muted);
 }
-.prose li > :is(ul, ol, .llx-code) {
+.prose li > :is(ul, ol, .fd-code) {
   margin: 0.6rem 0 0.4rem;
 }
 .prose li > p {
@@ -121,25 +121,25 @@
 
 /* A code block: its language in a quiet bar with Copy at the end, the code on its own ground;
    a long one scrolls inside its frame, both ways. */
-.prose .llx-code {
+.prose .fd-code {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 10px;
 }
-.prose .llx-code-bar {
+.prose .fd-code-bar {
   min-height: 2.25rem;
   padding: 0.3rem 0.5rem 0 1.1rem;
   border-bottom: 0;
   color: var(--muted);
   font: 400 0.8125rem/1 var(--text);
 }
-.prose .llx-code-language {
+.prose .fd-code-language {
   color: var(--muted);
   font: 400 0.8125rem/1 var(--text);
   letter-spacing: 0;
   text-transform: none;
 }
-.prose .llx-code-copy {
+.prose .fd-code-copy {
   width: auto;
   height: 1.75rem;
   padding: 0 0.5rem;
@@ -148,20 +148,20 @@
   font: 500 0.8125rem/1 var(--text);
   transition: color 160ms ease, background-color 160ms ease;
 }
-.prose .llx-code-copy svg {
+.prose .fd-code-copy svg {
   display: none;
 }
-.prose .llx-code-copy::after {
+.prose .fd-code-copy::after {
   content: 'Copy';
 }
-.prose .llx-code-copy:hover {
+.prose .fd-code-copy:hover {
   background: color-mix(in oklch, var(--white) 8%, transparent);
   color: var(--white);
 }
-.prose .llx-code-copy[data-copied] {
+.prose .fd-code-copy[data-copied] {
   color: var(--tk-ok);
 }
-.prose .llx-code-copy[data-copied]::after {
+.prose .fd-code-copy[data-copied]::after {
   content: 'Copied';
 }
 .prose pre {
@@ -176,7 +176,7 @@
 }
 
 /* A table is rows on hairlines, with no frame: it scrolls inside itself when it must. */
-.prose .llx-table {
+.prose .fd-table {
   overflow-x: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--line-strong) transparent;
@@ -187,24 +187,24 @@
   font-size: 0.9rem;
   line-height: 1.55;
 }
-.prose .llx-table :is(th, td) {
+.prose .fd-table :is(th, td) {
   padding: 0.7rem 0.75rem;
   border: 0;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
 }
-.prose .llx-table th {
+.prose .fd-table th {
   border-bottom-color: var(--line-strong);
   background: none;
   color: var(--white);
   font-weight: 600;
   white-space: nowrap;
 }
-.prose .llx-table :is(th, td):first-child {
+.prose .fd-table :is(th, td):first-child {
   padding-left: 0;
 }
-.prose .llx-table :is(th, td):last-child {
+.prose .fd-table :is(th, td):last-child {
   padding-right: 0;
 }
 /* Up to three columns share a phone's width, the longest text taking the most; four or more

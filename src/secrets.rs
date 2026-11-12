@@ -1,5 +1,5 @@
 //! Secrets an agent may have typed without ever seeing them: a password saved once with
-//! `llx-desk secret NAME < FILE`, kept 0600 in the config directory, and named in a call as
+//! `llxterm secret NAME < FILE`, kept 0600 in the config directory, and named in a call as
 //! `{{secret:NAME}}` (a page's `fill`, or a terminal's `input`). The
 //! app puts the value in where it is typed, and every answer it gives shows `{{secret:NAME}}`
 //! wherever the value would be. Nothing prints a saved value.
@@ -140,7 +140,7 @@ impl Vault {
         for name in named(text) {
             let value = dir.and_then(|dir| read_in(dir, &name)).ok_or_else(|| {
                 format!(
-                    "no secret {name}: the person saves it once with `llx-desk secret {name} < FILE`"
+                    "no secret {name}: the person saves it once with `llxterm secret {name} < FILE`"
                 )
             })?;
             let mut known = crate::lock(&self.known);

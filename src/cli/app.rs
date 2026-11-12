@@ -1,6 +1,6 @@
-//! llx-desk opened as an app: LLX Desk.app from the Finder, Spotlight or the Dock (macOS), or
-//! `llx-desk open` (the desktop entry elsewhere). It puts what is always on in place (the
-//! `llx-desk` command, setup.rs) and brings what the person turned on to this version, then is
+//! llxterm opened as an app: Localix Terminal.app from the Finder, Spotlight or the Dock (macOS), or
+//! `llxterm open` (the desktop entry elsewhere). It puts what is always on in place (the
+//! `llxterm` command, setup.rs) and brings what the person turned on to this version, then is
 //! the server itself, its window brought to the person at once: with no tab in it yet, their
 //! shell in their home. When a server of this build runs already (one a client started), the
 //! window is asked of it instead; one of another build is stopped, and the app takes its place:
@@ -23,7 +23,9 @@ pub(super) fn run() -> u8 {
     // or in a download's temporary place, which is gone at eject or restart.
     let in_place = crate::bundle::in_place();
     if !in_place {
-        said.push("not set up: move LLX Desk to Applications, and open it from there".into());
+        said.push(
+            "not set up: move Localix Terminal to Applications, and open it from there".into(),
+        );
     }
     let home = std::env::var_os("HOME").map(PathBuf::from);
     match bind_taking_over(&mut said) {
@@ -60,7 +62,7 @@ pub(super) fn run() -> u8 {
     }
 }
 
-/// `llx-desk open`: on macOS the system opens LLX Desk.app, as the Dock does, and the command
+/// `llxterm open`: on macOS the system opens Localix Terminal.app, as the Dock does, and the command
 /// is done; the app is not this terminal's (closing the terminal leaves it running). Elsewhere,
 /// or run from no app (a build in the tree), this process is the app.
 pub(super) fn open() -> u8 {
@@ -70,7 +72,7 @@ pub(super) fn open() -> u8 {
             Ok(()) => super::OK,
             Err(why) => {
                 crate::out::warn(&format!(
-                    "llx-desk: {} did not open: {why}",
+                    "llxterm: {} did not open: {why}",
                     bundle.display()
                 ));
                 super::FAILED
@@ -172,20 +174,20 @@ fn present(said: &mut Vec<String>, home: Option<&Path>) -> u8 {
                 Trouble::Refused(why) | Trouble::Lost(why) => why,
                 Trouble::None => "no server answered".into(),
             };
-            // Where the person can see it from `llx-desk open`; the log has it for the icon.
-            crate::out::warn(&format!("llx-desk: the window did not open: {why}"));
+            // Where the person can see it from `llxterm open`; the log has it for the icon.
+            crate::out::warn(&format!("llxterm: the window did not open: {why}"));
             said.push(format!("the window did not open: {why}"));
             1
         }
     }
 }
 
-/// `llx-desk open DIR`: the window on the project at `dir` (from the current directory), as it
+/// `llxterm open DIR`: the window on the project at `dir` (from the current directory), as it
 /// was left, or with what it had open; the app started, out of sight, when it is not running.
 pub(super) fn open_in(dir: &str) -> u8 {
     let folder = std::env::current_dir().unwrap_or_default().join(dir);
     if !folder.is_dir() {
-        crate::out::warn(&format!("llx-desk: {} is not a folder", folder.display()));
+        crate::out::warn(&format!("llxterm: {} is not a folder", folder.display()));
         return super::UNREACHABLE;
     }
     let caller = crate::client::Caller::at(&folder, None);
@@ -200,11 +202,11 @@ pub(super) fn open_in(dir: &str) -> u8 {
             super::OK
         }
         Err(Trouble::Refused(why)) => {
-            crate::out::warn(&format!("llx-desk: {why}"));
+            crate::out::warn(&format!("llxterm: {why}"));
             super::FAILED
         }
         Err(Trouble::Lost(why)) => {
-            crate::out::warn(&format!("llx-desk: {why}"));
+            crate::out::warn(&format!("llxterm: {why}"));
             super::UNREACHABLE
         }
         Err(Trouble::None) => super::UNREACHABLE,

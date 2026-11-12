@@ -16,14 +16,14 @@ A session in that terminal is that worker: it acts on the board under its name, 
 
 ## Where it is kept
 
-The board is kept in the app's database (`~/.local/share/llx-desk/llx-desk.sqlite`), so it outlives the app and every session reads the same one. After each change it is written out to `.localix/board.json` in the project, for git and for the plugin to read.
+The board is kept in the app's database (`~/.local/share/llxterm/llxterm.sqlite`), so it outlives the app and every session reads the same one. After each change it is written out to `.localix/board.json` in the project, for git and for the plugin to read.
 
 ## From an agent
 
 ```sh
-llx-desk window '{"action": "open", "kind": "board"}'
-llx-desk window '{"action": "interact", "tab": "b1", "op": "add", "cards": [{"title": "Cart button overlaps on mobile"}]}'
-llx-desk window '{"action": "interact", "tab": "b1", "op": "take"}'
+llxterm window '{"action": "open", "kind": "board"}'
+llxterm window '{"action": "interact", "tab": "b1", "op": "add", "cards": [{"title": "Cart button overlaps on mobile"}]}'
+llxterm window '{"action": "interact", "tab": "b1", "op": "take"}'
 ```
 
-The board is `b1`, the same tab each time. `op` is one of `add`, `take`, `review`, `block`, `release`, `comment`, `card`, `edit` and `remove`; with none, the call reads the board. `who` names a subagent. `llx-desk window --board` prints the project's open cards from its file, starting nothing, for an agent beginning work.
+The board is `b1`, the same tab each time. `op` is one of `add`, `take`, `review`, `block`, `release`, `comment`, `card`, `edit` and `remove`; with none, the call reads the board. `who` names a subagent. `llxterm window --board` prints the project's open cards from its file, starting nothing, for an agent beginning work.

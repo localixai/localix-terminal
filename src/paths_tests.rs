@@ -6,7 +6,7 @@ use super::*;
 fn the_runtime_directory_is_named_for_the_user_alone() {
     assert_eq!(
         under(Path::new("/var/folders/x/T"), 501),
-        Path::new("/var/folders/x/T/llx-desk-501")
+        Path::new("/var/folders/x/T/llxterm-501")
     );
 }
 

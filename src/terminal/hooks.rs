@@ -12,7 +12,7 @@ const ZSHENV: &str = include_str!("shell/zshenv");
 /// What bash reads in place of a login shell's files, which it reads itself.
 const BASHRC: &str = include_str!("shell/bashrc");
 /// Set to `0` where the shell starts, it is left as it is.
-const SWITCH: &str = "LLX_DESK_SHELL_MARKS";
+const SWITCH: &str = "LLXTERM_SHELL_MARKS";
 
 /// `program`, the person's shell named `shell` about to start with `vars` (this process's when
 /// none), made to mark its commands if it is one the app knows how to ask.
@@ -34,7 +34,7 @@ pub(super) fn apply(program: &mut Command, shell: &str, vars: Option<&[(String, 
             };
             // Its own ZDOTDIR is handed along, for the file to put back.
             if let Some(own) = var("ZDOTDIR") {
-                program.env("LLX_DESK_ZDOTDIR", own);
+                program.env("LLXTERM_ZDOTDIR", own);
             }
             program.env("ZDOTDIR", folder);
         }

@@ -23,7 +23,7 @@ A change is done only when it looks right in each of these states, alone and tog
 | Accessibility | Reduce Transparency, Increase Contrast, Reduce Motion                  |
 | Accent       | blue, another accent, Graphite                                          |
 
-Ask the person to look, or take a `llx-desk window` screenshot of a tab. Compare against Finder,
+Ask the person to look, or take a `llxterm window` screenshot of a tab. Compare against Finder,
 Safari or System Settings side by side when no number decides.
 
 ## Layers
@@ -288,7 +288,7 @@ define colours of its own beyond its `--ground`.
 - **A question is a dialog**, the window's own (`dialog.rs`), one look for everything the app
   asks or announces: a mark that draws itself, a title, a sentence, and two buttons. With the
   window away (put away, in the Dock) a question is the system's alert in front instead.
-  - the title asks about the act, with the app's or the thing's name ("Quit LLX Desk?");
+  - the title asks about the act, with the app's or the thing's name ("Quit Localix Terminal?");
   - the detail says what is lost or ended, in one or two sentences, and nothing else;
   - the default button names the act (Quit, Restart, Close), never OK or Yes, and is the
     dialog's one accent; the other is quiet, second, and Esc;

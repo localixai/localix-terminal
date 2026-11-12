@@ -5,35 +5,35 @@ use std::path::Path;
 
 use super::{HOSTS, host, opencode, write_over};
 
-const EXE: &str = "/Users/me/Applications/LLX Desk.app/Contents/MacOS/llx-desk";
+const EXE: &str = "/Users/me/Applications/Localix Terminal.app/Contents/MacOS/llxterm";
 
 #[test]
 fn every_agent_is_read_as_its_own_command_writes_it() {
     let read = |id: &str, text: &str| host(id).unwrap().entry(text);
     // As `codex mcp add`, `gemini mcp add`, `copilot mcp add` and `hermes mcp add` wrote them.
     let codex = format!(
-        "model = \"o3\"\n\n[mcp_servers.llx-desk]\ncommand = \"{EXE}\"\nargs = [\"mcp\"]\n\n[mcp_servers.other]\ncommand = \"x\"\n"
+        "model = \"o3\"\n\n[mcp_servers.llxterm]\ncommand = \"{EXE}\"\nargs = [\"mcp\"]\n\n[mcp_servers.other]\ncommand = \"x\"\n"
     );
     assert_eq!(read("codex", &codex).as_deref(), Some(EXE));
     // A path with a quote or a backslash in it is kept as a literal, in single quotes, and a
     // comment may follow either.
     let literal =
-        "[mcp_servers.llx-desk]\ncommand = 'C:\\a \"b\"\\llx-desk' # ours\nargs = [\"mcp\"]\n";
+        "[mcp_servers.llxterm]\ncommand = 'C:\\a \"b\"\\llxterm' # ours\nargs = [\"mcp\"]\n";
     assert_eq!(
         read("codex", literal).as_deref(),
-        Some("C:\\a \"b\"\\llx-desk")
+        Some("C:\\a \"b\"\\llxterm")
     );
-    let noted = format!("[mcp_servers.llx-desk]\ncommand = \"{EXE}\" # ours\n");
+    let noted = format!("[mcp_servers.llxterm]\ncommand = \"{EXE}\" # ours\n");
     assert_eq!(read("codex", &noted).as_deref(), Some(EXE));
     let json =
-        format!(r#"{{"mcpServers": {{"llx-desk": {{"command": "{EXE}", "args": ["mcp"]}}}}}}"#);
+        format!(r#"{{"mcpServers": {{"llxterm": {{"command": "{EXE}", "args": ["mcp"]}}}}}}"#);
     assert_eq!(read("gemini", &json).as_deref(), Some(EXE));
     assert_eq!(read("copilot", &json).as_deref(), Some(EXE));
     // Gemini CLI keeps the comments a person wrote in its settings.
     let noted = format!("// mine\n{json}");
     assert_eq!(read("gemini", &noted).as_deref(), Some(EXE));
     let yaml = format!(
-        "mcp_servers:\n  other:\n    command: npx\n  llx-desk:\n    command: {EXE}\n    args:\n      - mcp\n    enabled: true\nmodel: x\n"
+        "mcp_servers:\n  other:\n    command: npx\n  llxterm:\n    command: {EXE}\n    args:\n      - mcp\n    enabled: true\nmodel: x\n"
     );
     assert_eq!(read("hermes", &yaml).as_deref(), Some(EXE));
     // None of them has it: not added.
@@ -41,7 +41,7 @@ fn every_agent_is_read_as_its_own_command_writes_it() {
         assert_eq!(one.entry("model = 1\n"), None, "{}", one.id);
     }
     // Another server's command is never taken for its.
-    let other = "mcp_servers:\n  llx-desk-old:\n    command: /x\n  other:\n    command: /y\n";
+    let other = "mcp_servers:\n  llxterm-old:\n    command: /x\n  other:\n    command: /y\n";
     assert_eq!(read("hermes", other), None);
 }
 
@@ -55,7 +55,7 @@ fn opencode_keeps_the_rest_and_takes_out_only_its_own() {
     let off = opencode(&on, exe, false).unwrap();
     assert_eq!(host("opencode").unwrap().entry(&off), None);
     assert!(off.contains("\"other\""));
-    assert!(opencode("", exe, true).unwrap().contains("llx-desk"));
+    assert!(opencode("", exe, true).unwrap().contains("llxterm"));
 }
 
 #[test]
@@ -96,12 +96,12 @@ fn a_configuration_is_written_over_whole_and_through_a_link() {
 fn an_entry_an_older_app_added_without_its_timeout_is_not_whole() {
     let copilot = host("copilot").unwrap();
     let old =
-        format!(r#"{{"mcpServers": {{"llx-desk": {{"command": "{EXE}", "args": ["mcp"]}}}}}}"#);
+        format!(r#"{{"mcpServers": {{"llxterm": {{"command": "{EXE}", "args": ["mcp"]}}}}}}"#);
     assert_eq!(copilot.entry(&old).as_deref(), Some(EXE));
     assert!(!copilot.whole(&old));
     // Any timeout is whole: the person's own number is theirs to keep.
     let new = format!(
-        r#"{{"mcpServers": {{"llx-desk": {{"command": "{EXE}", "args": ["mcp"], "timeout": 45000}}}}}}"#
+        r#"{{"mcpServers": {{"llxterm": {{"command": "{EXE}", "args": ["mcp"], "timeout": 45000}}}}}}"#
     );
     assert!(copilot.whole(&new));
     // The agents whose calls wait long enough by themselves need nothing beside the command.

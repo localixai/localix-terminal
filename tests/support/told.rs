@@ -4,8 +4,8 @@
 
 use std::time::{Duration, Instant};
 
-use llx_desk::browser::{Armed, Driver, Notice, Observation, WebviewDriver};
-use llx_desk::view::Action;
+use llxterm::browser::{Armed, Driver, Notice, Observation, WebviewDriver};
+use llxterm::view::Action;
 
 fn reference(page: &Observation, role: &str, name: &str) -> String {
     page.elements

@@ -260,7 +260,9 @@ fn found_in(agent: &Agent, env: &Env, key: &str, runs: &Runs) -> Option<Found> {
 /// Why an entry of the key is left as it is.
 fn taken(agent: &Agent, env: &Env, key: &str) -> String {
     let at = shown(&agent.servers.file(env), &env.home);
-    format!("{at} already has a server `{key}` that LLX Desk did not add: it is left as it is")
+    format!(
+        "{at} already has a server `{key}` that Localix Terminal did not add: it is left as it is"
+    )
 }
 
 pub(super) fn plan(agent: &Agent, listing: &Listing, env: &Env) -> Result<Plan, String> {

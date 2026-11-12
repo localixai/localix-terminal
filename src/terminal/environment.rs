@@ -16,7 +16,7 @@ pub(super) fn apply(program: &mut Command, vars: Option<&[(String, String)]>) {
         .env("TERM", "xterm-256color")
         .env("COLORTERM", "truecolor")
         .env("CLICOLOR", "1")
-        .env("TERM_PROGRAM", "llx-desk")
+        .env("TERM_PROGRAM", "llxterm")
         .env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
     if !has_locale(vars) {
         program.env("LANG", DEFAULT_LANG);

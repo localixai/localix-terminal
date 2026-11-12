@@ -1,6 +1,6 @@
 //! A skill put where an agent reads the person's skills: its folder copied as `<skills>/<name>`,
 //! whole or not at all (copied beside it, then renamed into place), with a mark of this app's
-//! inside (`.llx-desk.json`: the listing and its version). The mark is how a folder is known to
+//! inside (`.llxterm.json`: the listing and its version). The mark is how a folder is known to
 //! be this app's: one without it is the person's own, and is never written over or removed; one
 //! of another listing of the same name is left too. The name is one safe path segment, as the
 //! skills' own format has it, and the copy never follows a link out of the folder it is given.
@@ -16,7 +16,7 @@ use crate::catalog::{Env, Listing, Plan, With};
 use crate::setup::reach::shown;
 
 /// The file that marks a skill's folder as this app's.
-const MARK: &str = ".llx-desk.json";
+const MARK: &str = ".llxterm.json";
 
 /// What is at a skill's place.
 #[derive(Debug, PartialEq, Eq)]
@@ -85,7 +85,7 @@ fn refused(folder: &Path, there: &There, env: &Env) -> Option<String> {
             "{at} holds the skill of another listing ({id}): remove that one first"
         )),
         There::Persons => Some(format!(
-            "{at} is a skill LLX Desk did not install: it is left as it is"
+            "{at} is a skill Localix Terminal did not install: it is left as it is"
         )),
     }
 }

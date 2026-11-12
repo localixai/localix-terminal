@@ -195,7 +195,7 @@ fn first_segment(address: &str) -> &str {
 /// prefix (a script's `fetch('/api.json')` under a policy that sends no Referer) carries it; a
 /// request from anyone else on this machine, who can reach the loopback but never saw a prefix,
 /// does not.
-const COOKIE: &str = "llx-desk-root";
+const COOKIE: &str = "llxterm-root";
 
 /// The value of [`COOKIE`] in a request's `Cookie` header.
 fn root_cookie(cookies: Option<&str>) -> Option<&str> {

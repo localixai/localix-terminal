@@ -47,8 +47,8 @@ pub(super) fn prepared(
 pub(super) fn prompt(card: &str, who: &str, key: &str) -> String {
     let read = serde_json::json!({"action": "interact", "tab": key, "op": "card", "card": card, "who": who});
     format!(
-        "Work card {card} of this project's llx-desk board (its tab {key}) as its worker {who}: it \
-         is already yours in Doing. Read it with `llx-desk window '{read}'` and do what its title \
+        "Work card {card} of this project's llxterm board (its tab {key}) as its worker {who}: it \
+         is already yours in Doing. Read it with `llxterm window '{read}'` and do what its title \
          and note ask. If the work needs the person, `block` the card with a `reason`. When it is \
          done and checked, hand it in with `review` and a `note` of what you did and how you \
          checked it; never move it to Done yourself."

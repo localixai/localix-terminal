@@ -160,8 +160,8 @@ impl Store {
                 .map_err(text)?;
             if done > STEPS.len() {
                 return Err(format!(
-                    "its schema is at step {done}, past the {} this build knows: a newer llx-desk \
-                     wrote it: update llx-desk, \
+                    "its schema is at step {done}, past the {} this build knows: a newer llxterm \
+                     wrote it: update llxterm, \
                      or move the file aside",
                     STEPS.len()
                 ));

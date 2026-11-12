@@ -33,7 +33,7 @@ fn an_interactive_terminal_does_not_inherit_automation_color_overrides() {
     assert_eq!(
         text,
         format!(
-            "term=xterm-256color\ndepth=truecolor\nprogram=llx-desk\nversion={}\n\
+            "term=xterm-256color\ndepth=truecolor\nprogram=llxterm\nversion={}\n\
              no_color=unset\nforce_color=unset\nclicolor=1\nclicolor_force=unset\nkept=kept\ntty=all",
             env!("CARGO_PKG_VERSION")
         )
@@ -44,7 +44,7 @@ fn an_interactive_terminal_does_not_inherit_automation_color_overrides() {
 fn an_inherited_server_environment_also_gets_the_terminals_capabilities() {
     let text = run(CAPABILITIES, None);
     for line in [
-        "program=llx-desk",
+        "program=llxterm",
         "no_color=unset",
         "force_color=unset",
         "clicolor=1",

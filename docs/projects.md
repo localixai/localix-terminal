@@ -74,10 +74,10 @@ change_events, change_cursors                          -- the feed, as now
 
 - Every call names its project by path: `project` (absolute) replaces `owner`, with `agent`
   (optional) and `cwd`. The server canonicalizes it and finds or makes its row.
-- The CLI, `llx-desk mcp` and the plugin resolve the project the same way: `--project DIR`, else
-  `LLX_DESK_PROJECT`, else `root_of(cwd)` (`client::Caller`). The plugin passes its session's
+- The CLI, `llxterm mcp` and the plugin resolve the project the same way: `--project DIR`, else
+  `LLXTERM_PROJECT`, else `root_of(cwd)` (`client::Caller`). The plugin passes its session's
   folder with every call it runs (`--project`), wherever its hooks run.
-- `llx-desk open [path]`: the app, showing the project of `path` (as `code .` opens a folder).
+- `llxterm open [path]`: the app, showing the project of `path` (as `code .` opens a folder).
 - A note (`comment/added`) carries the project's path and the agent's name.
 - The protocol's version moved on: a client of the owner string is told it speaks another.
 
@@ -105,7 +105,7 @@ do not.
   open; the tabs other windows had gather into the first window, each in its project's workspace
   there (windows are not opened again across a restart); another project's come back the first
   time the person goes to it (the switcher,
-  `llx-desk open DIR`).
+  `llxterm open DIR`).
 - A page reopens at its address.
 - A terminal opens a new shell in its last folder, with its last screen shown above the new
   prompt, dimmed. The program that ran is not run again (an agent's tab says how to resume it).

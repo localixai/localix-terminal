@@ -1,5 +1,5 @@
 //! What the `window` tool says of itself (its description and JSON Schema, printed by
-//! `llx-desk window` with no argument) and the small readers of its arguments.
+//! `llxterm window` with no argument) and the small readers of its arguments.
 
 mod guide;
 mod kinds;

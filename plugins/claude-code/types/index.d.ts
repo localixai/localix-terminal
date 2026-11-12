@@ -31,6 +31,6 @@ export type BoardCard = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'llx-desk': { desk: Shaped<Desk>; board: Shaped<BoardSummary | null> }
+    'llxterm': { desk: Shaped<Desk>; board: Shaped<BoardSummary | null> }
   }
 }

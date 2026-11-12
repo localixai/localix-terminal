@@ -97,7 +97,7 @@ fn a_database_a_newer_build_wrote_is_left_as_it_is() {
         .unwrap();
     drop(newer);
     let refused = Store::open(&path).err().unwrap_or_default();
-    assert!(refused.contains("newer llx-desk"), "{refused}");
+    assert!(refused.contains("newer llxterm"), "{refused}");
 }
 
 #[test]

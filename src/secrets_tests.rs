@@ -73,7 +73,7 @@ fn a_named_secret_is_put_in_and_every_answer_after_shows_its_reference() {
         r#"{"pw":"{{secret:Q}}"} {{secret:Q}} {{secret:Q}}"#
     );
     let missing = vault.fill_in(Some(&dir), "{{secret:NOPE}}").unwrap_err();
-    assert!(missing.contains("llx-desk secret NOPE < FILE"), "{missing}");
+    assert!(missing.contains("llxterm secret NOPE < FILE"), "{missing}");
 }
 
 #[test]

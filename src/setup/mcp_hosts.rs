@@ -1,5 +1,5 @@
 //! The window tool in the coding agents that take MCP servers (Codex, Gemini CLI, GitHub Copilot,
-//! OpenCode, Hermes): an `llx-desk` server in each one's own configuration, run as
+//! OpenCode, Hermes): an `llxterm` server in each one's own configuration, run as
 //! `<this program> mcp`. Each is put in and taken out with the agent's own commands
 //! (`<agent> mcp add` / `remove`), where it has them for a local server; OpenCode has none, and its
 //! JSON is written. Whether it is there is read from the agent's configuration file (read.rs),
@@ -21,7 +21,7 @@ use read::Kept;
 pub(super) use read::{json, toml_value};
 
 /// The name of the server in an agent's configuration.
-pub(super) const NAME: &str = "llx-desk";
+pub(super) const NAME: &str = "llxterm";
 /// How long an agent's `mcp` command may take (Hermes connects to the server to list its tools).
 const MOST: std::time::Duration = std::time::Duration::from_secs(60);
 

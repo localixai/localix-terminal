@@ -42,7 +42,7 @@ fn the_person_puts_the_window_away_and_only_they_bring_it_back() {
         );
         assert_eq!(presence.state(), State::Away, "{event:?}");
     }
-    // Their click on the app (its Dock icon, `llx-desk open`) brings the window back.
+    // Their click on the app (its Dock icon, `llxterm open`) brings the window back.
     assert_eq!(presence.event(Expand), vec![Enter(State::Expanded)]);
     assert_eq!(presence.event(Expand), vec![]);
 }

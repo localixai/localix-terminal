@@ -133,10 +133,10 @@ test('a turn that an error ended is said however short, and one the person stopp
 })
 
 test('a program missing from the PATH is tried once, then the one that ran is asked first', async () => {
-  const local = '/home/test/.local/bin/llx-desk'
+  const local = '/home/test/.local/bin/llxterm'
   const { calls, spawned, hook } = await session(async argv => (argv[0] === local ? answer(argv) : missing()))
   // The first look finds the program: the PATH's fails, then ~/.local/bin's runs.
-  expect(calls.slice(0, 2).map(call => call.argv[0])).toEqual(['llx-desk', local])
+  expect(calls.slice(0, 2).map(call => call.argv[0])).toEqual(['llxterm', local])
   const later = calls.slice(1).map(call => call.argv[0])
   expect(later.every(program => program === local)).toBe(true)
   expect(spawned[0]?.[0]).toBe(local)
@@ -167,11 +167,11 @@ test('in a terminal of the desk, a page the person asks for opens in its window,
   }
   // Said once, as a row the model reads ahead of the first prompt: the prompt itself is left
   // alone, since where an organization seats a policy the mod's part of it is passed over.
-  const inDesk = await told({ TERM_PROGRAM: 'llx-desk' })
+  const inDesk = await told({ TERM_PROGRAM: 'llxterm' })
   expect(inDesk).toHaveLength(1)
   expect(inDesk[0]!.message.type).toBe('user')
   const text = inDesk[0]!.message.content[0]!.text
-  expect(text).toContain('llx-desk window')
+  expect(text).toContain('llxterm window')
   expect(text).toContain('Claude in Chrome')
   // Elsewhere (another terminal) nothing is said: the person may mean their own browser.
   expect(await told({ TERM_PROGRAM: 'WarpTerminal' })).toEqual([])

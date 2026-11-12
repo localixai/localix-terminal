@@ -1,4 +1,4 @@
-//! `llx-desk setup`: the integrations (setup.rs) from a terminal, as Settings → Integrations
+//! `llxterm setup`: the integrations (setup.rs) from a terminal, as Settings → Integrations
 //! shows them in the window. With nothing, each and its state; with an id, that one put in
 //! place (`--off`: taken out); `all`, every one put in place as the app does when it opens;
 //! `mcp`, the MCP server's entry for any other host.
@@ -7,7 +7,7 @@ use super::{FAILED, OK, UNREACHABLE};
 use crate::out::{say, warn};
 use crate::setup::{INTEGRATIONS, State, state, turn};
 
-const USAGE: &str = "llx-desk setup [<id> [--off] | all | mcp]";
+const USAGE: &str = "llxterm setup [<id> [--off] | all | mcp]";
 
 /// What `setup` was given: whether `--off`, and the names. `--off` goes with one integration
 /// only (not `all` or `mcp`, which put in or print), and no other option is known.
@@ -35,7 +35,7 @@ pub(super) fn run(args: &[String]) -> u8 {
                 say(&format!("{word:<3} {:<12} {note}", integration.id));
             }
             say(
-                "\n`llx-desk setup <id>` puts one in place, `--off` takes it out for good; `llx-desk setup all` puts every one in place; `llx-desk setup mcp` prints the MCP entry for any other host.",
+                "\n`llxterm setup <id>` puts one in place, `--off` takes it out for good; `llxterm setup all` puts every one in place; `llxterm setup mcp` prints the MCP entry for any other host.",
             );
             OK
         }
@@ -56,7 +56,7 @@ pub(super) fn run(args: &[String]) -> u8 {
                 OK
             }
             Err(why) => {
-                warn(&format!("llx-desk setup: {why}"));
+                warn(&format!("llxterm setup: {why}"));
                 FAILED
             }
         },
@@ -66,7 +66,7 @@ pub(super) fn run(args: &[String]) -> u8 {
                 OK
             }
             Err(why) => {
-                warn(&format!("llx-desk setup {id}: {why}"));
+                warn(&format!("llxterm setup {id}: {why}"));
                 FAILED
             }
         },

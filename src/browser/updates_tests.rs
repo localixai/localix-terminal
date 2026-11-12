@@ -25,7 +25,7 @@ const NOW: u64 = 1_800_000_000;
 #[test]
 fn the_row_names_the_build_and_says_how_far_an_update_is() {
     let idle = row(&told(Stage::Idle), NOW);
-    assert_eq!(idle.title, "LLX Desk 0.1.5");
+    assert_eq!(idle.title, "Localix Terminal 0.1.5");
     assert_eq!(
         (idle.says.as_str(), idle.button),
         ("Not checked yet.", Some("Check Now"))
@@ -136,7 +136,7 @@ fn only_an_update_that_is_ready_is_offered_under_its_version() {
         offer(&ready),
         Some((
             "update:0.2.0".into(),
-            "LLX Desk 0.2.0 is ready to install.".into()
+            "Localix Terminal 0.2.0 is ready to install.".into()
         ))
     );
     let fetching = Stage::Fetching {
@@ -154,7 +154,7 @@ fn only_an_update_that_is_ready_is_offered_under_its_version() {
     }
     assert_eq!(
         notes("0.2.0"),
-        "https://github.com/rsaryev/llx-desk/releases/tag/v0.2.0"
+        "https://github.com/rsaryev/localix-terminal/releases/tag/v0.2.0"
     );
 }
 

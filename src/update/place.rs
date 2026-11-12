@@ -22,7 +22,7 @@ pub(super) fn of_this_app() -> Result<PathBuf, String> {
     match place.parent().is_some_and(writable) {
         true => Ok(place),
         false => Err(format!(
-            "LLX Desk cannot replace itself in {}: you may not write there.",
+            "Localix Terminal cannot replace itself in {}: you may not write there.",
             place.parent().unwrap_or(&place).display()
         )),
     }
@@ -36,7 +36,8 @@ fn installed() -> Result<PathBuf, String> {
     let app = crate::bundle::app().ok_or(NOT_A_RELEASE)?;
     if !crate::bundle::in_place() {
         return Err(
-            "Move LLX Desk to Applications first: it runs from a place that does not last.".into(),
+            "Move Localix Terminal to Applications first: it runs from a place that does not last."
+                .into(),
         );
     }
     // A build made on this Mac is signed by no one: it is never replaced by a release.
@@ -53,7 +54,7 @@ fn installed() -> Result<PathBuf, String> {
     let data = data
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")));
-    let installed = data.map(|data| data.join("llx-desk/llx-desk"));
+    let installed = data.map(|data| data.join("llxterm/llxterm"));
     match installed.and_then(|installed| std::fs::canonicalize(installed).ok()) {
         Some(installed) if installed == exe => Ok(exe),
         _ => Err(NOT_A_RELEASE.into()),
@@ -84,7 +85,7 @@ impl Again {
         };
         let script = format!(r#"while kill -0 "$1" 2>/dev/null; do sleep 0.2; done; {open}"#);
         Command::new("/bin/sh")
-            .args(["-c", &script, "llx-desk-update"])
+            .args(["-c", &script, "llxterm-update"])
             .arg(std::process::id().to_string())
             .arg(&self.old)
             .arg(&self.place)
@@ -94,6 +95,6 @@ impl Again {
             .process_group(0)
             .spawn()
             .map(|_| ())
-            .map_err(|why| format!("LLX Desk was updated; open it again ({why})."))
+            .map_err(|why| format!("Localix Terminal was updated; open it again ({why})."))
     }
 }

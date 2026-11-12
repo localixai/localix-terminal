@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use llx_desk::browser::Browser;
+use llxterm::browser::Browser;
 use serde_json::json;
 
 /// The ref the outline gives the control `line` names: `textbox "City" [e4]` → `e4`.
@@ -19,18 +19,18 @@ fn ref_of(outline: &str, line: &str) -> String {
 }
 
 pub(crate) fn scenario(browser: &Browser, origin: &str) {
-    let home = std::env::temp_dir().join(format!("llx-desk-refs-{}", std::process::id()));
+    let home = std::env::temp_dir().join(format!("llxterm-refs-{}", std::process::id()));
     std::fs::create_dir_all(home.join(".git")).unwrap();
-    let desk = llx_desk::desk::Desk::new(
+    let desk = llxterm::desk::Desk::new(
         Some(browser.clone()),
         true,
         home.join("shots"),
-        Arc::new(llx_desk::desk::Quiet),
-        Arc::new(llx_desk::store::Store::memory().unwrap()),
+        Arc::new(llxterm::desk::Quiet),
+        Arc::new(llxterm::store::Store::memory().unwrap()),
     );
     let project = desk.project(&home).unwrap();
-    let owner = llx_desk::projects::owner(&project, None);
-    let call = llx_desk::desk::Call {
+    let owner = llxterm::projects::owner(&project, None);
+    let call = llxterm::desk::Call {
         owner: &owner,
         project: &project,
         agent: None,

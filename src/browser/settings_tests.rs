@@ -57,7 +57,7 @@ fn a_change_is_checked_and_a_shortcut_back_on_its_default_is_not_kept() {
 #[test]
 fn settings_outlive_the_run_and_a_file_that_does_not_read_is_the_defaults() {
     let scratch = Scratch::new();
-    let file = scratch.path().join("llx-desk").join("settings.json");
+    let file = scratch.path().join("llxterm").join("settings.json");
     assert_eq!(Settings::read(&file), Settings::default());
     let mut settings = Settings::default();
     settings
@@ -75,7 +75,7 @@ fn settings_outlive_the_run_and_a_file_that_does_not_read_is_the_defaults() {
 #[test]
 fn a_size_by_hand_is_held_to_the_sizes_and_a_file_that_did_not_read_is_kept_aside() {
     let scratch = Scratch::new();
-    let file = scratch.path().join("llx-desk").join("settings.json");
+    let file = scratch.path().join("llxterm").join("settings.json");
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
     std::fs::write(&file, r#"{"font_size": 0}"#).unwrap();
     assert_eq!(Settings::read(&file).font_size, *SIZES.start());

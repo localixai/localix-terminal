@@ -18,8 +18,8 @@ use std::net::TcpListener;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::{Duration, Instant};
 
-use llx_desk::browser::{self, Driver, Observation, WebviewDriver, Window};
-use llx_desk::view::{Action, ViewError};
+use llxterm::browser::{self, Driver, Observation, WebviewDriver, Window};
+use llxterm::view::{Action, ViewError};
 
 #[path = "support/board.rs"]
 mod board;
@@ -1250,19 +1250,19 @@ fn drifted(driver: &WebviewDriver, origin: &str) {
 /// The event loop takes the main thread once per process, so the chosen ones run in one loop.
 fn main() {
     // Real windows: only when asked for (a display is needed, and the screen is shared).
-    if std::env::var_os("LLX_DESK_DISPLAY_TESTS").is_none() {
+    if std::env::var_os("LLXTERM_DISPLAY_TESTS").is_none() {
         return;
     }
     // The panel's and the glass's windows are shown ones: rendered, and never over what the
     // person is watching.
     // A test build's home is the one it is given (paths.rs): its own, for the pictures of
     // comments and the like.
-    let home = std::env::temp_dir().join(format!("llx-desk-display-{}", std::process::id()));
+    let home = std::env::temp_dir().join(format!("llxterm-display-{}", std::process::id()));
     std::fs::create_dir_all(&home).unwrap();
     // SAFETY: the first thing the process does, before any thread starts.
     unsafe { std::env::set_var("DESK_WINDOWS", "unseen") };
     // SAFETY: as above.
-    unsafe { std::env::set_var("LLX_DESK_TEST_DIR", &home) };
+    unsafe { std::env::set_var("LLXTERM_TEST_DIR", &home) };
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|arg| arg == "--list") {
         if !args.iter().any(|arg| arg == "--ignored") {

@@ -76,7 +76,7 @@ fn want(window: Option<&AnyObject>) {
     WANTED.with(|wanted| *crate::lock(wanted) = window);
 }
 
-/// llx-desk the active app and `window` its key window, for the person's press. The app becomes
+/// llxterm the active app and `window` its key window, for the person's press. The app becomes
 /// active only later (the system answers the request on a later turn), so the window is made key
 /// again once it has: done at once, it would be key in an app still behind another.
 pub(super) fn activate_and_key(window: &AnyObject) {

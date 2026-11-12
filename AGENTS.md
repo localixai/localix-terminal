@@ -1,4 +1,4 @@
-# Working on llx-desk
+# Working on llxterm
 
 How every agent works in this repository. These rules hold for every change, small or large.
 
@@ -106,12 +106,12 @@ build, not after the first screenshot.
 Look at it yourself before saying it is done. A visible change that was never seen on the
 screen is not finished, and the person should not be the first to see it.
 
-- **Capture the window.** Bring the app to the front (`open -a ~/Applications/"LLX Desk.app"`),
+- **Capture the window.** Bring the app to the front (`open -a ~/Applications/"Localix Terminal.app"`),
   read the window's place from System Events, and `screencapture -x -R x,y,w,h` it to the
   scratch directory. If another app is in front, the capture shows that app: check which process
-  is frontmost, and read the picture before trusting it. `llx-desk window screenshot` captures a
+  is frontmost, and read the picture before trusting it. `llxterm window screenshot` captures a
   tab's page, not the window's own parts.
-- **Measure what a picture cannot settle.** `agent-desktop snapshot --app "LLX Desk" -i
+- **Measure what a picture cannot settle.** `agent-desktop snapshot --app "Localix Terminal" -i
   --compact --include-bounds` gives each control's name, role and rectangle: use it to check
   that a thing is centred, aligned, the size meant, and named for assistive tools. Its own
   `screenshot` does not work on this machine; its `click` does.
@@ -162,16 +162,16 @@ One pass, and the person has nothing to send back for a detail that could have b
 
 ## Running a build on this machine
 
-The app is the server: `~/.local/bin/llx-desk` links into `~/Applications/LLX Desk.app`.
+The app is the server: `~/.local/bin/llxterm` links into `~/Applications/Localix Terminal.app`.
 
 1. Build and bundle: `cargo build --release && scripts/bundle-macos.sh`.
-2. Replace the bundle whole. `ditto` it to `LLX Desk.app.new`, then move that over the old one.
+2. Replace the bundle whole. `ditto` it to `Localix Terminal.app.new`, then move that over the old one.
    Never copy over the link or the binary.
-3. Restart: run `llx-desk quit`, wait until the old process is gone (`pgrep -f "LLX
+3. Restart: run `llxterm quit`, wait until the old process is gone (`pgrep -f "LLX
    Desk.app/Contents/MacOS"`; an `open` sent sooner fails with error -600), then
-   `env -i HOME="$HOME" USER="$USER" PATH=/usr/bin:/bin open -g -a ~/Applications/"LLX Desk.app" --args serve`.
+   `env -i HOME="$HOME" USER="$USER" PATH=/usr/bin:/bin open -g -a ~/Applications/"Localix Terminal.app" --args serve`.
    The bare environment matters: an app opened from an agent's shell hands that session's
    variables to every terminal the person opens in it. Under `serve` the window opens when the
-   app is brought forward: `open -a ~/Applications/"LLX Desk.app"`.
-4. Check that `llx-desk status` names the new build. Another session may start an older app after
+   app is brought forward: `open -a ~/Applications/"Localix Terminal.app"`.
+4. Check that `llxterm status` names the new build. Another session may start an older app after
    the quit. If it does, open the new one again: it takes over.

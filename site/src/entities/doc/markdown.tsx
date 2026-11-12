@@ -1,9 +1,9 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Code, Markdown, childrenToText, defaultUrlTransform, isCodeBlock, type MarkdownComponents } from 'llx-markdown';
-import { highlight } from 'llx-markdown/highlight';
-import { html as rawHtml } from 'llx-markdown/html';
-import { extractHeadings, splitBlocks } from 'llx-markdown/remark';
+import { Code, Markdown, childrenToText, defaultUrlTransform, isCodeBlock, type MarkdownComponents } from '@localix-ai/flowdown';
+import { highlight } from '@localix-ai/flowdown/highlight';
+import { html as rawHtml } from '@localix-ai/flowdown/html';
+import { extractHeadings, splitBlocks } from '@localix-ai/flowdown/remark';
 
 /** A heading of a page, for its table of contents. */
 export type Heading = { depth: number; id: string; text: string };
@@ -63,7 +63,7 @@ const COMPONENTS: MarkdownComponents = {
   },
 };
 
-/** llx-markdown at build time: GitHub's markdown and its own forms (callouts, steps, tabs, file
+/** flowdown at build time: GitHub's markdown and its own forms (callouts, steps, tabs, file
  *  trees), every fenced language highlighted, as static HTML. The page's script only answers a
  *  press (Copy, a tab). */
 function draw(markdown: string, rewrite: Rewrite, className = ''): string {
@@ -86,8 +86,8 @@ function draw(markdown: string, rewrite: Rewrite, className = ''): string {
   // A static page has nothing to download a block with: only Copy stays in a code block's bar.
   return renderToStaticMarkup(page)
     .replace(/<link rel="preload"[^>]*>/g, '')
-    .replace(/<button type="button" class="llx-code-download".*?<\/button>/g, '')
-    .replace(/(<span class="llx-code-language">)([^<]+)/g, (_, open: string, name: string) => `${open}${LANGUAGES[name] ?? name.toUpperCase()}`);
+    .replace(/<button type="button" class="fd-code-download".*?<\/button>/g, '')
+    .replace(/(<span class="fd-code-language">)([^<]+)/g, (_, open: string, name: string) => `${open}${LANGUAGES[name] ?? name.toUpperCase()}`);
 }
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#x27': "'", '#39': "'" };

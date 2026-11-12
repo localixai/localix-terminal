@@ -90,7 +90,7 @@ fn each_group_is_one_menu_listed_once_with_the_apps_own_last() {
         groups.len(),
         "a group's shortcuts are apart: {groups:?}"
     );
-    assert_eq!(groups.last(), Some(&"LLX Desk"));
+    assert_eq!(groups.last(), Some(&"Localix Terminal"));
     assert!(
         every()
             .iter()

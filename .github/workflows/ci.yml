@@ -18,20 +18,20 @@ concurrency:
 
 jobs:
   check:
-    runs-on: [self-hosted, linux, x64, llx-desk]
+    runs-on: [self-hosted, linux, x64, llxterm]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: scripts/check-versions.sh
-      - run: sh -n install.sh && sh -n plugins/claude-code/bin/llx-desk
+      - run: sh -n install.sh && sh -n plugins/claude-code/bin/llxterm
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
 
   msrv:
-    runs-on: [self-hosted, linux, x64, llx-desk]
+    runs-on: [self-hosted, linux, x64, llxterm]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,7 +60,7 @@ jobs:
         with:
           tool: cargo-deny,shellcheck
       - run: scripts/check-versions.sh
-      - run: shellcheck install.sh scripts/*.sh plugins/claude-code/bin/llx-desk
+      - run: shellcheck install.sh scripts/*.sh plugins/claude-code/bin/llxterm
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
@@ -70,6 +70,6 @@ jobs:
       - name: The app bundles and its signature holds (ad hoc, nothing is notarized)
         run: |
           cargo build --locked
-          app=$(scripts/bundle-macos.sh target/debug/llx-desk target/smoke)
+          app=$(scripts/bundle-macos.sh target/debug/llxterm target/smoke)
           codesign --verify --deep --strict --verbose=2 "$app"
-          lipo -archs "$app/Contents/MacOS/llx-desk"
+          lipo -archs "$app/Contents/MacOS/llxterm"

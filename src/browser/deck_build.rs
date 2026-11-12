@@ -45,7 +45,7 @@ impl Deck {
     ) -> Result<Self, String> {
         Self::build(
             (target, steps),
-            "llx-desk",
+            "llxterm",
             &Viewport::DESKTOP,
             false,
             (shared, proxy),
@@ -61,7 +61,7 @@ impl Deck {
     ) -> Result<Self, String> {
         let mut deck = Self::build(
             (target, steps),
-            "llx-desk",
+            "llxterm",
             &Viewport::DESKTOP,
             false,
             (shared, proxy),

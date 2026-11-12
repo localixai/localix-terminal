@@ -9,9 +9,9 @@ cargo test                                   # unit tests, and the CLI against a
 bun test plugins/claude-code/hooks/register.spec.ts  # plugin hooks with a mocked host; Bun 1.3+
 bun test src/browser                               # UI gestures, frame cadence and motion lifecycle
 bunx tsc -p plugins/claude-code                    # the plugin's types (see below)
-shellcheck install.sh scripts/*.sh plugins/claude-code/bin/llx-desk
+shellcheck install.sh scripts/*.sh plugins/claude-code/bin/llxterm
 cargo deny --locked check                          # advisories, licences and sources (deny.toml)
-LLX_DESK_DISPLAY_TESTS=1 cargo test --test browser   # real windows: needs a display, and shows some
+LLXTERM_DISPLAY_TESTS=1 cargo test --test browser   # real windows: needs a display, and shows some
 ```
 
 - The plugin's type check needs the `claude-code` module's declarations, which Claude Code writes
@@ -20,7 +20,7 @@ LLX_DESK_DISPLAY_TESTS=1 cargo test --test browser   # real windows: needs a dis
   this check; run it before you change the hooks.
 
 - `cargo test` builds a test build (the `test-server` feature, turned on only by the crate's own
-  dev-dependency): its server never opens a window and keeps its lock and socket in `LLX_DESK_TEST_DIR`,
+  dev-dependency): its server never opens a window and keeps its lock and socket in `LLXTERM_TEST_DIR`,
   so tests never reach your own server. Do not run a test build's binary by hand without that variable.
 - Read [ARCHITECTURE.md](ARCHITECTURE.md) first; its rules are checked by the lints and
   `tests/architecture.rs` in the normal `cargo test` run.
@@ -47,9 +47,9 @@ LLX_DESK_DISPLAY_TESTS=1 cargo test --test browser   # real windows: needs a dis
 3. Commit, then `git tag v0.2.0 && git push origin main v0.2.0`. The Release workflow first checks that
    the tag is on main and that CI passed for it. Then it builds Linux on the project's server and the
    Mac app on GitHub's Mac runner, signed and notarized with the project's Developer ID: one disk image
-   (`LLX-Desk-macos.dmg`) and one zip (`LLX-Desk-macos.zip`, which `install.sh` fetches), for Apple
+   (`Localix-Terminal-macos.dmg`) and one zip (`Localix-Terminal-macos.zip`, which `install.sh` fetches), for Apple
    Silicon only. It publishes them with the Linux archive and `SHA256SUMS`, each with a build
-   provenance attestation (`gh attestation verify FILE -R rsaryev/llx-desk`).
+   provenance attestation (`gh attestation verify FILE -R rsaryev/localix-terminal`).
 
 Releases build with the exact Rust that `RUSTUP_TOOLCHAIN` names in `release.yml`; move it to a
 newer stable once CI passed on it. `TEAM_ID` in `install.sh` is the Apple team that signs the app:

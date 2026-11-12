@@ -1,7 +1,7 @@
 //! The API, once: every method the server answers, with what it is for, its params as JSON
 //! Schema, and whether it is work (it acts in the window or a terminal and takes as long as it
 //! takes, so it runs on a thread of its own). The dispatch (`methods::call`), `api/describe` and,
-//! through it, every adapter (the CLI, `llx-desk mcp`, a plugin) read this one table: a method
+//! through it, every adapter (the CLI, `llxterm mcp`, a plugin) read this one table: a method
 //! added here is served, described and reachable everywhere, with nothing else to keep in step.
 
 use serde_json::{Value, json};
@@ -140,7 +140,7 @@ pub(super) fn describe(build: &str) -> Value {
         .collect();
     json!({
         "protocolVersion": PROTOCOL,
-        "server": {"name": "llx-desk", "version": env!("CARGO_PKG_VERSION"), "build": build},
+        "server": {"name": "llxterm", "version": env!("CARGO_PKG_VERSION"), "build": build},
         "methods": methods,
         "events": EVENTS,
         "window": {
@@ -202,7 +202,7 @@ fn present_params() -> Value {
             "project": string(PROJECT),
             "cwd": string("Where a terminal starts when the window has no tab."),
             "env": environment(),
-            "go": {"type": "boolean", "description": "The window goes to the project (`llx-desk open DIR`)."},
+            "go": {"type": "boolean", "description": "The window goes to the project (`llxterm open DIR`)."},
         }),
         &["project", "cwd"],
     )

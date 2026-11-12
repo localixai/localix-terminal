@@ -14,7 +14,7 @@ Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode and Hermes are connecte
 
 ## When it happens
 
-When the app starts, however it was started, and every hour while it runs, for whichever agent is installed. One you install later, or an entry another program rewrote, is put right without opening the app again. In a terminal, `llx-desk setup` does the same.
+When the app starts, however it was started, and every hour while it runs, for whichever agent is installed. One you install later, or an entry another program rewrote, is put right without opening the app again. In a terminal, `llxterm setup` does the same.
 
 **Settings → Integrations** (⌘,) shows the agents. One you remove stays removed until you add it back.
 

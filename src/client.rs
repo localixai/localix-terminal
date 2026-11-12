@@ -90,20 +90,20 @@ impl Client {
         // Before anything is sent (the caller's environment goes with a call): whatever
         // listens at the socket's path must be this user's own app.
         if !crate::wire::peer::is_own(&stream) {
-            return Err("the socket is another user's: this is not your LLX Desk".into());
+            return Err("the socket is another user's: this is not your Localix Terminal".into());
         }
         let link = Link::open(stream, Notes::clone(notes))
             .map_err(|e| format!("the server's socket: {e}"))?;
         let hello = json!({
             "protocolVersion": PROTOCOL,
-            "clientInfo": {"name": "llx-desk", "version": env!("CARGO_PKG_VERSION"), "build": crate::server::build()},
+            "clientInfo": {"name": "llxterm", "version": env!("CARGO_PKG_VERSION"), "build": crate::server::build()},
             "capabilities": {"binary": true},
         });
         let answer = link
             .request("initialize", hello, Some(SHAKE))
             .map_err(|why| match why {
                 Error::Foreign(detail) => format!(
-                    "another build's server answers, of another protocol: quit LLX Desk (`llx-desk quit`) and call again ({detail})"
+                    "another build's server answers, of another protocol: quit Localix Terminal (`llxterm quit`) and call again ({detail})"
                 ),
                 Error::Broken(_) | Error::Timeout => {
                     format!("the server did not complete the handshake: {why}")
@@ -137,7 +137,7 @@ pub enum Trouble {
 }
 
 /// `method` asked of the server, once more after a connection that broke under it: the one
-/// request every adapter (the CLI, `llx-desk mcp`) makes.
+/// request every adapter (the CLI, `llxterm mcp`) makes.
 pub fn ask(start: Start, method: &str, params: &Value) -> Result<Answer, Trouble> {
     let notes: Notes = Arc::new(|_, _| {});
     // Every request has a key, so that the one made again is not done twice.
@@ -154,7 +154,7 @@ pub fn ask(start: Start, method: &str, params: &Value) -> Result<Answer, Trouble
             Ok(Some(client)) => client,
             Ok(None) if asked => {
                 return Err(Trouble::Lost(
-                    "LLX Desk went away while this call ran".into(),
+                    "Localix Terminal went away while this call ran".into(),
                 ));
             }
             Ok(None) => return Err(Trouble::None),

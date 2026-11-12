@@ -199,7 +199,7 @@ fn watch_workspace(name: &str, proxy: &EventLoopProxy<Cmd>, tell: fn() -> Cmd) {
     }
 }
 
-/// llx-desk the active app and `window` its key window, for the person who just opened it:
+/// llxterm the active app and `window` its key window, for the person who just opened it:
 /// their next click and key go to it, as to any app they bring forward. Only their click calls it.
 pub(super) fn focus(window: &Window) {
     if unseen() {
@@ -208,7 +208,7 @@ pub(super) fn focus(window: &Window) {
     super::appkit::activate_and_key(native(window));
 }
 
-/// llx-desk no longer the active app, for the person who just put its window away: the app they
+/// llxterm no longer the active app, for the person who just put its window away: the app they
 /// were in before takes their keys again. Only their click calls it.
 pub(super) fn give_up_keys() {
     if unseen() {

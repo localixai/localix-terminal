@@ -101,7 +101,7 @@ impl Desk {
             _ => Err(format!(
                 "there is no tab {} among yours, {}: `list` names them. Tabs are kept per \
                  project, the directory with `.git` around where the call runs (or \
-                 LLX_DESK_PROJECT, or `--as`): run it from the project's directory",
+                 LLXTERM_PROJECT, or `--as`): run it from the project's directory",
                 tab.key, call.owner
             )),
         }

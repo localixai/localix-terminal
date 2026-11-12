@@ -109,10 +109,10 @@ impl Updater {
     }
 
     /// The updater of this app, reading the project's releases. In a build for development
-    /// `LLX_DESK_UPDATE_FROM` names another place that holds them; a release reads its own
+    /// `LLXTERM_UPDATE_FROM` names another place that holds them; a release reads its own
     /// alone, whatever its environment says.
     pub fn of_this_app() -> Self {
-        let from = std::env::var("LLX_DESK_UPDATE_FROM").ok();
+        let from = std::env::var("LLXTERM_UPDATE_FROM").ok();
         let from = from.filter(|from| cfg!(debug_assertions) && !from.is_empty());
         Self::new(Given {
             from: from.map_or_else(From::default, |base| From::at(&base)),
@@ -269,7 +269,7 @@ impl Updater {
         if let Err(why) = (given.trusted)(&staged) {
             let _ = std::fs::remove_dir_all(&given.dir);
             return Err(format!(
-                "LLX Desk {} was fetched, but {why}",
+                "Localix Terminal {} was fetched, but {why}",
                 release.version
             ));
         }
@@ -285,14 +285,20 @@ impl Updater {
         };
         let place = self.placed()?;
         if self.0.applying.swap(true, Ordering::SeqCst) {
-            return Err(format!("LLX Desk {} is being installed.", release.version));
+            return Err(format!(
+                "Localix Terminal {} is being installed.",
+                release.version
+            ));
         }
         let name = self.0.given.archive.unwrap_or_default();
         let staged = (self.0.given.dir.join("unpacked")).join(install::unpacked(name));
         install::swap(&staged, &place).inspect_err(|_| {
             self.0.applying.store(false, Ordering::SeqCst);
             self.set(Stage::Failed {
-                why: format!("LLX Desk {} could not be put in place.", release.version),
+                why: format!(
+                    "Localix Terminal {} could not be put in place.",
+                    release.version
+                ),
             });
         })?;
         Ok(Again {

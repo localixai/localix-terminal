@@ -1,7 +1,7 @@
 //! The window's three states on macOS as pure logic: events in, what to do out. Hidden while no
 //! tab is open; the window, an ordinary one, whenever one is; away, when the person puts it out
 //! of sight (the yellow button, ⌘M): nothing is on screen, the tabs stay and keep running, and
-//! only they bring the window back (the app's icon, `llx-desk open`). Nothing the agent does
+//! only they bring the window back (the app's icon, `llxterm open`). Nothing the agent does
 //! changes the state: its acts only turn the spinner of whose turn it is. Where the window cannot
 //! be put away ([`Support::WindowOnly`]) it stays the window. The AppKit side
 //! (host_presence.rs) applies what this decides.
@@ -29,7 +29,7 @@ pub(super) enum Event {
     Appeared,
     /// The window is gone (no window at all, not one with no tab: that stays).
     Vanished,
-    /// The person brought the window back: the app's icon, `llx-desk open`.
+    /// The person brought the window back: the app's icon, `llxterm open`.
     Expand,
     /// The person put the window away: the yellow button, ⌘M.
     Collapse,

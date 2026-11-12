@@ -165,7 +165,8 @@ fn the_persons_own_skill_is_never_written_over_or_removed() {
     let scratch = Scratch::new();
     let env = env_at(scratch.path());
     let own = scratch.file(".claude/skills/pdf/SKILL.md", "# Mine\n");
-    let why = "~/.claude/skills/pdf is a skill LLX Desk did not install: it is left as it is";
+    let why =
+        "~/.claude/skills/pdf is a skill Localix Terminal did not install: it is left as it is";
     let claude = target("claude");
     assert_eq!(claude.plan(&skill("pdf"), &env).unwrap_err(), why);
     let with = fetched(&scratch, "pdf", "# PDF\n");
@@ -204,7 +205,7 @@ fn a_link_at_the_place_is_the_persons_and_is_never_followed() {
     let elsewhere = scratch.path().join("elsewhere");
     scratch.file("elsewhere/SKILL.md", "# Linked\n");
     scratch.file(
-        "elsewhere/.llx-desk.json",
+        "elsewhere/.llxterm.json",
         r#"{"listing": "src/pdf", "version": "1.0.0"}"#,
     );
     std::fs::create_dir_all(scratch.path().join(".claude/skills")).unwrap();

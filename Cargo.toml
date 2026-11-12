@@ -1,12 +1,12 @@
 [package]
-name = "llx-desk"
+name = "llxterm"
 version = "0.1.6"
 edition = "2024"
 rust-version = "1.89"
 description = "Localix Terminal, the terminal for you and your coding agents: sessions that belong to a project and come back as you left them, with a browser, a board and a Store that agents use too"
 license = "MIT"
 publish = false
-repository = "https://github.com/rsaryev/llx-desk"
+repository = "https://github.com/rsaryev/localix-terminal"
 readme = "README.md"
 keywords = ["terminal", "coding-agents", "pty", "browser", "kanban"]
 
@@ -42,16 +42,16 @@ objc2-web-kit = { version = "0.3", default-features = false, features = ["std", 
 gtk = "0.18"
 webkit2gtk = "2.0"
 
-# Test builds only: a server with no window, whose lock and socket are in `LLX_DESK_TEST_DIR`,
+# Test builds only: a server with no window, whose lock and socket are in `LLXTERM_TEST_DIR`,
 # and the harness that runs one. Only the self dev-dependency below turns it on, so no
 # `cargo build` or `cargo install` has it.
 [features]
 test-server = []
 
 [dev-dependencies]
-llx-desk = { path = ".", features = ["test-server"] }
+llxterm = { path = ".", features = ["test-server"] }
 
-# Opens a real window: run with LLX_DESK_DISPLAY_TESTS=1.
+# Opens a real window: run with LLXTERM_DISPLAY_TESTS=1.
 [[test]]
 name = "browser"
 harness = false

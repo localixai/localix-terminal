@@ -33,7 +33,7 @@ pub(super) enum Act {
 /// The row of Settings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(super) struct Row {
-    /// The build that runs: `LLX Desk 0.1.5`.
+    /// The build that runs: `Localix Terminal 0.1.5`.
     pub(super) title: String,
     pub(super) says: String,
     /// How much of a download is there, in hundredths; none when nothing is fetched, or its
@@ -67,7 +67,7 @@ fn ago(then: u64, now: u64) -> String {
 pub(super) fn row(told: &Told, now: u64) -> Row {
     let version = told.current.split('+').next().unwrap_or(&told.current);
     let mut row = Row {
-        title: format!("LLX Desk {version}"),
+        title: format!("Localix Terminal {version}"),
         says: String::new(),
         progress: None,
         busy: false,
@@ -125,7 +125,7 @@ pub(super) fn offer(told: &Told) -> Option<(String, String)> {
     };
     Some((
         format!("{OF_UPDATE}{}", release.version),
-        format!("LLX Desk {} is ready to install.", release.version),
+        format!("Localix Terminal {} is ready to install.", release.version),
     ))
 }
 
@@ -142,7 +142,7 @@ pub(super) fn announcement(told: &Told) -> Option<(String, super::dialog::Dialog
         mark: "app",
         tone: "accent",
         versions: Some((told.current.clone(), release.version.to_string())),
-        title: format!("LLX Desk {} is ready", release.version),
+        title: format!("Localix Terminal {} is ready", release.version),
         detail: format!(
             "You have {}. Restarting installs the update; if a terminal still runs a program, \
              you are asked first.",

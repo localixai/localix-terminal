@@ -1,4 +1,4 @@
-# llx-desk architecture
+# llxterm architecture
 
 How the desk is built, and the rules every change keeps: read it before adding a kind of tab, a
 kind of thing that changes, something that reacts to a change, or a table. `ARCHITECTURE.md` maps
@@ -87,7 +87,7 @@ idempotent consumers that reconcile from the owner, and clients that are poked a
 
 ## The store
 
-One SQLite database (`store.rs`), `~/.local/share/llx-desk/llx-desk.sqlite` (`LLX_DESK_DATA` moves it; a
+One SQLite database (`store.rs`), `~/.local/share/llxterm/llxterm.sqlite` (`LLXTERM_DATA` moves it; a
 test build keeps it in its own directory; checks use one in memory). One connection, one writer:
 every write is a transaction under the store's lock. The schema is the list `STEPS` in
 `src/store/schema.rs`, applied in

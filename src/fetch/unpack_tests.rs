@@ -19,20 +19,20 @@ fn tarball(dir: &Path, top: &str, to: &Path) {
 #[test]
 fn an_archive_that_would_write_outside_its_folder_is_not_unpacked() {
     assert_eq!(
-        inside("LLX Desk.app/\nLLX Desk.app/Contents/MacOS/llx-desk\n"),
+        inside("Localix Terminal.app/\nLocalix Terminal.app/Contents/MacOS/llxterm\n"),
         Ok(())
     );
-    assert_eq!(inside("llx-desk\n./LICENSE\n"), Ok(()));
+    assert_eq!(inside("llxterm\n./LICENSE\n"), Ok(()));
     // A name with two dots in it is a name; a step up is not.
-    assert_eq!(inside("llx-desk..old\n"), Ok(()));
+    assert_eq!(inside("llxterm..old\n"), Ok(()));
     for entry in [
         "../.zshrc",
-        "LLX Desk.app/../../x",
+        "Localix Terminal.app/../../x",
         "/etc/hosts",
         "a/..",
         "..",
     ] {
-        let why = inside(&format!("llx-desk\n{entry}\n")).unwrap_err();
+        let why = inside(&format!("llxterm\n{entry}\n")).unwrap_err();
         assert!(why.contains("outside"), "{entry}: {why}");
     }
 }

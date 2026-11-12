@@ -18,14 +18,14 @@ pub(in crate::update) fn published(
     std::fs::create_dir_all(&files).unwrap();
     let made = dir.join(format!("made-{version}"));
     std::fs::create_dir_all(&made).unwrap();
-    std::fs::write(made.join("llx-desk"), format!("#!/bin/sh\necho {says}\n")).unwrap();
+    std::fs::write(made.join("llxterm"), format!("#!/bin/sh\necho {says}\n")).unwrap();
     let archive = files.join(name);
     let packed = [
         "-czf".as_ref(),
         archive.as_os_str(),
         "-C".as_ref(),
         made.as_os_str(),
-        "llx-desk".as_ref(),
+        "llxterm".as_ref(),
     ];
     run("tar", &packed).unwrap();
     let sum = sha256(&files.join(name)).unwrap();
@@ -42,7 +42,7 @@ pub(in crate::update) fn published(
     (from, release)
 }
 
-const NAME: &str = "llx-desk-x86_64-unknown-linux-gnu.tar.gz";
+const NAME: &str = "llxterm-x86_64-unknown-linux-gnu.tar.gz";
 
 #[test]
 fn an_update_is_fetched_checked_and_unpacked() {
@@ -51,7 +51,7 @@ fn an_update_is_fetched_checked_and_unpacked() {
     let heard = Mutex::new(Vec::new());
     let told = |so_far: u64| heard.lock().unwrap().push(so_far);
     let staged = stage(&from, &release, NAME, &dir.join("staging"), &told).unwrap();
-    assert_eq!(staged, dir.join("staging/unpacked/llx-desk"));
+    assert_eq!(staged, dir.join("staging/unpacked/llxterm"));
     assert!(
         std::fs::read_to_string(&staged)
             .unwrap()
@@ -103,15 +103,18 @@ fn says(app: &Path) -> String {
 #[test]
 fn the_new_app_takes_the_old_one_s_place_and_the_old_one_waits_aside() {
     let dir = folder("swap");
-    let place = app(&dir.join("Applications/LLX Desk.app"), "old");
-    let staged = app(&dir.join("staging/unpacked/LLX Desk.app"), "new");
+    let place = app(&dir.join("Applications/Localix Terminal.app"), "old");
+    let staged = app(&dir.join("staging/unpacked/Localix Terminal.app"), "new");
     swap(&staged, &place).unwrap();
     assert_eq!(says(&place), "new");
-    assert_eq!(aside(&place), dir.join("Applications/LLX Desk.app.old"));
+    assert_eq!(
+        aside(&place),
+        dir.join("Applications/Localix Terminal.app.old")
+    );
     assert_eq!(says(&aside(&place)), "old");
     assert!(!staged.exists());
     // An update after it: what waited aside before is gone, not in the way.
-    let staged = app(&dir.join("staging/unpacked/LLX Desk.app"), "newer");
+    let staged = app(&dir.join("staging/unpacked/Localix Terminal.app"), "newer");
     swap(&staged, &place).unwrap();
     assert_eq!(
         (says(&place), says(&aside(&place))),
@@ -123,12 +126,12 @@ fn the_new_app_takes_the_old_one_s_place_and_the_old_one_waits_aside() {
 #[test]
 fn an_update_that_cannot_be_put_in_place_leaves_the_app_as_it_was() {
     let dir = folder("swap-failed");
-    let place = app(&dir.join("Applications/LLX Desk.app"), "old");
-    let missing = dir.join("staging/unpacked/LLX Desk.app");
+    let place = app(&dir.join("Applications/Localix Terminal.app"), "old");
+    let missing = dir.join("staging/unpacked/Localix Terminal.app");
     assert!(swap(&missing, &place).is_err());
     assert_eq!(says(&place), "old");
     assert!(!aside(&place).exists());
-    assert!(!dir.join("Applications/LLX Desk.app.new").exists());
+    assert!(!dir.join("Applications/Localix Terminal.app.new").exists());
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -136,10 +139,10 @@ fn an_update_that_cannot_be_put_in_place_leaves_the_app_as_it_was() {
 #[test]
 fn an_app_no_one_signed_is_not_trusted() {
     let dir = folder("unsigned");
-    let unsigned = app(&dir.join("LLX Desk.app"), "who knows");
+    let unsigned = app(&dir.join("Localix Terminal.app"), "who knows");
     let why = trusted(&unsigned).unwrap_err();
     assert!(
-        why.starts_with("it is not signed and notarized as LLX Desk is ("),
+        why.starts_with("it is not signed and notarized as Localix Terminal is ("),
         "{why}"
     );
     let _ = std::fs::remove_dir_all(dir);

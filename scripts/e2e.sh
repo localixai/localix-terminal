@@ -9,7 +9,7 @@
 # The pictures are written to target/e2e; `--update` also copies the README's (the session, the
 # editor, the board and the Store) to assets/, to be looked at and committed.
 # The app it starts is apart from yours, which keeps running: it has its own socket, data and
-# settings in a scratch folder (LLX_DESK_RUNTIME, LLX_DESK_DATA, XDG_CONFIG_HOME), and only a
+# settings in a scratch folder (LLXTERM_RUNTIME, LLXTERM_DATA, XDG_CONFIG_HOME), and only a
 # copy of the Store's index is taken from yours, so the Store is full at once. While it runs
 # the other apps are hidden, yours among them, so that only the desktop is behind the window
 # and around it, and are shown again after: leave the Mac alone for the two minutes it takes.
@@ -19,8 +19,8 @@
 # without it. `E2E_APP` names an app already built, to run that instead of building.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-app=${E2E_APP:-$PWD/target/release/bundle/macos/LLX Desk.app}
-cli="$app/Contents/MacOS/llx-desk"
+app=${E2E_APP:-$PWD/target/release/bundle/macos/Localix Terminal.app}
+cli="$app/Contents/MacOS/llxterm"
 out=$PWD/target/e2e
 update=0
 if [ "${1:-}" = --update ]; then update=1; shift; fi
@@ -29,7 +29,7 @@ if [ "${1:-}" = --update ]; then update=1; shift; fi
 x=166 y=112 width=1180 height=740 margin=56
 failed=0
 # What the person's command links to before the run: it must be the same after.
-linked=$(readlink "$HOME/.local/bin/llx-desk" 2>/dev/null || true)
+linked=$(readlink "$HOME/.local/bin/llxterm" 2>/dev/null || true)
 if [ -z "${E2E_APP:-}" ]; then
   cargo build --release --quiet
   scripts/bundle-macos.sh >/dev/null
@@ -38,15 +38,15 @@ fi
 mkdir -p "$out"
 
 # One place each run, so an agent asked once whether it trusts the demo project is not asked again.
-work=/private/tmp/llx-desk-e2e
+work=/private/tmp/llxterm-e2e
 rm -rf "$work"
 mkdir -p "$work"
 demo="$work/acme-shop"
 touch "$work/others"
 # Where the app under test keeps its socket, its data and its settings: it and each command
 # sent to it are given these, and nothing else of this shell's.
-apart=(env -i HOME="$HOME" USER="$USER" PATH=/usr/bin:/bin "LLX_DESK_RUNTIME=$work/run"
-  "LLX_DESK_DATA=$work/data" "XDG_CONFIG_HOME=$work/config")
+apart=(env -i HOME="$HOME" USER="$USER" PATH=/usr/bin:/bin "LLXTERM_RUNTIME=$work/run"
+  "LLXTERM_DATA=$work/data" "XDG_CONFIG_HOME=$work/config")
 pid=""
 
 quit_app() {
@@ -103,11 +103,11 @@ JXA
 start() {
   quit_app
   rm -rf "$work/run" "$work/data" "$work/config" "$demo/.localix"
-  mkdir -p "$work/run" "$work/data" "$work/config/llx-desk"
+  mkdir -p "$work/run" "$work/data" "$work/config/llxterm"
   chmod 700 "$work/run"
-  [ ! -f "$HOME/.local/share/llx-desk/catalog.sqlite" ] || cp "$HOME/.local/share/llx-desk/catalog.sqlite" "$work/data/"
-  [ ! -d "$HOME/.local/share/llx-desk/catalog" ] || cp -R "$HOME/.local/share/llx-desk/catalog" "$work/data/"
-  printf '{"theme":"%s"}\n' "$1" > "$work/config/llx-desk/settings.json"
+  [ ! -f "$HOME/.local/share/llxterm/catalog.sqlite" ] || cp "$HOME/.local/share/llxterm/catalog.sqlite" "$work/data/"
+  [ ! -d "$HOME/.local/share/llxterm/catalog" ] || cp -R "$HOME/.local/share/llxterm/catalog" "$work/data/"
+  printf '{"theme":"%s"}\n' "$1" > "$work/config/llxterm/settings.json"
   printf '{"deck":{"x":%s,"y":%s,"width":%s,"height":%s},"side":true,"side_width":248,"files":true}\n' "$x" "$y" "$width" "$height" > "$work/data/window.json"
   serve
   "${apart[@]}" "$cli" open "$demo" >/dev/null
@@ -142,7 +142,7 @@ has() {
 
 # What the window offers to assistive tools, names and roles, one control a line.
 offered() {
-  agent-desktop snapshot --app "LLX Desk" --compact 2>/dev/null | tee "$out/offered.json" || true
+  agent-desktop snapshot --app "Localix Terminal" --compact 2>/dev/null | tee "$out/offered.json" || true
 }
 
 # A key pressed in the window, as the person presses it, by its place on the keyboard (43 is the
@@ -303,7 +303,7 @@ scenes() {
   sleep 1
   shot editor
   # The app under test is not the one the person uses: their command still runs theirs.
-  has "the person's command is left as it was" "$(readlink "$HOME/.local/bin/llx-desk" 2>&1)" "$linked"
+  has "the person's command is left as it was" "$(readlink "$HOME/.local/bin/llxterm" 2>&1)" "$linked"
 }
 
 project

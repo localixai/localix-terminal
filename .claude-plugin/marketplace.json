@@ -1,12 +1,12 @@
 {
-  "name": "llx-desk",
+  "name": "llxterm",
   "owner": { "name": "rsaryev" },
   "metadata": {
-    "description": "llx-desk: a native window of browser pages and terminals that agents work in and a person watches"
+    "description": "llxterm: a native window of browser pages and terminals that agents work in and a person watches"
   },
   "plugins": [
     {
-      "name": "llx-desk",
+      "name": "llxterm",
       "source": "./plugins/claude-code",
       "description": "A window of browser pages and terminals Claude works in and you watch, with a pane for its tabs and your comments",
       "version": "0.1.6",

@@ -1,12 +1,12 @@
-//! Where this program lives as an app: inside `LLX Desk.app` (macOS, scripts/bundle-macos.sh)
+//! Where this program lives as an app: inside `Localix Terminal.app` (macOS, scripts/bundle-macos.sh)
 //! it is the app itself, with its name, its icon and its Dock place, and LaunchServices starts
 //! it; anywhere else (a build, a package on Linux) it is a plain program, started as one. The
 //! layers ask here, never guess from paths of their own.
 
 use std::path::{Path, PathBuf};
 
-/// The app bundle this program is in (`…/LLX Desk.app`), its path resolved through links (the
-/// `llx-desk` command is a link into the bundle); none for a program outside one.
+/// The app bundle this program is in (`…/Localix Terminal.app`), its path resolved through links (the
+/// `llxterm` command is a link into the bundle); none for a program outside one.
 pub fn app() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let exe = std::fs::canonicalize(&exe).unwrap_or(exe);
@@ -30,7 +30,7 @@ fn temporary(app: &Path) -> bool {
 }
 
 /// Whether this run is the app opened (the Finder, the Dock, LaunchServices): the program run
-/// by its own path in the bundle, not through the `llx-desk` link, given nothing but what the
+/// by its own path in the bundle, not through the `llxterm` link, given nothing but what the
 /// system adds (`-psn_…` from older macOS, `-ApplePersistenceIgnoreState YES` when it comes
 /// back). Run through the link with nothing, it is the command, and says how to use it.
 pub fn opened(args: &[String]) -> bool {

@@ -353,7 +353,7 @@ impl Desk {
         sessions.values().for_each(|session| session.close());
     }
 
-    /// The window and every owner's tabs, for `llx-desk status`.
+    /// The window and every owner's tabs, for `llxterm status`.
     pub fn status(&self) -> String {
         let window = match (&self.page, &self.browser) {
             (Some(page), _) if page.is_open() || self.panels_open() => "open",

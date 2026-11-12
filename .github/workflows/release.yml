@@ -1,11 +1,11 @@
-# A release from a tag (v0.1.0): the app, which is all there is to install. On macOS LLX Desk.app
+# A release from a tag (v0.1.0): the app, which is all there is to install. On macOS Localix Terminal.app
 # (for Apple silicon, the Claude Code plugin inside), signed with the project's
-# Developer ID and notarized by Apple, as a disk image (LLX-Desk-macos.dmg) and as the zip that
-# install.sh fetches (LLX-Desk-macos.zip), built on GitHub's Mac runner by scripts/dmg.sh; on Linux
+# Developer ID and notarized by Apple, as a disk image (Localix-Terminal-macos.dmg) and as the zip that
+# install.sh fetches (Localix-Terminal-macos.zip), built on GitHub's Mac runner by scripts/dmg.sh; on Linux
 # the program and its licence, built on the project's own runner, whose system is Ubuntu 22.04: the
 # job checks that the program needs no newer glibc than 2.35. SHA256SUMS lists them all, and
 # install.sh checks against it; each file also carries a build provenance attestation (`gh
-# attestation verify FILE -R rsaryev/llx-desk`). The notes are the CHANGELOG.md section of that
+# attestation verify FILE -R rsaryev/localix-terminal`). The notes are the CHANGELOG.md section of that
 # version.
 #
 # Releases build with one exact Rust (RUSTUP_TOOLCHAIN below), so a tag built again builds the
@@ -73,7 +73,7 @@ jobs:
   linux:
     needs: gate
     if: ${{ !cancelled() && needs.gate.result != 'failure' }}
-    runs-on: [self-hosted, linux, x64, llx-desk]
+    runs-on: [self-hosted, linux, x64, llxterm]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -84,10 +84,10 @@ jobs:
       - run: cargo build --release --locked
       - name: No newer glibc than 2.35
         run: |
-          newest=$(objdump -T target/release/llx-desk | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)
+          newest=$(objdump -T target/release/llxterm | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)
           echo "needs $newest"
           [ "$(printf '%s\n' "$newest" GLIBC_2.35 | sort -V | tail -n 1)" = GLIBC_2.35 ]
-      - run: scripts/package.sh target/release/llx-desk x86_64-unknown-linux-gnu
+      - run: scripts/package.sh target/release/llxterm x86_64-unknown-linux-gnu
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: x86_64-unknown-linux-gnu
@@ -148,9 +148,9 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          CERTIFICATE_PATH="$RUNNER_TEMP/llx-desk-signing.p12"
-          KEYCHAIN_PATH="$RUNNER_TEMP/llx-desk-signing.keychain-db"
-          KEYCHAIN_LIST_PATH="$RUNNER_TEMP/llx-desk-keychain-search-list.txt"
+          CERTIFICATE_PATH="$RUNNER_TEMP/llxterm-signing.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/llxterm-signing.keychain-db"
+          KEYCHAIN_LIST_PATH="$RUNNER_TEMP/llxterm-keychain-search-list.txt"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
           echo "::add-mask::$KEYCHAIN_PASSWORD"
           security list-keychains -d user | tr -d '"' | sed 's/^[[:space:]]*//' > "$KEYCHAIN_LIST_PATH"
@@ -167,9 +167,9 @@ jobs:
           # Keychain paths contain no spaces; splitting the list into arguments is intended.
           # shellcheck disable=SC2046
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
-      - name: Build, sign and notarize LLX Desk.app and its disk image
+      - name: Build, sign and notarize Localix Terminal.app and its disk image
         env:
-          LLX_DESK_SIGN: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          LLXTERM_SIGN: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: scripts/dmg.sh --notarize --out dist
@@ -183,17 +183,17 @@ jobs:
           set -euo pipefail
           team="${APPLE_SIGNING_IDENTITY##*(}"
           team="${team%)}"
-          dmg=dist/LLX-Desk-macos.dmg
+          dmg=dist/Localix-Terminal-macos.dmg
           mount="$RUNNER_TEMP/dmg-check"
           unzipped="$RUNNER_TEMP/zip-check"
           mkdir -p "$mount" "$unzipped"
           hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$mount" "$dmg" >/dev/null
           trap 'hdiutil detach "$mount" >/dev/null || true' EXIT
-          ditto -x -k dist/LLX-Desk-macos.zip "$unzipped"
+          ditto -x -k dist/Localix-Terminal-macos.zip "$unzipped"
           codesign --verify --strict --verbose=2 "$dmg"
-          codesign --verify --deep --strict --verbose=2 "$mount/LLX Desk.app"
-          codesign --verify --deep --strict --verbose=2 "$unzipped/LLX Desk.app"
-          for target in "$dmg" "$mount/LLX Desk.app" "$unzipped/LLX Desk.app"; do
+          codesign --verify --deep --strict --verbose=2 "$mount/Localix Terminal.app"
+          codesign --verify --deep --strict --verbose=2 "$unzipped/Localix Terminal.app"
+          for target in "$dmg" "$mount/Localix Terminal.app" "$unzipped/Localix Terminal.app"; do
             codesign -dv "$target" 2>&1 | grep -qx "TeamIdentifier=$team" ||
               { echo "$target is not signed by team $team" >&2; exit 1; }
             # Apple's CloudKit drops a hosted runner's connection now and then.
@@ -204,7 +204,7 @@ jobs:
             done
           done
           spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
-          spctl --assess --type execute --verbose=2 "$mount/LLX Desk.app"
+          spctl --assess --type execute --verbose=2 "$mount/Localix Terminal.app"
           # install.sh holds a downloaded app to the team its TEAM_ID names: the one that signs.
           pinned=$(sed -n 's/^TEAM_ID=\([A-Z0-9]*\)$/\1/p' install.sh)
           if [ -z "$pinned" ]; then
@@ -217,13 +217,13 @@ jobs:
         with:
           name: apple-darwin
           path: |
-            dist/LLX-Desk-macos.dmg
-            dist/LLX-Desk-macos.zip
+            dist/Localix-Terminal-macos.dmg
+            dist/Localix-Terminal-macos.zip
       - name: Remove the signing material
         if: always()
         run: |
-          KEYCHAIN_PATH="$RUNNER_TEMP/llx-desk-signing.keychain-db"
-          KEYCHAIN_LIST_PATH="$RUNNER_TEMP/llx-desk-keychain-search-list.txt"
+          KEYCHAIN_PATH="$RUNNER_TEMP/llxterm-signing.keychain-db"
+          KEYCHAIN_LIST_PATH="$RUNNER_TEMP/llxterm-keychain-search-list.txt"
           if [ -s "$KEYCHAIN_LIST_PATH" ]; then
             ORIGINAL_KEYCHAINS=()
             while IFS= read -r keychain; do
@@ -233,7 +233,7 @@ jobs:
           fi
           security delete-keychain "$KEYCHAIN_PATH" || true
           rm -f \
-            "$RUNNER_TEMP/llx-desk-signing.p12" \
+            "$RUNNER_TEMP/llxterm-signing.p12" \
             "$RUNNER_TEMP/apple-api-key.p8" \
             "$KEYCHAIN_LIST_PATH"
 
@@ -259,10 +259,10 @@ jobs:
       - name: Every archive, and its checksum
         run: |
           cd dist
-          for file in llx-desk-x86_64-unknown-linux-gnu.tar.gz LLX-Desk-macos.zip LLX-Desk-macos.dmg; do
+          for file in llxterm-x86_64-unknown-linux-gnu.tar.gz Localix-Terminal-macos.zip Localix-Terminal-macos.dmg; do
             [ -s "$file" ] || { echo "missing $file"; exit 1; }
           done
-          sha256sum llx-desk-*.tar.gz LLX-Desk-macos.zip LLX-Desk-macos.dmg > SHA256SUMS
+          sha256sum llxterm-*.tar.gz Localix-Terminal-macos.zip Localix-Terminal-macos.dmg > SHA256SUMS
           cat SHA256SUMS
       # Which workflow run, commit and tag made each file, signed for the repository.
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -281,8 +281,8 @@ jobs:
             echo
             echo "### Download"
             echo
-            echo "- **macOS 12+, Apple silicon:** [LLX-Desk-macos.dmg]($base/LLX-Desk-macos.dmg), signed and notarized. Open it and drag LLX Desk to Applications."
-            echo "- **Linux x86_64 (glibc 2.35+):** [llx-desk-x86_64-unknown-linux-gnu.tar.gz]($base/llx-desk-x86_64-unknown-linux-gnu.tar.gz)"
+            echo "- **macOS 12+, Apple silicon:** [Localix-Terminal-macos.dmg]($base/Localix-Terminal-macos.dmg), signed and notarized. Open it and drag Localix Terminal to Applications."
+            echo "- **Linux x86_64 (glibc 2.35+):** [llxterm-x86_64-unknown-linux-gnu.tar.gz]($base/llxterm-x86_64-unknown-linux-gnu.tar.gz)"
             echo "- **Either, from a terminal:** \`curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install.sh | sh\`"
             echo
             echo "Checksums are in [SHA256SUMS]($base/SHA256SUMS)."
@@ -293,9 +293,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "LLX Desk ${GITHUB_REF_NAME#v}" \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "Localix Terminal ${GITHUB_REF_NAME#v}" \
               --notes-file notes.md
           fi
-          gh release upload "$GITHUB_REF_NAME" dist/llx-desk-*.tar.gz dist/LLX-Desk-macos.zip \
-            dist/LLX-Desk-macos.dmg dist/SHA256SUMS --clobber
+          gh release upload "$GITHUB_REF_NAME" dist/llxterm-*.tar.gz dist/Localix-Terminal-macos.zip \
+            dist/Localix-Terminal-macos.dmg dist/SHA256SUMS --clobber
           gh release edit "$GITHUB_REF_NAME" --draft=false

@@ -12,8 +12,8 @@ use super::State;
 use super::shell::{Ran, failure, find, run};
 
 /// The plugin as Claude Code names it, and its marketplace.
-const PLUGIN: &str = "llx-desk@llx-desk";
-const MARKETPLACE: &str = "llx-desk";
+const PLUGIN: &str = "llxterm@llxterm";
+const MARKETPLACE: &str = "llxterm";
 /// How long a `claude plugin` command may take (an install copies the plugin).
 const MOST: Duration = Duration::from_secs(90);
 /// Why the plugin is off when the person disabled it in Claude Code: the app leaves it so.
@@ -98,7 +98,7 @@ fn on_record(installed: &Value, markets: &Value, settings: &Value, dir: &Path) -
 
 pub(super) fn state() -> State {
     let Some(dir) = marketplace() else {
-        return State::Unavailable("from LLX Desk.app: its bundle holds the plugin".into());
+        return State::Unavailable("from Localix Terminal.app: its bundle holds the plugin".into());
     };
     if recorded(&dir) {
         let version = env!("CARGO_PKG_VERSION");
@@ -124,7 +124,7 @@ pub(super) fn state() -> State {
 /// The plugin installed and enabled, of the app's version: its marketplace pointed at the bundle
 /// (an earlier one of the same name, elsewhere, is replaced), then installed or updated.
 pub(super) fn turn_on() -> Result<String, String> {
-    let dir = marketplace().ok_or("only LLX Desk.app holds the plugin")?;
+    let dir = marketplace().ok_or("only Localix Terminal.app holds the plugin")?;
     let claude = find("claude")?;
     // Taken out only when it is known to name another folder: a list that could not be read
     // (it timed out, Claude Code said another thing) must not remove the plugin with it.

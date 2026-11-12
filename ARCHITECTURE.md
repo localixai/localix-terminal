@@ -1,18 +1,18 @@
 # Architecture
 
-llx-desk is one crate: a library and the `llx-desk` binary, which is the app. The app is the server:
+llxterm is one crate: a library and the `llxterm` binary, which is the app. The app is the server:
 it owns the window, the terminals, the board and the database, and serves one API on a unix socket.
-Everything else is a thin face of that API with nothing of its own: the CLI, `llx-desk mcp`, and the
+Everything else is a thin face of that API with nothing of its own: the CLI, `llxterm mcp`, and the
 Claude Code plugin (which runs the CLI). The desk knows no model and no agent. This file maps the
 modules; `docs/architecture.md` is the architecture they follow (owners, the change feed, consumers,
 the store) and how to add to it.
 
 ```text
-llx-desk window '<json>'   llx-desk mcp   plugin hooks      the adapters (cli.rs, mcp.rs), via client.rs
+llxterm window '<json>'   llxterm mcp   plugin hooks      the adapters (cli.rs, mcp.rs), via client.rs
         \                  |              /
          JSON-RPC 2.0 lines over a unix socket (wire.rs); server/api.rs is every method, once
         v                  v             v
-LLX Desk.app                  the server (server.rs): lock, socket, one thread per connection;
+Localix Terminal.app                  the server (server.rs): lock, socket, one thread per connection;
         |                     started by the first call through LaunchServices (bundle.rs)
         v
 desk/                         the window tool's actions over a project's tabs; the app's life
@@ -108,7 +108,7 @@ normal tests in CI.
   shown in a tab of the window's own (`host_settings.rs`, `settings.html`). Every shortcut
   (`shortcuts.rs`) is a click the strip already knows, fired by the app's hidden menu
   (`app_menu.rs`, macOS), so a key, a menu item and a button never do different things. The app
-  is a regular Mac app inside its bundle (`platform::dock`): Dock icon, menu bar (LLX Desk, Edit,
+  is a regular Mac app inside its bundle (`platform::dock`): Dock icon, menu bar (Localix Terminal, Edit,
   and a menu for each group of shortcuts), and nothing it does for an agent activates it; only the
   person's own acts do (`appkit::activate`). What the person does to the app itself reaches the desk
   as `Heard`: `Quit` (⌘Q, the Dock's Quit and logging out, through `applicationShouldTerminate:`;
@@ -161,7 +161,7 @@ normal tests in CI.
   configuration (no clipboard addon, a link handler limited to http and https, `Said::Open`, the
   CSP) is the boundary there. A
   terminal starts with the caller's environment, but for the variables its integration names
-  its own in `LLX_DESK_SCRUB` (the Claude Code plugin's launcher lists Claude Code's session
+  its own in `LLXTERM_SCRUB` (the Claude Code plugin's launcher lists Claude Code's session
   variables), so the core knows no agent's names.
 - **`files.rs`, `files/`** are a project's files: a folder listed one at a time (`files.rs`),
   heard from the system while it is in sight (`watch.rs` over `fsevents.rs` and `inotify.rs`,
@@ -231,7 +231,7 @@ normal tests in CI.
   desk until acknowledged, and told again on every subscribe), `tab/closed`, `app/quitting`.
   `client.rs` and `client/link.rs` are the other end: `client::ask` is the one request every adapter
   makes, with the caller (`client/params.rs`: its project, from `--project DIR`,
-  `LLX_DESK_PROJECT` or its folder, and its agent, `--as NAME`); when nothing listens it starts the
+  `LLXTERM_PROJECT` or its folder, and its agent, `--as NAME`); when nothing listens it starts the
   server: the app through LaunchServices, in the
   background, when this program is the app's (`bundle.rs`), else this program as `serve`. The CLI,
   `--said --follow` and `mcp.rs` (an MCP server on stdio whose one tool is the window tool as
@@ -239,18 +239,18 @@ normal tests in CI.
   the answers, `mcp/era.rs` tells a host that opens with `initialize` from one that names its
   revision in every request and words a result for each, `mcp/running.rs` holds the calls being
   worked, so one the agent cancels is not answered and one it follows hears that it still runs)
-  are its clients; `llx-desk window --board` reads a project's board from its
+  are its clients; `llxterm window --board` reads a project's board from its
   file and starts nothing.
-- **`cli/app.rs`** is the program opened as the app (LLX Desk.app from the Finder or the Dock;
-  `llx-desk open` elsewhere): it sets up what is always on, then is the server with its window
-  brought to the person at once. On macOS `llx-desk open` asks the system to open the bundle, as the
-  Dock does, and returns once it has (`cli/app.rs`); the app is not that terminal's. `llx-desk
+- **`cli/app.rs`** is the program opened as the app (Localix Terminal.app from the Finder or the Dock;
+  `llxterm open` elsewhere): it sets up what is always on, then is the server with its window
+  brought to the person at once. On macOS `llxterm open` asks the system to open the bundle, as the
+  Dock does, and returns once it has (`cli/app.rs`); the app is not that terminal's. `llxterm
   open DIR` brings the window on that folder as a project
   (`window/present` with `go`). `scripts/bundle-macos.sh` builds the bundle (Info.plist, icon and
   entitlements in `packaging/macos`, the Claude Code plugin as a marketplace in `Contents/Resources/claude-code`);
   `scripts/dmg.sh` makes the release files from it, the disk image and the zip (notarized with
   `--notarize`, as the release workflow does). The app is for Apple Silicon only.
-  `packaging/homebrew/llx-desk.rb` is the cask a tap takes, filled in per release.
+  `packaging/homebrew/llxterm.rb` is the cask a tap takes, filled in per release.
 - **`kind.rs`** is the port of a kind of tab that draws itself: a page of its own in a panel,
   painted by frames, acted on by `window` calls and by what the person does in its page. A kind
   says all the window and the desk need of it in one description (`About`: its name, the letter
@@ -294,7 +294,7 @@ normal tests in CI.
   installed from a release is replaced. The restart itself is the desk's (`lifecycle.rs`), as a
   quit is: it asks first when programs run.
 - **`setup.rs`, `setup/`** are the integrations, reached from Settings → Integrations and from
-  `llx-desk setup`: the command (`command.rs`: a link in `~/.local/bin` to the program, the login
+  `llxterm setup`: the command (`command.rs`: a link in `~/.local/bin` to the program, the login
   shell's profile when its PATH lacks it; a desktop entry on Linux), the Claude Code plugin
   (`claude.rs`: installed from the bundle's marketplace with `claude plugin`), and the window tool
   in the other agents of the window's that take MCP servers (`mcp_hosts.rs`: one table of Codex,
@@ -327,9 +327,9 @@ normal tests in CI.
   A new dialog is a `Dialog` asked there, never a page's own markup. With the window away a
   question is the system's alert (`appkit/sheet.rs`).
 - **`paths.rs`** is where the server lives: its lock and socket at one fixed place per user
-  (`llx-desk-<uid>` in the user's temporary directory), its files in the home (`LLX_DESK_HOME`, which
+  (`llxterm-<uid>` in the user's temporary directory), its files in the home (`LLXTERM_HOME`, which
   moves nothing else). A test build (feature `test-server`, turned on only by the crate's own dev-dependency)
-  takes the place from `LLX_DESK_TEST_DIR` and never opens a window; `harness.rs` is its test support.
+  takes the place from `LLXTERM_TEST_DIR` and never opens a window; `harness.rs` is its test support.
 
 ## Rules
 
@@ -346,5 +346,5 @@ normal tests in CI.
   adapter holds no list of its own.
 - Every file opens with a `//!` that says what it is, and holds at most 300 lines of working code.
 - Unit tests sit beside the code (`x.rs` ends with `#[path = "x_tests.rs"] mod tests;`). Tests that
-  open a real window run only with `LLX_DESK_DISPLAY_TESTS=1`; `tests/server.rs` drives the binary
+  open a real window run only with `LLXTERM_DISPLAY_TESTS=1`; `tests/server.rs` drives the binary
   against an app of its own with no window (a test build, in a directory of the test's own).

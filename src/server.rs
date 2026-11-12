@@ -114,10 +114,10 @@ impl Shared {
 }
 
 /// This build: its version and the binary's size and time, so a rebuilt binary of the same
-/// version is another build. A test build may name one in `LLX_DESK_BUILD`.
+/// version is another build. A test build may name one in `LLXTERM_BUILD`.
 pub fn build() -> String {
     if cfg!(feature = "test-server")
-        && let Some(named) = std::env::var("LLX_DESK_BUILD")
+        && let Some(named) = std::env::var("LLXTERM_BUILD")
             .ok()
             .filter(|b| !b.is_empty())
     {
@@ -186,7 +186,7 @@ pub fn run(bound: &Bound, browser: Option<Browser>, begin: Begin) -> i32 {
     let store = crate::store::Store::open(&crate::paths::database()).or_else(|why| {
         log::warn!(
             "desk: its database could not be opened, nothing is kept across restarts (move the \
-             file aside, or update llx-desk): {why}"
+             file aside, or update llxterm): {why}"
         );
         // Kept in the store itself, so `app/status` can tell the person and the agents.
         crate::store::Store::memory_instead(&why)

@@ -6,7 +6,7 @@ Plugins, skills and MCP servers for your coding agents in one searchable list (â
 
 One tab in a project lists what others published for coding agents: the plugins of the Claude Code and Codex marketplaces, Agent Skills, and the servers of the MCP Registry.
 
-The list is read from its sources when the Store is opened and at most once an hour after; the round arrow reads it now. It is kept in an index of its own (`~/.local/share/llx-desk/catalog.sqlite`) and searched there as you type, so a search never leaves your computer.
+The list is read from its sources when the Store is opened and at most once an hour after; the round arrow reads it now. It is kept in an index of its own (`~/.local/share/llxterm/catalog.sqlite`) and searched there as you type, so a search never leaves your computer.
 
 ## Installing
 
@@ -27,6 +27,6 @@ The Store only removes what it put there.
 An agent can search and read the Store with [the window tool](window-tool.md). What it asks to install is shown to you the same way: nothing is installed on an agent's word.
 
 ```sh
-llx-desk window '{"action": "open", "kind": "store"}'
-llx-desk window '{"action": "interact", "tab": "p1", "store": {"search": "playwright"}}'
+llxterm window '{"action": "open", "kind": "store"}'
+llxterm window '{"action": "interact", "tab": "p1", "store": {"search": "playwright"}}'
 ```

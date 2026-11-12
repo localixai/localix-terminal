@@ -5,7 +5,7 @@
 use serde::Deserialize;
 
 /// The repository whose releases the app is updated from, as install.sh names it.
-pub const REPO: &str = "rsaryev/llx-desk";
+pub const REPO: &str = "rsaryev/localix-terminal";
 
 /// The longest notes kept, in bytes: what a person reads of a release, not its whole history.
 pub(super) const NOTES_MOST: usize = 6000;
@@ -124,8 +124,8 @@ pub(super) fn checksum(sums: &str, name: &str) -> Option<String> {
 /// none where it has no build.
 pub(super) fn archive(os: &str, arch: &str) -> Option<&'static str> {
     match (os, arch) {
-        ("macos", "aarch64") => Some("LLX-Desk-macos.zip"),
-        ("linux", "x86_64") => Some("llx-desk-x86_64-unknown-linux-gnu.tar.gz"),
+        ("macos", "aarch64") => Some("Localix-Terminal-macos.zip"),
+        ("linux", "x86_64") => Some("llxterm-x86_64-unknown-linux-gnu.tar.gz"),
         _ => None,
     }
 }

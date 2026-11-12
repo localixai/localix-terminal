@@ -129,7 +129,7 @@ fn an_update_taken_is_the_desk_s_to_carry_out_and_one_put_off_closes() {
     let bar = Bar {
         id: "update:0.2.0".to_string(),
         agent: None,
-        says: "LLX Desk 0.2.0 is ready to install.".to_string(),
+        says: "Localix Terminal 0.2.0 is ready to install.".to_string(),
         take: Some("Restart to Update".to_string()),
         later: Some("Not Now".to_string()),
         busy: false,

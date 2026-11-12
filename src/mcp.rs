@@ -1,4 +1,4 @@
-//! `llx-desk mcp`: the app's API as an MCP server on stdio, for an agent whose host speaks MCP,
+//! `llxterm mcp`: the app's API as an MCP server on stdio, for an agent whose host speaks MCP,
 //! in the revision the host opens with (era.rs: with `initialize`, or request by request). It
 //! holds nothing of its own: its one tool is the window tool as the app describes it
 //! (`api/describe`; this build's own description while no app runs), and a call of it is
@@ -36,13 +36,13 @@ pub fn run(args: &[String]) -> u8 {
         match arg.as_str() {
             "--as" => {
                 let Some(name) = args.next() else {
-                    warn("llx-desk mcp: `--as` takes a name");
+                    warn("llxterm mcp: `--as` takes a name");
                     return 3;
                 };
                 named = Some(name.clone());
             }
             other => {
-                warn(&format!("llx-desk mcp: no option `{other}`"));
+                warn(&format!("llxterm mcp: no option `{other}`"));
                 return 3;
             }
         }
@@ -50,7 +50,7 @@ pub fn run(args: &[String]) -> u8 {
     let cwd = std::env::current_dir().unwrap_or_default();
     let caller = Caller::of(&cwd, named);
     let Ok((out, writer)) = Out::spawn(std::io::stdout()) else {
-        warn("llx-desk mcp: no thread to write with");
+        warn("llxterm mcp: no thread to write with");
         return 1;
     };
     let server = Server {
@@ -180,7 +180,7 @@ fn tool() -> Value {
 fn named(window: &Value) -> Value {
     json!({
         "name": TOOL,
-        "title": "LLX Desk Window",
+        "title": "Localix Terminal Window",
         "description": window["description"],
         "inputSchema": window["schema"],
         "annotations": {
@@ -211,7 +211,7 @@ fn result(answer: Result<Answer, Trouble>) -> Value {
             }
             json!({"content": content})
         }
-        Err(Trouble::None) => failed("LLX Desk is not running"),
+        Err(Trouble::None) => failed("Localix Terminal is not running"),
         Err(Trouble::Refused(why) | Trouble::Lost(why)) => failed(&why),
     }
 }

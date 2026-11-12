@@ -2,7 +2,7 @@ import type { SiteConfig } from '@/shared/config';
 
 // What the site knows about itself: the product's name, where the site is published, the
 // repository, the builds a reader downloads.
-const GITHUB = 'https://github.com/rsaryev/llx-desk';
+const GITHUB = 'https://github.com/rsaryev/localix-terminal';
 const RELEASE = `${GITHUB}/releases/latest/download`;
 const DESCRIPTION =
   'Terminal sessions that belong to a project and come back as you left them. Claude Code, Codex or any CLI agent runs in them as it ships, and uses the same browser, board and Store you do.';
@@ -17,11 +17,11 @@ const site: SiteConfig = {
   sourceDir: 'site',
   // The app's builds: the landing offers the one for the reader's system, macOS's otherwise.
   downloads: [
-    { os: 'macos', label: 'Download for macOS', href: `${RELEASE}/LLX-Desk-macos.dmg`, note: 'Apple Silicon, macOS 12 or later', also: 'Also for macOS' },
+    { os: 'macos', label: 'Download for macOS', href: `${RELEASE}/Localix-Terminal-macos.dmg`, note: 'Apple Silicon, macOS 12 or later', also: 'Also for macOS' },
     {
       os: 'linux',
       label: 'Download for Linux',
-      href: `${RELEASE}/llx-desk-x86_64-unknown-linux-gnu.tar.gz`,
+      href: `${RELEASE}/llxterm-x86_64-unknown-linux-gnu.tar.gz`,
       note: 'x86_64, with WebKitGTK 4.1',
       also: 'Also for Linux',
     },
@@ -41,7 +41,7 @@ const site: SiteConfig = {
     action: { label: 'Download', href: '/#start' },
   },
   footer: {
-    note: 'Localix Terminal is MIT-licensed and open source. The app and its command carry the name LLX Desk, llx-desk.',
+    note: 'Localix Terminal is MIT-licensed and open source. The app and its command carry the name Localix Terminal, llxterm.',
     links: [
       { label: 'Docs', href: '/docs' },
       { label: 'GitHub', href: GITHUB },

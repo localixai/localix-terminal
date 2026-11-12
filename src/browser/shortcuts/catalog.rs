@@ -127,8 +127,20 @@ const SHORTCUTS: [Shortcut; 29] = [
     at("history", "History", "Window", "cmd+y", "history"),
     at("events", "Event Center", "Window", "cmd+shift+e", "events"),
     at("collapse", "Minimize", "Window", "cmd+m", "collapse"),
-    at("settings", "Settings…", "LLX Desk", "cmd+,", "key settings"),
-    at("quit", "Quit LLX Desk", "LLX Desk", "cmd+q", "quit"),
+    at(
+        "settings",
+        "Settings…",
+        "Localix Terminal",
+        "cmd+,",
+        "key settings",
+    ),
+    at(
+        "quit",
+        "Quit Localix Terminal",
+        "Localix Terminal",
+        "cmd+q",
+        "quit",
+    ),
 ];
 
 /// Every shortcut there is: the catalog's, and after the board's the command of each kind that

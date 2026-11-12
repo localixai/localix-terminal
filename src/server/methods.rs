@@ -169,7 +169,7 @@ fn subscribed(shared: &Shared, conn: &Conn, params: &Value) -> Result<Value, Rpc
 
 fn status_of(shared: &Shared) -> Value {
     let text = format!(
-        "llx-desk {} (pid {})\nbuild: {}, protocol {PROTOCOL}\nconnections: {}, subscribed: {}\n{}",
+        "llxterm {} (pid {})\nbuild: {}, protocol {PROTOCOL}\nconnections: {}, subscribed: {}\n{}",
         env!("CARGO_PKG_VERSION"),
         std::process::id(),
         shared.build,

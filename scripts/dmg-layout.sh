@@ -6,13 +6,13 @@
 # places and the picture, as Finder itself records them). Run it at a Mac when the layout or the
 # picture changes and commit what it writes; a release never runs it.
 #   scripts/dmg-layout.sh
-# Finder lays the window out, on a scratch image mounted as "LLX Desk": macOS asks once whether
+# Finder lays the window out, on a scratch image mounted as "Localix Terminal": macOS asks once whether
 # the terminal may control Finder, and no other volume of that name may be mounted, since Finder
 # finds the picture by the volume's name. The ground is light whatever the Mac's appearance: over
 # a picture Finder writes the names in black.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-volume="LLX Desk"
+volume="Localix Terminal"
 dir=packaging/macos/dmg
 [ ! -e "/Volumes/$volume" ] || { echo "eject the volume \"$volume\" first" >&2; exit 1; }
 
@@ -32,7 +32,7 @@ tiffutil -cathidpicheck "$work/background.png" "$work/background@2x.png" -out "$
 # What the image holds, by name: Finder records a place for each name, so an empty folder stands
 # for the app.
 stage="$work/stage"
-mkdir -p "$stage/.background" "$stage/LLX Desk.app"
+mkdir -p "$stage/.background" "$stage/Localix Terminal.app"
 ln -s /Applications "$stage/Applications"
 cp "$dir/background.tiff" "$stage/.background/background.tiff"
 hdiutil create -quiet -volname "$volume" -srcfolder "$stage" -fs APFS -format UDRW -ov "$work/layout.dmg"
@@ -57,7 +57,7 @@ on run argv
       set text size of opts to 13
       set label position of opts to bottom
       set background picture of opts to file ".background:background.tiff"
-      set position of item "LLX Desk.app" of container window to {176, 180}
+      set position of item "Localix Terminal.app" of container window to {176, 180}
       set position of item "Applications" of container window to {464, 180}
       update without registering applications
       delay 1

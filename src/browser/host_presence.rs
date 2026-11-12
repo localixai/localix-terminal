@@ -50,8 +50,8 @@ impl Presenter {
         }
     }
 
-    /// The person opened the app (its Dock icon, `llx-desk open`): a window put away comes back,
-    /// and llx-desk becomes the app they use, its window taking their next click and key. Only
+    /// The person opened the app (its Dock icon, `llxterm open`): a window put away comes back,
+    /// and llxterm becomes the app they use, its window taking their next click and key. Only
     /// their click does this: what the agent shows never takes their keys.
     pub(super) fn opened(&mut self, stage: &mut Stage<'_>) {
         self.event(Event::Expand, stage);

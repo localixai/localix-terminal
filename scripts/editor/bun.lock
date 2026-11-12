@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "llx-desk-editor-vendor",
+      "name": "llxterm-editor-vendor",
       "dependencies": {
         "@codemirror/autocomplete": "6.20.4",
         "@codemirror/commands": "6.11.1",

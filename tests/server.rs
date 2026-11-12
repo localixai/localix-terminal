@@ -3,10 +3,10 @@
 
 use std::path::Path;
 
-use llx_desk::harness::Home;
+use llxterm::harness::Home;
 
 fn home(name: &str) -> Home {
-    Home::new(env!("CARGO_BIN_EXE_llx-desk"), name)
+    Home::new(env!("CARGO_BIN_EXE_llxterm"), name)
 }
 
 #[test]
@@ -14,7 +14,7 @@ fn help_and_the_tool_description_need_no_server() {
     let home = home("help");
     let tmp = Path::new("/tmp");
     let help = home.run(tmp, &[]);
-    assert!(String::from_utf8_lossy(&help.stdout).contains("llx-desk window"));
+    assert!(String::from_utf8_lossy(&help.stdout).contains("llxterm window"));
     let describe = home.run(tmp, &["window"]);
     let text = String::from_utf8_lossy(&describe.stdout);
     assert!(
@@ -32,7 +32,7 @@ fn the_board_in_brief_is_read_from_its_file_with_no_server() {
     let empty = home.run(&project, &["window", "--board"]);
     assert!(empty.status.success() && empty.stdout.is_empty());
 
-    let mut board = llx_desk::board::Board::default();
+    let mut board = llxterm::board::Board::default();
     board
         .add(
             "Cart button",
@@ -188,7 +188,7 @@ fn the_home_places_files_only_and_the_socket_stays_where_every_client_finds_it()
         std::path::PathBuf::from(format!("/tmp/ldk-{}-files-elsewhere", std::process::id()));
     std::fs::create_dir_all(&other).unwrap();
     let mut call = home.command(Path::new("/tmp"), &["window", r#"{"action":"list"}"#]);
-    let out = Home::finish(call.env("LLX_DESK_HOME", &other));
+    let out = Home::finish(call.env("LLXTERM_HOME", &other));
     assert!(out.status.success(), "{out:?}");
     assert!(home.socket().exists(), "the socket moved with the home");
     assert!(!other.join("desk.sock").exists());
@@ -203,8 +203,8 @@ fn a_test_build_without_its_directory_reaches_nothing() {
     let home = home("unset");
     let mut call = home.command(Path::new("/tmp"), &["window", r#"{"action":"list"}"#]);
     let out = Home::finish(
-        call.env_remove("LLX_DESK_TEST_DIR")
-            .env_remove("LLX_DESK_HOME"),
+        call.env_remove("LLXTERM_TEST_DIR")
+            .env_remove("LLXTERM_HOME"),
     );
     assert_eq!(out.status.code(), Some(3), "{out:?}");
     assert!(!Path::new("/nonexistent").exists());
@@ -214,10 +214,10 @@ fn a_test_build_without_its_directory_reaches_nothing() {
 fn a_server_of_another_build_is_reached_and_a_second_serve_starts_nothing() {
     let home = home("builds");
     let tmp = Path::new("/tmp");
-    home.start(&[("LLX_DESK_BUILD", "build-a")]);
+    home.start(&[("LLXTERM_BUILD", "build-a")]);
     let pid = home.pid().unwrap();
     let mut again = home.command(tmp, &["serve"]);
-    let again = Home::finish(again.env("LLX_DESK_BUILD", "build-b"));
+    let again = Home::finish(again.env("LLXTERM_BUILD", "build-b"));
     assert_eq!(again.status.code(), Some(0));
     assert!(
         again.stdout.is_empty() && again.stderr.is_empty(),
@@ -285,7 +285,7 @@ fn status_says_when_the_app_is_not_running_and_quit_is_answered_before_it_ends()
     let none = home.run(tmp, &["status"]);
     let said =
         String::from_utf8_lossy(&none.stdout).to_string() + &String::from_utf8_lossy(&none.stderr);
-    assert!(said.contains("LLX Desk is not running"), "{said}");
+    assert!(said.contains("Localix Terminal is not running"), "{said}");
     // Exit 3: a script tells "not running" from an answer.
     assert_eq!(none.status.code(), Some(3));
     // Nothing to quit is done.
@@ -447,10 +447,7 @@ fn a_secret_saved_once_is_typed_into_a_terminal_and_no_answer_shows_it() {
 
     let missing = r#"{"action":"interact","tab":"t1","input":"{{secret:NOPE}}\n"}"#;
     let (ok, text) = home.window(tmp, missing);
-    assert!(
-        !ok && text.contains("llx-desk secret NOPE < FILE"),
-        "{text}"
-    );
+    assert!(!ok && text.contains("llxterm secret NOPE < FILE"), "{text}");
     let _ = home.run(tmp, &["window", "--end"]);
 }
 

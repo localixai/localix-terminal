@@ -250,7 +250,7 @@ fn an_entry_of_the_persons_by_that_name_is_left_as_it_is() {
     let env = env_at(scratch.path());
     let theirs = r#"{"mcpServers": {"weather": {"command": "node", "args": ["mine.js"]}}}"#;
     scratch.file(".claude.json", theirs);
-    let why = "~/.claude.json already has a server `weather` that LLX Desk did not add: it is left as it is";
+    let why = "~/.claude.json already has a server `weather` that Localix Terminal did not add: it is left as it is";
     let claude = target("claude");
     assert_eq!(claude.plan(&weather(), &env).unwrap_err(), why);
     let given = with(&[("API_KEY", "sk-1")]);

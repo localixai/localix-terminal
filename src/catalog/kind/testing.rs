@@ -201,7 +201,7 @@ pub(super) fn store(
     let keeps: &'static Keeps = Box::leak(Box::default());
     let store = Store::of(Parts {
         index,
-        cache: std::env::temp_dir().join("llx-desk-no-cache"),
+        cache: std::env::temp_dir().join("llxterm-no-cache"),
         installed: Installed::default(),
         net: Box::new(NoNet),
         sources: crate::catalog::sources::Sources::default(),
@@ -264,7 +264,7 @@ pub(super) fn sourced(
     let keeps: &'static Keeps = Box::leak(Box::default());
     let store = Store::of(Parts {
         index: Index::memory().unwrap(),
-        cache: std::env::temp_dir().join("llx-desk-no-cache"),
+        cache: std::env::temp_dir().join("llxterm-no-cache"),
         installed: Installed::default(),
         net: Box::new(NoNet),
         sources: crate::catalog::sources::Sources::of(vec![lists]),

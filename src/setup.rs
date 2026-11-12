@@ -1,8 +1,8 @@
 //! What the app puts in place for the person's tools, so that the app is all there is to
-//! install: the `llx-desk` command on their PATH, its plugin in Claude Code, its window tool in
+//! install: the `llxterm` command on their PATH, its plugin in Claude Code, its window tool in
 //! the other coding agents of the window's (agents.rs) that take MCP servers; any other MCP host
 //! is given the entry to paste. Each is an integration with a state and an act, reached two ways:
-//! Settings → Integrations in the window and `llx-desk setup` in a terminal.
+//! Settings → Integrations in the window and `llxterm setup` in a terminal.
 //!
 //! The app puts every one in place itself, for whatever agent is installed, when it starts and
 //! every hour while it runs (`doctor.rs`, a round of `opened` and `auto`): nobody has to set
@@ -85,7 +85,7 @@ pub const INTEGRATIONS: [Integration; 7] = [
     Integration {
         id: "command",
         title: "Command line",
-        gives: "`llx-desk` in every terminal, for any agent that runs commands (on Linux, the app among the applications too).",
+        gives: "`llxterm` in every terminal, for any agent that runs commands (on Linux, the app among the applications too).",
         agent: None,
         offer: None,
     },
@@ -95,7 +95,7 @@ pub const INTEGRATIONS: [Integration; 7] = [
         gives: "The plugin: the window skill, the board, comments told to Claude.",
         agent: Some("claude"),
         offer: Some(offer(
-            "Add the LLX Desk plugin to Claude Code: pages, the board and comments, in this window.",
+            "Add the Localix Terminal plugin to Claude Code: pages, the board and comments, in this window.",
             "Add Plugin",
             "Plugin added. Run /reload-plugins in Claude Code to use it.",
         )),
@@ -106,7 +106,7 @@ pub const INTEGRATIONS: [Integration; 7] = [
         gives: "The window tool as an MCP server.",
         agent: Some("codex"),
         offer: Some(offer(
-            "Add LLX Desk's window tool to Codex: pages and what you point at, in this window.",
+            "Add Localix Terminal's window tool to Codex: pages and what you point at, in this window.",
             "Add to Codex",
             "Added to Codex. Start Codex again to use it.",
         )),
@@ -117,7 +117,7 @@ pub const INTEGRATIONS: [Integration; 7] = [
         gives: "The window tool as an MCP server.",
         agent: Some("gemini"),
         offer: Some(offer(
-            "Add LLX Desk's window tool to Gemini CLI: pages and what you point at, in this window.",
+            "Add Localix Terminal's window tool to Gemini CLI: pages and what you point at, in this window.",
             "Add to Gemini",
             "Added to Gemini CLI. Run /mcp reload in it to use it.",
         )),
@@ -128,7 +128,7 @@ pub const INTEGRATIONS: [Integration; 7] = [
         gives: "The window tool as an MCP server.",
         agent: Some("copilot"),
         offer: Some(offer(
-            "Add LLX Desk's window tool to Copilot: pages and what you point at, in this window.",
+            "Add Localix Terminal's window tool to Copilot: pages and what you point at, in this window.",
             "Add to Copilot",
             "Added to Copilot. Run /mcp reload in it to use it.",
         )),
@@ -139,7 +139,7 @@ pub const INTEGRATIONS: [Integration; 7] = [
         gives: "The window tool as an MCP server.",
         agent: Some("opencode"),
         offer: Some(offer(
-            "Add LLX Desk's window tool to OpenCode: pages and what you point at, in this window.",
+            "Add Localix Terminal's window tool to OpenCode: pages and what you point at, in this window.",
             "Add to OpenCode",
             "Added to OpenCode. Start it again to use it.",
         )),
@@ -150,7 +150,7 @@ pub const INTEGRATIONS: [Integration; 7] = [
         gives: "The window tool as an MCP server.",
         agent: Some("hermes"),
         offer: Some(offer(
-            "Add LLX Desk's window tool to Hermes: pages and what you point at, in this window.",
+            "Add Localix Terminal's window tool to Hermes: pages and what you point at, in this window.",
             "Add to Hermes",
             "Added to Hermes. Run /reload-mcp in it to use it.",
         )),

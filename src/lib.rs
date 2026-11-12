@@ -1,10 +1,10 @@
-//! llx-desk: a native window of browser pages and terminal sessions that an agent works in and a
+//! llxterm: a native window of browser pages and terminal sessions that an agent works in and a
 //! person watches. Tabs on the system's WebView (WKWebView on macOS, WebKitGTK on Linux), each
 //! page driven through a probe script; terminal sessions in a PTY, painted into tabs of the same
 //! window; a bar and a side that list the tabs of one project at a time, kept as one layout of
 //! windows, workspaces and tabs; on macOS a small preview in a screen corner. The app is the
-//! server (`llx-desk open`, or the bundle; `llx-desk serve` is its launch out of sight, as a call
-//! starts it): an agent calls it from its shell, `llx-desk window '<json>'`, over a unix socket,
+//! server (`llxterm open`, or the bundle; `llxterm serve` is its launch out of sight, as a call
+//! starts it): an agent calls it from its shell, `llxterm window '<json>'`, over a unix socket,
 //! and the app keeps each caller's tabs apart, within the project they work in.
 //!
 //! The layers, from the window up: [`browser`] (the window and its pages), [`terminal`]

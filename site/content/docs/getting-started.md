@@ -1,25 +1,22 @@
 # Getting started
 
-Install the app, open a folder as a project, and open a terminal or start an agent in it. The app is all there is to install: it holds the window, the `llx-desk` command, the MCP server and, on macOS, the Claude Code plugin, and puts each in place for you.
-
-> [!NOTE]
-> The product is Localix Terminal. Its app and its command still carry the project's earlier name: **LLX Desk** and `llx-desk`.
+Install the app, open a folder as a project, and open a terminal or start an agent in it. The app is all there is to install: it holds the window, the `llxterm` command, the MCP server and, on macOS, the Claude Code plugin, and puts each in place for you.
 
 ## Install
 
 macOS 12+ on Apple Silicon, or Linux with WebKitGTK.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rsaryev/llx-desk/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rsaryev/localix-terminal/main/install.sh | sh
 ```
 
-On macOS that is **LLX Desk.app** in `~/Applications`. Or take [`LLX-Desk-macos.dmg`](https://github.com/rsaryev/llx-desk/releases/latest/download/LLX-Desk-macos.dmg), open it and drag the app to Applications: it is signed and notarized by Apple. It is a regular Mac app, with a Dock icon, a menu bar and ⌘Q.
+On macOS that is **Localix Terminal.app** in `~/Applications`. Or take [`Localix-Terminal-macos.dmg`](https://github.com/rsaryev/localix-terminal/releases/latest/download/Localix-Terminal-macos.dmg), open it and drag the app to Applications: it is signed and notarized by Apple. It is a regular Mac app, with a Dock icon, a menu bar and ⌘Q.
 
-The script checks `SHA256SUMS` before it writes anything; `LLX_DESK_VERSION=0.1.0` picks another release.
+The script checks `SHA256SUMS` before it writes anything; `LLXTERM_VERSION=0.1.0` picks another release.
 
 ### Linux
 
-The program goes to `~/.local/share/llx-desk`, and `llx-desk setup command` puts the command on your `PATH` and the app among your applications. Pages need WebKitGTK 4.1 and GTK 3, glibc 2.35+ (Ubuntu 22.04+), and a display (X or Wayland). Without a display, terminals still work.
+The program goes to `~/.local/share/llxterm`, and `llxterm setup command` puts the command on your `PATH` and the app among your applications. Pages need WebKitGTK 4.1 and GTK 3, glibc 2.35+ (Ubuntu 22.04+), and a display (X or Wayland). Without a display, terminals still work.
 
 ```sh
 sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0
@@ -30,17 +27,17 @@ sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0
 Rust 1.89+; on Linux also `libwebkit2gtk-4.1-dev` and `libgtk-3-dev`.
 
 ```sh
-cargo install --locked --git https://github.com/rsaryev/llx-desk && llx-desk setup command
+cargo install --locked --git https://github.com/rsaryev/localix-terminal && llxterm setup command
 ```
 
-On macOS, `cargo build --release && scripts/bundle-macos.sh` makes `target/release/bundle/macos/LLX Desk.app`, signed ad hoc for this Mac.
+On macOS, `cargo build --release && scripts/bundle-macos.sh` makes `target/release/bundle/macos/Localix Terminal.app`, signed ad hoc for this Mac.
 
 ## Open a project
 
-Opened, the app links `llx-desk` into `~/.local/bin` and brings the window to you.
+Opened, the app links `llxterm` into `~/.local/bin` and brings the window to you.
 
 ```sh
-llx-desk open .
+llxterm open .
 ```
 
 That opens the current folder as a project. In the window, **Open Folder…** (⌘O) does the same. A project you come back to shows what it had open. With nothing left open, the window offers New Page, New Terminal, Board and Open Folder… with their keys, and under them the mark of each coding agent you have installed.

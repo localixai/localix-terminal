@@ -9,7 +9,7 @@ const MOST: Duration = Duration::from_secs(20);
 
 /// A folder of this test's own, empty.
 pub(crate) fn folder(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("llx-desk-fetch-{}-{name}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("llxterm-fetch-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir.canonicalize().unwrap()
@@ -92,7 +92,7 @@ fn a_short_answer_is_asked_for_again_only_if_it_changed_and_no_larger_than_allow
     assert_eq!(after("--etag-save"), tag.display().to_string());
     assert_eq!(after("--write-out"), "%{http_code}");
     assert_eq!(after("--proto"), "=https");
-    assert_eq!(after("--user-agent"), "llx-desk");
+    assert_eq!(after("--user-agent"), "llxterm");
     // An ETag that would carry a second header, or none at all, is not sent.
     for etag in [Some("\"a\"\r\nCookie: x"), Some(""), None] {
         let ask = Ask { etag, ..ask };

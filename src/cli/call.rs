@@ -98,7 +98,7 @@ fn board(project: &std::path::Path) -> u8 {
             OK
         }
         Err(why) => {
-            warn(&format!("llx-desk: {why}"));
+            warn(&format!("llxterm: {why}"));
             FAILED
         }
     }
@@ -148,7 +148,7 @@ pub(super) fn window(args: &[String]) -> u8 {
 
 fn object(text: &str) -> Result<Value, String> {
     const WHAT: &str = "the call is the window's arguments as one JSON object, such as '{\"action\": \"list\"}'; \
-                        `llx-desk window` alone says what they are";
+                        `llxterm window` alone says what they are";
     match serde_json::from_str(text) {
         Ok(args @ Value::Object(_)) => Ok(args),
         Ok(_) => Err(WHAT.into()),
@@ -185,7 +185,7 @@ fn read_up_to(input: impl Read, most: u64) -> Result<String, String> {
 pub(super) fn admin(method: &str, idle: u8) -> u8 {
     let asked = ask(Start::Never, method, &json!({}));
     if let Err(Trouble::None) = &asked {
-        say("llx-desk: LLX Desk is not running");
+        say("llxterm: Localix Terminal is not running");
         return idle;
     }
     printed(asked)
@@ -239,7 +239,7 @@ fn words(answer: &Answer, shots: &std::path::Path) -> String {
 }
 
 pub(super) fn usage(why: &str) -> u8 {
-    warn(&format!("llx-desk: {why}"));
+    warn(&format!("llxterm: {why}"));
     UNREACHABLE
 }
 

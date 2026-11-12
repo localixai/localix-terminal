@@ -1,7 +1,7 @@
 //! The person's presses in the app's windows, wherever they land: a page or a terminal takes
 //! its own clicks, so the window hears of them here (a local event monitor) and knows which half
 //! of a split window the person works in. A press in the window (a panel that never activates
-//! the app by itself, nspanel.rs) makes llx-desk the app in use, as a click in any app's window
+//! the app by itself, nspanel.rs) makes llxterm the app in use, as a click in any app's window
 //! does: its menus in the menu bar, its window key. What an agent does never activates it.
 
 use block2::RcBlock;
@@ -42,7 +42,7 @@ pub(super) fn watch(proxy: &EventLoopProxy<Cmd>) {
     }
 }
 
-/// Press `event` in the window, llx-desk not the active app: the app made the active one, and
+/// Press `event` in the window, llxterm not the active app: the app made the active one, and
 /// the window its key window, the person's keys going to it.
 fn take_over(event: *mut AnyObject) {
     // SAFETY: the monitor hands an NSEvent, or nil.

@@ -17,14 +17,17 @@ fn about(title: &str) -> Dialog {
 
 #[test]
 fn a_question_is_a_dialog_with_its_act_and_cancel_that_takes_the_keys() {
-    let dialog = about("Quit LLX Desk?");
+    let dialog = about("Quit Localix Terminal?");
     assert_eq!(
         (dialog.yes.as_str(), dialog.no.as_str(), dialog.asked),
         ("Quit", "Cancel", true)
     );
     let drawn = script(Some(&dialog));
     assert!(drawn.starts_with("DLG({"), "{drawn}");
-    assert!(drawn.contains("\"title\":\"Quit LLX Desk?\""), "{drawn}");
+    assert!(
+        drawn.contains("\"title\":\"Quit Localix Terminal?\""),
+        "{drawn}"
+    );
     assert!(!drawn.contains("ask:"), "its id is not the page's: {drawn}");
     assert_eq!(script(None), "DLG(null)");
 }
@@ -37,12 +40,12 @@ fn dialogs_are_shown_one_at_a_time_and_one_asked_again_is_not_shown_twice() {
         Box::new(move |yes: bool, _: &Given| crate::lock(&heard).push((who, yes))) as super::Done
     };
     let mut stage = Stage::default();
-    stage.ask(about("Quit LLX Desk?"), hear("first"));
-    stage.ask(about("Restart LLX Desk to update?"), hear("other"));
-    stage.ask(about("Quit LLX Desk?"), hear("again"));
+    stage.ask(about("Quit Localix Terminal?"), hear("first"));
+    stage.ask(about("Restart Localix Terminal to update?"), hear("other"));
+    stage.ask(about("Quit Localix Terminal?"), hear("again"));
     assert_eq!(stage.up.len(), 2, "the same question joins the one up");
     let shown = stage.up.front().map(|(dialog, _)| dialog.title.clone());
-    assert_eq!(shown.as_deref(), Some("Quit LLX Desk?"));
+    assert_eq!(shown.as_deref(), Some("Quit Localix Terminal?"));
     for done in stage.answered() {
         done(true, &Given::new());
     }
@@ -58,7 +61,7 @@ fn dialogs_are_shown_one_at_a_time_and_one_asked_again_is_not_shown_twice() {
 fn a_releases_notes_are_read_as_headings_points_and_sentences_in_plain_words() {
     let read = notes(
         "The window asks in its own dialog.\n\n### Added\n\n- **Dialogs**: one look, see\n  \
-         [the rules](docs/ui.md).\n- `llx-desk setup` runs on its own.\n\n## Fixed\n* A tab.",
+         [the rules](docs/ui.md).\n- `llxterm setup` runs on its own.\n\n## Fixed\n* A tab.",
     );
     assert_eq!(
         read,
@@ -66,7 +69,7 @@ fn a_releases_notes_are_read_as_headings_points_and_sentences_in_plain_words() {
             Note::Text("The window asks in its own dialog.".into()),
             Note::Head("Added".into()),
             Note::Item("Dialogs: one look, see the rules.".into()),
-            Note::Item("llx-desk setup runs on its own.".into()),
+            Note::Item("llxterm setup runs on its own.".into()),
             Note::Head("Fixed".into()),
             Note::Item("A tab.".into()),
         ]

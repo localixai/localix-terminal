@@ -63,8 +63,8 @@ fn run(program: &str, args: &[&std::ffi::OsStr]) -> Result<(), String> {
 /// What the archive `name` unpacks to: the app (a zip), or the program (a tarball).
 pub(super) fn unpacked(name: &str) -> &'static str {
     match name.ends_with(".zip") {
-        true => "LLX Desk.app",
-        false => "llx-desk",
+        true => "Localix Terminal.app",
+        false => "llxterm",
     }
 }
 
@@ -127,7 +127,7 @@ pub(super) fn stage(
     }
 }
 
-/// Whether `app` is LLX Desk as its releases are: signed by the team's Developer ID, the
+/// Whether `app` is Localix Terminal as its releases are: signed by the team's Developer ID, the
 /// signature whole, and notarized by Apple (macOS). The checksum comes from where the archive
 /// does; this is what says whose app it is.
 #[cfg(target_os = "macos")]
@@ -150,7 +150,7 @@ pub(super) fn trusted(app: &Path) -> Result<(), String> {
             ];
             run("/usr/sbin/spctl", &assess)
         })
-        .map_err(|why| format!("it is not signed and notarized as LLX Desk is ({why})"))
+        .map_err(|why| format!("it is not signed and notarized as Localix Terminal is ({why})"))
 }
 
 /// Elsewhere a release is a program and its checksum: it is one that can be run.

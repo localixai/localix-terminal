@@ -9,10 +9,10 @@ use super::{Market, marketplace_in, on_record, plugin_in};
 
 #[test]
 fn a_marketplace_is_removed_only_when_it_is_listed_at_another_folder() {
-    let dir = Path::new("/Applications/LLX Desk.app/Contents/Resources/claude-code");
-    let here = json!([{"name": "llx-desk", "path": dir.display().to_string()}]);
+    let dir = Path::new("/Applications/Localix Terminal.app/Contents/Resources/claude-code");
+    let here = json!([{"name": "llxterm", "path": dir.display().to_string()}]);
     assert_eq!(marketplace_in(&here, dir), Market::Here);
-    let elsewhere = json!([{"name": "llx-desk", "path": "/old/claude-code"}]);
+    let elsewhere = json!([{"name": "llxterm", "path": "/old/claude-code"}]);
     assert_eq!(marketplace_in(&elsewhere, dir), Market::Elsewhere);
     // Listed cleanly without it: added, nothing to remove.
     let others = json!([{"name": "other", "path": "/x"}]);
@@ -28,18 +28,18 @@ fn a_marketplace_is_removed_only_when_it_is_listed_at_another_folder() {
 #[test]
 fn the_plugins_version_is_the_one_claude_code_loads() {
     let listed = |plugin| plugin_in(&json!([{"id": "other@x", "version": "9"}, plugin]));
-    let recorded = json!({"id": "llx-desk@llx-desk", "version": "0.1.4", "enabled": true});
+    let recorded = json!({"id": "llxterm@llxterm", "version": "0.1.4", "enabled": true});
     assert_eq!(listed(recorded), Some(("0.1.4".into(), true)));
     // Read from a folder (the app's bundle), the folder's version is what a session loads,
     // whatever was recorded when the plugin was installed.
     let folder = json!({
-        "id": "llx-desk@llx-desk", "version": "0.1.4", "folderVersion": "0.1.5",
-        "readFromFolder": "/Applications/LLX Desk.app/Contents/Resources/claude-code",
+        "id": "llxterm@llxterm", "version": "0.1.4", "folderVersion": "0.1.5",
+        "readFromFolder": "/Applications/Localix Terminal.app/Contents/Resources/claude-code",
         "enabled": false
     });
     assert_eq!(listed(folder), Some(("0.1.5".into(), false)));
     assert_eq!(
-        plugin_in(&json!([{"id": "llx-desk@other", "version": "1"}])),
+        plugin_in(&json!([{"id": "llxterm@other", "version": "1"}])),
         None
     );
     assert_eq!(plugin_in(&json!({"plugins": []})), None);
@@ -47,12 +47,11 @@ fn the_plugins_version_is_the_one_claude_code_loads() {
 
 #[test]
 fn the_plugin_is_known_in_place_from_claude_codes_own_records() {
-    let dir = Path::new("/Applications/LLX Desk.app/Contents/Resources/claude-code");
-    let installed =
-        |version: &str| json!({"plugins": {"llx-desk@llx-desk": [{"version": version}]}});
+    let dir = Path::new("/Applications/Localix Terminal.app/Contents/Resources/claude-code");
+    let installed = |version: &str| json!({"plugins": {"llxterm@llxterm": [{"version": version}]}});
     let markets =
-        |path: &str| json!({"llx-desk": {"source": {"source": "directory", "path": path}}});
-    let settings = |on: bool| json!({"enabledPlugins": {"llx-desk@llx-desk": on}});
+        |path: &str| json!({"llxterm": {"source": {"source": "directory", "path": path}}});
+    let settings = |on: bool| json!({"enabledPlugins": {"llxterm@llxterm": on}});
     let here = dir.display().to_string();
     let now = env!("CARGO_PKG_VERSION");
     assert!(on_record(

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 
-use llx_desk::browser::{Arranged, Arranging, Browser, Heard};
+use llxterm::browser::{Arranged, Arranging, Browser, Heard};
 
 #[track_caller]
 fn wait(mut ready: impl FnMut() -> bool) {
@@ -125,18 +125,18 @@ pub(crate) fn scenario(browser: &Browser) {
 }
 
 fn board(browser: &Browser) {
-    let mut state = llx_desk::board::Board::default();
+    let mut state = llxterm::board::Board::default();
     state.add("First", "", None, "person").unwrap();
     browser.group("b72", "ui");
     let panel = browser.panel(
-        llx_desk::browser::BOARD + 72,
+        llxterm::browser::BOARD + 72,
         "UI",
-        llx_desk::board::page("UI"),
+        llxterm::board::page("UI"),
     );
     browser.go("ui");
     browser.act("b72", false).unwrap();
     wait(|| browser.peek(&panel, "typeof B") == Ok(json!("function")));
-    panel.paint(&llx_desk::board::frame(&state, "b72", "UI", 1, &json!([])));
+    panel.paint(&llxterm::board::frame(&state, "b72", "UI", 1, &json!([])));
     wait(|| {
         browser
             .peek(&panel, "document.querySelectorAll('.card').length === 1")
@@ -158,7 +158,7 @@ fn board(browser: &Browser) {
         )
         .unwrap();
     state.cards[0].title = "Changed elsewhere".to_string();
-    panel.paint(&llx_desk::board::frame(&state, "b72", "UI", 2, &json!([])));
+    panel.paint(&llxterm::board::frame(&state, "b72", "UI", 2, &json!([])));
     wait(|| browser.peek(&panel, "board.now === 2").unwrap() == json!(true));
     assert_eq!(
         browser
@@ -195,7 +195,7 @@ fn board(browser: &Browser) {
             "window.__same = document.querySelector('.card'); true",
         )
         .unwrap();
-    panel.paint(&llx_desk::board::frame(&state, "b72", "UI", 3, &json!([])));
+    panel.paint(&llxterm::board::frame(&state, "b72", "UI", 3, &json!([])));
     wait(|| browser.peek(&panel, "board.now === 3").unwrap() == json!(true));
     assert_eq!(
         browser

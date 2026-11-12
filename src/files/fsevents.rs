@@ -162,7 +162,7 @@ impl Stream {
             return Err(io::Error::other("the system gave no stream of file events"));
         }
         // SAFETY: the label is a C string that lives for the call.
-        let queue = unsafe { dispatch_queue_create(c"llx-desk.files".as_ptr(), ptr::null()) };
+        let queue = unsafe { dispatch_queue_create(c"llxterm.files".as_ptr(), ptr::null()) };
         // SAFETY: the stream and the queue are ours, made above.
         unsafe { FSEventStreamSetDispatchQueue(stream, queue) };
         // SAFETY: the stream has its queue.

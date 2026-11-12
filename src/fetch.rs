@@ -69,7 +69,7 @@ fn curl(url: &str, file: &Path, most: Duration) -> Command {
         .args(["--proto", protocol, "--proto-redir", protocol])
         .args(["--retry", "2", "--connect-timeout", "20"])
         .args(["--max-time", &most.as_secs().max(1).to_string()])
-        .args(["--user-agent", "llx-desk"])
+        .args(["--user-agent", "llxterm"])
         .arg("--output")
         .arg(file)
         .arg(url);

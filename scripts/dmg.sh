@@ -1,10 +1,10 @@
 #!/bin/bash
-# The release files of the Mac app: LLX-Desk-macos.dmg (the disk image people open, the app and a
-# link to /Applications in it, in the window packaging/macos/dmg lays out) and LLX-Desk-macos.zip (the app, which install.sh fetches), in dist.
+# The release files of the Mac app: Localix-Terminal-macos.dmg (the disk image people open, the app and a
+# link to /Applications in it, in the window packaging/macos/dmg lays out) and Localix-Terminal-macos.zip (the app, which install.sh fetches), in dist.
 # CI and a person at this Mac run the same script.
 #   scripts/dmg.sh [--universal] [--notarize] [--out dist]
 # --universal builds both Macs' programs and joins them with lipo (releases are Apple silicon only
-# and do not use it); without it the program is the one of this Mac. The signature is LLX_DESK_SIGN, or else the first Developer ID
+# and do not use it); without it the program is the one of this Mac. The signature is LLXTERM_SIGN, or else the first Developer ID
 # Application identity of the keychain, or else ad hoc: an ad hoc build is bundled, verified and
 # zipped, and Gatekeeper will refuse it on another Mac. --notarize needs a Developer ID identity
 # and the notary's credentials, either a keychain profile in LLX_NOTARY_PROFILE (made once with
@@ -41,7 +41,7 @@ version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
 scripts/check-versions.sh
 
 # The signature: what the environment names, else the keychain's Developer ID, else ad hoc.
-sign=${LLX_DESK_SIGN:-}
+sign=${LLXTERM_SIGN:-}
 if [ -z "$sign" ]; then
   sign=$(security find-identity -v -p codesigning |
     sed -n 's/.*"\(Developer ID Application:.*\)".*/\1/p' | head -n 1)
@@ -53,7 +53,7 @@ case "$sign" in
 esac
 if [ "$sign" = - ]; then
   echo "signing ad hoc: Gatekeeper will refuse this build on another Mac"
-  [ "$notarize" = 0 ] || { echo "--notarize needs a Developer ID identity (LLX_DESK_SIGN)" >&2; exit 1; }
+  [ "$notarize" = 0 ] || { echo "--notarize needs a Developer ID identity (LLXTERM_SIGN)" >&2; exit 1; }
 else
   echo "signing with a Developer ID identity${team:+, team $team}"
 fi
@@ -146,9 +146,9 @@ if [ "$universal" = 1 ]; then
     cargo build --release --locked --target "$target"
   done
   mkdir -p target/universal
-  lipo -create -output target/universal/llx-desk \
-    target/aarch64-apple-darwin/release/llx-desk target/x86_64-apple-darwin/release/llx-desk
-  binary=target/universal/llx-desk
+  lipo -create -output target/universal/llxterm \
+    target/aarch64-apple-darwin/release/llxterm target/x86_64-apple-darwin/release/llxterm
+  binary=target/universal/llxterm
   archs=$(lipo -archs "$binary")
   # Each on its own: lipo names them in either order, one space apart.
   for arch in arm64 x86_64; do
@@ -159,7 +159,7 @@ if [ "$universal" = 1 ]; then
   done
 else
   cargo build --release --locked
-  binary=target/release/llx-desk
+  binary=target/release/llxterm
 fi
 # No program may ask for a newer macOS than Info.plist's LSMinimumSystemVersion.
 for minos in $(otool -l "$binary" | awk '/^ +minos /{ print $2 }'); do
@@ -168,7 +168,7 @@ for minos in $(otool -l "$binary" | awk '/^ +minos /{ print $2 }'); do
 done
 
 # The app, signed by the script that makes it.
-app=$(LLX_DESK_SIGN="$sign" scripts/bundle-macos.sh "$binary" "$out/bundle")
+app=$(LLXTERM_SIGN="$sign" scripts/bundle-macos.sh "$binary" "$out/bundle")
 codesign --verify --deep --strict --verbose=2 "$app"
 if [ "$sign" != - ]; then
   seen=$(codesign -dv --verbose=2 "$app" 2>&1 | sed -n 's/^TeamIdentifier=//p')
@@ -186,8 +186,8 @@ if [ "$notarize" = 1 ]; then
 fi
 
 # The update zip is made from the stapled app, so it carries the ticket.
-rm -f "$out/LLX-Desk-macos.zip" "$out/LLX-Desk-macos.dmg"
-ditto -c -k --keepParent "$app" "$out/LLX-Desk-macos.zip"
+rm -f "$out/Localix-Terminal-macos.zip" "$out/Localix-Terminal-macos.dmg"
+ditto -c -k --keepParent "$app" "$out/Localix-Terminal-macos.zip"
 
 # The disk image: the app and a link to /Applications to drag it to, in the window that
 # scripts/dmg-layout.sh laid out: its picture and Finder's record of the window, both hidden. The
@@ -195,33 +195,33 @@ ditto -c -k --keepParent "$app" "$out/LLX-Desk-macos.zip"
 # APFS, since macOS 26.4 beta cannot mount an HFS+ image.
 stage="$work/stage"
 mkdir -p "$stage/.background"
-ditto "$app" "$stage/LLX Desk.app"
+ditto "$app" "$stage/Localix Terminal.app"
 ln -s /Applications "$stage/Applications"
 cp packaging/macos/dmg/background.tiff "$stage/.background/background.tiff"
 cp packaging/macos/dmg/DS_Store "$stage/.DS_Store"
-hdiutil create -quiet -volname "LLX Desk" -srcfolder "$stage" -fs APFS -format UDZO -ov \
-  "$out/LLX-Desk-macos.dmg"
+hdiutil create -quiet -volname "Localix Terminal" -srcfolder "$stage" -fs APFS -format UDZO -ov \
+  "$out/Localix-Terminal-macos.dmg"
 if [ "$sign" != - ]; then
-  codesign_image "$out/LLX-Desk-macos.dmg"
-  codesign --verify --strict --verbose=2 "$out/LLX-Desk-macos.dmg"
+  codesign_image "$out/Localix-Terminal-macos.dmg"
+  codesign --verify --strict --verbose=2 "$out/Localix-Terminal-macos.dmg"
 fi
 if [ "$notarize" = 1 ]; then
-  notarize_file "$out/LLX-Desk-macos.dmg"
-  retry staple_and_validate "$out/LLX-Desk-macos.dmg"
+  notarize_file "$out/Localix-Terminal-macos.dmg"
+  retry staple_and_validate "$out/Localix-Terminal-macos.dmg"
 fi
 
 # What a person gets by opening the image: the app signed as it was, and the link beside it.
 mount="$work/mount"
 mkdir -p "$mount"
-hdiutil attach -nobrowse -readonly -noautoopen -quiet -mountpoint "$mount" "$out/LLX-Desk-macos.dmg"
-[ -d "$mount/LLX Desk.app" ] || { echo "the disk image has no LLX Desk.app" >&2; exit 1; }
+hdiutil attach -nobrowse -readonly -noautoopen -quiet -mountpoint "$mount" "$out/Localix-Terminal-macos.dmg"
+[ -d "$mount/Localix Terminal.app" ] || { echo "the disk image has no Localix Terminal.app" >&2; exit 1; }
 [ -L "$mount/Applications" ] || { echo "the disk image has no link to /Applications" >&2; exit 1; }
 [ -s "$mount/.DS_Store" ] && [ -s "$mount/.background/background.tiff" ] ||
   { echo "the disk image has no window layout" >&2; exit 1; }
-codesign --verify --deep --strict --verbose=2 "$mount/LLX Desk.app"
+codesign --verify --deep --strict --verbose=2 "$mount/Localix Terminal.app"
 if [ "$notarize" = 1 ]; then
-  spctl --assess --type execute -vv "$mount/LLX Desk.app"
-  spctl --assess --type open --context context:primary-signature -vv "$out/LLX-Desk-macos.dmg"
+  spctl --assess --type execute -vv "$mount/Localix Terminal.app"
+  spctl --assess --type open --context context:primary-signature -vv "$out/Localix-Terminal-macos.dmg"
 elif [ "$sign" = - ]; then
   echo "not asking Gatekeeper: it refuses an ad hoc build on another Mac"
 else
@@ -230,7 +230,7 @@ fi
 hdiutil detach "$mount" -quiet
 mount=
 
-(cd "$out" && shasum -a 256 LLX-Desk-macos.dmg LLX-Desk-macos.zip > SHA256SUMS.local)
-echo "LLX Desk $version:"
-ls -l "$out/LLX-Desk-macos.dmg" "$out/LLX-Desk-macos.zip"
+(cd "$out" && shasum -a 256 Localix-Terminal-macos.dmg Localix-Terminal-macos.zip > SHA256SUMS.local)
+echo "Localix Terminal $version:"
+ls -l "$out/Localix-Terminal-macos.dmg" "$out/Localix-Terminal-macos.zip"
 cat "$out/SHA256SUMS.local"

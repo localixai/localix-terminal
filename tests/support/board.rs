@@ -4,8 +4,8 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use llx_desk::board::{Board, Worker};
-use llx_desk::browser::{BOARD, Browser, Pane};
+use llxterm::board::{Board, Worker};
+use llxterm::browser::{BOARD, Browser, Pane};
 use serde_json::json;
 
 fn until(what: &str, want: impl Fn() -> bool) {
@@ -18,7 +18,7 @@ fn until(what: &str, want: impl Fn() -> bool) {
 
 pub(crate) fn scenario(browser: &Browser) {
     let title = "desk · board · shop";
-    let panel = browser.panel(BOARD + 1, title, llx_desk::board::page(title));
+    let panel = browser.panel(BOARD + 1, title, llxterm::board::page(title));
     let posted: Arc<Mutex<Vec<String>>> = Arc::default();
     let kept = Arc::clone(&posted);
     panel.keyboard(Arc::new(move |text: &str| {
@@ -43,11 +43,11 @@ pub(crate) fn scenario(browser: &Browser) {
     }
     board.take(Some("c2"), Worker(Some("tests"))).unwrap();
     board.review("c2", Worker(Some("tests")), "fixed").unwrap();
-    panel.paint(&llx_desk::board::frame(
+    panel.paint(&llxterm::board::frame(
         &board,
         "b1",
         "shop",
-        llx_desk::board::now(),
+        llxterm::board::now(),
         &json!([{"id": "codex", "name": "Codex"}]),
     ));
     // A card waiting in Todo offers to be run by an agent.
@@ -92,9 +92,7 @@ pub(crate) fn scenario(browser: &Browser) {
             .any(|text| text == r#"{"op":"accept","card":"c2"}"#)
     });
     // A refusal is said in the page.
-    panel.paint(&llx_desk::board::refused(
-        "there is no card c9 on the board",
-    ));
+    panel.paint(&llxterm::board::refused("there is no card c9 on the board"));
     until("the refusal was never shown", || {
         browser.peek(&panel, "document.getElementById('toast').textContent")
             == Ok(json!("there is no card c9 on the board"))
@@ -105,19 +103,19 @@ pub(crate) fn scenario(browser: &Browser) {
 /// The person closes the board's tab, the window's last: the window stays with no tab, and the
 /// agent's `show` gives the board a tab again, painted as it is.
 pub(crate) fn reopened(browser: &Browser) {
-    let home = std::env::temp_dir().join(format!("llx-desk-board-{}", std::process::id()));
+    let home = std::env::temp_dir().join(format!("llxterm-board-{}", std::process::id()));
     std::fs::create_dir_all(home.join(".git")).unwrap();
     let shots = home.join("shots");
-    let desk = llx_desk::desk::Desk::new(
+    let desk = llxterm::desk::Desk::new(
         Some(browser.clone()),
         true,
         shots,
-        Arc::new(llx_desk::desk::Quiet),
-        Arc::new(llx_desk::store::Store::memory().unwrap()),
+        Arc::new(llxterm::desk::Quiet),
+        Arc::new(llxterm::store::Store::memory().unwrap()),
     );
     let project = desk.project(&home).unwrap();
-    let owner = llx_desk::projects::owner(&project, None);
-    let call = llx_desk::desk::Call {
+    let owner = llxterm::projects::owner(&project, None);
+    let call = llxterm::desk::Call {
         owner: &owner,
         project: &project,
         agent: None,
@@ -160,18 +158,18 @@ pub(crate) fn reopened(browser: &Browser) {
 /// button for it), sees it, and accepts the card from there, which moves it to Done on the board.
 #[cfg(target_os = "macos")]
 pub(crate) fn center(browser: &Browser) {
-    let home = std::env::temp_dir().join(format!("llx-desk-center-{}", std::process::id()));
+    let home = std::env::temp_dir().join(format!("llxterm-center-{}", std::process::id()));
     std::fs::create_dir_all(home.join(".git")).unwrap();
-    let desk = llx_desk::desk::Desk::new(
+    let desk = llxterm::desk::Desk::new(
         Some(browser.clone()),
         true,
         home.join("shots"),
-        Arc::new(llx_desk::desk::Quiet),
-        Arc::new(llx_desk::store::Store::memory().unwrap()),
+        Arc::new(llxterm::desk::Quiet),
+        Arc::new(llxterm::store::Store::memory().unwrap()),
     );
     let project = desk.project(&home).unwrap();
-    let owner = llx_desk::projects::owner(&project, None);
-    let call = llx_desk::desk::Call {
+    let owner = llxterm::projects::owner(&project, None);
+    let call = llxterm::desk::Call {
         owner: &owner,
         project: &project,
         agent: None,

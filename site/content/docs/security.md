@@ -1,6 +1,6 @@
 # Security
 
-The app has no approval prompt of its own: the agent's permission to run the command is the approval. Allowing `llx-desk window *` lets an agent open pages, run scripts in them and start programs as you. Scope it as you would a shell.
+The app has no approval prompt of its own: the agent's permission to run the command is the approval. Allowing `llxterm window *` lets an agent open pages, run scripts in them and start programs as you. Scope it as you would a shell.
 
 ## What the app listens on
 
@@ -21,7 +21,7 @@ A key an answer would carry (a GitHub, cloud, Stripe, Slack, GitLab, npm or mode
 
 ## Terminals and files
 
-Terminals run with the environment of the caller that opened them, but for the variables its integration names in `LLX_DESK_SCRUB`. Screenshots are files in the app's home; the newest 30 are kept.
+Terminals run with the environment of the caller that opened them, but for the variables its integration names in `LLXTERM_SCRUB`. Screenshots are files in the app's home; the newest 30 are kept.
 
 ## The Store
 

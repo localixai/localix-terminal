@@ -3,8 +3,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use llx_desk::browser::{Browser, Panel};
-use llx_desk::terminal::{DEFAULT_WAIT, Session, Until};
+use llxterm::browser::{Browser, Panel};
+use llxterm::terminal::{DEFAULT_WAIT, Session, Until};
 use serde_json::json;
 
 const CELLS: &str = r#"(() => {

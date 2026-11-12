@@ -4,8 +4,8 @@
 
 import './docs-menus';
 
-for (const button of document.querySelectorAll<HTMLButtonElement>('.llx-code-copy')) {
-  const code = button.closest('.llx-code')?.querySelector('pre');
+for (const button of document.querySelectorAll<HTMLButtonElement>('.fd-code-copy')) {
+  const code = button.closest('.fd-code')?.querySelector('pre');
   if (!code) continue;
   let timer = 0;
   button.addEventListener('click', async () => {
@@ -25,8 +25,8 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('.llx-code-cop
 }
 
 // Tabs: a press or an arrow key shows a variant and hides the others.
-for (const list of document.querySelectorAll<HTMLElement>('.llx-tab-list')) {
-  const tabs = [...list.querySelectorAll<HTMLButtonElement>('.llx-tab')];
+for (const list of document.querySelectorAll<HTMLElement>('.fd-tab-list')) {
+  const tabs = [...list.querySelectorAll<HTMLButtonElement>('.fd-tab')];
   const show = (chosen: HTMLButtonElement) => {
     for (const tab of tabs) {
       const on = tab === chosen;
@@ -37,7 +37,7 @@ for (const list of document.querySelectorAll<HTMLElement>('.llx-tab-list')) {
     }
   };
   list.addEventListener('click', (event) => {
-    const tab = (event.target as Element).closest<HTMLButtonElement>('.llx-tab');
+    const tab = (event.target as Element).closest<HTMLButtonElement>('.fd-tab');
     if (tab) show(tab);
   });
   list.addEventListener('keydown', (event) => {

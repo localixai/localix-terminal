@@ -1,4 +1,4 @@
-//! The command line, a client of the app: `llx-desk window`, `status`, `quit`, `mcp`, `setup`,
+//! The command line, a client of the app: `llxterm window`, `status`, `quit`, `mcp`, `setup`,
 //! `open`, `secret`. Exit codes: 0 done, 1 the call failed (the output says why), 3 the app could
 //! not be reached or the arguments are wrong. `serve` is the app's own launch, not the person's.
 
@@ -15,44 +15,44 @@ const OK: u8 = 0;
 const FAILED: u8 = 1;
 const UNREACHABLE: u8 = 3;
 
-const HELP: &str = "llx-desk: a native window of browser pages and terminals that agents work in and a person watches
+const HELP: &str = "llxterm: a native window of browser pages and terminals that agents work in and a person watches
 
 Usage:
-  llx-desk window '<json>' [--as NAME] [--project DIR]   one call: open, interact, screenshot,
+  llxterm window '<json>' [--as NAME] [--project DIR]   one call: open, interact, screenshot,
                                          close, show, list
-  llx-desk window '<json>' --peek        as above, a look for a pane: what the person sent stays for your
+  llxterm window '<json>' --peek        as above, a look for a pane: what the person sent stays for your
                                          own next call
-  llx-desk window                        how to call it: the actions and their arguments (JSON Schema)
-  llx-desk window --end [--as NAME]      close the caller's tabs
-  llx-desk window --said [--as NAME]     print what the person sent from the window since last asked
-  llx-desk window --board                the project's open cards, for an agent starting work (read
+  llxterm window                        how to call it: the actions and their arguments (JSON Schema)
+  llxterm window --end [--as NAME]      close the caller's tabs
+  llxterm window --said [--as NAME]     print what the person sent from the window since last asked
+  llxterm window --board                the project's open cards, for an agent starting work (read
                                          from its file: the app need not run); nothing when none is open
-  llx-desk window --said --follow [--json]   keep waiting, and print each comment as it comes (for a
+  llxterm window --said --follow [--json]   keep waiting, and print each comment as it comes (for a
                                          monitor); --json: each one a JSON string on one line
-  llx-desk status                        what the app holds (exit 3 when it is not running)
-  llx-desk quit                          quit the app: its tabs and terminals end
-  llx-desk mcp [--as NAME]               the window tool as an MCP server on stdio, for an agent
+  llxterm status                        what the app holds (exit 3 when it is not running)
+  llxterm quit                          quit the app: its tabs and terminals end
+  llxterm mcp [--as NAME]               the window tool as an MCP server on stdio, for an agent
                                          whose host speaks MCP (Settings → Integrations adds it)
-  llx-desk setup [<id> [--off] | all | mcp]
+  llxterm setup [<id> [--off] | all | mcp]
                                          what the app puts in place by itself: the command, the
                                          Claude Code plugin, the window tool in Codex, Gemini CLI,
                                          Copilot, OpenCode, Hermes; `--off` takes one out for good
-  llx-desk open [DIR]                    the app: the window to you (the app's icon does the same);
-                                         with DIR, on that folder as a project (`llx-desk open .`)
-  llx-desk secret NAME < FILE            save a secret (a password) a call types as {{secret:NAME}}, never shown
-  llx-desk secret [--forget NAME]        list the secrets saved | forget one
-  llx-desk --version
+  llxterm open [DIR]                    the app: the window to you (the app's icon does the same);
+                                         with DIR, on that folder as a project (`llxterm open .`)
+  llxterm secret NAME < FILE            save a secret (a password) a call types as {{secret:NAME}}, never shown
+  llxterm secret [--forget NAME]        list the secrets saved | forget one
+  llxterm --version
 
 Tabs, the board and history belong to a project: a folder (the nearest one with a .git around the
-current directory; --project DIR or LLX_DESK_PROJECT names another). --as NAME is an agent of it
+current directory; --project DIR or LLXTERM_PROJECT names another). --as NAME is an agent of it
 with tabs of its own.
 Give the JSON as the argument, or `-` to read it from stdin.
 A call starts the app, out of sight, when it is not running.
-Environment: LLX_DESK_PROJECT (the project, when not the one around the current directory); LLX_DESK_HOME (where its log, screenshots and comments go).
+Environment: LLXTERM_PROJECT (the project, when not the one around the current directory); LLXTERM_HOME (where its log, screenshots and comments go).
 Exit codes: 0 done, 1 the call failed, 3 the app could not be reached or the arguments are wrong.";
 
 pub fn run(args: Vec<String>) -> ExitCode {
-    // Opened as LLX Desk.app: the app itself, not the CLI's help.
+    // Opened as Localix Terminal.app: the app itself, not the CLI's help.
     if crate::bundle::opened(&args) {
         return ExitCode::from(app::run());
     }
@@ -65,7 +65,7 @@ pub fn run(args: Vec<String>) -> ExitCode {
             OK
         }
         Some("-V" | "--version") => {
-            say(concat!("llx-desk ", env!("CARGO_PKG_VERSION")));
+            say(concat!("llxterm ", env!("CARGO_PKG_VERSION")));
             OK
         }
         Some("window") => call::window(&rest),
@@ -90,7 +90,7 @@ pub fn run(args: Vec<String>) -> ExitCode {
             _ => call::usage("open takes one folder at most"),
         },
         Some(other) => {
-            warn(&format!("llx-desk: no command `{other}`\n\n{HELP}"));
+            warn(&format!("llxterm: no command `{other}`\n\n{HELP}"));
             UNREACHABLE
         }
     };
@@ -156,10 +156,10 @@ fn list_kinds() {
 /// loop owns this thread and the server runs beside it; the process ends with the code it
 /// returns.
 pub(super) fn serving(bound: crate::server::Bound, serve: Serving) -> u8 {
-    // A test build never opens a window; `LLX_DESK_NO_WINDOW` asks for the same in any.
+    // A test build never opens a window; `LLXTERM_NO_WINDOW` asks for the same in any.
     let windowless = serve.windowless
         || cfg!(feature = "test-server")
-        || std::env::var_os("LLX_DESK_NO_WINDOW").is_some_and(|v| !v.is_empty());
+        || std::env::var_os("LLXTERM_NO_WINDOW").is_some_and(|v| !v.is_empty());
     list_kinds();
     let begin = crate::server::Begin {
         headless: serve.headless,

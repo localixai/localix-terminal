@@ -1,7 +1,7 @@
-//! The `llx-desk` binary.
+//! The `llxterm` binary.
 
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    llx_desk::cli::run(std::env::args().skip(1).collect())
+    llxterm::cli::run(std::env::args().skip(1).collect())
 }
