@@ -24,7 +24,7 @@ libc = "0.2"
 # An update's archive is checked against the checksum its release lists.
 sha2 = "0.11.1"
 # A terminal session's screen.
-vt100 = "0.16.2"
+vt100 = "0.18.1"
 # What the desk keeps across restarts: the change feed, the boards, the Event Center's journal. Built
 # in, so the binary needs no SQLite of the system.
 rusqlite = { version = "0.41.1", features = ["bundled", "fallible_uint"] }
