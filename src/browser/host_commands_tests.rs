@@ -146,6 +146,12 @@ fn named() -> Vec<(Cmd, Route, Drawn)> {
         (Cmd::Paint(3), pane("t3"), Drawn::Itself),
         (Cmd::Unpanel(3), pane("t3"), Drawn::Settles),
         (Cmd::PanelMenu(3, (1, 2), vec![]), pane("t3"), Drawn::Itself),
+        (
+            Cmd::PanelLink(3, "http://localhost:5175/".into()),
+            pane("t3"),
+            Drawn::Itself,
+        ),
+        (Cmd::Unanswered(4, 9), pane("w4"), Drawn::Itself),
         (Cmd::Titled(2, "zsh".into()), pane("t2"), Drawn::Told),
         (
             Cmd::Navigate {

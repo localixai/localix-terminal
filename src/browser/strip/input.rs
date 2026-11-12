@@ -89,6 +89,8 @@ pub(in super::super) enum Click {
     SplitEven,
     /// The person dragged a tab along the list: it goes before the other (none: to the end).
     Move(Key, Option<Key>),
+    /// The person carried a document along its row: it goes before the other (none: last).
+    Place(Key, Option<Key>),
     /// A tab dragged out over the pages, at a point of the window: where it would go shows.
     DropOver(Key, u32, u32),
     /// The dragged tab back over the list (or let go there): nothing shows on the pages.
@@ -304,7 +306,8 @@ pub(in super::super) fn click(body: &str) -> Option<Click> {
     }
 }
 
-/// A tab the person drags: along the list (`move KEY BEFORE|end`), over the pages
+/// A tab the person drags: along the list (`move KEY BEFORE|end`), a document along its row
+/// (`place KEY BEFORE|end`), over the pages
 /// (`drop-over KEY X Y`, `drop-off`), let go of over them (`drop KEY X Y`).
 fn dragged_tab(verb: &str, rest: Option<&str>) -> Option<Click> {
     let point = |at: &str| -> Option<(u32, u32)> {
@@ -312,13 +315,18 @@ fn dragged_tab(verb: &str, rest: Option<&str>) -> Option<Click> {
         Some((x.parse().ok()?, y.parse().ok()?))
     };
     match (verb, rest) {
-        ("move", Some(rest)) => {
+        ("move" | "place", Some(rest)) => {
             let (key, before) = rest.split_once(' ')?;
             let before = match before {
                 "end" => None,
                 before => Some(Key::parse(before)?),
             };
-            Some(Click::Move(Key::parse(key)?, before))
+            let to = if verb == "move" {
+                Click::Move
+            } else {
+                Click::Place
+            };
+            Some(to(Key::parse(key)?, before))
         }
         ("drop-off", None) => Some(Click::DropOff),
         ("drop-over", Some(rest)) => {

@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use super::{Entry, MOST, list, open, open_dirs, shut, within};
+use super::{Entry, MOST, list, moved, open, open_dirs, shut, within};
 use crate::store::Store;
 use crate::testing::Scratch;
 
@@ -138,4 +138,33 @@ fn open_folders_are_kept_per_project_and_shutting_one_shuts_what_is_under_it() {
     );
     assert_eq!(kept(two), ["src"], "another project's are its own");
     assert!(!store.write(|tx| shut(tx, one, "src")).unwrap());
+}
+
+#[test]
+fn a_folder_renamed_or_moved_stays_open_where_it_is_now_with_what_is_under_it() {
+    let store = Store::memory().unwrap();
+    let project = store
+        .write(|tx| {
+            let project = crate::projects::find_or_make(tx, Path::new("/work/one"), 1)?.id;
+            for path in [
+                "src",
+                "src/ui",
+                "src/ui/deep",
+                "src_old",
+                "lib",
+                "lib/stale",
+            ] {
+                open(tx, project, path)?;
+            }
+            Ok(project)
+        })
+        .unwrap();
+    store
+        .write(|tx| moved(tx, project, "src/ui", "lib"))
+        .unwrap();
+    assert_eq!(
+        store.read(|db| open_dirs(db, project)).unwrap(),
+        ["lib", "lib/deep", "src", "src_old"],
+        "what was kept of the place it took is gone, and a name that only starts the same stays"
+    );
 }

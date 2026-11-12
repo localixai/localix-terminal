@@ -38,12 +38,18 @@ pub(super) fn outside(url: &str) -> bool {
         .any(|scheme| url.starts_with(scheme))
 }
 
-/// The kinds of file a page shows as they are: markup it renders, a picture, a document.
-const SHOWN: [&str; 11] = [
-    "html", "htm", "svg", "png", "jpg", "jpeg", "gif", "webp", "avif", "ico", "pdf",
-];
+/// The file `url` names: the last part of its path, as written before it was spelled for an
+/// address. None for an address whose path ends in no name (a site's root, a folder).
+pub(super) fn file_named(url: &str) -> Option<String> {
+    let parsed = url::Url::parse(url).ok()?;
+    let last = parsed.path_segments()?.next_back()?.to_owned();
+    let plain = percent_encoding::percent_decode_str(&last)
+        .decode_utf8()
+        .map_or_else(|_| last.clone(), std::borrow::Cow::into_owned);
+    (!plain.is_empty()).then_some(plain)
+}
 
-/// Of them, the ones that are text: an editor takes them too, and a page renders them.
+/// Markup a page renders, which is text too: two ways to be opened in a tab.
 const RENDERED: [&str; 3] = ["html", "htm", "svg"];
 
 fn of_kind(path: &std::path::Path, kinds: &[&str]) -> bool {
@@ -51,9 +57,10 @@ fn of_kind(path: &std::path::Path, kinds: &[&str]) -> bool {
         .is_some_and(|kind| kinds.contains(&kind.to_ascii_lowercase().as_str()))
 }
 
-/// Whether a page shows the file at `path` as it is.
-pub fn shows(path: &std::path::Path) -> bool {
-    of_kind(path, &SHOWN)
+/// Whether the file at `path` is a picture written as text: it is looked at far more than it
+/// is written, so a pick shows it drawn, and its text is the second way.
+pub fn drawn(path: &std::path::Path) -> bool {
+    of_kind(path, &["svg"])
 }
 
 /// Whether the file at `path` is text a page renders: it has two ways to be opened in a tab.

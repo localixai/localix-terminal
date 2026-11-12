@@ -199,6 +199,13 @@ fn a_dragged_tab_says_where_it_goes() {
         Some(Click::SplitMove(-40, true))
     );
     assert_eq!(click("move w2"), None);
+    // A document carried along its row is placed in it: before another, or last.
+    assert_eq!(
+        click("place w2 w1"),
+        Some(Click::Place(Key::Web(2), Some(Key::Web(1))))
+    );
+    assert_eq!(click("place w2 end"), Some(Click::Place(Key::Web(2), None)));
+    assert_eq!(click("place w2"), None);
     // The side's points are the window's once moved down by the bar.
     assert_eq!(moved("drop w1 400 120", (0.0, 38.0)), "drop w1 400 158");
     assert_eq!(

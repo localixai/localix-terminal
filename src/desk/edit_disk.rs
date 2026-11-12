@@ -18,26 +18,9 @@ use crate::projects::ProjectId;
 #[derive(Debug)]
 pub(super) struct NotOpened {
     pub(super) why: String,
-    /// It is there, and not text an editor takes: something else may still show it.
+    /// It is there, and not text an editor takes: a page's to show (a picture, a film), or
+    /// to say in a line that nothing shows it.
     pub(super) page: bool,
-}
-
-/// Where a file the person picked is shown when an editor does not take it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Instead {
-    /// In a tab, as a page shows it: a picture, a document.
-    Page,
-    /// By the app the person has for its kind.
-    Outside,
-}
-
-/// Where the file at `path`, not opened for `not`, is shown instead: nowhere when it is not
-/// there to show.
-pub(super) fn instead(path: &Path, not: &NotOpened) -> Option<Instead> {
-    not.page.then(|| match crate::browser::shows(path) {
-        true => Instead::Page,
-        false => Instead::Outside,
-    })
 }
 
 /// A file edited in a tab.
@@ -57,6 +40,8 @@ pub(super) struct Kept {
     pub(super) panel: Option<Arc<Panel>>,
     /// The file's folder, heard while the tab is open.
     pub(super) watch: Option<Watch>,
+    /// Where its worker is handed work: a file that moved is heard, and told, from there.
+    pub(super) work: Option<SyncSender<Work>>,
 }
 
 impl Kept {

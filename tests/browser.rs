@@ -73,10 +73,16 @@ fn answer(stream: &std::net::TcpStream) {
     let file = format!("{}/tests/fixtures/{path}", env!("CARGO_MANIFEST_DIR"));
     let (status, body) = match std::fs::read(&file) {
         Ok(body) => ("200 OK", body),
+        // An archive: a file to keep, which no page shows.
+        Err(_) if path.ends_with(".zip") => ("200 OK", b"PK\x03\x04".to_vec()),
         Err(_) => ("404 Not Found", b"missing".to_vec()),
     };
+    let kind = match path.ends_with(".zip") {
+        true => "application/zip",
+        false => "text/html; charset=utf-8",
+    };
     let head = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\n\
+        "HTTP/1.1 {status}\r\nContent-Type: {kind}\r\n\
          Content-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     );
@@ -496,6 +502,8 @@ fn scenario(driver: &WebviewDriver, origin: &str) {
     assert!(matches!(stale, Err(ViewError::Stale(_))), "{stale:?}");
 
     tabs(driver, origin);
+    never_came(driver, origin);
+    not_shown(driver, origin);
     screenshots(driver, origin);
     rerendered(driver, origin);
     drifted(driver, origin);
@@ -1029,6 +1037,118 @@ fn tabs(driver: &WebviewDriver, origin: &str) {
     assert!(driver.close_tab(2).unwrap());
 }
 
+/// A port nothing listens at: taken, then let go.
+fn free_port() -> u16 {
+    let taken = TcpListener::bind("127.0.0.1:0").unwrap();
+    taken.local_addr().unwrap().port()
+}
+
+/// A new tab asked for a page at a port nothing listens at, once it says so: the tab, the port
+/// and the address.
+fn dead_tab(driver: &WebviewDriver) -> (u32, u16, String) {
+    let port = free_port();
+    let dead = format!("http://127.0.0.1:{port}/second.html");
+    let tab = driver.add_tab(&dead).unwrap();
+    let pinned = driver.on(tab);
+    pinned.wait_new();
+    let line = (0..40).find_map(|_| {
+        std::thread::sleep(Duration::from_millis(100));
+        let text = pinned.evaluate("document.body.innerText").ok()?;
+        text.contains("Could Not Load").then_some(text)
+    });
+    let line = line.expect("the tab said nothing of the page that never came");
+    assert!(line.contains(&format!("127.0.0.1:{port}")), "{line}");
+    (tab, port, dead)
+}
+
+/// The fixtures are served at `port` from now on; whether tab `tab` then comes to show `url`.
+fn comes_after(driver: &WebviewDriver, tab: u32, port: u16, url: &str, reload: &dyn Fn()) -> bool {
+    let listener = TcpListener::bind(("127.0.0.1", port)).unwrap();
+    std::thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            std::thread::spawn(move || answer(&stream));
+        }
+    });
+    reload();
+    let pinned = driver.on(tab);
+    (0..40).any(|_| {
+        std::thread::sleep(Duration::from_millis(100));
+        (pinned.evaluate("location.href")).is_ok_and(|href| href.contains(url))
+    })
+}
+
+/// A page that never comes: the tab says so in one line, keeps the address asked of it, and
+/// loads the page once something answers there. A tab that shows a page keeps it.
+fn never_came(driver: &WebviewDriver, origin: &str) {
+    let (tab, port, dead) = dead_tab(driver);
+    let pinned = driver.on(tab);
+    let kept = |driver: &WebviewDriver| {
+        let (tabs, _) = driver.tabs();
+        let tab = tabs.iter().find(|open| open.id == tab).unwrap();
+        (tab.url.clone(), tab.title.clone())
+    };
+    assert_eq!(kept(driver), (dead.clone(), format!("127.0.0.1:{port}")));
+    // Something answers there now: Reload, pressed as an agent presses it, brings the page.
+    let came = comes_after(driver, tab, port, &dead, &|| {
+        pinned.press(&["cmd+r".to_owned()], 0).unwrap();
+    });
+    assert!(came, "Reload left the tab at {:?}", kept(driver));
+    // Asked for a page that answers, the tab is that page's.
+    pinned.navigate(&format!("{origin}/form.html")).unwrap();
+    assert!(kept(driver).0.ends_with("/form.html"), "{:?}", kept(driver));
+    // A tab that shows a page keeps it when the next one never comes.
+    let _ = pinned.navigate(&format!("http://127.0.0.1:{}/", free_port()));
+    std::thread::sleep(Duration::from_millis(900));
+    let text = pinned.evaluate("document.body.innerText").unwrap();
+    assert!(!text.contains("Could Not Load"), "{text}");
+    assert!(driver.close_tab(tab).unwrap());
+    driver.switch_tab(1).unwrap();
+}
+
+/// What comes and no page shows (an archive): the tab says so in one line, by the file's name,
+/// and keeps the address. A tab that shows a page keeps its page.
+fn not_shown(driver: &WebviewDriver, origin: &str) {
+    let archive = format!("{origin}/get/build%20all.zip");
+    let tab = driver.add_tab(&archive).unwrap();
+    let pinned = driver.on(tab);
+    pinned.wait_new();
+    let line = (0..40).find_map(|_| {
+        std::thread::sleep(Duration::from_millis(100));
+        let text = pinned.evaluate("document.body.innerText").ok()?;
+        text.contains("No Preview").then_some(text)
+    });
+    let line = line.expect("the tab said nothing of the file no page shows");
+    assert!(line.contains("No Preview for build all.zip"), "{line}");
+    let (tabs, _) = driver.tabs();
+    let open = tabs.iter().find(|open| open.id == tab).unwrap();
+    assert_eq!(
+        (open.url.as_str(), open.title.as_str()),
+        (archive.as_str(), "build all.zip")
+    );
+    // A page's own link to an archive leaves the page as it is.
+    pinned.navigate(&format!("{origin}/form.html")).unwrap();
+    let _ = pinned.navigate(&archive);
+    std::thread::sleep(Duration::from_millis(900));
+    let text = pinned.evaluate("document.body.innerText").unwrap();
+    assert!(!text.contains("No Preview"), "{text}");
+    assert!(driver.close_tab(tab).unwrap());
+    driver.switch_tab(1).unwrap();
+}
+
+/// The person's own Reload (the toolbar's, ⌘R) asks a tab for the address it could not load.
+fn the_person_reloads(browser: &browser::Browser, driver: &WebviewDriver) {
+    let (tab, port, dead) = dead_tab(driver);
+    driver.switch_tab(tab).unwrap();
+    let came = comes_after(driver, tab, port, &dead, &|| browser.click("reload"));
+    assert!(
+        came,
+        "the person's Reload brought no page: {:?}",
+        driver.tabs()
+    );
+    assert!(driver.close_tab(tab).unwrap());
+    driver.switch_tab(1).unwrap();
+}
+
 /// A screenshot is the WebView's own picture, as JPEG; a selector crops it to one element.
 fn screenshots(driver: &WebviewDriver, origin: &str) {
     driver.navigate(&format!("{origin}/canvas.html")).unwrap();
@@ -1216,6 +1336,7 @@ fn main() {
                 second_page(&browser, &driver, &origin);
                 answers_while_loading(&browser, &driver, &origin);
                 starts_at_once(&browser, &driver, &origin);
+                the_person_reloads(&browser, &driver);
                 feedback(&browser, &driver);
                 feedback_in_a_dialog(&driver);
                 waits_for_the_person(&browser, &driver);

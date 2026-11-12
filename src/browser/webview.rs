@@ -65,6 +65,13 @@ impl WebviewDriver {
             .unwrap_or_else(|| self.shared.active.load(Ordering::SeqCst))
     }
 
+    /// The tab loads again, as its Reload asks: the address it could not load, else its page
+    /// (unloaded.rs).
+    pub(super) fn reload(&self) -> ViewResult<()> {
+        let script = self.shared.unloaded.reloading(self.target());
+        self.evaluate(&script).map(|_| ())
+    }
+
     /// Whether the window is open: the person may have closed it.
     pub fn is_open(&self) -> bool {
         self.shared.open.load(Ordering::SeqCst)

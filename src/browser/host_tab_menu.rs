@@ -229,7 +229,7 @@ impl On<'_> {
                 if let (Key::Web(id), Some(web)) = (key, open.web.as_ref())
                     && let Some(page) = web.at(Some(id))
                 {
-                    let _ = page.reload();
+                    crate::browser::unloaded::reload(page, id, self.shared);
                 }
             }
             Item::Duplicate => {

@@ -42,6 +42,27 @@ fn a_document_shown_is_the_one_in_sight_and_the_rest_keep_their_order() {
 }
 
 #[test]
+fn a_document_carried_along_its_row_goes_before_another_or_to_the_end() {
+    let mut tree = session();
+    assert!(tree.stack(4));
+    assert!(tree.show(2));
+    // Before another document, and to the end with none: the one in sight stays in sight.
+    assert!(tree.place(4, Some(2)));
+    assert_eq!(tree.stacked(), [4, 2, 3]);
+    assert!(tree.place(4, None));
+    assert_eq!(tree.stacked(), [2, 3, 4]);
+    assert_eq!(tree.visible(), [1, 2]);
+    // Where it is already, before itself, before what is no document of the stack, or a pane
+    // that is no document: nothing moves.
+    assert!(!tree.place(2, Some(3)));
+    assert!(!tree.place(4, None));
+    assert!(!tree.place(3, Some(3)));
+    assert!(!tree.place(3, Some(1)));
+    assert!(!tree.place(1, Some(2)));
+    assert_eq!(tree.stacked(), [2, 3, 4]);
+}
+
+#[test]
 fn the_document_in_sight_taken_out_shows_its_neighbour_and_the_last_ends_the_stack() {
     let mut tree = session();
     assert!(tree.stack(4));

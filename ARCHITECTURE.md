@@ -140,6 +140,12 @@ normal tests in CI.
   (`chip.rs`): past its window's edge it becomes a window of its own, over another window's list it
   goes into that list. The window's layout (the strip, the side, the pages) is `deck_layout.rs`;
   the menus a right click opens, a tab's and a panel's, `host_tab_menu.rs`.
+- **A page that never came** is the tab's to say (`unloaded.rs`): the view tells of a load that
+  starts and one that ends, never of one given up, so a tab whose document is blank is asked
+  now and then whether its view still loads, and shows one line under the address it keeps.
+  What came as a file to keep (the app downloads nothing) leaves the same blank tab and gets
+  the same line, said by the file's name. A picked file that is no text is such a page: the
+  loopback server (`served.rs`) gives it its type, and WebKit shows it or does not.
 - **`board.rs`, `board/`** are the board: its cards and the rules every move keeps (one card in Doing
   per worker, a worker acts on its own cards, Done is the person's), the person's actions from the
   window (`person.rs`), the board as text for the agent (`text.rs`), where it is kept
@@ -160,16 +166,19 @@ normal tests in CI.
 - **`files.rs`, `files/`** are a project's files: a folder listed one at a time (`files.rs`),
   heard from the system while it is in sight (`watch.rs` over `fsevents.rs` and `inotify.rs`,
   no timer), the folders a person left open (`kept.rs`), one file as an editor holds it with a
-  stamp of what the disk held (`text.rs`), and what was left unsaved (`drafts.rs`). They know
-  nothing of the window. `desk/files.rs` reads and watches the trees in sight and tells the
-  window only what is new, through the feed; the side draws them (`browser/tree.rs`, `tree.js`,
+  stamp of what the disk held (`text.rs`), what was left unsaved (`drafts.rs`), and an entry
+  made, named or moved without ever writing over another (`ops.rs`). They know nothing of the
+  window. `desk/files.rs` reads and watches the trees in sight and tells the window only what
+  is new, through the feed; `desk/files_ops.rs` does what the person asks of an entry and says
+  in the tree what is refused; the side draws them (`browser/tree.rs`, `tree.js`,
   `host_tree.rs`).
 - **`editor.rs`, `editor/`** are the editor's page: a vendored editor core and one script a
   language (`vendor/`, built by `scripts/editor` from pinned packages, each run by its SHA-384),
   with the page's own script. A page loads the core and the language of its file, never the
   others. `desk/edit.rs` opens a file into a tab, held to its caller's project (`within`), and
   `desk/edit_disk.rs` is that tab against the disk: the news of a change, and a save that
-  writes only over what the page was last told.
+  writes only over what the page was last told. `desk/edit_moved.rs` keeps a tab on its file
+  when the file is named anew or moved in the tree.
 - **`desk/`** is the `window` tool. A `Call` (its project and agent, directory, environment) and a
   JSON object in,
   text out. Its arguments are checked against its schema (`args.rs`) before anything is done: a field

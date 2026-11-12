@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::Desk;
+use super::files_ops::Op as EntryOp;
 use crate::browser::{Branch, Leaf, Tree, TreeDid};
 use crate::feed::{Entity, Op};
 use crate::files::{self, Change, Listing, Watch};
@@ -26,6 +27,8 @@ pub(super) struct Shown {
     /// Whether a notice the window's consumer has not pulled yet is in the feed: a burst of
     /// changes is one notice.
     noticed: bool,
+    /// The entry the person just made, named or moved, to be picked as the tree is next told.
+    pick: Option<String>,
 }
 
 /// What of a tree is to be read again.
@@ -39,6 +42,7 @@ enum Did {
     Seen(bool),
     Opened(String),
     Shut(String),
+    Entry(EntryOp),
 }
 
 impl Desk {
@@ -52,12 +56,14 @@ impl Desk {
             TreeDid::Seen(seen) => Did::Seen(seen),
             TreeDid::Opened(path) => Did::Opened(path.to_string()),
             TreeDid::Shut(path) => Did::Shut(path.to_string()),
+            TreeDid::Entry(did) => Did::Entry(did.into()),
         };
         let desk = Arc::clone(self);
         self.write_later(move || match did {
             Did::Seen(seen) => desk.tree_seen(project, seen),
             Did::Opened(path) => desk.tree_folder(project, &path, true),
             Did::Shut(path) => desk.tree_folder(project, &path, false),
+            Did::Entry(op) => desk.tree_op(project, &op),
         });
     }
 
@@ -90,6 +96,7 @@ impl Desk {
             listed: BTreeMap::new(),
             stale: Stale::All,
             noticed: true,
+            pick: None,
         };
         crate::lock(&self.trees).insert(project, shown);
         self.feed.record(&Entity::Files { project }, Op::Upserted);
@@ -149,6 +156,30 @@ impl Desk {
                     }
                 }
             }
+            !std::mem::replace(&mut shown.noticed, true)
+        };
+        if notice {
+            self.feed.record(&Entity::Files { project }, Op::Upserted);
+        }
+    }
+
+    /// The folder of `project`'s tree, while a window shows it.
+    pub(super) fn tree_root(&self, project: ProjectId) -> Option<PathBuf> {
+        (crate::lock(&self.trees).get(&project)).map(|shown| shown.root.clone())
+    }
+
+    /// The person's own hand changed folders `dirs` of `project`'s tree: they are read again
+    /// now, not when the system gets to saying so, and `pick` is the entry picked then.
+    pub(super) fn tree_touched(&self, project: ProjectId, dirs: &[&str], pick: Option<String>) {
+        let notice = {
+            let mut trees = crate::lock(&self.trees);
+            let Some(shown) = trees.get_mut(&project) else {
+                return;
+            };
+            if let Stale::Dirs(stale) = &mut shown.stale {
+                stale.extend(dirs.iter().map(ToString::to_string));
+            }
+            shown.pick = pick;
             !std::mem::replace(&mut shown.noticed, true)
         };
         if notice {
@@ -261,7 +292,8 @@ impl Desk {
             .filter_map(|path| Some((path, shown.listed.get(path)?)))
             .map(|(path, listing)| branch(path, listing))
             .collect();
-        let changed = !dirs.is_empty() || shown.listed.len() != before;
+        let pick = shown.pick.take();
+        let changed = !dirs.is_empty() || shown.listed.len() != before || pick.is_some();
         drop(trees);
         if !gone.is_empty() {
             let forgot = self.feed.store().write(|tx| {
@@ -275,6 +307,7 @@ impl Desk {
             root,
             open: open.into_iter().collect(),
             dirs,
+            pick,
         })
     }
 }
@@ -301,4 +334,4 @@ fn branch(path: &str, listing: &Listing) -> Branch {
 
 #[cfg(test)]
 #[path = "files_tests.rs"]
-mod tests;
+pub(super) mod tests;

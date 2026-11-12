@@ -55,6 +55,11 @@ one neutral coat over it (an `NSBox` fill). The chrome pages are clear over it.
   window is inactive instead ([Focus and selection](#focus-and-selection)).
 - **The coat is neutral**: near-black `#070707` or near-white `#f7f7f7`, at the alpha of the
   person's level (`frame::coat`). It is never a hue, a page's colour or a gradient.
+- **The levels are set by what the words need**, not by taste. The dark material over a bright
+  desktop is a mid grey, so the dark coat covers 85% (Low), 70% (Standard) and 40% (High): over
+  such a desktop the quiet ink (`--ink-2`) keeps 4.5 to 1 at Standard and Low, and at High the
+  main ink keeps 4.5 to 1 and the quiet one 3 to 1 (WCAG 2, 1.4.3 and 1.4.11). The light
+  material is the system's sidebar, nearly opaque by itself: its coat is 35%, 10% and none.
 - **No decoration over the glass.** No pools of colour, sheens, vignettes, noise or gradients.
   Apple says to remove custom backgrounds from toolbars and sidebars and let the material speak.
   Decoration reads as dirt on a light desktop, and as a fake wallpaper in full screen.
@@ -112,7 +117,12 @@ person's accent and the system's selection and focus colours, never a site's fix
   - the document in sight has the shown tab's neutral fill; the others are `--ink-2`;
   - a tab's close button shows on the one in sight and on the one pointed at;
   - a hairline closes the row; the row is not there when the session has no document;
-  - it lies over the pages and is no titlebar: a press on its empty part moves nothing.
+  - it lies over the pages and is no titlebar: a press on its empty part moves nothing;
+  - a tab dragged along it is a card (`--card`, the inner hairline) that follows the pointer
+    within the row; the others slide aside as its middle passes theirs (a fade in place under
+    Reduce Motion), the row scrolls while it is held near an edge with more past it, and let
+    go it settles into its place. A press that moves less than 5 pt is a click, and Escape
+    puts it back.
 - **Tiling** is the system's. The window allows it (`FULL_SCREEN_PRIMARY`).
 - Don't draw window controls of our own. A copy that doesn't match exactly makes the app feel
   broken.
@@ -182,10 +192,21 @@ define colours of its own beyond its `--ground`.
     folder, a 16 pt picture, the name; 12 pt further in for each folder it is under. The tree
     is under the tabs, which then take the height they need and at most half the side's; its
     head (Files) folds it away. Only the rows in view are drawn, and a folder of more than
-    2,000 entries ends in one quiet row that says how many more there are;
+    2,000 entries ends in one quiet row that says how many more there are. A name is written
+    in the row itself, in a field of the row's height (a new entry's in a row of its own at
+    the head of its folder); what the app would not do is one quiet 11/14 line under the
+    entry, gone at the person's next act in the tree. A carried entry is a card of its picture
+    and name, lifted as a carried tab is; the folder it would go into is lit, and where it
+    cannot go the pointer says so;
   - a separator is 11 pt tall with a hairline.
 - **The side** is 248 pt by default, 200 to 480 pt when dragged, and never more than half the
   window. Shut, it is a 52 pt rail.
+- **Glyphs** are line pictures on a 16 pt grid: a 1.4 pt stroke with round caps and joins,
+  no fill, in the ink of their control. Lines that meet are one path, never one shape laid
+  over another: the ink is not opaque, so a shape painted over a second shows a brighter spot
+  at each crossing. A mark that sits on a glyph (the bell's dot) is given a gap of the ground
+  by cutting the glyph away around it, not by a ring of a colour, which would show on the
+  glass.
 - **Radii** are tokens (`--r-1` 4, `--r-2` 6, `--r-3` 8, `--r-4` 10, `--r-5` 12, `--r-pill`). Nested shapes are
   concentric: the inner radius is the outer radius minus the padding between them, never more.
   A capsule's radius is half its height.
@@ -292,6 +313,13 @@ define colours of its own beyond its `--ground`.
   History", "No Matching Tabs" (title case, as a menu's disabled item). An empty board column
   says what its cards are ("Cards ready for an agent"). No glyph tile, dashed frame,
   illustration, logo or motion, and nothing to press: "+" and the menus open what can be.
+- **A page that never came is such a place**: the tab shows "Could Not Load" and the host
+  asked for (with a port that is not the scheme's own), on the app's ground, in a document
+  titled with that host. The tab keeps the address, and Reload asks for it again. Nothing
+  else is drawn: no glyph, no button, no reason guessed at.
+- **A file no page shows is such a place too** (an archive, a program, picked in the tree or
+  answered by an address): "No Preview for" and the file's name, in a document titled with
+  that name. The app downloads nothing and opens no other app unasked.
 - **The one exception is the window with no tab left.** The whole pages' part is empty, so it
   offers what opens a tab, as a menu does: New Page, New Terminal, Board, Open Folder…, each with
   its key as Settings sets it, quiet until pointed at. Under them, the coding agents installed:
@@ -314,7 +342,8 @@ wait.
 - **Everything can be interrupted.** A new click retargets from where the thing is now. Input is
   never blocked while something moves.
 - **Direct manipulation follows the pointer one to one**, with no transition. That covers a
-  carried tab, the side's edge and the split's divider. The spring starts on release.
+  carried tab, a carried entry of the tree, the side's edge and the split's divider. The
+  spring starts on release.
 - **Springs move things. Curves fade them.** Start at bounce 0. Add bounce (at most 0.15, and
   0.3 for a release with real momentum) only when the gesture carried momentum. A tap never
   overshoots.

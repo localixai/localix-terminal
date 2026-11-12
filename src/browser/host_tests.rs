@@ -121,3 +121,48 @@ fn a_reply_from_a_tab_the_call_did_not_go_to_answers_nothing() {
     shared.ipc(&sealed(&shared, &reply), Some(2));
     assert_eq!(call.receiver.try_recv(), Ok(Ok(Value::from(1))));
 }
+
+#[test]
+fn a_tab_whose_page_never_came_says_the_address_asked_of_it() {
+    let shared = events::fresh();
+    let at = shared.navigation_requested(3);
+    assert!(shared.unloaded.asked(3, "http://localhost:5175/", at));
+    assert!(shared.unloaded.failed(3, at).is_some());
+    crate::lock(&shared.tabs).push(Tab {
+        id: 3,
+        url: String::new(),
+        title: String::new(),
+    });
+    // The line it shows instead is a blank document's: the tab keeps the address.
+    shared.page_load(3, &PageLoadEvent::Started, "about:blank");
+    let said = |shared: &Shared| crate::lock(&shared.tabs)[0].url.clone();
+    assert_eq!(said(&shared), "http://localhost:5175/");
+    // Closed, nothing of it is left for the next tab of its number.
+    shared.forget(&[Key::Web(3)]);
+    shared.page_load(3, &PageLoadEvent::Started, "about:blank");
+    assert_eq!(said(&shared), "about:blank");
+}
+
+#[test]
+fn a_page_with_no_title_of_its_own_is_named_for_the_file_it_shows() {
+    let named = |url: &str, title: &str| {
+        let (id, url, title) = (4, url.to_owned(), title.to_owned());
+        Tab { id, url, title }.name()
+    };
+    // A film, a sound, a drawn picture: the document WebKit makes for one has no title, and
+    // it never says such a document has finished loading, so the name waits for nothing.
+    let film = "http://127.0.0.1:5175/k3/first%20cut.mp4";
+    assert_eq!(named(film, ""), "first cut.mp4");
+    assert_eq!(named(film, "  "), "first cut.mp4");
+    // A title the page gives is the tab's.
+    assert_eq!(named("http://a.test/shop/cart.html", "Shop"), "Shop");
+    // An address that names no file is the name, as it was: a route says less than its place.
+    for place in [
+        "http://a.test/shop/",
+        "http://localhost:5173/about",
+        "about:blank",
+    ] {
+        assert_eq!(named(place, ""), place);
+    }
+    assert_eq!(named("", ""), "");
+}

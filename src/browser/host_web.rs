@@ -167,6 +167,8 @@ pub(super) fn on_browser(
         | Cmd::Paint(_)
         | Cmd::Unpanel(_)
         | Cmd::PanelMenu(..)
+        | Cmd::PanelLink(..)
+        | Cmd::Unanswered(..)
         | Cmd::Reveal(_)
         | Cmd::Titled(..)
         | Cmd::Clicked(_)
@@ -177,7 +179,6 @@ pub(super) fn on_browser(
         | Cmd::Strip
         | Cmd::Offered(..)
         | Cmd::Go(_)
-        | Cmd::Outside(_)
         | Cmd::Arranged(..)
         | Cmd::Tree(..)
         | Cmd::NewWindow(_)

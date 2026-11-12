@@ -295,11 +295,7 @@ pub(super) fn open(
                 }
             }
             Some(Said::Open(url)) => {
-                let _ = opens.send_event(Cmd::NewTab {
-                    url: url.to_owned(),
-                    reply: None,
-                    opener: None,
-                });
+                let _ = opens.send_event(Cmd::PanelLink(id, url.to_owned()));
             }
             Some(Said::Menu(x, y, items)) => {
                 let _ = menus.send_event(Cmd::PanelMenu(id, (x, y), items));

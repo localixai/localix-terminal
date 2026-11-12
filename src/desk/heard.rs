@@ -90,6 +90,12 @@ impl Desk {
                     self.write_later(move || desk.move_kept(&key, rows, window));
                 }
             }
+            Heard::Placed(before) => {
+                if let Some(rows) = self.rows_placed(key, before) {
+                    let (desk, key) = (Arc::clone(self), key.to_string());
+                    self.write_later(move || desk.place_kept(&key, rows));
+                }
+            }
             Heard::Detached => {
                 if let Some((pane, _)) = self.rows_moved(key, None) {
                     let (desk, key) = (Arc::clone(self), key.to_string());
@@ -189,6 +195,7 @@ impl Desk {
                         }
                     }
                     Asked::File(path) => desk.person_file(&call, path),
+                    Asked::Text(path) => desk.person_text(&call, path),
                     Asked::Board => (desk.board(&call, &json!({"op": "show"})))
                         .map(|_| ())
                         .map_err(|failure| failure.message().to_string()),

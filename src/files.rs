@@ -1,11 +1,12 @@
 //! A project's files as the window's tree shows them. A folder is read one at a time, and only
 //! one the person opened: its entries in the order a person expects (folders first, then by name
 //! as a file manager sorts them). `watch` hears a folder change from the system as it happens,
-//! `kept` is the folders a person left open in each project, and `text` is one file as an
-//! editor holds it.
+//! `kept` is the folders a person left open in each project, `ops` is what they do to an entry
+//! from the tree, and `text` is one file as an editor holds it.
 
 pub mod drafts;
 mod kept;
+pub mod ops;
 mod order;
 pub mod text;
 mod watch;
@@ -13,7 +14,7 @@ mod watch;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
-pub use kept::{open, open_dirs, shut};
+pub use kept::{moved, open, open_dirs, shut};
 pub use watch::{Change, Watch};
 
 /// The most entries of one folder the tree lists; what is past them is counted, not shown.

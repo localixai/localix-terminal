@@ -87,6 +87,32 @@ impl Tree {
         swap
     }
 
+    /// Document `pane` goes before document `before` in its stack (last with none); the one in
+    /// sight stays in sight. Whether the order changed: not when either is no document of it.
+    pub fn place(&mut self, pane: PaneId, before: Option<PaneId>) -> bool {
+        match self {
+            Self::Leaf { .. } => false,
+            Self::Stack { panes, .. } => {
+                let mut placed: Vec<PaneId> =
+                    panes.iter().copied().filter(|it| *it != pane).collect();
+                let at = match before {
+                    Some(before) => placed.iter().position(|it| *it == before),
+                    None => Some(placed.len()),
+                };
+                let Some(at) = at.filter(|_| placed.len() < panes.len()) else {
+                    return false;
+                };
+                placed.insert(at, pane);
+                let changed = placed != *panes;
+                *panes = placed;
+                changed
+            }
+            Self::Branch { children, .. } => {
+                (children.iter_mut()).any(|child| child.tree.place(pane, before))
+            }
+        }
+    }
+
     /// Document `pane` is the one its stack shows. Whether it is a document of it.
     pub fn show(&mut self, pane: PaneId) -> bool {
         match self {

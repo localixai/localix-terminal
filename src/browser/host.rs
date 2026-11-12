@@ -129,6 +129,8 @@ pub(super) struct Shared {
     pub(super) turn: super::turn::Turn,
     /// What each tab's pages told besides their content, and how it answers a confirm.
     pub(super) notices: super::notices::Notices,
+    /// The addresses that never came, which their tabs keep (unloaded.rs).
+    pub(super) unloaded: super::unloaded::Unloaded,
     /// Where the person put the window, for the process.
     pub(super) kept: Mutex<super::placement::Kept>,
     /// What the offer bar knows: the agents in the terminals, the integrations' states.
@@ -196,6 +198,7 @@ impl Shared {
         for key in keys {
             if let Key::Web(id) = key {
                 self.notices.forget(*id);
+                self.unloaded.forget(*id);
             }
         }
     }
@@ -241,13 +244,16 @@ impl Shared {
         self.loaded.notify_all();
     }
 
-    pub(super) fn navigation_requested(&self, tab: u32) {
+    /// Tab `tab` asks for a document: the count it is asked at.
+    pub(super) fn navigation_requested(&self, tab: u32) -> u64 {
         let next = self.seq.fetch_add(1, Ordering::SeqCst) + 1;
         crate::lock(&self.loads).entry(tab).or_default().requested = next;
         self.loaded.notify_all();
+        next
     }
 
     pub(super) fn page_load(&self, tab: u32, event: &PageLoadEvent, url: &str) {
+        let url = &self.unloaded.shows(tab, url);
         let next = self.seq.fetch_add(1, Ordering::SeqCst) + 1;
         {
             let mut loads = crate::lock(&self.loads);
@@ -258,7 +264,7 @@ impl Shared {
             }
         }
         let title = (crate::lock(&self.tabs).iter_mut().find(|t| t.id == tab)).map(|entry| {
-            entry.url = url.to_string();
+            entry.url.clone_from(url);
             entry.title.clone()
         });
         if matches!(event, PageLoadEvent::Finished) {

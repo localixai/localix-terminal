@@ -107,10 +107,12 @@ pub(super) fn material(dark: bool) -> isize {
 
 /// The coat over the glass in the dark appearance or the light at the person's transparency
 /// `level`, and how much of it covers: neutral near-black or near-white (oklch 0.13 and 0.975),
-/// never a page's colour. The material makes the text read, as the system means it to; the coat
-/// only takes the desktop back for who wants less of it. White over a light blur hides the
-/// desktop far sooner than black over a dark one, so the light ladder falls faster: its standard
-/// is nearly the bare material.
+/// never a page's colour. The material alone does not make the words read: the dark one over a
+/// bright desktop is a mid grey, so the dark coat is what keeps them at the contrast text needs
+/// (WCAG 2: 4.5 to 1 for the quiet words at Standard and under it, for the main ones at High).
+/// White over a light blur hides the desktop far sooner than black over a dark one, and the
+/// light material is the system's own sidebar, nearly opaque: the light ladder falls faster,
+/// and its standard is nearly the bare material.
 #[cfg(any(target_os = "macos", test))]
 pub(super) fn coat(dark: bool, level: super::settings::Transparency) -> (Rgb, f64) {
     use super::settings::Transparency as Level;
@@ -121,7 +123,7 @@ pub(super) fn coat(dark: bool, level: super::settings::Transparency) -> (Rgb, f6
         Level::High => 3,
     };
     match dark {
-        true => (DARK, [1.0, 0.7, 0.4, 0.1][step]),
+        true => (DARK, [1.0, 0.85, 0.7, 0.4][step]),
         false => (LIGHT, [1.0, 0.35, 0.1, 0.0][step]),
     }
 }

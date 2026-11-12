@@ -47,8 +47,9 @@ own, and another session never shows them.
 A key's letter is the pane's kind: `w` a page, `t` a terminal, `b` the board, `f` a file in an
 editor. A file has one pane in its project, found by its path: opened again, by the person or
 an agent, it is the same pane shown. The app, not the tree, says how a picked file is shown:
-text in an editor, a kind a page shows (a picture, a PDF) as a page, anything else by the app
-the person has for it.
+text in an editor; a picture written as text (SVG), and what is no text an editor takes, as a
+page, which shows it (a picture, a film, a sound, a PDF) or says in a line that nothing does.
+Nothing is handed to another app unasked: that is the menu's Open in Default App.
 
 A pane restored after a restart is the same row with a new key. Moving a tab to another window
 moves the row (its `workspace` changes); its panes, keys, pages and programs are the same ones.
@@ -251,6 +252,11 @@ as the pane's ledger row (`desk/beside.rs`): the terminal's tab holds its docume
   A tab of the row is as wide as its name, up to a tab of the side's, and never narrows: more
   than fit scroll sideways (a wheel turned up and down moves the row too), an edge with more
   past it fades, and the document in sight is brought into view when it changes.
+- A document carried along the row is placed where it is let go (`place KEY BEFORE|end`,
+  `Heard::Placed`): the session's stack keeps the order (`Tree::place`,
+  `desk/layout_moves.rs`), the document in sight stays in sight, and the row is told its
+  documents again. A document never leaves its row this way: the order of sessions is the
+  side's.
 - A document's menu (a right click on its tab in the row) is the tab's menu, placed where the
   person clicked: the row says its points are its own (`Cmd::DocsClicked`) and the window
   moves them to where the row lies, as it does the side's and the toolbar's. Its "other" tabs

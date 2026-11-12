@@ -21,6 +21,48 @@ impl Desk {
         }
     }
 
+    /// The person carried document `key` along its session's row, before document `before`
+    /// (last with none). In one go, for tests, as `moved` is.
+    #[cfg(test)]
+    pub(super) fn placed(&self, key: &str, before: Option<&str>) {
+        if let Some(rows) = self.rows_placed(key, before) {
+            self.place_kept(key, rows);
+        }
+    }
+
+    /// The rows of document `key` and of the one it goes before: none when either named has no
+    /// row, since a document placed before a tab that is gone must not go last.
+    pub(super) fn rows_placed(
+        &self,
+        key: &str,
+        before: Option<&str>,
+    ) -> Option<(Row, Option<Row>)> {
+        let (pane, at) = self.rows_moved(key, before)?;
+        (at.is_some() == before.is_some()).then_some((pane, at))
+    }
+
+    /// Document `pane` (`key`) before document `before` in its session's stack, kept in the
+    /// layout; the session shows the document it showed.
+    pub(super) fn place_kept(&self, key: &str, (pane, before): (Row, Option<Row>)) {
+        let placed = self.feed.write(|write| {
+            let Some(id) = layout::tab_of(write.tx(), pane)? else {
+                return Ok(());
+            };
+            let Some(tab) = layout::tab(write.tx(), id)? else {
+                return Ok(());
+            };
+            let mut tree = tab.tree.clone();
+            if !tree.place(pane, before) {
+                return Ok(());
+            }
+            layout::set_tree(write.tx(), id, &tree, tab.focused)?;
+            told(write, &[Entity::Tab { id }])
+        });
+        if let Err(why) = placed {
+            log::warn!("document {key} was not placed in its row: {why}");
+        }
+    }
+
     /// The rows of pane `key` and of pane `before`, as the ledger has them now: none when `key`
     /// has none.
     pub(super) fn rows_moved(&self, key: &str, before: Option<&str>) -> Option<(Row, Option<Row>)> {
@@ -136,3 +178,7 @@ impl Desk {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "layout_moves_tests.rs"]
+mod tests;

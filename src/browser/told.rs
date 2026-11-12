@@ -49,6 +49,9 @@ pub enum Heard<'a> {
         /// The window whose list it was let go over (its row in the layout), when not its own.
         window: Option<i64>,
     },
+    /// They carried the document of this key along its session's row, before the document of
+    /// pane `before` (none: last): the session's stack keeps the order.
+    Placed(Option<&'a str>),
     /// They let tab `key` go away from every list: it is a window of its own now (docs/windows.md).
     Detached,
     /// They closed window `i64` (its row in the layout; not the main one): its tabs are closed
@@ -69,17 +72,41 @@ pub enum TreeDid<'a> {
     Opened(&'a str),
     /// They shut this folder.
     Shut(&'a str),
+    /// What they did to an entry.
+    Entry(EntryDid<'a>),
+}
+
+/// What the person did to an entry of a project's tree, each named by its path under the
+/// project's folder (`""`: the folder itself).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryDid<'a> {
+    /// They made an empty file (`folder`: a folder) named `name` in folder `dir`.
+    Made {
+        dir: &'a str,
+        name: &'a str,
+        folder: bool,
+    },
+    /// They named the entry at `path` `name`.
+    Named { path: &'a str, name: &'a str },
+    /// They moved the entry at `path` into folder `into`.
+    Moved { path: &'a str, into: &'a str },
+    /// They moved the entry at `path` to the Trash.
+    Trashed(&'a str),
+    /// They gave the entry at `path` to terminal `terminal` (its key): its path is typed there.
+    Given { path: &'a str, terminal: &'a str },
 }
 
 /// News of a project's tree of files, as the window draws it: its folder, every folder open
 /// in it now (by its path under the root, `""` the root itself), and those of them whose
 /// entries are new to the window or changed, a parent before its own. What the window holds
-/// of a folder no longer open, or of another root, it lets go of.
+/// of a folder no longer open, or of another root, it lets go of. `pick` is the entry the
+/// person just made, named or moved, by its path now: the tree picks it and brings it in sight.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tree {
     pub root: std::path::PathBuf,
     pub open: Vec<String>,
     pub dirs: Vec<Branch>,
+    pub pick: Option<String>,
 }
 
 /// One open folder of a tree: its path under the root (`""`: the root), its entries in
@@ -225,8 +252,11 @@ pub enum Asked {
     Page(Option<String>),
     /// A terminal of theirs, in this folder of the project, else in the project's.
     Terminal(Option<std::path::PathBuf>),
-    /// A file of theirs in an editor's tab: its path. What is not text opens as a page.
+    /// A file of theirs in a tab: its path. Text opens in an editor; what is not text, and a
+    /// picture written as text, as a page.
     File(std::path::PathBuf),
+    /// A file of theirs in an editor's tab, whatever a page would make of it: its path.
+    Text(std::path::PathBuf),
     /// The project's board, opened or shown.
     Board,
     /// A coding agent's program, in a terminal of theirs in the project's folder: its command.
@@ -263,6 +293,21 @@ pub struct Tab {
     pub id: u32,
     pub url: String,
     pub title: String,
+}
+
+impl Tab {
+    /// What the tab is called: its page's title; with none, the file its address names (a
+    /// film, a sound, a drawn picture: the document made for one has no title, and a view
+    /// never says such a document finished loading), else the address.
+    pub(super) fn name(&self) -> String {
+        let title = self.title.trim();
+        if !title.is_empty() {
+            return title.to_owned();
+        }
+        super::guard::file_named(&self.url)
+            .filter(|name| std::path::Path::new(name).extension().is_some())
+            .unwrap_or_else(|| self.url.clone())
+    }
 }
 
 /// What the person's closing a tab of `kind` (a key's) says, to whoever listens.

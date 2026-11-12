@@ -268,7 +268,7 @@ impl Driver for WebviewDriver {
                 self.press_page(page, delay_ms)?;
             }
             if reload {
-                self.evaluate("location.reload()")?;
+                self.reload()?;
             }
         }
         Ok(())

@@ -75,10 +75,65 @@ fn each_appearance_has_its_own_material_and_coat() {
             .zip(light)
             .all(|(dark, light)| light.1 <= dark.1)
     );
-    assert!(light[2].1 <= 0.15 && (0.3..=0.5).contains(&dark[2].1));
+    assert!(light[2].1 <= 0.15 && dark[2].1 >= 0.7);
     // A neutral coat, near-black or near-white, so the material never reads grey.
     let neutral = |[red, green, blue]: Rgb| red == green && green == blue;
     assert!(neutral(DARK) && DARK[0] < 0x10 && neutral(LIGHT) && LIGHT[0] > 0xf0);
+}
+
+/// A colour's relative luminance, as WCAG 2 defines it.
+fn luminance(colour: [f64; 3]) -> f64 {
+    let linear = |part: f64| match part / 255.0 {
+        part if part <= 0.040_45 => part / 12.92,
+        part => ((part + 0.055) / 1.055).powf(2.4),
+    };
+    let [red, green, blue] = colour.map(linear);
+    0.2126 * red + 0.7152 * green + 0.0722 * blue
+}
+
+/// `top`, `alpha` of it, over `under`.
+fn over(top: [f64; 3], alpha: f64, under: [f64; 3]) -> [f64; 3] {
+    [0, 1, 2].map(|part| top[part] * alpha + under[part] * (1.0 - alpha))
+}
+
+#[test]
+fn the_dark_glass_keeps_its_words_readable_over_a_bright_desktop() {
+    use super::super::settings::Transparency as Level;
+    // The dark material over a bright desktop, as a window showed it: far lighter than the
+    // coat, which is all that darkens it for the words.
+    const BRIGHT: [f64; 3] = [150.0, 127.0, 147.0];
+    // The dark appearance's ink, and how much of it the main and the quiet words are.
+    const INK: [f64; 3] = [230.0, 230.0, 230.0];
+    const MAIN: f64 = 0.9;
+    const QUIET: f64 = 0.6;
+    assert!(CSS.contains("--ink:color-mix(in srgb,var(--fg) 90%,transparent);"));
+    assert!(CSS.contains("--fg:#e6e6e6;\n--ink-2:color-mix(in srgb,var(--fg) 60%,transparent);"));
+    let reads = |level: Level, ink: f64| {
+        let (colour, alpha) = coat(true, level);
+        let ground = over(colour.map(f64::from), alpha, BRIGHT);
+        let (words, ground) = (luminance(over(INK, ink, ground)), luminance(ground));
+        (words + 0.05) / (ground + 0.05)
+    };
+    // WCAG 2 (1.4.3): 4.5 to 1 for text. The quiet words keep it at the level the app starts
+    // with and under it; at the clearest the person may choose, the main words still do, and
+    // the quiet ones keep the 3 to 1 of a control's least part (1.4.11).
+    for level in [Level::Off, Level::Low, Level::Standard] {
+        assert!(
+            reads(level, QUIET) >= 4.5,
+            "{level:?}: {}",
+            reads(level, QUIET)
+        );
+    }
+    assert!(
+        reads(Level::High, MAIN) >= 4.5,
+        "{}",
+        reads(Level::High, MAIN)
+    );
+    assert!(
+        reads(Level::High, QUIET) >= 3.0,
+        "{}",
+        reads(Level::High, QUIET)
+    );
 }
 
 #[test]

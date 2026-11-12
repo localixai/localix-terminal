@@ -72,6 +72,23 @@ pub(in super::super) fn see_through(webview: &wry::WebView, through: bool) {
 #[cfg(not(target_os = "macos"))]
 pub(in super::super) fn see_through(_webview: &wry::WebView, _through: bool) {}
 
+/// Whether `webview` loads a document now. Asked of a tab that waits for a page: nothing
+/// tells the app of a load WebKit gave up, and a view that loads nothing has given up.
+#[cfg(target_os = "macos")]
+pub(in super::super) fn loading(webview: &wry::WebView) -> bool {
+    use objc2::msg_send;
+    use wry::WebViewExtMacOS;
+    let view = webview.webview();
+    // SAFETY: the WKWebView is a live NSObject; `isLoading` takes nothing and answers a BOOL.
+    unsafe { msg_send![&*view, isLoading] }
+}
+
+/// Elsewhere the view shows its own page for a load it gave up: the app has nothing to say.
+#[cfg(not(target_os = "macos"))]
+pub(in super::super) fn loading(_webview: &wry::WebView) -> bool {
+    true
+}
+
 /// `webview`, one of the app's own pages, in the system's appearance: WebKit then gives its
 /// pages the person's accent (`-apple-system-control-accent`), the system's selection, link and
 /// focus ring colours, and follows the view's light or dark, where otherwise it answers fixed

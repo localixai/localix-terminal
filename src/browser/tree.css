@@ -34,3 +34,23 @@ html[data-inactive] #fh:focus-visible{box-shadow:none}
 #ft:focus-visible .fe[data-pick]{background:var(--acc-sel);color:var(--on-sel)}
 #ft:focus-visible .fe[data-pick] .ch{color:inherit}
 html[data-inactive] .fe .fi{opacity:.6}
+/* What the app would not do, said under the entry it was asked of: words, in the quiet ink. */
+.fe.note{color:var(--ink-2);font-size:11px;line-height:14px}
+.fe.note:is(:hover,:active){background:none}
+/* A name being written: the field takes the name's place, in the row's own letters. */
+.fe .fx{display:block;width:100%;height:20px;box-sizing:border-box;margin:0;padding:0 4px;border:0;border-radius:var(--r-1);outline:0;background:var(--card);color:var(--fg);font:inherit;box-shadow:inset 0 0 0 1px var(--accent),0 0 0 3px var(--acc-2)}
+.fe:has(.fx),.fe:has(.fx):is(:hover,:active){background:none;color:var(--fg)}
+/* An entry carried: its row waits, dimmed; the folder it would go into is lit in the accent's
+   wash, the tree's own folder by a line around the tree; rows are not lit under the pointer. */
+.fe[data-held]{opacity:.45}
+.fe[data-into]{background:var(--acc-2);box-shadow:inset 0 0 0 1px var(--acc-4)}
+#ft[data-into]{box-shadow:inset 0 0 0 1px var(--acc-4);border-radius:var(--r-2)}
+html[data-carry] .fe:hover:not([data-into]){background:none}
+html[data-carry] .fe[data-pick]:not([data-into]){background:var(--ov-2)}
+html[data-carry],html[data-carry] *{cursor:default!important}
+html[data-carry=no],html[data-carry=no] *{cursor:not-allowed!important}
+/* Its card: the entry's picture and name, as a carried tab's card is drawn. */
+.fc{position:fixed;z-index:9;display:flex;align-items:center;gap:4px;height:24px;box-sizing:border-box;padding:0 8px 0 6px;border-radius:var(--r-2);background:var(--card);box-shadow:var(--hair-in);color:var(--fg);font-size:13px;line-height:16px;white-space:nowrap;pointer-events:none;will-change:transform}
+.fc .fi{flex:none;width:16px;height:16px;display:grid}
+.fc .fi svg{width:16px;height:16px}
+.fc span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis}

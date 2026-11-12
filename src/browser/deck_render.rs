@@ -30,13 +30,12 @@ impl Deck {
             let known = crate::lock(&shared.tabs).clone();
             for id in ids {
                 let tab = known.iter().find(|tab| tab.id == id);
-                let (title, url) = tab.map_or((String::new(), String::new()), |tab| {
-                    (tab.title.trim().to_string(), tab.url.clone())
-                });
+                let (title, url) =
+                    tab.map_or_else(Default::default, |tab| (tab.name(), tab.url.clone()));
                 out.push(WindowTab {
                     id: Key::Web(id).name(),
                     kind: "browser".into(),
-                    title: if title.is_empty() { url.clone() } else { title },
+                    title,
                     detail: url,
                     shown: self.shown == Shown::Web && id == active,
                     acted_on: id == active,

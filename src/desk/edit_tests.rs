@@ -310,29 +310,3 @@ fn a_file_left_open_in_two_rows_comes_back_as_one_tab_and_a_restore_under_way_is
     let kept = crate::lock(&desk.ledger)["f1"].0;
     assert_eq!(left[0].row, kept);
 }
-
-#[test]
-fn a_picked_file_an_editor_does_not_take_is_shown_as_a_page_or_by_the_persons_own_app() {
-    use super::super::edit_disk::{Instead, instead};
-
-    let binary = |name: &str| {
-        instead(
-            Path::new(name),
-            &not_opened(Path::new(name), &Unread::Binary),
-        )
-    };
-    // A picture or a document a page shows as it is.
-    assert_eq!(binary("/work/app/logo.PNG"), Some(Instead::Page));
-    assert_eq!(binary("/work/app/paper.pdf"), Some(Instead::Page));
-    // Anything else there is: the app the person has for its kind.
-    assert_eq!(binary("/work/app/build.zip"), Some(Instead::Outside));
-    assert_eq!(binary("/work/app/tool"), Some(Instead::Outside));
-    let large = not_opened(Path::new("/work/app/all.log"), &Unread::Large(64 << 20));
-    assert_eq!(
-        instead(Path::new("/work/app/all.log"), &large),
-        Some(Instead::Outside)
-    );
-    // What is not there, or is no file, opens nowhere.
-    let gone = not_opened(Path::new("/work/app/none.rs"), &Unread::Gone);
-    assert_eq!(instead(Path::new("/work/app/none.rs"), &gone), None);
-}

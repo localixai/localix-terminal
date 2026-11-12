@@ -168,6 +168,20 @@ pub fn titled(tx: &Transaction<'_>, row: Row, title: &str) -> Result<bool, Strin
     Ok(changed > 0)
 }
 
+/// File `row` is at `path` now, titled `title`: where it opens again from.
+///
+/// # Errors
+/// The store refused it.
+pub fn moved(tx: &Transaction<'_>, row: Row, title: &str, path: &Path) -> Result<(), String> {
+    let (set, path) = (
+        "UPDATE panes SET title = ?2, cwd = ?3 WHERE id = ?1",
+        path.display(),
+    );
+    (tx.execute(set, params![row, title, path.to_string()])
+        .map(drop))
+    .map_err(|why| failed(&why))
+}
+
 /// Page `row` showed `url`, titled `title`, `now`: its address and title, and a visit of its
 /// project's when it is a web page or a file; whether that is news.
 ///

@@ -110,13 +110,16 @@ html[data-part=docs] body>*:not(#head),html[data-part=docs] #head>*:not(#tabs){d
 html[data-part=docs],html[data-part=docs] body,html[data-part=docs] #head{height:100%;overflow:hidden}
 html[data-part=docs]:not([data-glass]) body{background:var(--ground)}
 html[data-part=docs] #head{box-shadow:inset 0 -.5px 0 var(--ov-3)}
-html[data-part=docs] #tabs{padding:0 8px;height:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior:contain}
+html[data-part=docs] #tabs{padding:0 8px;height:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior:contain;position:relative}
 html[data-part=docs] #tabs::-webkit-scrollbar{display:none}
 html[data-part=docs] #tabs[data-more=left]{-webkit-mask-image:linear-gradient(to right,transparent,#000 24px);mask-image:linear-gradient(to right,transparent,#000 24px)}
 html[data-part=docs] #tabs[data-more=right]{-webkit-mask-image:linear-gradient(to left,transparent,#000 24px);mask-image:linear-gradient(to left,transparent,#000 24px)}
 html[data-part=docs] #tabs[data-more=both]{-webkit-mask-image:linear-gradient(to right,transparent,#000 24px,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(to right,transparent,#000 24px,#000 calc(100% - 24px),transparent)}
 html[data-part=docs] #tabs .t{flex:none;max-width:220px;justify-content:flex-start;padding:0 6px 0 10px}
 html[data-part=docs] #tabs .t .x{position:static}
+/* A document carried along the row: the card a carried tab of the side is as it lifts, over
+   the others, which move aside under it. */
+html[data-part=docs] #tabs .t.carry{z-index:1;background:var(--card);box-shadow:var(--hair-in);color:var(--fg);transition:none}
 @media (prefers-contrast:more){html[data-part=docs] #head{box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--fg) 45%,transparent)}}
 html[data-part=nav] #bar,html[data-part=nav] #tabs,html[data-part=nav] #offer,html[data-part=nav] #menu,html[data-part=nav] #back{display:none!important}
 /* Three columns, as Safari's toolbar: the address field stays in the middle whatever comes and goes beside it. */
@@ -217,7 +220,10 @@ html:not([data-glass]) #sug,html:not([data-glass]) #menu{background:var(--ground
 /* The Event Center: its button, marked with the crumbs' dot while something new wants the person,
    and each event with what it is, its words and its buttons. */
 #ev,:is(#sl,#gh) .ic{position:relative}
-#ev .d,:is(#sl,#gh) .ic .d{position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:3px;background:var(--accent)}
+#ev .d,:is(#sl,#gh) .ic .d{position:absolute;top:7px;right:7px;width:6px;height:6px;border-radius:3px;background:var(--accent)}
+/* The dot sits on the bell's shoulder, and the bell is cut away around it: a gap of the ground,
+   whatever the ground is, where a ring of one colour would show on the glass. */
+#ev:has(.d:not([hidden])) svg{-webkit-mask-image:radial-gradient(circle at 12px 4px,transparent 4.2px,#000 4.7px);mask-image:radial-gradient(circle at 12px 4px,transparent 4.2px,#000 4.7px)}
 /* A tab that waits for the person, out of sight: the same dot, on its icon's corner. */
 :is(#sl,#gh) .ic .d{top:-1px;right:-1px}
 .ev{display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:center;column-gap:9px;padding:5px 8px;border-radius:var(--r-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
@@ -396,7 +402,7 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
     </div>
     <div id="end">
     <div class="grp">
-      <span class="b" id="ev" title="Show events"><svg viewBox="0 0 16 16"><path d="M4.2 11V7.4a3.8 3.8 0 0 1 7.6 0V11l1 1.2H3.2zM6.6 13.4a1.5 1.5 0 0 0 2.8 0"/></svg><span class="d" hidden></span></span>
+      <span class="b" id="ev" title="Show events"><svg viewBox="0 0 16 16"><path d="M3 11c1-.9 1.5-2 1.5-4.3a3.5 3.5 0 0 1 7 0c0 2.3.5 3.4 1.5 4.3zM6.7 13.2a1.4 1.4 0 0 0 2.6 0"/></svg><span class="d" hidden></span></span>
       <span class="b" id="hs" title="Show history"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.3"/></svg></span>
       <span class="b" id="mo" title="Show more" hidden><svg viewBox="0 0 16 16"><path d="M4.5 4.5 8 8l-3.5 3.5M8.5 4.5 12 8l-3.5 3.5"/></svg></span>
     </div>
@@ -423,7 +429,7 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
 </div>
 <div id="back"></div>
 <div id="side">
-  <div id="sh"><label id="sk"><span id="si"></span><input id="sq" spellcheck="false" autocomplete="off" placeholder="Search tabs"></label><span class="b" id="sg" title="Settings"><svg viewBox="0 0 16 16"><path d="M6.71 3.17 7.02 1.47h1.96l.31 1.7 1.21.5 1.43-.98 1.38 1.38-.98 1.43.5 1.21 1.7.31v1.96l-1.7.31-.5 1.21.98 1.43-1.38 1.38-1.43-.98-1.21.5-.31 1.7H7.02l-.31-1.7-1.21-.5-1.43.98-1.38-1.38.98-1.43-.5-1.21-1.7-.31V7.02l1.7-.31.5-1.21-.98-1.43 1.38-1.38 1.43.98z"/><circle cx="8" cy="8" r="2.1"/></svg></span><span class="b" id="sn" title="New tab"><svg viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9"/></svg></span><span class="b" id="sc" title="Hide the tabs"><svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.6"/><path d="M6.3 3v10"/></svg></span></div>
+  <div id="sh"><label id="sk"><span id="si"></span><input id="sq" spellcheck="false" autocomplete="off" placeholder="Search tabs"></label><span class="b" id="sg" title="Settings"></span><span class="b" id="sn" title="New tab"></span><span class="b" id="sc" title="Hide the tabs"><svg viewBox="0 0 16 16"><path d="M4.5 3h7a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-7a2 2 0 0 1 -2 -2v-6a2 2 0 0 1 2 -2zM6.5 3v10"/></svg></span></div>
   <div id="sl" role="listbox" aria-label="Tabs" tabindex="0"></div>
   <div id="fh" role="button" tabindex="0" aria-expanded="false" aria-controls="ft" title="Show the files"><span class="ch"></span><span>Files</span></div>
   <div id="ft" role="tree" aria-label="Files" tabindex="0"><div id="fr"></div></div>
@@ -438,14 +444,15 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
 /*RESIZE_HANDLES*/
 /*DIALOG_JS*/
 // The strip's small pictures, drawn as the buttons are; never text characters. Built element by
-// element, as everything on the strip is: no markup is ever parsed.
+// element, as everything on the strip is: no markup is ever parsed. Lines that meet are one
+// path: the ink is not opaque, and two shapes that cross are painted twice where they do.
 const GLYPHS = {
-  web: [["circle", { cx: 8, cy: 8, r: 5.6 }], ["path", { d: "M2.6 8h10.8M8 2.4c1.6 1.6 1.6 9.6 0 11.2M8 2.4c-1.6 1.6-1.6 9.6 0 11.2" }]],
+  web: [["path", { d: "M8 2.4a5.6 5.6 0 1 0 0 11.2a5.6 5.6 0 1 0 0 -11.2zM2.4 8h11.2M8 2.4c1.6 1.6 1.6 9.6 0 11.2M8 2.4c-1.6 1.6-1.6 9.6 0 11.2" }]],
   term: [["path", { d: "m4 5.5 2.5 2.5L4 10.5M8.5 10.5H12" }]],
-  board: [["rect", { x: 2.5, y: 3, width: 11, height: 10, rx: 1.4 }], ["path", { d: "M6.2 3v10M9.8 3v10" }]],
+  board: [["path", { d: "M3.9 3h8.2a1.4 1.4 0 0 1 1.4 1.4v7.2a1.4 1.4 0 0 1 -1.4 1.4h-8.2a1.4 1.4 0 0 1 -1.4 -1.4v-7.2a1.4 1.4 0 0 1 1.4 -1.4zM6.2 3v10M9.8 3v10" }]],
   file: [["path", { d: "M4.5 2.5h4.6l2.9 2.9v7c0 .6-.5 1.1-1.1 1.1H4.5c-.6 0-1-.5-1-1.1V3.6c0-.6.4-1.1 1-1.1zM9 2.6v2.9h2.9" }]],
-  settings: [["path", { d: "M6.71 3.17 7.02 1.47h1.96l.31 1.7 1.21.5 1.43-.98 1.38 1.38-.98 1.43.5 1.21 1.7.31v1.96l-1.7.31-.5 1.21.98 1.43-1.38 1.38-1.43-.98-1.21.5-.31 1.7H7.02l-.31-1.7-1.21-.5-1.43.98-1.38-1.38.98-1.43-.5-1.21-1.7-.31V7.02l1.7-.31.5-1.21-.98-1.43 1.38-1.38 1.43.98z" }], ["circle", { cx: 8, cy: 8, r: 2.1 }]],
-  search: [["circle", { cx: 7.2, cy: 7.2, r: 4.2 }], ["path", { d: "m10.3 10.3 3 3" }]],
+  settings: [["path", { d: "M6.45 3.88L6.52 2.19A6 6 0 0 1 9.48 2.19L9.55 3.88A4.4 4.4 0 0 1 10.79 4.6L12.29 3.81A6 6 0 0 1 13.78 6.38L12.34 7.28A4.4 4.4 0 0 1 12.34 8.72L13.78 9.62A6 6 0 0 1 12.29 12.19L10.79 11.4A4.4 4.4 0 0 1 9.55 12.12L9.48 13.81A6 6 0 0 1 6.52 13.81L6.45 12.12A4.4 4.4 0 0 1 5.21 11.4L3.71 12.19A6 6 0 0 1 2.22 9.62L3.66 8.72A4.4 4.4 0 0 1 3.66 7.28L2.22 6.38A6 6 0 0 1 3.71 3.81L5.21 4.6A4.4 4.4 0 0 1 6.45 3.88z" }], ["circle", { cx: 8, cy: 8, r: 1.9 }]],
+  search: [["path", { d: "M7.2 3a4.2 4.2 0 1 0 0 8.4a4.2 4.2 0 1 0 0 -8.4zM10.3 10.3l3 3" }]],
   close: [["path", { d: "m4.5 4.5 7 7M11.5 4.5l-7 7" }]],
   folder: [["path", { d: "M2.5 4.6c0-.6.4-1.1 1-1.1h2.8l1.3 1.4h4.9c.6 0 1 .5 1 1.1v5.9c0 .6-.4 1.1-1 1.1h-9c-.6 0-1-.5-1-1.1z" }]],
   down: [["path", { d: "m4.5 6.5 3.5 3.5 3.5-3.5" }]],
@@ -454,7 +461,7 @@ const GLYPHS = {
   phone: [["rect", { x: 5, y: 2.5, width: 6, height: 11, rx: 1.4 }], ["path", { d: "M7.3 11.6h1.4" }]],
   tablet: [["rect", { x: 3.5, y: 2.5, width: 9, height: 11, rx: 1.4 }], ["path", { d: "M7.3 11.6h1.4" }]],
   laptop: [["rect", { x: 3.5, y: 4, width: 9, height: 6.5, rx: 1 }], ["path", { d: "M2 12.5h12" }]],
-  desktop: [["rect", { x: 2.5, y: 3, width: 11, height: 7.5, rx: 1 }], ["path", { d: "M8 10.5v2.5M5.5 13h5" }]],
+  desktop: [["path", { d: "M3.5 3h9a1 1 0 0 1 1 1v5.5a1 1 0 0 1 -1 1h-9a1 1 0 0 1 -1 -1v-5.5a1 1 0 0 1 1 -1zM8 10.5V13M5.5 13h5" }]],
 };
 function glyph(name) {
   const NS = "http://www.w3.org/2000/svg";
@@ -504,6 +511,7 @@ function tabItem(tab, on) {
   item.className = tab.key === on ? "t on" : "t";
   item.setAttribute("role", "tab");
   item.setAttribute("aria-selected", String(tab.key === on));
+  item.dataset.key = tab.key;
   item.title = tab.title;
   const icon = document.createElement("span");
   icon.className = "i";
@@ -527,17 +535,25 @@ function tabItem(tab, on) {
 // in sight lit. It is told the tabs (S) and which of them it lists (DR), and draws from both; the
 // same again draws nothing, so a press on a tab is not lost to a title another tab changed.
 let docTabs = [], docRow = null, docSig = null, docSeen = null;
+// A document is carried along the row (`docHeld`): the row is not drawn again under the pointer,
+// and what came meanwhile (`docLate`) is drawn once the document has settled.
+let docHeld = false, docLate = false;
 function DR(row) {
   docRow = row;
   drawDocs();
 }
-function drawDocs() {
+// What the row shows now: its documents, the one in sight, and all of it as one string.
+function docsNow() {
   const keys = docRow ? docRow.keys : [];
   const tabs = keys.map((key) => docTabs.find((tab) => tab.key === key)).filter(Boolean);
   const on = docRow ? docRow.on : "";
-  const now = JSON.stringify([on, tabs.map((tab) => [tab.key, tab.title, tab.kind, tab.waits])]);
-  if (now === docSig) return;
-  docSig = now;
+  return { keys, tabs, on, sig: JSON.stringify([on, tabs.map((tab) => [tab.key, tab.title, tab.kind, tab.waits])]) };
+}
+function drawDocs() {
+  if (docHeld) return void (docLate = true);
+  const { keys, tabs, on, sig } = docsNow();
+  if (sig === docSig) return;
+  docSig = sig;
   const row = document.getElementById("tabs");
   row.setAttribute("role", "tablist");
   row.setAttribute("aria-label", "Documents");
@@ -577,6 +593,155 @@ if (document.documentElement.dataset.part === "docs") {
   row.addEventListener("scroll", docEdges, { passive: true });
   // The pane the row lies over was made wider or narrower: the one in sight stays in view.
   addEventListener("resize", () => (docInView(row), docEdges()));
+  // A document carried along the row: it follows the pointer, kept within the row, and the
+  // others move aside as its middle passes theirs; let go, it settles where it is and its
+  // session keeps the order (`place KEY BEFORE|end`). A press that moves less than a few
+  // points is a click. Escape, or a drag the system ends, puts it back.
+  let drag = null, swallow = false, scrolling = false, aborted = false;
+  const tabsOf = () => [...row.querySelectorAll(".t")];
+  const others = () => tabsOf().filter((tab) => tab !== drag?.tab);
+  const keyOf = (tab) => tab?.dataset.key ?? "end";
+  // Where a tab lies in the page by the row's layout, which neither its own move under the
+  // pointer nor a slide in flight changes: a swap does not flip back and forth.
+  const place = (tab) => row.getBoundingClientRect().left + row.clientLeft + tab.offsetLeft - row.scrollLeft;
+  const over = () => {
+    const box = row.getBoundingClientRect(), tab = drag.tab, wide = tab.offsetWidth;
+    const left = Math.max(box.left + 8, Math.min(drag.at - drag.grab, box.right - 8 - wide));
+    const mid = left + wide / 2;
+    const step = () => {
+      const prev = tab.previousElementSibling, next = tab.nextElementSibling;
+      if (prev && mid < place(prev) + prev.offsetWidth / 2) return prev;
+      if (next && mid > place(next) + next.offsetWidth / 2) return next.nextElementSibling ?? false;
+      return null;
+    };
+    if (step() !== null) {
+      flip(() => {
+        for (let at = step(), n = 0; at !== null && n < 64; at = step(), n++) row.insertBefore(tab, at || null);
+      }, others, true);
+    }
+    tab.style.transform = `translateX(${left - place(tab)}px)`;
+  };
+  // The row scrolls while the document is held near an edge with more past it (28 points; at
+  // most 14 a frame), and its place is looked for again as it goes.
+  const scroll = () => {
+    scrolling = false;
+    if (!drag?.moving) return;
+    const box = row.getBoundingClientRect();
+    const back = 28 - (drag.at - box.left), on = 28 - (box.right - drag.at);
+    const speed = back > 0 ? -Math.min(14, back / 2) : on > 0 ? Math.min(14, on / 2) : 0;
+    if (!speed) return;
+    const was = row.scrollLeft;
+    row.scrollLeft += speed;
+    if (row.scrollLeft !== was) over();
+    scrolling = true;
+    requestAnimationFrame(scroll);
+  };
+  // Let go: the row is as the person left it at once, and the session is told; cancelled, the
+  // document goes back where it was and nothing is said. Then it settles into its place.
+  const land = (cancelled) => {
+    const { tab } = drag;
+    document.documentElement.classList.remove("dragging");
+    if (cancelled) {
+      if (tab.nextElementSibling !== drag.nextEl) flip(() => row.insertBefore(tab, drag.nextEl), others, true);
+    } else if (keyOf(tab.nextElementSibling) !== drag.next) {
+      window.ipc.postMessage("place " + drag.key + " " + keyOf(tab.nextElementSibling));
+      // The row is told its documents again once the layout has them so: till then, and to what
+      // is drawn late, this is their order.
+      docRow = { on: docRow ? docRow.on : "", keys: tabsOf().map(keyOf) };
+      docSig = docsNow().sig;
+    }
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      tab.classList.remove("carry");
+      tab.style.transition = tab.style.transform = "";
+      docHeld = false;
+      docEdges();
+      if (docLate) {
+        docLate = false;
+        drawDocs();
+      }
+    };
+    if (calm()) return settle();
+    tab.style.transition = "transform var(--t-move) var(--spring-b)";
+    void tab.offsetWidth;
+    tab.style.transform = "translateX(0)";
+    tab.addEventListener("transitionend", settle, { once: true });
+    setTimeout(settle, 260);
+  };
+  // The click that would end a drag shows nothing.
+  const swallowed = () => {
+    swallow = true;
+    setTimeout(() => { swallow = false; }, 0);
+  };
+  row.addEventListener("mousedown", (event) => {
+    // Ctrl and click is the system's menu, whose end this page may never hear. One document
+    // alone has nowhere to go.
+    const tab = event.target.closest(".t");
+    if (!tab || event.button !== 0 || event.ctrlKey || event.target.closest(".x") || docHeld || tabsOf().length < 2) return;
+    drag = { tab, key: keyOf(tab), x: event.clientX, at: event.clientX, grab: event.clientX - place(tab),
+      next: keyOf(tab.nextElementSibling), nextEl: tab.nextElementSibling, moving: false };
+  });
+  // A drag the system ended without a mouse-up (a menu, another app, a gesture): no button is
+  // down, so the document goes back.
+  const abandon = () => {
+    if (drag?.moving) land(true);
+    drag = null;
+  };
+  addEventListener("mousemove", (event) => {
+    if (!drag) return;
+    if (event.buttons === 0) return abandon();
+    if (!drag.moving) {
+      if (Math.abs(event.clientX - drag.x) < 5) return;
+      drag.moving = docHeld = true;
+      drag.tab.classList.add("carry");
+      document.documentElement.classList.add("dragging");
+    }
+    // Worked out at most once a frame, from the latest pointer.
+    drag.at = event.clientX;
+    if (!drag.staged) {
+      drag.staged = true;
+      const mine = drag;
+      requestAnimationFrame(() => {
+        mine.staged = false;
+        if (drag === mine) over();
+      });
+    }
+    if (!scrolling) {
+      scrolling = true;
+      requestAnimationFrame(scroll);
+    }
+  });
+  // Escape puts the document back; the button is still down, so what follows it shows nothing.
+  addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !drag?.moving) return;
+    event.preventDefault();
+    land(true);
+    drag = null;
+    aborted = true;
+  });
+  addEventListener("pointercancel", abandon);
+  addEventListener("mouseup", () => {
+    const was = drag;
+    drag = null;
+    if (!was?.moving) {
+      if (aborted) swallowed();
+      aborted = false;
+      return;
+    }
+    drag = was;
+    over();
+    land(false);
+    drag = null;
+    swallowed();
+  });
+  addEventListener("click", (event) => {
+    if (!swallow) return;
+    swallow = false;
+    event.stopPropagation();
+    event.preventDefault();
+  }, true);
 }
 // Whether `tab` is listed with `project` shown: it is the project's, or the window's own.
 const ours = (tab, project) => tab.group === project || tab.group === "";
@@ -718,15 +883,17 @@ const sliding = new Map();
 // Rows move to their new places from where they were: each one slides, none jumps; one that comes
 // in fades up into its place. A row still sliding goes on from where it is seen. With Reduce Motion
 // a row that moved fades in its new place instead. The time and the curve are the page's tokens.
-const flip = (change) => {
-  const before = new Map(listRows().map((row) => [row, row.getBoundingClientRect()]));
+// The rows are the side's list, or those `rowsOf` gives; `across`, they lie side by side.
+const flip = (change, rowsOf = listRows, across = false) => {
+  const at = (row) => row.getBoundingClientRect()[across ? "left" : "top"];
+  const before = new Map(rowsOf().map((row) => [row, at(row)]));
   for (const run of sliding.values()) run.cancel();
   sliding.clear();
   change();
   const moved = [];
-  for (const row of listRows()) {
+  for (const row of rowsOf()) {
     const was = before.get(row);
-    const dy = was ? was.top - row.getBoundingClientRect().top : null;
+    const dy = was === undefined ? null : was - at(row);
     if (dy === null || Math.abs(dy) >= .5) moved.push([row, dy]);
   }
   const css = getComputedStyle(document.documentElement);
@@ -736,7 +903,7 @@ const flip = (change) => {
   for (const [row, dy] of moved) {
     const frames = calm() ? [{ opacity: 0 }, { opacity: 1 }]
       : dy === null ? [{ opacity: 0, transform: "translateY(-4px)" }, { opacity: 1, transform: "none" }]
-      : [{ transform: `translateY(${dy}px)` }, { transform: "none" }];
+      : [{ transform: `translate${across ? "X" : "Y"}(${dy}px)` }, { transform: "none" }];
     const run = row.animate(frames, { duration: calm() ? 150 : duration, easing });
     sliding.set(row, run);
     run.onfinish = run.oncancel = () => {
@@ -920,7 +1087,7 @@ function patchPair(item, left, right) {
 }
 if (document.documentElement.dataset.part === "side") {
   const search = document.getElementById("sq");
-  document.getElementById("si").append(glyph("search"));
+  for (const [id, name] of [["si", "search"], ["sg", "settings"], ["sn", "plus"]]) document.getElementById(id).append(glyph(name));
   search.addEventListener("input", drawSide);
   search.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {

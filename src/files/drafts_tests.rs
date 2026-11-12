@@ -57,3 +57,28 @@ fn past_the_most_files_the_ones_written_longest_ago_go() {
     assert!(kept(0) && kept(MOST) && kept(2));
     assert!(!kept(1));
 }
+
+#[test]
+fn what_is_unsaved_follows_its_file_and_the_files_of_a_folder_that_moved() {
+    let store = Store::memory().unwrap();
+    let at = |path: &str| store.read(|db| draft(db, Path::new(path))).unwrap();
+    store
+        .write(|tx| {
+            keep(tx, Path::new("/p/src/a.rs"), "a", None)?;
+            keep(tx, Path::new("/p/src/in/b.rs"), "b", None)?;
+            keep(tx, Path::new("/p/src_old/c.rs"), "c", None)?;
+            keep(tx, Path::new("/p/lib/a.rs"), "stale", None)
+        })
+        .unwrap();
+    store
+        .write(|tx| moved(tx, Path::new("/p/src"), Path::new("/p/lib")))
+        .unwrap();
+    assert_eq!(at("/p/lib/a.rs").unwrap().text, "a");
+    assert_eq!(at("/p/lib/in/b.rs").unwrap().text, "b");
+    assert_eq!(at("/p/src_old/c.rs").unwrap().text, "c");
+    assert_eq!(at("/p/src/a.rs"), None);
+    store
+        .write(|tx| moved(tx, Path::new("/p/lib/a.rs"), Path::new("/p/lib/z.rs")))
+        .unwrap();
+    assert_eq!(at("/p/lib/z.rs").unwrap().text, "a");
+}

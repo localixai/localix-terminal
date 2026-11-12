@@ -216,6 +216,13 @@ impl Browser {
         let _ = self.proxy.send_event(Cmd::Tree(project.to_string(), news));
     }
 
+    /// What the person asked of entry `path` of project `project`'s tree (its key) was not
+    /// done: `why` is said under it, in the sides that show the tree.
+    pub fn tree_refused(&self, project: &str, path: &str, why: &str) {
+        let said = super::super::tree::refused(project, path, why);
+        let _ = self.proxy.send_event(Cmd::Tree(project.to_string(), said));
+    }
+
     /// The window's projects' tabs as the layout keeps them: their order, their splits, the one
     /// each shows. The window draws them so.
     pub fn arranged(&self, windows: Vec<i64>, arranged: Vec<super::Arranged>) {
@@ -247,11 +254,6 @@ impl Browser {
     /// for what it had open.
     pub fn go(&self, project: &str) {
         let _ = self.proxy.send_event(Cmd::Go(project.to_string()));
-    }
-
-    /// The file at `path` opened by the app the person has for its kind: what no tab shows.
-    pub fn outside(&self, path: &std::path::Path) {
-        let _ = self.proxy.send_event(Cmd::Outside(path.to_path_buf()));
     }
 
     /// The next tab the app opens is of project `project` (its key): out of sight, and that

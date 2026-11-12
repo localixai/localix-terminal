@@ -8,7 +8,7 @@ use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Weak};
 
 pub(super) use super::edit_disk::Kept;
-use super::edit_disk::{Instead, NotOpened, instead, not_opened, shown, watched, within};
+use super::edit_disk::{NotOpened, not_opened, shown, watched, within};
 use super::ledger::Facts;
 use super::{Call, Desk};
 use crate::browser::{Pane, Panel};
@@ -73,12 +73,14 @@ impl Desk {
             line,
             panel: None,
             watch: None,
+            work: None,
             path,
         };
         kept.unsaved = (self.feed.store())
             .read(|db| drafts::draft(db, &kept.path))
             .is_ok_and(|draft| draft.is_some());
         let work = self.file_worker(&key);
+        kept.work.clone_from(&work);
         kept.watch = work
             .as_ref()
             .and_then(|work| watched(&kept.path, work.clone()));
@@ -97,31 +99,6 @@ impl Desk {
             browser.detail(&key, Some(&detail));
         }
         Ok(key)
-    }
-
-    /// The file at `path` opened for the person, who picked it in the project's tree: in an
-    /// editor's tab; what an editor does not take, as a page where a page shows its kind (a
-    /// picture), else by the app they have for it. It joins the session they look at
-    /// (beside.rs), where their call names no pane.
-    pub(super) fn person_file(&self, call: &Call, path: &Path) -> Result<(), String> {
-        let inside = (path.canonicalize()).map_err(|why| format!("{}: {why}", path.display()))?;
-        let not = match self.open_file(call, &inside, None) {
-            Ok(_) => return Ok(()),
-            Err(not) => not,
-        };
-        match (instead(&inside, &not), &self.browser) {
-            (Some(Instead::Page), _) => {
-                let page = serde_json::json!({"kind": "browser", "url": inside});
-                (self.open(call, &page))
-                    .map(drop)
-                    .map_err(|failure| failure.message().to_string())
-            }
-            (Some(Instead::Outside), Some(browser)) => {
-                browser.outside(&inside);
-                Ok(())
-            }
-            _ => Err(not.why),
-        }
     }
 
     /// The thread that works file `key`'s tab: what the person does, the page's loads and the
@@ -314,6 +291,8 @@ impl Desk {
         })
     }
 }
+
+mod picked;
 
 #[cfg(test)]
 #[path = "edit_tests.rs"]

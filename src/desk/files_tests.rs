@@ -13,7 +13,7 @@ use crate::testing::Scratch;
 const SOON: Duration = Duration::from_secs(10);
 
 /// A project with a few files, its tree in sight, and the news of it read whole.
-fn seen(scratch: &Scratch) -> (Arc<Desk>, ProjectId, Tree) {
+pub(in crate::desk) fn seen(scratch: &Scratch) -> (Arc<Desk>, ProjectId, Tree) {
     for file in ["Cargo.toml", "src/main.rs", "src/ui/side.css", "docs/a.md"] {
         scratch.file(file, "");
     }
@@ -24,7 +24,7 @@ fn seen(scratch: &Scratch) -> (Arc<Desk>, ProjectId, Tree) {
     (desk, project, whole)
 }
 
-fn names(branch: &Branch) -> Vec<&str> {
+pub(in crate::desk) fn names(branch: &Branch) -> Vec<&str> {
     branch
         .leaves
         .iter()

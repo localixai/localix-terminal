@@ -72,6 +72,11 @@ pub(in super::super) enum Cmd {
     Unpanel(u32),
     /// A panel's menu, where the person right-clicked in it (`m` of its page).
     PanelMenu(u32, (u32, u32), Vec<super::super::choice::Entry>),
+    /// An address the person opened from a panel's text (`o` of its page).
+    PanelLink(u32, String),
+    /// A page tab waits for what was asked of it at this count: does its view still load
+    /// (unloaded.rs)?
+    Unanswered(u32, u64),
     /// A panel's page took a title.
     Titled(u32, String),
     /// What the person clicked on the strip.
@@ -93,8 +98,6 @@ pub(in super::super) enum Cmd {
     Offered(&'static str, bool),
     /// The window goes to the project of this key (one the app just made, the person's pick).
     Go(String),
-    /// The file at this path opened by the app the person has for its kind.
-    Outside(std::path::PathBuf),
     /// The layout of the windows' projects (`Browser::arranged`), and the windows open, the main
     /// one first: drawn as it is.
     Arranged(Vec<i64>, Vec<Arranged>),
@@ -167,10 +170,12 @@ impl Cmd {
             | Cmd::Paint(id)
             | Cmd::Unpanel(id)
             | Cmd::PanelMenu(id, ..)
+            | Cmd::PanelLink(id, _)
             | Cmd::Titled(id, _) => term(*id),
             Cmd::Eval { tab: Some(id), .. }
             | Cmd::Navigate { tab: Some(id), .. }
             | Cmd::Reveal(id)
+            | Cmd::Unanswered(id, _)
             | Cmd::SwitchTab { id, .. }
             | Cmd::CloseTab { id, .. }
             | Cmd::Frame(Some(id), _)
@@ -195,7 +200,6 @@ impl Cmd {
             | Cmd::DocsClicked(_)
             | Cmd::Noted(_)
             | Cmd::Go(_)
-            | Cmd::Outside(_)
             | Cmd::Adopt
             | Cmd::Dressed(_)
             | Cmd::Listing(_)
@@ -234,7 +238,8 @@ impl Cmd {
             | Cmd::Capture { .. }
             | Cmd::Paint(_)
             | Cmd::PanelMenu(..)
-            | Cmd::Outside(_)
+            | Cmd::PanelLink(..)
+            | Cmd::Unanswered(..)
             | Cmd::Restyle
             | Cmd::Tree(..)
             | Cmd::Noted(_)

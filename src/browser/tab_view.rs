@@ -31,8 +31,9 @@ pub(super) fn builder<'a>(
     let loads = Arc::clone(shared);
     let requests = Arc::clone(shared);
     let titles = Arc::clone(shared);
+    let (kept, apart) = (Arc::clone(shared), proxy.clone());
     // A title or a load changes what the strip names the tab.
-    let (titled, loaded) = (proxy.clone(), proxy.clone());
+    let (titled, loaded, watched) = (proxy.clone(), proxy.clone(), proxy.clone());
     // The person's sign-ins stay, as in their own browser, in the window they see: WebKit's
     // store of the app's own (macOS: ~/Library/WebKit and HTTPStorages, under the binary's
     // name). A window nobody sees (headless, CI, the tests' unseen ones) remembers nothing.
@@ -79,11 +80,21 @@ pub(super) fn builder<'a>(
             let allow = allowed(&url) || url == BLANK;
             super::debug(|| format!("tab {id} navigation requested: {url} (allowed: {allow})"));
             if allow {
-                requests.navigation_requested(id);
+                let at = requests.navigation_requested(id);
+                if requests.unloaded.asked(id, &url, at) {
+                    super::unloaded::watch(&requests, &watched, id, at);
+                }
             }
             allow
         })
-        .with_download_started_handler(|_url, _path| false)
+        // Nothing is downloaded. What a blank tab was asked for and came as a file to keep
+        // leaves it empty: the tab says so in a line (unloaded.rs), asked for now.
+        .with_download_started_handler(move |_url, _path| {
+            if let Some(at) = kept.unloaded.kept_apart(id) {
+                let _ = apart.send_event(Cmd::Unanswered(id, at));
+            }
+            false
+        })
         // A link with target=_blank or `window.open` opens a tab, which is shown: what the page
         // opened is what it is about now. Built while WebKit waits, it keeps its opener
         // (popup.rs); where it cannot be, it opens as a tab of its own.

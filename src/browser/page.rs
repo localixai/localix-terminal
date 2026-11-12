@@ -160,9 +160,7 @@ impl Page {
             Action::Click { reference } if reference == toolbar::BACK => {
                 driver.evaluate("history.back()").map(|_| ())
             }
-            Action::Click { reference } if reference == toolbar::RELOAD => {
-                driver.evaluate("location.reload()").map(|_| ())
-            }
+            Action::Click { reference } if reference == toolbar::RELOAD => driver.reload(),
             Action::Click { .. }
             | Action::Select { .. }
             | Action::Type { .. }

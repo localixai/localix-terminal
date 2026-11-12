@@ -1163,6 +1163,7 @@ dependencies = [
  "log",
  "objc2",
  "objc2-web-kit",
+ "percent-encoding",
  "rusqlite",
  "serde",
  "serde_json",

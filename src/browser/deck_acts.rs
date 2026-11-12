@@ -45,9 +45,7 @@ impl Deck {
             | Click::Menu(..)
             | Click::Key(_)
             | Click::Agent(_)
-            | Click::Glass(_) => {
-                return Ok(());
-            }
+            | Click::Glass(_) => return Ok(()),
             Click::Side => {
                 self.slide_side(shared);
                 return Ok(());
@@ -57,12 +55,13 @@ impl Deck {
             | Click::SplitMove(..)
             | Click::SplitEven
             | Click::Move(..)
+            | Click::Place(..)
             | Click::DropOver(..)
             | Click::DropOff
             | Click::Drop(..) => return Ok(()),
             Click::Reload => {
                 if let (Some(web), Shown::Web) = (&self.web, self.shown) {
-                    let _ = web.active().reload();
+                    super::super::unloaded::reload(web.active(), web.active_id(), shared);
                 }
                 return Ok(());
             }
@@ -165,6 +164,7 @@ impl Deck {
             | Click::SplitMove(..)
             | Click::SplitEven
             | Click::Move(..)
+            | Click::Place(..)
             | Click::DropOver(..)
             | Click::DropOff
             | Click::Drop(..)

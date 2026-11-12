@@ -29,6 +29,7 @@ fn tree(open: &[&str], dirs: Vec<Branch>) -> Tree {
         root: PathBuf::from("/work/app"),
         open: open.iter().map(|path| (*path).to_string()).collect(),
         dirs,
+        pick: None,
     }
 }
 
@@ -197,4 +198,66 @@ fn news_for_the_page_names_only_what_changed() {
     assert_eq!(drawn["whole"], false);
     assert_eq!(drawn["open"], serde_json::json!(["", "src"]));
     assert_eq!(drawn["dirs"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn what_the_person_does_to_an_entry_is_said_with_its_path_and_a_name_after_a_line_break() {
+    assert_eq!(
+        said("tree make file src/my dir\na b.rs"),
+        Some(Said::Make("src/my dir", "a b.rs", false))
+    );
+    assert_eq!(
+        said("tree make dir \ndocs"),
+        Some(Said::Make("", "docs", true)),
+        "in the tree's own folder"
+    );
+    assert_eq!(
+        said("tree name src/a b.rs\nc d.rs"),
+        Some(Said::Name("src/a b.rs", "c d.rs"))
+    );
+    assert_eq!(
+        said("tree move src/a.rs\n"),
+        Some(Said::Move("src/a.rs", ""))
+    );
+    assert_eq!(
+        said("tree move src/a.rs\nmy docs"),
+        Some(Said::Move("src/a.rs", "my docs"))
+    );
+    assert_eq!(
+        said("tree trash src/a b.rs"),
+        Some(Said::Trash("src/a b.rs"))
+    );
+    assert_eq!(
+        said("tree drop 640 212 src/a b.rs"),
+        Some(Said::Drop(640, 212, "src/a b.rs"))
+    );
+    for other in [
+        "tree make file src",
+        "tree make link src\na",
+        "tree make file src\n",
+        "tree name \nx",
+        "tree name a",
+        "tree move \nsrc",
+        "tree trash",
+        "tree drop 1 2",
+        "tree drop -1 2 a",
+    ] {
+        assert_eq!(said(other), None, "{other:?}");
+    }
+}
+
+#[test]
+fn a_refusal_and_a_name_to_write_are_told_to_the_page_as_data() {
+    assert_eq!(
+        refused("p3", "src/a.rs", "The name “b” is already taken."),
+        r#"TW({"k":"p3","p":"src/a.rs","why":"The name “b” is already taken."})"#
+    );
+    assert_eq!(
+        writes("p3", "src", Some(true)),
+        r#"TE({"k":"p3","make":"dir","p":"src"})"#
+    );
+    assert_eq!(
+        writes("p3", "src/a.rs", None),
+        r#"TE({"k":"p3","make":null,"p":"src/a.rs"})"#
+    );
 }

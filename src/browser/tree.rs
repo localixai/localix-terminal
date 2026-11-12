@@ -96,7 +96,10 @@ impl Trees {
         let held = self.held.get(key)?;
         let open: Vec<&String> = held.dirs.keys().collect();
         let dirs: Vec<Value> = held.dirs.values().map(drawn).collect();
-        Some(call(key, &held.root, true, &json!(open), &dirs))
+        Some(format!(
+            "TR({})",
+            told(key, &held.root, true, &json!(open), &dirs)
+        ))
     }
 
     /// The file or folder at `path` of project `key`'s tree (`""`: its folder), and whether it
@@ -115,23 +118,39 @@ impl Trees {
 /// The call that draws `news` of project `key`'s tree over what the page holds of it.
 pub(super) fn news(key: &str, news: &Tree) -> String {
     let dirs: Vec<Value> = news.dirs.iter().map(drawn).collect();
-    call(key, &news.root, false, &json!(news.open), &dirs)
+    let mut tree = told(key, &news.root, false, &json!(news.open), &dirs);
+    tree["pick"] = json!(news.pick);
+    format!("TR({tree})")
+}
+
+/// The call that says under entry `path` of project `key`'s tree why what the person asked of
+/// it was not done.
+pub(super) fn refused(key: &str, path: &str, why: &str) -> String {
+    format!("TW({})", json!({"k": key, "p": path, "why": why}))
 }
 
 /// The call that takes the tree out of the side.
 pub(super) const NONE: &str = "TR(null)";
 
-fn call(key: &str, root: &Path, whole: bool, open: &Value, dirs: &[Value]) -> String {
+/// The call that has the page take a name from the person, in project `key`'s tree: a new
+/// file's or folder's (`make`: whether a folder) in folder `path`, else a new name for the
+/// entry at `path`.
+pub(super) fn writes(key: &str, path: &str, make: Option<bool>) -> String {
+    let make = make.map(|folder| if folder { "dir" } else { "file" });
+    format!("TE({})", json!({"k": key, "p": path, "make": make}))
+}
+
+/// A tree as the page is told it.
+fn told(key: &str, root: &Path, whole: bool, open: &Value, dirs: &[Value]) -> Value {
     let name = root.file_name().map(|name| name.to_string_lossy());
-    let tree = json!({
+    json!({
         "k": key,
         "root": root.to_string_lossy(),
         "name": name,
         "whole": whole,
         "open": open,
         "dirs": dirs,
-    });
-    format!("TR({tree})")
+    })
 }
 
 /// A folder's entries as the page draws them: its folders' names, its files each with its
@@ -157,10 +176,23 @@ pub(super) enum Said<'a> {
     Act(&'a str),
     /// The menu of an entry (`""`: of the tree itself), at this point of the side.
     Menu(u32, u32, &'a str),
+    /// A file (a folder, when true) to be made in this folder under this name.
+    Make(&'a str, &'a str, bool),
+    /// An entry named anew.
+    Name(&'a str, &'a str),
+    /// An entry dragged into a folder of the tree (`""`: the tree's own).
+    Move(&'a str, &'a str),
+    /// An entry sent to the Trash (the keyboard's way).
+    Trash(&'a str),
+    /// An entry dragged out of the tree and let go at this point of the side's page.
+    Drop(u32, u32, &'a str),
 }
 
 /// A message of the side's tree: `tree files`, `tree open src/ui`, `tree shut src`, `tree act
-/// src/main.rs`, `tree menu 40 212 src/main.rs`. Anything else is not the tree's.
+/// src/main.rs`, `tree menu 40 212 src/main.rs`, `tree trash src/old.rs`, `tree drop 640 212
+/// src/main.rs`; and, a line break between a path and the name that follows it (no name holds
+/// one), `tree make file src⏎new.rs`, `tree name src/a.rs⏎b.rs`, `tree move src/a.rs⏎docs`.
+/// Anything else is not the tree's.
 pub(super) fn said(body: &str) -> Option<Said<'_>> {
     let rest = body.strip_prefix("tree ")?;
     let (verb, rest) = rest.split_once(' ').unwrap_or((rest, ""));
@@ -169,11 +201,31 @@ pub(super) fn said(body: &str) -> Option<Said<'_>> {
         "open" if !rest.is_empty() => Some(Said::Open(rest)),
         "shut" if !rest.is_empty() => Some(Said::Shut(rest)),
         "act" if !rest.is_empty() => Some(Said::Act(rest)),
-        "menu" => {
+        "trash" if !rest.is_empty() => Some(Said::Trash(rest)),
+        "menu" | "drop" => {
             let mut parts = rest.splitn(3, ' ');
             let (x, y) = (parts.next()?.parse().ok()?, parts.next()?.parse().ok()?);
-            Some(Said::Menu(x, y, parts.next().unwrap_or("")))
+            match (verb, parts.next()) {
+                ("menu", path) => Some(Said::Menu(x, y, path.unwrap_or(""))),
+                (_, Some(path)) if !path.is_empty() => Some(Said::Drop(x, y, path)),
+                _ => None,
+            }
         }
+        "make" => {
+            let (kind, rest) = rest.split_once(' ')?;
+            let (dir, name) = rest.split_once('\n').filter(|(_, name)| !name.is_empty())?;
+            match kind {
+                "file" => Some(Said::Make(dir, name, false)),
+                "dir" => Some(Said::Make(dir, name, true)),
+                _ => None,
+            }
+        }
+        "name" => (rest.split_once('\n'))
+            .filter(|(path, name)| !path.is_empty() && !name.is_empty())
+            .map(|(path, name)| Said::Name(path, name)),
+        "move" => (rest.split_once('\n'))
+            .filter(|(path, _)| !path.is_empty())
+            .map(|(path, into)| Said::Move(path, into)),
         _ => None,
     }
 }

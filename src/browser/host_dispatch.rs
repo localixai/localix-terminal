@@ -7,7 +7,7 @@ use std::sync::mpsc::SyncSender;
 use crate::browser::deck::Deck;
 use crate::browser::panel::Opening;
 use crate::browser::strip::{Click, Key};
-use crate::browser::{frame, platform, strip};
+use crate::browser::{Asked, Heard, frame, platform, strip};
 
 use super::super::commands::Drawn;
 use super::super::web::on_browser;
@@ -62,14 +62,9 @@ impl On<'_> {
             Cmd::Panel(opening) => self.panel(opening),
             Cmd::Paint(id) => self.paint(id),
             Cmd::PanelMenu(id, at, items) => self.panel_menu(id, at, &items),
-            Cmd::Reveal(id) => {
-                let web = self.deck.as_ref().and_then(|deck| deck.web.as_ref());
-                if let Some(webview) = web.and_then(|tabs| tabs.at(Some(id))) {
-                    platform::see_through(webview, false);
-                }
-                // The tab draws now: the strip says so.
-                let _ = self.proxy.send_event(Cmd::Strip);
-            }
+            Cmd::PanelLink(id, url) => self.panel_link(id, url),
+            Cmd::Reveal(id) => self.reveal(id),
+            Cmd::Unanswered(id, at) => self.unanswered(id, at),
             Cmd::Unpanel(id) => {
                 if let Some(open) = self.deck.as_mut() {
                     if let Some(gone) = open.end_term(id) {
@@ -90,11 +85,6 @@ impl On<'_> {
             }
             Cmd::Offered(id, on) => self.offered(id, on),
             Cmd::Go(project) => self.go_project(&project),
-            Cmd::Outside(file) => {
-                if let Ok(address) = url::Url::from_file_path(&file) {
-                    platform::open_outside(address.as_str());
-                }
-            }
             Cmd::Arranged(_, arranged) => self.arranged(arranged),
             Cmd::Tree(project, news) => {
                 if let Some(open) = self.deck.as_ref() {
@@ -181,6 +171,44 @@ impl On<'_> {
             return;
         }
         let _ = reply.send(act(self.deck, said, self.shared));
+    }
+
+    /// Page `id` drew: it is seen through no more, and the strip says that it draws.
+    fn reveal(&self, id: u32) {
+        let web = self.deck.as_ref().and_then(|deck| deck.web.as_ref());
+        if let Some(webview) = web.and_then(|tabs| tabs.at(Some(id))) {
+            platform::see_through(webview, false);
+        }
+        let _ = self.proxy.send_event(Cmd::Strip);
+    }
+
+    /// Page tab `id` waits for what was asked of it at `at`, and its view loads nothing any
+    /// more: the page never came, and the tab shows the line for it under the address it keeps.
+    fn unanswered(&self, id: u32, at: u64) {
+        let web = self.deck.as_ref().and_then(|deck| deck.web.as_ref());
+        let Some(view) = web.and_then(|tabs| tabs.at(Some(id))) else {
+            return;
+        };
+        let unloaded = &self.shared.unloaded;
+        if unloaded.waits(id, at)
+            && !platform::loading(view)
+            && unloaded.failed(id, at).is_some()
+            && let Some(line) = unloaded.line(id)
+        {
+            let _ = view.load_html(&line);
+        }
+    }
+
+    /// An address the person opened from terminal `id`'s text: a page asked of the app as any
+    /// the person asks for, in that terminal's project, so it joins the session they look at
+    /// and opens where the window has no page yet.
+    fn panel_link(&self, id: u32, url: String) {
+        let project = crate::lock(&self.shared.groups)
+            .get(&Key::Term(id).name())
+            .cloned();
+        if let Some(project) = project {
+            (self.shared).heard(&project, Heard::Asked(Asked::Page(Some(url))));
+        }
     }
 
     /// Terminal `id`'s newest frame, run in its page.

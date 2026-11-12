@@ -107,6 +107,12 @@ impl On<'_> {
                 self.shared.heard(&key.name(), moved);
                 return;
             }
+            // A document carried along its row: its session keeps the order.
+            Some(Click::Place(key, before)) => {
+                let before = before.map(|before| before.name());
+                (self.shared).heard(&key.name(), Heard::Placed(before.as_deref()));
+                return;
+            }
             // Carried over the pages, the window lays the tab out where it lands as it moves;
             // off them, back as it was.
             Some(Click::DropOver(key, x, y)) => {

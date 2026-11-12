@@ -8,7 +8,7 @@ mod views;
 pub(super) use bounds::bound;
 pub(super) use views::{Follow, OVER_PAGES, follow};
 pub(super) use views::{
-    Pane, clear, keep_rendering, keep_tab_rendering, reparent, see_through, stack,
+    Pane, clear, keep_rendering, keep_tab_rendering, loading, reparent, see_through, stack,
     system_appearance, to_front,
 };
 
@@ -267,6 +267,18 @@ pub(super) const REVEAL: &str = if cfg!(target_os = "macos") {
 #[cfg(not(target_os = "macos"))]
 pub(super) fn reveal(path: &std::path::Path) -> bool {
     url::Url::from_file_path(path).is_ok_and(|folder| open_outside(folder.as_str()))
+}
+
+/// The file or folder at `path` moved to the system's Trash, never deleted.
+pub fn trash(path: &std::path::Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    return super::appkit::trash(path);
+    #[cfg(not(target_os = "macos"))]
+    {
+        use gtk::gio::prelude::FileExt;
+        let none: Option<&gtk::gio::Cancellable> = None;
+        (gtk::gio::File::for_path(path).trash(none)).map_err(|why| why.to_string())
+    }
 }
 
 /// Put `text` on the pasteboard.

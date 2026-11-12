@@ -5,9 +5,11 @@
 use std::hash::{Hash, Hasher};
 
 use super::super::host::Shared;
+use super::super::session;
+use super::super::strip::Key;
 use super::super::told::{Heard, TreeDid};
 use super::super::{file_icons, tree};
-use super::{Deck, LOADS, Part};
+use super::{Deck, LOADS, Over, Part};
 
 impl Deck {
     /// This window, among those that show a tree.
@@ -84,5 +86,28 @@ impl Deck {
         entries: &[super::super::choice::Entry],
     ) -> Option<usize> {
         super::super::platform::show(self.side.as_ref()?, at, entries)
+    }
+
+    /// The terminal of the session this window shows, by its key: the tab shown when it is
+    /// one, else the terminal its document is held beside. Where a path given from the tree
+    /// is typed.
+    pub(in super::super) fn session_terminal(&self, shared: &Shared) -> Option<String> {
+        let shown = self.shown_key()?;
+        if shown.kind() == "term" {
+            return Some(shown.name());
+        }
+        let arranged = shared.arranged_of(&self.shown_project(shared))?;
+        let shown = shown.name();
+        let lead = session::led(&arranged, Some(&shown)).remove(&shown)?;
+        (Key::parse(&lead).filter(|lead| lead.kind() == "term")).map(Key::name)
+    }
+
+    /// The pane at `x`, `y` of the window (points from its top left): a split window's half
+    /// there, a whole one's tab; none off the pages.
+    pub(in super::super) fn pane_under(&self, x: f64, y: f64) -> Option<Key> {
+        if matches!(self.over(x, y), Over::Off) {
+            return None;
+        }
+        self.half_at(x, y).or_else(|| self.shown_key())
     }
 }

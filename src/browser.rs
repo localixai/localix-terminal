@@ -63,6 +63,7 @@ mod told;
 mod toolbar;
 mod tree;
 mod turn;
+mod unloaded;
 mod updates;
 mod viewport;
 mod webview;
@@ -78,7 +79,7 @@ pub use agents::{
     started_on as agent_started_on,
 };
 pub use capture::{Clip, Shot};
-pub use guard::{loadable, shows};
+pub use guard::{drawn, loadable};
 pub use host::{
     Answers, Arranged, Arranging, Asked, Browser, CenterDid, Confirm, Dressing, Halves, Heard,
     Ledger, Past, Place, Tab, TabKind, Visited, Went, Window, host,
@@ -86,10 +87,11 @@ pub use host::{
 pub use notices::{Armed, Notice};
 pub use page::Page;
 pub use panel::{Fitted, Pane, Panel};
+pub use platform::trash;
 pub use strip::HOME;
 pub use strip::{BOARD, FILE};
 pub use tabs::MAX_TABS;
-pub use told::{Branch, Leaf, Tree, TreeDid};
+pub use told::{Branch, EntryDid, Leaf, Tree, TreeDid};
 pub(crate) use toolbar::owns;
 pub use viewport::Viewport;
 pub use webview::WebviewDriver;

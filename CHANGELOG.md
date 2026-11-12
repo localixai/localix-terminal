@@ -4,11 +4,25 @@
 
 ### Added
 
+- **A session's documents are put in order by dragging.** A tab of the row over them is carried
+  along it, the others moving aside, and stays where it is let go: the session keeps the order,
+  across a restart too. Escape puts it back.
+
 - **Files.** The side shows the project's tree under its tabs (the Files head folds it away).
   A folder is read when it is opened and is heard from the system while it is in sight, so a
   file made, renamed or deleted by anyone shows at once; nothing is read or watched for a
   project no window shows. Each kind of file has its picture, the folders left open stay open,
-  and an entry's menu reveals it in the Finder or copies its path.
+  and an entry's menu reveals it in the Finder or copies its path, whole or from the project's
+  folder.
+- **Files are made, named, moved and thrown away in the tree.** A folder's menu makes a file or
+  a folder in it, and an entry's names it anew (F2) or moves it to the Trash (⌘⌫); the name is
+  written in the row itself, Return keeps it and Escape lets it go. An entry is dragged into
+  another folder (a shut one opens when the pointer rests on it, and the tree scrolls at its
+  edges), or out over the pages: let go over a terminal, its path is typed there, as **Insert
+  Path in Terminal** does for the terminal in sight; a file let go over another pane opens.
+  Nothing is ever written over: a name in use, a folder moved into itself and what the system
+  refuses are said in one line under the entry. A file's open tab, what is unsaved in it and
+  the folders left open follow an entry that is named or moved.
 - **Sessions.** A project's tabs are its sessions: a terminal, and the files and pages opened
   in it. They are a row of tabs on the terminal's right, one of them in sight, and the side
   lists the session alone, so two terminals never mix what each has open. What an agent opens
@@ -39,10 +53,13 @@
   order mark the disk had. A file changed on disk is followed (one Undo step) while it is not
   edited; edited on both sides, a save writes nothing and says what the disk holds. What is
   left unsaved is kept with the file's path, past its tab and the app. It takes UTF-8 text up
-  to 2 MB; a picture or a PDF opens as a page, and what neither shows (an archive, a program,
-  a larger file) opens in the app you have for its kind. A file's menu in the tree offers
-  **Open in New Tab** for every file, and **Open as Page** for HTML and SVG, which an editor
-  takes too.
+  to 2 MB. What is not such text opens as a page: a picture (PNG, JPEG, GIF, WebP, AVIF, HEIC,
+  TIFF, BMP), a film (MP4, MOV, M4V, WebM), a sound (MP3, M4A, AAC, WAV, FLAC, Ogg) and a PDF
+  are shown and played there, its tab named for the file. An SVG, text that is a picture,
+  opens drawn. What no page shows (an archive, a program) says so in one quiet line, "No
+  Preview for build.zip", and nothing leaves for another app unasked. A file's menu in the
+  tree offers **Open in New Tab** and **Open in Default App** for every file, **Open as Page**
+  for HTML and **Open as Text** for SVG.
 - Agents open a file for the person with `open` and `kind: "file"` (`path`, `line`), and
   `interact` reads it as the person sees it. A file tab holds a file of its own project only,
   however its path is said (`..`, a link), and is listed, read and closed by that project's
@@ -129,6 +146,16 @@
 
 ### Changed
 
+- The strip's glyphs are redrawn so that none shows a brighter spot where its lines meet: each is
+  one stroked path, painted once (the sidebar's fold button, a page's globe, the board, the
+  search glass, the desktop size). The gear has six even teeth, the bell a flared rim, and the
+  dot of what is new sits on the bell's shoulder with the bell cut away around it.
+
+- **The glass lets less of the desktop through in the dark appearance.** Over a bright
+  desktop the old Standard left the quiet words at about 3.4 to 1 against their ground, under
+  the 4.5 to 1 text needs (WCAG 2). The dark coat now covers 85% at Low, 70% at Standard and
+  40% at High: Standard is what Low was, and High what Standard was, so who liked the old look
+  picks High in Settings. Off and the light appearance are as they were.
 - The first window opens in the middle of the screen at about three quarters of it each way
   (up to 1200 × 760 points), so what is around it stays in sight, where it used to take a
   strip of the screen's right edge at full height. Where you leave the window, and its
@@ -231,6 +258,15 @@
 
 ### Fixed
 
+- **A link ⌘-clicked in a terminal opens** where the window has no page yet (it did nothing
+  there), in the window that terminal is in, as a page of the session you look at.
+- **A page that never comes says so.** A new tab asked for an address where nothing answers
+  (a dev server that has stopped, no such host) was an empty page that had forgotten its
+  address. It now shows one line, "Could Not Load localhost:5175", is named for the place,
+  keeps the address in its bar, and Reload asks for it again; an agent that opens such a page
+  reads the same line. A tab that shows a page keeps it, as before. An address that answers
+  with a file to keep (an archive, an installer), which the app does not download, says "No
+  Preview for" and the file's name in the same way.
 - A split window stays split under an open list: opening the Event Center, the history or a
   dialog no longer takes one half away and stretches the other across the window until the
   list shuts. The same holds while you type an address: the page's half keeps its place, and

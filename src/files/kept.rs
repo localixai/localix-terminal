@@ -1,6 +1,6 @@
 //! The folders a person left open in each project's tree, kept by their path under the
 //! project's folder. A folder is open only under open folders: shutting one shuts what is
-//! under it.
+//! under it, and one renamed or moved stays open where it is now, with what is open under it.
 
 use crate::projects::ProjectId;
 use crate::store::{Connection, Transaction, params};
@@ -35,5 +35,23 @@ pub fn shut(tx: &Transaction<'_>, project: ProjectId, path: &str) -> Result<bool
         params![project, path],
     )
     .map(|rows| rows > 0)
+    .map_err(|why| why.to_string())
+}
+
+/// Folder `from` of `project` is at `to` now: it and every folder under it stay as open as
+/// they were, by their new paths. What was kept of `to` before is replaced.
+pub fn moved(tx: &Transaction<'_>, project: ProjectId, from: &str, to: &str) -> Result<(), String> {
+    tx.execute(
+        "DELETE FROM open_dirs WHERE project = ?1
+         AND (path = ?2 OR substr(path, 1, length(?2) + 1) = ?2 || '/')",
+        params![project, to],
+    )
+    .map_err(|why| why.to_string())?;
+    tx.execute(
+        "UPDATE open_dirs SET path = ?3 || substr(path, length(?2) + 1) WHERE project = ?1
+         AND (path = ?2 OR substr(path, 1, length(?2) + 1) = ?2 || '/')",
+        params![project, from, to],
+    )
+    .map(drop)
     .map_err(|why| why.to_string())
 }

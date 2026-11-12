@@ -91,6 +91,18 @@ pub fn forget(tx: &Transaction<'_>, path: &Path) -> Result<(), String> {
     .map_err(|why| why.to_string())
 }
 
+/// The file or folder at `from` is at `to` now: what is unsaved in it, or in a file under it,
+/// is kept by where the file is. What was kept for a path now taken is replaced.
+pub fn moved(tx: &Transaction<'_>, from: &Path, to: &Path) -> Result<(), String> {
+    tx.execute(
+        "UPDATE OR REPLACE drafts SET path = ?2 || substr(path, length(?1) + 1)
+         WHERE path = ?1 OR substr(path, 1, length(?1) + 1) = ?1 || '/'",
+        params![from.to_string_lossy(), to.to_string_lossy()],
+    )
+    .map(drop)
+    .map_err(|why| why.to_string())
+}
+
 #[cfg(test)]
 #[path = "drafts_tests.rs"]
 mod tests;

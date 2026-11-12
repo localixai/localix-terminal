@@ -171,6 +171,25 @@ pub(super) fn open_outside(address: &str) -> bool {
     opened.as_bool()
 }
 
+/// The file or folder at `path` moved to the Trash, where the person can take it back from.
+pub(super) fn trash(path: &std::path::Path) -> Result<(), String> {
+    let no = || format!("“{}” could not be moved to the Trash", path.display());
+    let path = string(&path.to_string_lossy()).ok_or_else(no)?;
+    // SAFETY: NSURL's class method takes a path as an NSString and answers a file's NSURL.
+    let url: Option<Retained<AnyObject>> =
+        unsafe { msg_send![class!(NSURL), fileURLWithPath: &*path] };
+    let url = url.ok_or_else(no)?;
+    // SAFETY: NSFileManager's class method answers the shared manager, which any thread uses.
+    let manager: Retained<AnyObject> = unsafe { msg_send![class!(NSFileManager), defaultManager] };
+    let nowhere = std::ptr::null_mut::<*mut AnyObject>();
+    // SAFETY: the manager takes an NSURL and two places to answer in (where the entry went,
+    // what went wrong), either of which may be nil, and answers a BOOL.
+    let trashed: Bool = unsafe {
+        msg_send![&*manager, trashItemAtURL: &*url, resultingItemURL: nowhere, error: nowhere]
+    };
+    trashed.as_bool().then_some(()).ok_or_else(no)
+}
+
 /// The file or folder at `path` shown, selected, in the Finder; whether it was.
 pub(super) fn reveal(path: &std::path::Path) -> bool {
     let (path, root) = (text(&path.to_string_lossy()), text(""));

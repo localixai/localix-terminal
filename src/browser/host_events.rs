@@ -304,6 +304,7 @@ pub(super) fn fresh() -> Arc<Shared> {
         comments: Comments::default(),
         turn: Default::default(),
         notices: Default::default(),
+        unloaded: Default::default(),
         kept: Mutex::new(crate::browser::placement::recalled()),
         offers: crate::browser::offer::Offers::default(),
         folders: Mutex::default(),
