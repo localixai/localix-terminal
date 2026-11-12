@@ -158,13 +158,18 @@ fn an_open_folder_that_goes_is_shut_and_does_not_open_again_when_it_comes_back()
     desk.tree_news(project).unwrap();
 
     std::fs::remove_dir_all(scratch.path().join("src")).unwrap();
+    // The system may tell of the folder's own end before its parent's: both are waited for,
+    // the folder shut and the root told without it. A folder back before the root was read
+    // again would leave the root as it was told, and nothing to tell.
+    let left = |news: &Tree| {
+        (news.dirs.iter()).any(|dir| dir.path.is_empty() && !names(dir).contains(&"src"))
+    };
     let mut news = news_soon(&desk, project);
-    // The system may tell of the folder's own end before its parent's.
-    let deadline = Instant::now() + SOON;
-    while news.open != [""] && Instant::now() < deadline {
+    let mut gone = left(&news);
+    while !(gone && news.open == [""]) {
         news = news_soon(&desk, project);
+        gone |= left(&news);
     }
-    assert_eq!(news.open, [""]);
 
     scratch.file("src/ui/side.css", "");
     let back = news_soon(&desk, project);

@@ -9,6 +9,10 @@ use serde::Deserialize;
 
 /// One event of the center, as much as is said outside its list.
 #[derive(Debug, Deserialize)]
+#[cfg_attr(
+    all(not(target_os = "macos"), not(test)),
+    expect(dead_code, reason = "only macOS's notices read the whole of an event")
+)]
 pub(super) struct Event {
     n: u64,
     section: String,
@@ -29,6 +33,10 @@ pub(super) struct Event {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(
+    all(not(target_os = "macos"), not(test)),
+    expect(dead_code, reason = "only macOS's notices ask what a button does")
+)]
 struct Button {
     role: String,
 }
@@ -55,6 +63,10 @@ pub(super) fn waits(events: &[Event]) -> HashMap<String, String> {
 
 /// A notice of the system's for one event.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    all(not(target_os = "macos"), not(test)),
+    expect(dead_code, reason = "only macOS has the system's notices")
+)]
 pub(super) struct Note {
     /// The event's number: the notice is taken back by it.
     pub id: u64,
@@ -66,6 +78,13 @@ pub(super) struct Note {
 
 /// What changes outside the list after the events were heard.
 #[derive(Debug, Default)]
+#[cfg_attr(
+    all(not(target_os = "macos"), not(test)),
+    expect(
+        dead_code,
+        reason = "only macOS has the system's notices and a Dock to count on"
+    )
+)]
 pub(super) struct Change {
     pub post: Vec<Note>,
     pub withdraw: Vec<u64>,
@@ -75,6 +94,10 @@ pub(super) struct Change {
 
 /// What was told so far, so each thing is told once.
 #[derive(Debug, Default)]
+#[cfg_attr(
+    all(not(target_os = "macos"), not(test)),
+    expect(dead_code, reason = "only macOS has the system's notices")
+)]
 pub(super) struct Alerts {
     /// What wanted the person when last heard: only what is not among it is news.
     known: HashSet<u64>,
@@ -87,6 +110,10 @@ pub(super) struct Alerts {
 
 impl Alerts {
     /// The events as they are now, the person in the app (`active`) or away.
+    #[cfg_attr(
+        all(not(target_os = "macos"), not(test)),
+        expect(dead_code, reason = "only macOS has the system's notices")
+    )]
     pub(super) fn heard(&mut self, events: &[Event], active: bool) -> Change {
         let wanting: Vec<_> = (events.iter())
             .filter(|event| event.urgent && event.unseen)
@@ -144,6 +171,11 @@ impl Event {
         }
     }
 
+    /// The notice of the system's for it.
+    #[cfg_attr(
+        all(not(target_os = "macos"), not(test)),
+        expect(dead_code, reason = "only macOS has the system's notices")
+    )]
     fn note(&self) -> Note {
         let open = self.buttons.iter().position(|button| button.role == "open");
         let (title, beside) = self.says();

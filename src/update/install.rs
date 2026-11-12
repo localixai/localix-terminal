@@ -16,7 +16,13 @@ use super::run;
 
 /// The Apple Developer team that signs the Mac app, as install.sh names it (a test holds the
 /// two to each other).
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+#[cfg_attr(
+    all(not(target_os = "macos"), not(test)),
+    expect(
+        dead_code,
+        reason = "only the Mac app's signature is checked against it"
+    )
+)]
 const TEAM_ID: &str = "64V3JT9A64";
 
 /// How long the list of checksums and the archive may take.

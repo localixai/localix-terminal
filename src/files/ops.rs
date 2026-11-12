@@ -171,8 +171,7 @@ mod exclusive {
 
     pub(super) fn rename(from: &Path, to: &Path) -> io::Result<()> {
         let (old, new) = (text(from)?, text(to)?);
-        let done = asked(&old, &new);
-        if done == 0 {
+        if moved(&old, &new) {
             return Ok(());
         }
         let why = io::Error::last_os_error();
@@ -184,18 +183,18 @@ mod exclusive {
     }
 
     #[cfg(target_os = "macos")]
-    fn asked(old: &CString, new: &CString) -> i64 {
+    fn moved(old: &CString, new: &CString) -> bool {
         // SAFETY: both are NUL-terminated strings that live past the call, and the flag is one
         // `renamex_np` documents.
-        i64::from(unsafe { libc::renamex_np(old.as_ptr(), new.as_ptr(), libc::RENAME_EXCL) })
+        (unsafe { libc::renamex_np(old.as_ptr(), new.as_ptr(), libc::RENAME_EXCL) }) == 0
     }
 
     #[cfg(target_os = "linux")]
-    fn asked(old: &CString, new: &CString) -> i64 {
+    fn moved(old: &CString, new: &CString) -> bool {
         // SAFETY: `renameat2` takes two directory descriptors (the working directory's, unused
         // by absolute paths), two NUL-terminated strings that live past the call, and a flag
         // it documents.
-        i64::from(unsafe {
+        (unsafe {
             libc::syscall(
                 libc::SYS_renameat2,
                 libc::AT_FDCWD,
@@ -204,13 +203,13 @@ mod exclusive {
                 new.as_ptr(),
                 libc::RENAME_NOREPLACE,
             )
-        })
+        }) == 0
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    fn asked(old: &CString, new: &CString) -> i64 {
+    fn moved(old: &CString, new: &CString) -> bool {
         // SAFETY: both are NUL-terminated strings that live past the call.
-        i64::from(unsafe { libc::rename(old.as_ptr(), new.as_ptr()) })
+        (unsafe { libc::rename(old.as_ptr(), new.as_ptr()) }) == 0
     }
 }
 
