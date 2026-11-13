@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.7
+
 ### Added
 
 - **An end-to-end run** (`scripts/e2e.sh`): this tree's app is started beside the person's and
@@ -39,8 +41,25 @@
   `llxterm:end`, and the variables a terminal is given start with `LLXTERM_`. The data and
   settings live in `~/.local/share/llxterm` and `~/.config/llxterm`. A release's archives are
   `Localix-Terminal-macos.zip`, `Localix-Terminal-macos.dmg` and
-  `llxterm-x86_64-unknown-linux-gnu.tar.gz`. Nothing is carried over from a copy of 0.1.6 or
-  older: install this one afresh and open its projects again.
+  `llxterm-x86_64-unknown-linux-gnu.tar.gz`.
+- **LLX Desk is now Localix Terminal, and what you had comes with it.** LLX Desk 0.1.6 updates
+  to this release as it would to any other, and the first time Localix Terminal starts it takes
+  over what LLX Desk kept: your projects, sessions, boards and settings move from
+  `~/.local/share/llx-desk` and `~/.config/llx-desk` to `~/.local/share/llxterm` and
+  `~/.config/llxterm`, and the database takes its new name. Nothing is copied or deleted on the
+  way: what cannot be moved stays where it was, and `app.log` says what was done. A folder you
+  chose with `LLX_DESK_DATA` or `LLX_DESK_HOME` is still used, and stays where you put it, until
+  you set `LLXTERM_DATA` or `LLXTERM_HOME`.
+- **On macOS the app takes its new name.** An `LLX Desk.app` that the update replaced renames
+  itself `Localix Terminal.app`, in the same folder, and opens again from there, once. It keeps
+  its old name, and runs as before, where another `Localix Terminal.app` is already beside it
+  or the folder cannot be written to.
+- **Your agents' LLX Desk entries are replaced by Localix Terminal's.** The `llx-desk` server
+  in Codex, Gemini CLI, GitHub Copilot, OpenCode and Hermes, the `llx-desk` plugin and
+  marketplace in Claude Code, the `llx-desk` command in `~/.local/bin` and, on Linux, the LLX
+  Desk desktop entry are taken out once, and the `llxterm` ones are put in, as before. Only
+  what runs the old LLX Desk program, now gone, or this app is taken out; an LLX Desk you kept
+  installed elsewhere is left alone, and an agent you said no to stays declined.
 - **The window is dark by default.** It followed the system's appearance until the theme was
   chosen; Settings → Appearance still offers System and Light, and a theme already chosen stays.
 - **A kind of tab that draws itself is one description.** The window, the "+" menu, the
