@@ -4,6 +4,7 @@
 
 mod app;
 mod call;
+mod former;
 mod secret;
 mod setup;
 
@@ -52,8 +53,13 @@ Environment: LLXTERM_PROJECT (the project, when not the one around the current d
 Exit codes: 0 done, 1 the call failed, 3 the app could not be reached or the arguments are wrong.";
 
 pub fn run(args: Vec<String>) -> ExitCode {
+    let opened = crate::bundle::opened(&args);
+    // What LLX Desk 0.1.6 left, put right before anything reads the app's files.
+    if let Some(code) = former::begin(&args, opened) {
+        return ExitCode::from(code);
+    }
     // Opened as Localix Terminal.app: the app itself, not the CLI's help.
-    if crate::bundle::opened(&args) {
+    if opened {
         return ExitCode::from(app::run());
     }
     let mut args = args.into_iter();

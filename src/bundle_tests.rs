@@ -42,3 +42,21 @@ fn an_app_on_a_disk_image_or_translocated_is_not_in_place() {
         "/Users/me/Applications/Localix Terminal.app"
     )));
 }
+
+#[test]
+fn a_bundle_under_llx_desks_name_takes_this_apps_where_nothing_has_it() {
+    let scratch = crate::testing::Scratch::new();
+    let old = scratch.path().join("LLX Desk.app");
+    std::fs::create_dir_all(old.join("Contents/MacOS")).unwrap();
+    assert_eq!(
+        super::renamed(&old),
+        Some(scratch.path().join("Localix Terminal.app"))
+    );
+    // One that is there already is the person's: neither is moved.
+    std::fs::create_dir_all(scratch.path().join("Localix Terminal.app")).unwrap();
+    assert_eq!(super::renamed(&old), None);
+    // Any other name is the person's choice, or this app's already.
+    for name in ["Localix Terminal.app", "LLX Desk 2.app", "Mine.app"] {
+        assert_eq!(super::renamed(&scratch.path().join(name)), None, "{name}");
+    }
+}

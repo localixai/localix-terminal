@@ -3,10 +3,17 @@
 //! included): there is one app, and every client must reach it. Its files (log, pictures,
 //! comments) go to the home, which `LLXTERM_HOME` moves and which is the same directory
 //! otherwise.
+//!
+//! What LLX Desk 0.1.6 kept under its own names is carried over to these (`former.rs`), and the
+//! variables it was moved with are read where this app's are not set.
+
+mod former;
 
 use std::io;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+
+pub use former::{carry_over, former_server};
 
 /// The directory of the lock and the socket: `llxterm-<uid>` in the user's temporary
 /// directory as the system names it (not `$TMPDIR`, which a sandbox or a wrapper may change).
@@ -80,29 +87,50 @@ fn user_temp() -> PathBuf {
 
 /// The variables that move the desk's files: a server started for a caller (the app, through
 /// LaunchServices, which gives it none of the caller's) is given these, so both find the same.
-pub const MOVED_BY: [&str; 4] = [
+/// 0.1.6's two (`LLX_DESK_HOME`, `LLX_DESK_DATA`) go with the bridge (`former.rs`).
+pub const MOVED_BY: [&str; 6] = [
     "LLXTERM_RUNTIME",
     "LLXTERM_HOME",
     "LLXTERM_DATA",
     "XDG_CONFIG_HOME",
+    "LLX_DESK_HOME",
+    "LLX_DESK_DATA",
 ];
 
-/// `$LLXTERM_HOME`, else the runtime directory: where the log, the pictures and the
-/// comments go.
-pub fn home() -> PathBuf {
-    std::env::var_os("LLXTERM_HOME")
-        .filter(|home| !home.is_empty())
-        .map_or_else(runtime, PathBuf::from)
+/// The directory variable `name` names, else the one 0.1.6 named the same with (`former`): a
+/// person who moved LLX Desk's files keeps them where they put them.
+fn moved(name: &str, former: &str) -> Option<PathBuf> {
+    moved_in(|name| std::env::var_os(name), name, former)
 }
 
-/// What the desk keeps across restarts: `LLXTERM_DATA`, else `~/.local/share/llxterm`. A test
-/// build keeps it in its own directory.
+/// [`moved`], with the variables `var` reads.
+fn moved_in(
+    var: impl Fn(&str) -> Option<std::ffi::OsString>,
+    name: &str,
+    former: &str,
+) -> Option<PathBuf> {
+    named(var(name)).or_else(|| named(var(former)))
+}
+
+/// The data directory the person named, when they named one.
+fn moved_data() -> Option<PathBuf> {
+    moved("LLXTERM_DATA", "LLX_DESK_DATA")
+}
+
+/// `$LLXTERM_HOME` (else 0.1.6's `$LLX_DESK_HOME`), else the runtime directory: where the log,
+/// the pictures and the comments go.
+pub fn home() -> PathBuf {
+    moved("LLXTERM_HOME", "LLX_DESK_HOME").unwrap_or_else(runtime)
+}
+
+/// What the desk keeps across restarts: `LLXTERM_DATA` (else 0.1.6's `LLX_DESK_DATA`), else
+/// `~/.local/share/llxterm`. A test build keeps it in its own directory.
 pub fn data() -> PathBuf {
     if cfg!(feature = "test-server") {
         return runtime();
     }
-    if let Some(dir) = std::env::var_os("LLXTERM_DATA").filter(|dir| !dir.is_empty()) {
-        return PathBuf::from(dir);
+    if let Some(dir) = moved_data() {
+        return dir;
     }
     std::env::var_os("HOME").map_or_else(runtime, |home| {
         PathBuf::from(home)

@@ -46,6 +46,21 @@ fn adds_only_options(args: &[String]) -> bool {
     })
 }
 
+/// The name LLX Desk 0.1.6 gave its bundle. Its updater put this app in that bundle's place,
+/// under that name, and the app takes its own once (`renamed`). It can go with the bridge
+/// archives of release.yml.
+const FORMER: &str = "LLX Desk.app";
+/// The bundle's name, as releases make it.
+const NAME: &str = "Localix Terminal.app";
+
+/// Where `app` goes when it is a bundle under 0.1.6's name: beside it, under this app's, when
+/// nothing is there yet. None for any other bundle, and where a `Localix Terminal.app` is
+/// already: the person's, which is left alone.
+pub fn renamed(app: &Path) -> Option<PathBuf> {
+    let to = (app.file_name()? == FORMER).then(|| app.with_file_name(NAME))?;
+    std::fs::symlink_metadata(&to).is_err().then_some(to)
+}
+
 /// The bundle `exe` is the program of: `<x>.app/Contents/MacOS/<exe>`.
 fn of(exe: &Path) -> Option<&Path> {
     let mut up = exe.ancestors().skip(1);

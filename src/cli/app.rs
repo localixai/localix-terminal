@@ -223,7 +223,8 @@ pub(super) fn keep_well() {
     }
 }
 
-fn note(said: &[String]) {
+/// `said` appended to the app's log, each line stamped.
+pub(super) fn note(said: &[String]) {
     let file = crate::paths::log();
     let opened = std::fs::OpenOptions::new()
         .create(true)

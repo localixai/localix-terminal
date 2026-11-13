@@ -38,3 +38,24 @@ fn an_app_given_a_runtime_directory_is_apart_from_the_persons() {
     assert_eq!(named(Some("".into())), None);
     assert_eq!(named(None), None);
 }
+
+#[test]
+fn a_folder_moved_with_llx_desks_variable_stays_where_the_person_put_it() {
+    let set = |pairs: &'static [(&'static str, &'static str)]| {
+        move |name: &str| {
+            (pairs.iter())
+                .find(|(known, _)| *known == name)
+                .map(|(_, value)| std::ffi::OsString::from(value))
+        }
+    };
+    let data = |var| moved_in(var, "LLXTERM_DATA", "LLX_DESK_DATA");
+    assert_eq!(data(set(&[("LLX_DESK_DATA", "/old")])), Some("/old".into()));
+    // This app's own wins, and one set to nothing is not set.
+    let both = set(&[("LLX_DESK_DATA", "/old"), ("LLXTERM_DATA", "/new")]);
+    assert_eq!(data(both), Some("/new".into()));
+    let empty = set(&[("LLX_DESK_DATA", "/old"), ("LLXTERM_DATA", "")]);
+    assert_eq!(data(empty), Some("/old".into()));
+    assert_eq!(data(set(&[])), None);
+    // A server started for a caller is given both, so that the two find the same.
+    assert!(MOVED_BY.contains(&"LLX_DESK_DATA") && MOVED_BY.contains(&"LLX_DESK_HOME"));
+}
