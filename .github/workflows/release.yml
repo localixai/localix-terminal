@@ -16,6 +16,13 @@
 # secrets belong to the `release` environment (its branches and tags: main and v*) and to the macos
 # job alone, which runs on GitHub's runner: the self-hosted runner never sees them.
 #
+# Two bridge archives go up beside them, for LLX Desk 0.1.6 (as this app was called up to then),
+# whose updater looks for its own names only: LLX-Desk-macos.zip, the same signed and notarized
+# app with its top folder named LLX Desk.app, and llx-desk-x86_64-unknown-linux-gnu.tar.gz, the
+# same program named llx-desk. Updated through them, the app takes its own names on its first run
+# (src/cli/former.rs, src/paths/former.rs). They can go, with that code, once no one updates
+# from 0.1.6 any more; nothing of this app's reads them.
+#
 # Run by hand (workflow_dispatch) it is a dry run: the same builds, the same signing and
 # notarization, and the files stay on the run as artifacts. Only a tag publishes.
 name: Release
@@ -88,6 +95,16 @@ jobs:
           echo "needs $newest"
           [ "$(printf '%s\n' "$newest" GLIBC_2.35 | sort -V | tail -n 1)" = GLIBC_2.35 ]
       - run: scripts/package.sh target/release/llxterm x86_64-unknown-linux-gnu
+      # The bridge archive for 0.1.6's updater (see the top): the same program, named llx-desk.
+      - name: The bridge archive for LLX Desk 0.1.6
+        run: |
+          set -eu
+          stage=$(mktemp -d)
+          cp target/release/llxterm "$stage/llx-desk"
+          chmod 0755 "$stage/llx-desk"
+          cp LICENSE "$stage/LICENSE"
+          tar -czf dist/llx-desk-x86_64-unknown-linux-gnu.tar.gz -C "$stage" llx-desk LICENSE
+          rm -rf "$stage"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: x86_64-unknown-linux-gnu
@@ -213,12 +230,33 @@ jobs:
             echo "install.sh's TEAM_ID is $pinned, but the release is signed by team $team" >&2
             exit 1
           fi
+      # The bridge archive for 0.1.6's updater (see the top): the app of the zip just verified, the
+      # same bytes, its top folder named LLX Desk.app. A bundle's name is no part of its signature
+      # or its ticket, which the checks below ask again under that name.
+      - name: The bridge archive for LLX Desk 0.1.6
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          team="${APPLE_SIGNING_IDENTITY##*(}"
+          team="${team%)}"
+          bridge="$RUNNER_TEMP/bridge"
+          mkdir -p "$bridge"
+          ditto -x -k dist/Localix-Terminal-macos.zip "$bridge"
+          mv "$bridge/Localix Terminal.app" "$bridge/LLX Desk.app"
+          codesign --verify --deep --strict --verbose=2 "$bridge/LLX Desk.app"
+          codesign -dv "$bridge/LLX Desk.app" 2>&1 | grep -qx "TeamIdentifier=$team" ||
+            { echo "LLX Desk.app is not signed by team $team" >&2; exit 1; }
+          spctl --assess --type execute --verbose=2 "$bridge/LLX Desk.app"
+          ditto -c -k --keepParent "$bridge/LLX Desk.app" dist/LLX-Desk-macos.zip
+          [ "$(unzip -Z1 dist/LLX-Desk-macos.zip | head -n 1)" = "LLX Desk.app/" ]
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: apple-darwin
           path: |
             dist/Localix-Terminal-macos.dmg
             dist/Localix-Terminal-macos.zip
+            dist/LLX-Desk-macos.zip
       - name: Remove the signing material
         if: always()
         run: |
@@ -259,10 +297,14 @@ jobs:
       - name: Every archive, and its checksum
         run: |
           cd dist
-          for file in llxterm-x86_64-unknown-linux-gnu.tar.gz Localix-Terminal-macos.zip Localix-Terminal-macos.dmg; do
+          # The last two are the bridge archives for LLX Desk 0.1.6 (see the top).
+          files="llxterm-x86_64-unknown-linux-gnu.tar.gz Localix-Terminal-macos.zip Localix-Terminal-macos.dmg
+            llx-desk-x86_64-unknown-linux-gnu.tar.gz LLX-Desk-macos.zip"
+          for file in $files; do
             [ -s "$file" ] || { echo "missing $file"; exit 1; }
           done
-          sha256sum llxterm-*.tar.gz Localix-Terminal-macos.zip Localix-Terminal-macos.dmg > SHA256SUMS
+          # shellcheck disable=SC2086 # the names hold no spaces; one argument each is intended.
+          sha256sum $files > SHA256SUMS
           cat SHA256SUMS
       # Which workflow run, commit and tag made each file, signed for the repository.
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -297,5 +339,6 @@ jobs:
               --notes-file notes.md
           fi
           gh release upload "$GITHUB_REF_NAME" dist/llxterm-*.tar.gz dist/Localix-Terminal-macos.zip \
-            dist/Localix-Terminal-macos.dmg dist/SHA256SUMS --clobber
+            dist/Localix-Terminal-macos.dmg dist/llx-desk-x86_64-unknown-linux-gnu.tar.gz \
+            dist/LLX-Desk-macos.zip dist/SHA256SUMS --clobber
           gh release edit "$GITHUB_REF_NAME" --draft=false
