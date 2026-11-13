@@ -18,6 +18,10 @@
 - **A script with no ending has its colours.** A file whose name says nothing of its language
   (`bootstrap`, `lab-ci`) is coloured by the program its first line names: `#!/bin/sh`,
   `#!/usr/bin/env python3`, `node`, `bun`, `ruby`, `php`, `lua`, `swift`.
+- **A tree of files let go of as a change is told no longer stops the app.** Letting go of a
+  folder's watch waited for the news under way, so a tree that left sight just as a change on
+  disk was told left the two waiting for each other, and a watch let go of in its own news
+  ended the app. A watch let go of now ends without waiting, on macOS and on Linux.
 
 ## 0.1.7
 

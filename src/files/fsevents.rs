@@ -84,7 +84,7 @@ unsafe extern "C" {
 
 unsafe extern "C" {
     fn dispatch_queue_create(label: *const c_char, attributes: Ref) -> *mut c_void;
-    fn dispatch_sync_f(queue: *mut c_void, context: *mut c_void, work: extern "C" fn(*mut c_void));
+    fn dispatch_async_f(queue: *mut c_void, context: *mut c_void, work: extern "C" fn(*mut c_void));
     fn dispatch_release(object: *mut c_void);
 }
 
@@ -187,27 +187,44 @@ impl Stream {
     }
 }
 
+/// What a stream let go of still holds until a callback under way has returned.
+struct Left {
+    stream: *mut c_void,
+    heard: *mut Heard,
+}
+
 impl Drop for Stream {
-    /// The stream and its queue were made in `new` and are released once, here. After the
-    /// stream is invalidated no callback is queued; the empty work run on the queue waits for
-    /// one under way, so `heard` is freed only when nothing reads it.
+    /// The stream is stopped here: no callback begins after it. The stream and what its
+    /// callback reads are released on its queue, after a callback under way, so the drop
+    /// never waits on the queue: it may come in the stream's own callback (its news let go of
+    /// the last owner) or under a lock that callback waits for.
     fn drop(&mut self) {
         // SAFETY: the stream is ours, started or not.
         unsafe { FSEventStreamStop(self.stream) };
         // SAFETY: as above; no callback is queued after it.
         unsafe { FSEventStreamInvalidate(self.stream) };
-        // SAFETY: released once.
-        unsafe { FSEventStreamRelease(self.stream) };
-        // SAFETY: the queue is ours; the work reads nothing.
-        unsafe { dispatch_sync_f(self.queue, ptr::null_mut(), nothing) };
-        // SAFETY: released once, with no work left on it.
+        let left = Box::into_raw(Box::new(Left {
+            stream: self.stream,
+            heard: self.heard,
+        }));
+        // SAFETY: the queue is ours and keeps itself until its work ran; `release` takes
+        // `left` once.
+        unsafe { dispatch_async_f(self.queue, left.cast(), release) };
+        // SAFETY: released once; the work above holds the queue until it ran.
         unsafe { dispatch_release(self.queue) };
-        // SAFETY: made by `Box::into_raw` in `new`; no callback runs any more.
-        drop(unsafe { Box::from_raw(self.heard) });
     }
 }
 
-extern "C" fn nothing(_: *mut c_void) {}
+/// On the stream's queue, once a callback under way has returned: the stream and what its
+/// callback read are let go of.
+extern "C" fn release(left: *mut c_void) {
+    // SAFETY: made by `Box::into_raw` in `drop`, and given to this work alone.
+    let left = unsafe { Box::from_raw(left.cast::<Left>()) };
+    // SAFETY: the stream made in `new`, released once.
+    unsafe { FSEventStreamRelease(left.stream) };
+    // SAFETY: made by `Box::into_raw` in `new`; no callback runs any more.
+    drop(unsafe { Box::from_raw(left.heard) });
+}
 
 /// The stream's callback, on its queue: the folders that changed among those listened to.
 extern "C" fn changed(

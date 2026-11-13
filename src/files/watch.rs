@@ -26,7 +26,9 @@ pub enum Change {
 /// Who is told of a change: called on the watch's own thread, so it only hands the news on.
 type Tell = Box<dyn Fn(Change) + Send + Sync>;
 
-/// The changes under one root, heard until it is dropped.
+/// The changes under one root, heard until it is dropped. A drop never waits for news under
+/// way, so the watch may be dropped by whoever it tells, or under a lock that they take; that
+/// news ends as it would have, and none comes after it.
 pub struct Watch(system::Stream);
 
 impl Watch {

@@ -8,7 +8,6 @@ use std::os::fd::{AsRawFd as _, FromRawFd as _, OwnedFd};
 use std::os::unix::ffi::OsStrExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
 
 use super::{Change, Tell};
 
@@ -32,11 +31,11 @@ struct Shared {
     tell: Tell,
 }
 
-/// The watches, the pipe that ends the reader, and the reader.
+/// The watches, and the pipe that ends the reader. The reader is never waited for: it holds
+/// what it reads, and ends by itself once woken.
 pub(super) struct Stream {
     shared: Arc<Shared>,
     stop: OwnedFd,
-    reader: Option<JoinHandle<()>>,
 }
 
 impl Stream {
@@ -63,14 +62,10 @@ impl Stream {
             tell,
         });
         let reading = Arc::clone(&shared);
-        let reader = std::thread::Builder::new()
+        std::thread::Builder::new()
             .name("files".into())
             .spawn(move || read(&reading, &stopped))?;
-        Ok(Self {
-            shared,
-            stop,
-            reader: Some(reader),
-        })
+        Ok(Self { shared, stop })
     }
 
     pub(super) fn listen(&self, dirs: &BTreeSet<PathBuf>) {
@@ -99,12 +94,11 @@ impl Stream {
 }
 
 impl Drop for Stream {
+    /// The reader is woken to end, not waited for: the drop may come on the reader's own
+    /// thread (its news let go of the last owner) or under a lock that its news waits for.
     fn drop(&mut self) {
         // SAFETY: one byte from a buffer of one, to our own pipe: it wakes the reader.
         unsafe { libc::write(self.stop.as_raw_fd(), [0u8].as_ptr().cast(), 1) };
-        if let Some(reader) = self.reader.take() {
-            let _ = reader.join();
-        }
     }
 }
 
