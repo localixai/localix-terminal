@@ -307,7 +307,10 @@ normal tests in CI.
   started by a call, and one every hour while it runs), for each agent installed; what the person takes out is remembered in the store's `state`
   (`integration.declined.<id>`) and left out. The person's programs run as their terminal would
   (`shell.rs`: their login shell's PATH, a deadline each, an answer for one that asks). An
-  integration names the agent it is for and what to offer.
+  integration names the agent it is for and what to offer. Before its first round puts this app's
+  in, the doctor takes out once what LLX Desk, as the app was called up to 0.1.6, put in under its
+  own name (`former.rs`: the `llx-desk` link, desktop entry, agents' servers and Claude Code
+  plugin), each only when what it runs is gone or is this app.
 - **`browser/alerts.rs`, `browser/alerts_macos.rs`** say what waits for the person outside the
   Event Center's list, read from that list and never a source of their own: which tabs wait (the
   strip's dot and second line), and, on macOS in the app's bundle, a silent notice for each new
@@ -330,6 +333,12 @@ normal tests in CI.
   (`llxterm-<uid>` in the user's temporary directory), its files in the home (`LLXTERM_HOME`, which
   moves nothing else). A test build (feature `test-server`, turned on only by the crate's own dev-dependency)
   takes the place from `LLXTERM_TEST_DIR` and never opens a window; `harness.rs` is its test support.
+- **`cli/former.rs`, `paths/former.rs`, `bundle.rs`** carry LLX Desk 0.1.6 over, first in a run and
+  before anything opens the database or the settings: on macOS an `LLX Desk.app` is renamed
+  `Localix Terminal.app` and opened again from there; an LLX Desk that still serves is stopped
+  when the app starts; its data folder, database and settings are renamed this app's, all of a
+  move or none of it, and logged. `LLX_DESK_DATA` and `LLX_DESK_HOME` are read where the new
+  variables are not set. All of it goes with release.yml's bridge archives.
 
 ## Rules
 

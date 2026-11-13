@@ -6,6 +6,7 @@
 //! where the agent itself looks for it (place.rs), which is quick and needs none of its
 //! programs to start. Any other host is given the entry to paste (`snippet`).
 
+mod former;
 mod place;
 mod read;
 
@@ -15,6 +16,7 @@ use serde_json::{Value, json};
 
 use super::State;
 use super::shell::{failure, find, login_var, run_with};
+pub(super) use former::gone_or_this;
 use place::Place;
 pub(super) use place::shown;
 use read::Kept;

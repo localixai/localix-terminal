@@ -16,6 +16,7 @@ mod claude;
 mod command;
 mod declined;
 mod doctor;
+mod former;
 mod mcp_hosts;
 pub(crate) mod reach;
 mod shell;

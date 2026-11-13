@@ -15,9 +15,14 @@ const EVERY: Duration = Duration::from_secs(60 * 60);
 /// thread goes on.
 static SOONER: OnceLock<SyncSender<()>> = OnceLock::new();
 
-/// One round: the command, then every agent's integration. What was done, in words.
+/// One round: what LLX Desk 0.1.6 left under its name taken out (once), then the command, then
+/// every agent's integration. What was done, in words.
 pub fn doctor() -> Vec<String> {
-    let mut said = super::opened();
+    let mut said = {
+        let _one = crate::lock(&super::BUSY);
+        super::former::sweep()
+    };
+    said.extend(super::opened());
     said.extend(super::auto());
     said
 }

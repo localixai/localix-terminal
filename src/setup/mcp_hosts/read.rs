@@ -14,23 +14,37 @@ pub(super) enum Kept {
     Json(&'static [&'static str]),
     /// JSON: the command line (an array, the program first) at this path.
     JsonLine(&'static [&'static str]),
-    /// TOML: `command` in the `[mcp_servers.llxterm]` table.
+    /// TOML: `command` in the `[mcp_servers.<name>]` table.
     Toml,
-    /// YAML: `command:` under `llxterm:`.
+    /// YAML: `command:` under `<name>:`.
     Yaml,
 }
 
 impl Kept {
     /// The command `text` (a configuration) runs for the server, if it has one.
     pub(super) fn entry(self, text: &str) -> Option<String> {
+        self.entry_named(text, NAME)
+    }
+
+    /// The command `text` runs for the server named `name` (an older app's), if it has one.
+    pub(super) fn entry_named(self, text: &str, name: &str) -> Option<String> {
+        let named = |at: &[&'static str]| -> Vec<&str> {
+            (at.iter())
+                .map(|key| if *key == NAME { name } else { key })
+                .collect()
+        };
         match self {
-            Self::Json(at) => at_path(&json(text)?, at)?.as_str().map(String::from),
-            Self::JsonLine(at) => at_path(&json(text)?, at)?
+            Self::Json(at) => at_path(&json(text)?, &named(at))?
+                .as_str()
+                .map(String::from),
+            Self::JsonLine(at) => at_path(&json(text)?, &named(at))?
                 .get(0)?
                 .as_str()
                 .map(String::from),
-            Self::Toml => toml_command(text),
-            Self::Yaml => yaml_command(text),
+            Self::Toml => toml_value(text, &format!("mcp_servers.{name}"), "command")?
+                .as_str()
+                .map(String::from),
+            Self::Yaml => yaml_command(text, name),
         }
     }
 }
@@ -88,18 +102,9 @@ fn uncommented(text: &str) -> String {
 }
 
 /// The value at `path` in `config`.
-fn at_path<'a>(config: &'a Value, path: &[&str]) -> Option<&'a Value> {
-    path.iter().try_fold(config, |value, key| value.get(*key))
-}
-
-/// The server's table in Codex's TOML.
-const TOML_TABLE: &str = "mcp_servers.llxterm";
-
-/// `command` in the server's TOML table.
-fn toml_command(text: &str) -> Option<String> {
-    toml_value(text, TOML_TABLE, "command")?
-        .as_str()
-        .map(String::from)
+fn at_path<'a>(config: &'a Value, path: &[impl AsRef<str>]) -> Option<&'a Value> {
+    path.iter()
+        .try_fold(config, |value, key| value.get(key.as_ref()))
 }
 
 /// Key `key` of table `table` in a TOML text (from the table's heading, `[table]`, to the next
@@ -128,12 +133,12 @@ pub(in crate::setup) fn toml_value(text: &str, table: &str, key: &str) -> Option
         .ok()
 }
 
-/// `command:` under the server's key in YAML: the first one more indented than the key, before
-/// the next key as indented as it.
-fn yaml_command(text: &str) -> Option<String> {
+/// `command:` under the server's key (`name:`) in YAML: the first one more indented than the
+/// key, before the next key as indented as it.
+fn yaml_command(text: &str, name: &str) -> Option<String> {
     let mut lines = text.lines();
     let indent = |line: &str| line.len() - line.trim_start().len();
-    let key = lines.find(|line| line.trim() == format!("{NAME}:"))?;
+    let key = lines.find(|line| line.trim() == format!("{name}:"))?;
     let depth = indent(key);
     let value = lines
         .take_while(|line| line.trim().is_empty() || indent(line) > depth)

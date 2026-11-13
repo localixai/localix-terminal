@@ -138,7 +138,7 @@ pub(super) fn take_off_entry(exe: &Path, home: &Path) -> Result<String, String> 
 }
 
 /// Whether the program at `file` is an llxterm, by what its `--version` says.
-fn is_llxterm(file: &Path) -> bool {
+pub(super) fn is_llxterm(file: &Path) -> bool {
     let mut asked = std::process::Command::new(file);
     asked.arg("--version");
     within(asked, Duration::from_secs(5)).is_ok_and(|ran| ran.out.starts_with("llxterm "))

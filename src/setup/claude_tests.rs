@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde_json::json;
 
-use super::{Market, marketplace_in, on_record, plugin_in};
+use super::{Former, Market, former_in, holds_former, marketplace_in, on_record, plugin_in};
 
 #[test]
 fn a_marketplace_is_removed_only_when_it_is_listed_at_another_folder() {
@@ -92,4 +92,43 @@ fn the_plugin_is_known_in_place_from_claude_codes_own_records() {
         &settings(true),
         dir
     ));
+}
+
+#[test]
+fn llx_desks_plugin_and_marketplace_are_found_in_claude_codes_records() {
+    let old = "/Applications/LLX Desk.app/Contents/Resources/claude-code";
+    let none = json!({});
+    // As this Mac's settings have them: the marketplace a folder in 0.1.6's bundle.
+    let settings = json!({
+        "enabledPlugins": {"llx-desk@llx-desk": true, "llxterm@llxterm": true},
+        "extraKnownMarketplaces": {"llx-desk": {"source": {"source": "directory", "path": old}}}
+    });
+    assert_eq!(
+        former_in(&none, &none, &settings),
+        Former::Recorded(Some(old.into()))
+    );
+    let markets = json!({"llx-desk": {"source": {"source": "directory", "path": "/elsewhere"}}});
+    assert_eq!(
+        former_in(&none, &markets, &none),
+        Former::Recorded(Some("/elsewhere".into()))
+    );
+    // The plugin alone, its marketplace gone already.
+    let installed = json!({"plugins": {"llx-desk@llx-desk": [{"version": "0.1.6"}]}});
+    assert_eq!(former_in(&installed, &none, &none), Former::Recorded(None));
+    // This app's own are not LLX Desk's.
+    let new = json!({"enabledPlugins": {"llxterm@llxterm": true}});
+    assert_eq!(former_in(&none, &none, &new), Former::Absent);
+}
+
+#[test]
+fn a_marketplace_folder_holds_llx_desks_only_while_its_manifest_names_it() {
+    let scratch = crate::testing::Scratch::new();
+    let dir = scratch.path();
+    assert!(!holds_former(dir));
+    let manifest = ".claude-plugin/marketplace.json";
+    scratch.file(manifest, r#"{"name": "llx-desk", "plugins": []}"#);
+    assert!(holds_former(dir));
+    // 0.1.6's bundle with this app in it: the folder is there, and holds this app's.
+    scratch.file(manifest, r#"{"name": "llxterm", "plugins": []}"#);
+    assert!(!holds_former(dir));
 }

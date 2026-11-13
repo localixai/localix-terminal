@@ -9,7 +9,8 @@ use std::time::Duration;
 use serde_json::Value;
 
 use super::State;
-use super::shell::{Ran, failure, find, run};
+use super::former::Swept;
+use super::shell::{Ran, failure, find, login_path, run};
 
 /// The plugin as Claude Code names it, and its marketplace.
 const PLUGIN: &str = "llxterm@llxterm";
@@ -218,6 +219,89 @@ fn marketplace_in(markets: &Value, dir: &Path) -> Market {
         None => Market::Absent,
         Some(found) if found["path"].as_str() == Some(&dir.display().to_string()) => Market::Here,
         Some(_) => Market::Elsewhere,
+    }
+}
+
+/// LLX Desk 0.1.6's plugin and its marketplace, as Claude Code names them.
+const FORMER_PLUGIN: &str = "llx-desk@llx-desk";
+const FORMER_MARKETPLACE: &str = "llx-desk";
+
+/// What Claude Code's records hold of LLX Desk's plugin and marketplace.
+#[derive(Debug, PartialEq, Eq)]
+enum Former {
+    /// Neither.
+    Absent,
+    /// One of them: the folder of the marketplace, when they name one.
+    Recorded(Option<PathBuf>),
+}
+
+/// What Claude Code's records (its installed plugins, its known marketplaces and its settings)
+/// hold of LLX Desk's plugin and marketplace.
+fn former_in(installed: &Value, markets: &Value, settings: &Value) -> Former {
+    let folder = |market: &Value| market["source"]["path"].as_str().map(PathBuf::from);
+    let market = (markets.get(FORMER_MARKETPLACE))
+        .or_else(|| settings["extraKnownMarketplaces"].get(FORMER_MARKETPLACE));
+    let plugin = installed["plugins"].get(FORMER_PLUGIN).is_some()
+        || settings["enabledPlugins"].get(FORMER_PLUGIN).is_some();
+    match market {
+        Some(market) => Former::Recorded(folder(market)),
+        None if plugin => Former::Recorded(None),
+        None => Former::Absent,
+    }
+}
+
+/// Whether `dir` holds LLX Desk's marketplace still (an LLX Desk installed beside this app).
+fn holds_former(dir: &Path) -> bool {
+    let manifest = std::fs::read_to_string(dir.join(".claude-plugin/marketplace.json"));
+    (manifest
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok()))
+    .is_some_and(|market| market["name"] == FORMER_MARKETPLACE)
+}
+
+/// LLX Desk's plugin and marketplace taken out of Claude Code with its own commands, when its
+/// records hold them and the marketplace's folder no longer holds LLX Desk's (0.1.6's updater
+/// replaced the app, or this app took its place).
+pub(super) fn retire() -> Swept {
+    let Some(dir) = records() else {
+        return Swept::Nothing;
+    };
+    let read = |name: &str| -> Value {
+        (std::fs::read_to_string(dir.join(name)).ok())
+            .and_then(|text| serde_json::from_str(&text).ok())
+            .unwrap_or_default()
+    };
+    let found = former_in(
+        &read("plugins/installed_plugins.json"),
+        &read("plugins/known_marketplaces.json"),
+        &read("settings.json"),
+    );
+    let Former::Recorded(market) = found else {
+        return Swept::Nothing;
+    };
+    if let Some(market) = market.filter(|market| holds_former(market)) {
+        return Swept::Left(format!("its marketplace at {} is there", market.display()));
+    }
+    let claude = match find("claude") {
+        Ok(claude) => claude,
+        Err(why) if login_path().is_some() => return Swept::Left(why),
+        Err(why) => return Swept::Failed(why),
+    };
+    // Either may have nothing to take out (a marketplace with no plugin installed from it).
+    let plugin = ask(&claude, &["plugin", "uninstall", FORMER_PLUGIN]);
+    let market = ask(
+        &claude,
+        &["plugin", "marketplace", "remove", FORMER_MARKETPLACE],
+    );
+    match (plugin, market) {
+        (Ok(plugin), Ok(market)) if !plugin.ok && !market.ok => Swept::Failed(failure(
+            &market,
+            "`claude plugin marketplace remove llx-desk` failed and said nothing",
+        )),
+        (Ok(_), Ok(_)) => {
+            Swept::Done("the plugin llx-desk and its marketplace are taken out".into())
+        }
+        (Err(why), _) | (_, Err(why)) => Swept::Failed(why),
     }
 }
 
