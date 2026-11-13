@@ -136,7 +136,8 @@ impl Desk {
         if aside {
             browser.aside(key);
         }
-        let page = editor::page(&name, editor::language(&name));
+        let language = editor::language(&name, kept.text());
+        let page = editor::page(&name, language, editor::reads(&name));
         let panel = Arc::new(browser.panel(id, &name, page));
         let loaded = work.clone();
         panel.keyboard(Arc::new(move |posted: &str| {
@@ -155,6 +156,7 @@ impl Desk {
     /// `work` done on file `key`'s tab: the frames its page is told, painted where a window
     /// shows it.
     pub(super) fn file_work(&self, key: &str, work: Work) -> Vec<String> {
+        let mut followed = None;
         let mut edits = crate::lock(&self.edits);
         let Some(kept) = edits.get_mut(key) else {
             return vec![];
@@ -181,6 +183,10 @@ impl Desk {
                     self.file_draft(kept, None);
                     vec![]
                 }
+                Some(Did::Follow(href)) => {
+                    followed = Some(href);
+                    vec![]
+                }
                 None => vec![],
             },
         };
@@ -188,6 +194,12 @@ impl Desk {
             for frame in &frames {
                 panel.paint(frame);
             }
+        }
+        drop(edits);
+        // A link followed opens another tab, which takes the files itself: once they are let
+        // go here.
+        if let Some(href) = followed {
+            self.file_followed(key, &href);
         }
         frames
     }
@@ -201,15 +213,15 @@ impl Desk {
             .inspect_err(|why| log::warn!("a file's unsaved text was not read: {why}"))
             .ok()
             .flatten();
-        let name = kept.name();
+        let (name, line) = (kept.name(), kept.line.take());
         let opened = editor::Opened {
             name: &name,
-            text: kept.held.as_ref().map_or("", |held| held.text.as_str()),
+            text: kept.text(),
             draft: draft.as_ref().map(|draft| draft.text.as_str()),
             moved: (draft.as_ref()).is_some_and(|draft| {
                 (kept.held.as_ref()).is_none_or(|held| draft.moved(&held.stamp))
             }),
-            line: kept.line.take(),
+            line,
         };
         let mut frames = vec![editor::opened(&opened)];
         if kept.held.is_none() {

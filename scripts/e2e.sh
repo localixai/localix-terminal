@@ -302,6 +302,19 @@ scenes() {
   has "the file asked for is the one in sight" "$said" "$shown (file) [shown]: src/cart.ts"
   sleep 1
   shot editor
+  # A Markdown file opens drawn as a document, its text one button away; the tool still reads
+  # the text itself.
+  said=$(call '{"action":"open","kind":"file","path":"README.md"}')
+  doc=$(grep -o 'f[0-9][0-9]*' <<<"$said" | head -1)
+  sleep 1
+  has "a Markdown file's tab holds its text" "$(call "{\"action\":\"interact\",\"tab\":\"$doc\"}")" "# Acme Shop"
+  if command -v agent-desktop >/dev/null; then
+    said=$(offered)
+    has "a Markdown file opens as a document" "$said" "Acme Shop"
+    has "its text is one button away" "$said" "Edit text"
+  fi
+  shot document
+  call "{\"action\":\"close\",\"tab\":\"$doc\"}" >/dev/null
   # The app under test is not the one the person uses: their command still runs theirs.
   has "the person's command is left as it was" "$(readlink "$HOME/.local/bin/llxterm" 2>&1)" "$linked"
 }

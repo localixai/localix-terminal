@@ -391,6 +391,23 @@ The tokens (`frame.css`) set the timings; a component never picks its own durati
 
   `frame.css` already limits every transition to colours and opacity under it.
 
+## A file drawn to read
+
+- **A Markdown file opens as a document**, drawn from its text: one column, 720 pt wide at
+  most and centred in its pane, in the system font at 15 / 24 (*ours*: prose is content, read
+  at length, not a row of the chrome), on the editor's ground and in the window's inks. Code
+  takes the editor's own colours, a rule or a table's line the fills. Nothing is loaded from
+  outside the page: a picture is its words, in the quiet ink.
+- **One button turns between the document and its text**: an icon alone in the pane's top
+  right corner (a pencil over the document, an eye over the text), 28 pt, quiet until pointed
+  at, in the margin both leave it so that it never lies over a line. Its key is ⇧⌘V. Each
+  keeps its own place as the person turns between them.
+- **A file opens as what was asked for**: the document, but its text where text was left
+  unsaved in it or a line of it was named.
+- **A link leads on in the window**: to the web as a page in a tab of its own, to a file of
+  the project as that file's tab, to a heading as a scroll to it. Nothing leaves the project,
+  and no other app is opened.
+
 ## Settings
 
 - **One window's tab**, opened by ⌘, from the app menu. There's no toolbar button for it.
@@ -413,6 +430,10 @@ when its gap is closed.
   as the page was told its look (at its start and at each restyle). Turning VoiceOver on or off
   does not tell the pages by itself.
 - Pages still mix `currentColor` and hex in places where a system keyword fits.
+- The editor's own actions (Save, Find, and a Markdown file's turn between the document and
+  its text) are keys of its page alone: none has a home in the menu bar yet, and none is in
+  the shortcut table, so Settings cannot change them.
+- A document drawn from a Markdown file has no Find: ⌘F answers only over the text.
 
 ## Sources
 

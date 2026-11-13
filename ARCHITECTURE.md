@@ -175,10 +175,16 @@ normal tests in CI.
 - **`editor.rs`, `editor/`** are the editor's page: a vendored editor core and one script a
   language (`vendor/`, built by `scripts/editor` from pinned packages, each run by its SHA-384),
   with the page's own script. A page loads the core and the language of its file, never the
-  others. `desk/edit.rs` opens a file into a tab, held to its caller's project (`within`), and
+  others; `editor/language.rs` tells that language from the file's name, and from the program
+  its first line names where the name says nothing. A Markdown file's page also loads the
+  vendored script that draws it as a document to read (`preview`: the lab's own renderer,
+  taken as the published package, never by path), and opens showing that; the page loads
+  nothing from outside, so a picture is its words. `desk/edit.rs` opens a file into a tab,
+  held to its caller's project (`within`), and
   `desk/edit_disk.rs` is that tab against the disk: the news of a change, and a save that
   writes only over what the page was last told. `desk/edit_moved.rs` keeps a tab on its file
-  when the file is named anew or moved in the tree.
+  when the file is named anew or moved in the tree, and `desk/edit_link.rs` follows a link of
+  a document to another file of the same project, opened as one picked in the tree is.
 - **`desk/`** is the `window` tool. A `Call` (its project and agent, directory, environment) and a
   JSON object in,
   text out. Its arguments are checked against its schema (`args.rs`) before anything is done: a field

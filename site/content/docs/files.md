@@ -12,7 +12,9 @@ The menu makes a file or a folder, names an entry anew (F2) and moves it to the 
 
 ## The editor
 
-A file picked in the tree opens in a tab on the right of what you look at, the next one in its place. It has syntax colours for the common languages, and ⌘S saves the file as the disk wrote it, its line ends kept.
+A file picked in the tree opens in a tab on the right of what you look at, the next one in its place. It has syntax colours for the common languages, and ⌘S saves the file as the disk wrote it, its line ends kept. A script with no ending is coloured by the program its first line names (`#!/bin/sh`, `#!/usr/bin/env python3`).
+
+A Markdown file opens drawn as a document to read. The button in its corner, or ⇧⌘V, turns to its text and back; a file with text left unsaved, or one opened at a line, opens as its text. A link to another file of the project opens that file, a link to the web opens a page, and a picture is shown as its words: the page loads nothing.
 
 A file changed on disk is followed while you have not edited it. Where both changed, a save writes nothing and says so. What you left unsaved is kept with the file, past the tab and the app.
 

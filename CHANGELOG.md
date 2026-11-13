@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Added
+
+- **A Markdown file opens as a document.** A `.md` file picked in the tree, or opened by an
+  agent, is drawn to read by flowdown, the lab's own renderer: headings, tables, callouts and
+  code in the editor's colours, on the window's ground. The icon button in its corner, or ⇧⌘V,
+  turns to the file's text and back; the document is drawn from that text, so it shows an
+  unsaved edit and follows the disk as the text does. A file with text left unsaved, or one
+  opened at a line, opens as its text. A link to a file of the project opens that file in a
+  tab, a link to the web opens a page, and a picture is shown as its words: the page loads
+  nothing.
+
+### Fixed
+
+- **A script with no ending has its colours.** A file whose name says nothing of its language
+  (`bootstrap`, `lab-ci`) is coloured by the program its first line names: `#!/bin/sh`,
+  `#!/usr/bin/env python3`, `node`, `bun`, `ruby`, `php`, `lua`, `swift`.
+
 ## 0.1.7
 
 ### Added

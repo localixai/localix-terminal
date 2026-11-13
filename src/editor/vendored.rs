@@ -66,6 +66,11 @@ pub(super) const SCRIPTS: &[Script] = &[
         sha384: "D3BwlmEwts62c8YF2qKtKts1BuOQ8A4tg95eWr/qv6LcD7fktl4hjcG1Sl+bXHz/",
     },
     Script {
+        name: "preview",
+        text: include_str!("vendor/preview.js"),
+        sha384: "eTKa5O1h9pJmFsSgTOUuS6i80vSYSsCfnh91j+FBYAyYaRh64mJuD09wO+aqGURK",
+    },
+    Script {
         name: "python",
         text: include_str!("vendor/python.js"),
         sha384: "hIBJqpEoauqkM6UcWshH1duTqCgnLLdjGY4Yy5kkgL9oul/2mbuDjP1jJzDKrzcw",

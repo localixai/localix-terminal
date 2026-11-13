@@ -30,7 +30,36 @@ body{margin:0;display:flex;flex-direction:column;color:var(--fg);font:13px/16px 
 #bar button:hover{background:var(--ov-3)}
 #bar button:active{background:var(--ov-4)}
 #bar button:focus-visible{outline:2px solid var(--acc-4);outline-offset:1px}
+/* The file's place: its text, or the document drawn from it, and over their corner the one
+   button that turns between them. */
+#w{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
 #e{flex:1;min-height:0}
+/* An icon button, as the Store's: a line glyph alone, quiet until pointed at. It stands in the
+   margin the text and the document both leave it, never over a line. */
+.ico{flex:none;width:28px;height:28px;padding:0;border:0;border-radius:var(--r-2);background:transparent;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-2);cursor:default}
+.ico:hover{background:var(--ov-2);color:var(--fg)}
+.ico:active{background:var(--ov-3)}
+.ico:focus-visible{outline:2px solid var(--acc-4);outline-offset:1px}
+.ico svg{flex:none;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+html[data-inactive] .ico svg{opacity:.6}
+#mode{position:absolute;top:8px;right:16px}
+#mode[data-reading] .to-read,#mode:not([data-reading]) .to-edit{display:none}
+#w[data-read] #e .cm-line{padding-right:56px}
+/* A Markdown file drawn to read: a column of prose on the editor's ground, in the window's
+   inks and the editor's own colours for code. The renderer's sheet is put in by the page's
+   script; what is set here are its tokens and the document's measure. */
+#p{flex:1;min-height:0;overflow:auto;padding:24px 56px 64px;outline:none;cursor:auto;user-select:text;-webkit-user-select:text}
+#p .flowdown{max-width:720px;margin:0 auto;font-size:15px;line-height:24px;
+  --fd-fg:var(--fg);--fd-fg-soft:var(--ink-2);--fd-fg-faint:var(--ink-2);--fd-bg:transparent;--fd-bg-solid:var(--bg);
+  --fd-border:var(--ov-4);--fd-border-subtle:var(--ov-3);--fd-border-strong:var(--ink-3);
+  --fd-link:var(--s-value);--fd-focus:var(--acc-4);--fd-font-mono:var(--mono);--fd-radius:var(--r-3);--fd-radius-small:var(--r-1);
+  --fd-code-comment:var(--s-note);--fd-code-keyword:var(--s-word);--fd-code-string:var(--s-text);--fd-code-number:var(--s-value);
+  --fd-code-function:var(--s-call);--fd-code-type:var(--s-kind);--fd-code-tag:var(--s-tag)}
+#p .flowdown a{cursor:pointer}
+/* A block of code is copied, never saved as a file: the page hands nothing to the disk. */
+#p .fd-code-download{display:none}
+/* A picture is its words: the page loads nothing. */
+#p .pic{color:var(--ink-2);font-style:italic}
 /* Each rule of the text is under `#e`: the editor's library styles its own parts by a class of
    its own, and a rule that named only the part would lose to it. */
 #e .cm-editor{height:100%;font:var(--mono-size,13px)/1.5 var(--mono);color:var(--fg);background:transparent}
@@ -71,7 +100,11 @@ html[data-inactive] #e .cm-focused>.cm-scroller>.cm-selectionLayer .cm-selection
 </head>
 <body>
 <div id="bar" role="status" hidden><span id="said"></span></div>
+<div id="w">
 <div id="e"></div>
+<div id="p" tabindex="-1" hidden></div>
+<button id="mode" class="ico" type="button" hidden><svg class="to-edit" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13l.7-2.8L11 2.9a1.5 1.5 0 0 1 2.1 2.1L5.8 12.3 3 13zM9.8 4.1l2.1 2.1"/></svg><svg class="to-read" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8zM8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg></button>
+</div>
 {{vendored}}<script>{{glue}}</script>
 </body>
 </html>

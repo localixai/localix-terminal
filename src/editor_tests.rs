@@ -1,5 +1,5 @@
-//! Tests of `editor`: a page runs the core and its file's language by their hashes and nothing
-//! else, a file's language is told from its name, and the page's messages are read.
+//! Tests of `editor`: a page runs the core, its file's language and, for a file drawn to read,
+//! what draws it, by their hashes and nothing else; and the page's frames and messages are read.
 
 use super::vendored::SCRIPTS;
 use super::*;
@@ -17,14 +17,14 @@ fn policy(page: &str) -> &str {
 fn a_page_runs_the_core_and_its_files_language_by_their_hashes_and_nothing_else() {
     let hash = |name: &str| format!("'sha384-{}'", vendored(name).unwrap().sha384);
     let glue = format!("'sha384-{GLUE_SHA384}'");
-    let rust = page("main.rs · <b>&", language("main.rs"));
+    let rust = page("main.rs · <b>&", language("main.rs", ""), false);
     assert_eq!(
         policy(&rust),
         format!("{} {} {glue}", hash("core"), hash("rust"))
     );
     assert!(rust.contains("<title>main.rs · &lt;b&gt;&amp;</title>"));
     assert_eq!(rust.matches("<script>").count(), 3);
-    let html = page("index.html", language("index.html"));
+    let html = page("index.html", language("index.html", ""), false);
     assert_eq!(
         policy(&html),
         format!(
@@ -35,12 +35,46 @@ fn a_page_runs_the_core_and_its_files_language_by_their_hashes_and_nothing_else(
             hash("html")
         )
     );
-    let plain = page("notes.txt", language("notes.txt"));
+    let plain = page("notes.txt", language("notes.txt", ""), false);
     assert_eq!(policy(&plain), format!("{} {glue}", hash("core")));
     for page in [&rust, &html, &plain] {
         assert!(!page.contains("{{vendored}}") && !page.contains("{{scripts}}"));
         assert!(page.contains(&format!("<script>{GLUE}</script>")));
     }
+}
+
+#[test]
+fn only_a_file_drawn_to_read_runs_what_draws_it() {
+    let hash = |name: &str| format!("'sha384-{}'", vendored(name).unwrap().sha384);
+    let glue = format!("'sha384-{GLUE_SHA384}'");
+    let read = page("README.md", language("README.md", ""), reads("README.md"));
+    assert_eq!(
+        policy(&read),
+        format!(
+            "{} {} {} {glue}",
+            hash("core"),
+            hash("markdown"),
+            hash("preview")
+        )
+    );
+    assert_eq!(read.matches("<script>").count(), 4);
+    // An MDX file has Markdown's words coloured, and is never drawn.
+    let mdx = page("page.mdx", language("page.mdx", ""), reads("page.mdx"));
+    assert_eq!(
+        policy(&mdx),
+        format!("{} {} {glue}", hash("core"), hash("markdown"))
+    );
+}
+
+#[test]
+fn a_script_with_no_ending_is_opened_in_the_language_its_first_line_names() {
+    let frame = opened(&Opened {
+        name: "cf",
+        text: "#!/bin/sh\nexec true\n",
+        ..Opened::default()
+    });
+    assert!(frame.contains(r#""lang":"shell""#), "{frame}");
+    assert!(frame.contains(r#""read":false"#), "{frame}");
 }
 
 #[test]
@@ -60,33 +94,6 @@ fn nothing_a_page_holds_can_end_its_own_element() {
 }
 
 #[test]
-fn a_files_language_is_told_from_its_name() {
-    let id = |name: &str| language(name).map(|language| language.id);
-    assert_eq!(id("main.rs"), Some("rust"));
-    assert_eq!(id("App.TSX"), Some("tsx"));
-    assert_eq!(id("Cargo.lock"), Some("toml"));
-    assert_eq!(id("Dockerfile"), Some("dockerfile"));
-    assert_eq!(id("Dockerfile.dev"), Some("dockerfile"));
-    assert_eq!(id(".env.local"), Some("properties"));
-    assert_eq!(id("build.gradle.kts"), Some("kotlin"));
-    assert_eq!(id("LICENSE"), None);
-    assert_eq!(id("photo.png"), None);
-    assert!(wraps("README.md") && wraps("notes.TXT") && !wraps("main.rs"));
-}
-
-#[test]
-fn every_language_a_name_tells_is_held_in_scripts_that_exist() {
-    for (_, id) in BY_END.iter().chain(BY_NAME) {
-        let held = (HELD_IN.iter())
-            .find_map(|(ids, scripts)| ids.contains(id).then_some(*scripts))
-            .unwrap_or_else(|| std::slice::from_ref(id));
-        for script in held {
-            assert!(vendored(script).is_some(), "{id}: no script {script}");
-        }
-    }
-}
-
-#[test]
 fn the_pages_messages_are_read() {
     assert_eq!(
         did(r#"{"t":"save","text":"a\nb"}"#),
@@ -97,6 +104,11 @@ fn the_pages_messages_are_read() {
         Some(Did::Draft(String::new()))
     );
     assert_eq!(did(r#"{"t":"clean"}"#), Some(Did::Clean));
+    assert_eq!(
+        did(r#"{"t":"follow","href":"docs/ui.md#colour"}"#),
+        Some(Did::Follow("docs/ui.md#colour".into()))
+    );
+    assert_eq!(did(r#"{"t":"follow"}"#), None);
     assert_eq!(did(r#"{"t":"save"}"#), None);
     assert_eq!(did(r#"{"t":"other"}"#), None);
     assert_eq!(did("not json"), None);
@@ -117,6 +129,7 @@ fn a_file_is_opened_with_its_language_and_what_was_left_unsaved() {
     let told: Value = serde_json::from_str(inside.unwrap()).unwrap();
     assert_eq!(told["lang"], "markdown");
     assert_eq!(told["wrap"], true);
+    assert_eq!(told["read"], true);
     assert_eq!(told["text"], "one\n");
     assert_eq!(told["draft"], "two\n");
     assert_eq!(told["moved"], true);

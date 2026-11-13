@@ -2,8 +2,10 @@
 // A file edited in a tab. The desk opens it (O: its text as the disk holds it, and the text the
 // person left unsaved), shows a line of it (L), says when the disk changed under it (D) or the
 // file went (G), and answers a save (S). The page posts what the person did as one JSON message ("k" and it): `save` with
-// the text, `draft` with the text while it differs from the disk's, and `clean` once it does not.
+// the text, `draft` with the text while it differs from the disk's, `clean` once it does not,
+// and `follow` with a link of the document to another file.
 // The text is the person's until they save it: nothing the disk does replaces what they typed.
+// A file the page can draw (Markdown) opens as a document to read, drawn from that same text.
 const post = (text) => window.ipc && window.ipc.postMessage(text);
 const say = (what) => post("k" + JSON.stringify(what));
 const { EditorState, Compartment, Text, Transaction, Prec } = CM.pkg["@codemirror/state"];
@@ -30,6 +32,8 @@ const coloured = HighlightStyle.define([
 ]);
 
 const bar = document.getElementById("bar"), said = document.getElementById("said");
+const stage = document.getElementById("w"), source = document.getElementById("e");
+const reader = document.getElementById("p"), turn = document.getElementById("mode");
 const dark = matchMedia("(prefers-color-scheme: dark)");
 const scheme = new Compartment();
 // The text as the disk holds it, the file's name, and what was sent to be saved and not answered.
@@ -61,7 +65,7 @@ function tell(words, ...buttons) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = word;
-    button.onclick = () => { tell(""); press(); view.focus(); };
+    button.onclick = () => { tell(""); press(); attend(); };
     bar.append(button);
   }
   view.requestMeasure();
@@ -93,7 +97,7 @@ function started(text, told) {
       EditorView.contentAttributes.of({ "aria-label": told.name || "File" }),
       Prec.highest(keymap.of([{ key: "Mod-s", run: save }])),
       keymap.of([...CM.close.closeBracketsKeymap, ...CM.commands.defaultKeymap, ...CM.search.searchKeymap, ...CM.commands.historyKeymap, CM.commands.indentWithTab]),
-      EditorView.updateListener.of((update) => { if (update.docChanged) settle(); }),
+      EditorView.updateListener.of((update) => { if (update.docChanged) { settle(); draw(); } }),
     ],
   });
 }
@@ -102,7 +106,58 @@ const view = new EditorView({ parent: document.getElementById("e"), state: start
 dark.addEventListener("change", () => view.dispatch({ effects: scheme.reconfigure(EditorView.darkTheme.of(dark.matches)) }));
 // The person's font changed (Settings): the text is measured again.
 addEventListener("desk-look", () => view.requestMeasure());
-addEventListener("focus", () => view.focus());
+addEventListener("focus", () => attend());
+
+// The document a Markdown file is read as: the vendored renderer draws the editor's own text,
+// so what is read is what a save would write, an edit by another hand shows as it lands, and
+// the person's place in each stays as they turn between the two. A picture is its words, a
+// link to the web opens a tab of its own, and one to a file of the project opens that file.
+let drawn = null, reading = false;
+const picture = (props) => ({ tag: "span", props: { className: "pic" }, children: [props.alt || "Image"] });
+function draw() {
+  if (reading) drawn.update(view.state.doc.toString());
+}
+// The keys go to what is shown: the document scrolls, the text is typed into.
+function attend() {
+  if (reading) reader.focus(); else view.focus();
+}
+function read(on) {
+  if (on && !drawn) {
+    const sheet = document.createElement("style");
+    sheet.textContent = CM.preview.sheet;
+    document.head.prepend(sheet);
+    drawn = CM.preview.mount(reader, { html: CM.preview.html, highlight: CM.preview.highlight, headingIds: true, components: { img: picture } });
+  }
+  reading = on;
+  reader.hidden = !on;
+  source.hidden = on;
+  turn.toggleAttribute("data-reading", on);
+  turn.title = on ? "Edit text" : "Show preview";
+  turn.setAttribute("aria-label", turn.title);
+  draw();
+  if (!on) view.requestMeasure();
+  attend();
+}
+turn.onclick = () => read(!reading);
+reader.addEventListener("click", (event) => {
+  const link = event.target instanceof Element && event.target.closest("a[href]");
+  if (!link) return;
+  event.preventDefault();
+  const href = link.getAttribute("href");
+  if (/^https?:\/\//i.test(href)) post("o " + href);
+  else if (href.startsWith("#")) document.getElementById(decodeURIComponent(href.slice(1)))?.scrollIntoView();
+  else if (!/^[a-z][a-z\d+.-]*:/i.test(href)) say({ t: "follow", href });
+});
+// The keys the text's own map holds, where the document is shown and the text has no focus:
+// Save, and the turn between the two (⇧⌘V), which the text answers too.
+addEventListener("keydown", (event) => {
+  if (!event.metaKey || event.ctrlKey || event.altKey || turn.hidden) return;
+  const key = event.key.toLowerCase();
+  if (key === "v" && event.shiftKey) read(!reading);
+  else if (key === "s" && !event.shiftKey && reading) save();
+  else return;
+  event.preventDefault();
+}, true);
 
 // A long line scrolled sideways passes under the line numbers, which stand on the window's own
 // ground with none of theirs: what is under them is cut away (the page's sheet, `data-cut`).
@@ -140,8 +195,9 @@ function conflict(words) {
   tell(words, ["Reload", () => { take(true); settle(); }], ["Keep Mine", () => {}]);
 }
 
-// Line `n` shown, the cursor at its start.
+// Line `n` shown, the cursor at its start: a line is of the text, so the text is what shows.
 function show(n) {
+  if (reading) read(false);
   const line = view.state.doc.line(Math.max(1, Math.min(n, view.state.doc.lines)));
   view.dispatch({ selection: { anchor: line.from }, effects: EditorView.scrollIntoView(line.from, { y: "center" }) });
 }
@@ -156,11 +212,17 @@ window.O = (told) => {
   sending = null;
   view.setState(started(told.draft == null ? told.text : told.draft, told));
   tell("");
+  // A file the page draws opens as the document, with the text a click away; one with text
+  // left unsaved, or opened at a line, opens as its text, which is what was asked for.
+  const draws = !!(told.read && CM.preview);
+  turn.hidden = !draws;
+  stage.toggleAttribute("data-read", draws);
+  read(draws && told.draft == null && !told.line);
   if (told.draft != null && told.moved && dirty()) conflict("This file changed on disk since you edited it.");
   if (told.line) show(told.line);
   wasDirty = false;
   settle();
-  view.focus();
+  attend();
 };
 
 // The disk changed under the file: a text the person did not touch follows it; one they did

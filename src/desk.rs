@@ -20,6 +20,7 @@ mod center;
 mod changes;
 mod edit;
 mod edit_disk;
+mod edit_link;
 mod edit_moved;
 mod events;
 mod files;

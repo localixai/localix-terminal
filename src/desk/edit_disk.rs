@@ -49,6 +49,11 @@ impl Kept {
         (self.path.file_name()).map_or_else(String::new, |name| name.to_string_lossy().into_owned())
     }
 
+    /// The file's text as the page was last told the disk holds it; empty once the file is gone.
+    pub(super) fn text(&self) -> &str {
+        self.held.as_ref().map_or("", |held| held.text.as_str())
+    }
+
     /// The frames that tell the page what the disk holds now, when it is not what the page
     /// was told. What an editor does not take (the file made a picture) is not told: the page
     /// keeps its text, and a save says why it is not written.
