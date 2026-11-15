@@ -1,32 +1,20 @@
 # Configuration
 
-The app needs no configuration to run. These are the few switches it has, for secrets, for where it keeps its files, and for running with no window.
+The app needs no configuration to run. These are the few things it keeps, and the switches it has.
 
 ## Secrets
 
-A password an agent should type but not see is saved once and named in a call:
+A password an agent should type but not see is saved once as a secret: the agent asks you to save it, names it in what it types, and the app types the value. What the agent reads back shows only the name, never the value.
 
-```sh
-llxterm secret DEMO_PW < password.txt
-llxterm secret
-llxterm secret --forget DEMO_PW
-```
-
-It is saved to `~/.config/llxterm/secrets/NAME` with mode 0600. Use `{{secret:NAME}}` in a page's `fill` or a terminal's `input`: the app types the value, and answers show the placeholder.
+Secrets are kept in `~/.config/llxterm/secrets/`, one file each, with mode 0600.
 
 ## Variables
 
 | Variable | Meaning |
 | --- | --- |
-| `LLXTERM_HOME` | Where the app keeps its log, screenshots and comments. The lock and socket never move. |
-| `LLXTERM_PROJECT` | The project a call belongs to, instead of the nearest directory with `.git`. |
+| `LLXTERM_HOME` | Where the app keeps its log, screenshots and comments. |
 | `LLXTERM_NO_WINDOW` | Terminals only: the app runs with no window. |
-| `LLXTERM_SCRUB` | Comma-separated variables (`NAME_*` for all that start so) a terminal does not get from its caller: set by an integration for its agent's session variables. |
 | `LLXTERM_VERSION` | The release the install script takes. |
-
-## With no window
-
-`llxterm serve --headless` keeps the window off screen until a call asks to show it; pages still render.
 
 ## Where things are kept
 

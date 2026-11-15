@@ -1,7 +1,7 @@
-//! llxterm: a native window of browser pages and terminal sessions that an agent works in and a
-//! person watches. Tabs on the system's WebView (WKWebView on macOS, WebKitGTK on Linux), each
-//! page driven through a probe script; terminal sessions in a PTY, painted into tabs of the same
-//! window; a bar and a side that list the tabs of one project at a time, kept as one layout of
+//! llxterm: Localix Terminal, the terminal for you and your coding agents. Terminal sessions
+//! that belong to a project, beside a browser, a board and a Store that agents use too. Sessions
+//! in a PTY, painted into tabs of the window; pages on the system's WebView (WKWebView on macOS,
+//! WebKitGTK on Linux), each driven through a probe script; a bar and a side that list the tabs of one project at a time, kept as one layout of
 //! windows, workspaces and tabs; on macOS a small preview in a screen corner. The app is the
 //! server (`llxterm open`, or the bundle; `llxterm serve` is its launch out of sight, as a call
 //! starts it): an agent calls it from its shell, `llxterm window '<json>'`, over a unix socket,

@@ -272,7 +272,7 @@ export const register: Register = (on, options) => {
               }
               if (!text) continue
               await update($, desk, d => ({ ...d, comments: [...d.comments, { at: time(), text: words(text) }].slice(-20) }))
-              $.ui.toast(`llxterm: ${words(text).slice(0, 80)}`)
+              $.ui.toast(`Localix Terminal: ${words(text).slice(0, 80)}`)
               await tell(text)
             }
           }
@@ -421,7 +421,7 @@ export const register: Register = (on, options) => {
     const b = await read($, board)
     const ideas = b && b.backlog ? ` · ${b.backlog} in backlog` : ''
     const work = b ? `\nBoard: ${b.todo} todo · ${b.doing} doing · ${b.review} in review · ${b.done} done${ideas}` : ''
-    if (d.app === 'not running') return { text: `llxterm is not running.${work}` }
+    if (d.app === 'not running') return { text: `Localix Terminal is not running.${work}` }
     const tabs = d.tabs.length ? d.tabs.map(tab => `  ${tab}`).join('\n') : '  none open'
     const last = d.comments.slice(-3).map(c => `  ${c.at} ${c.text}`).join('\n')
     const said = last ? `\nLast comments:\n${last}` : ''
@@ -444,7 +444,7 @@ export const register: Register = (on, options) => {
     return (
       <Box>
         <Text wrap="truncate-end">
-          <Text color="cyan">◐ desk</Text>
+          <Text color="cyan">◐ Localix Terminal</Text>
           <Text dimColor>
             {running ? ` · ${tabs}` : ''}
             {working}

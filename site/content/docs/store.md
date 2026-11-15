@@ -24,9 +24,4 @@ The Store only removes what it put there.
 
 ## From an agent
 
-An agent can search and read the Store with [the window tool](window-tool.md). What it asks to install is shown to you the same way: nothing is installed on an agent's word.
-
-```sh
-llxterm window '{"action": "open", "kind": "store"}'
-llxterm window '{"action": "interact", "tab": "p1", "store": {"search": "playwright"}}'
-```
+An agent can search and read the Store with [the window tool](window-tool.md#the-store). What it asks to install is shown to you the same way: nothing is installed on an agent's word.

@@ -16,7 +16,7 @@ const OK: u8 = 0;
 const FAILED: u8 = 1;
 const UNREACHABLE: u8 = 3;
 
-const HELP: &str = "llxterm: a native window of browser pages and terminals that agents work in and a person watches
+const HELP: &str = "llxterm: the command of Localix Terminal, the terminal for you and your coding agents
 
 Usage:
   llxterm window '<json>' [--as NAME] [--project DIR]   one call: open, interact, screenshot,

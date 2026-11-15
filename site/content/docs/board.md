@@ -20,10 +20,4 @@ The board is kept in the app's database (`~/.local/share/llxterm/llxterm.sqlite`
 
 ## From an agent
 
-```sh
-llxterm window '{"action": "open", "kind": "board"}'
-llxterm window '{"action": "interact", "tab": "b1", "op": "add", "cards": [{"title": "Cart button overlaps on mobile"}]}'
-llxterm window '{"action": "interact", "tab": "b1", "op": "take"}'
-```
-
-The board is `b1`, the same tab each time. `op` is one of `add`, `take`, `review`, `block`, `release`, `comment`, `card`, `edit` and `remove`; with none, the call reads the board. `who` names a subagent. `llxterm window --board` prints the project's open cards from its file, starting nothing, for an agent beginning work.
+An agent plans on the same board with [the window tool](window-tool.md#the-board): it adds cards, takes one into Doing, hands it in to Review or blocks it with what it needs. The rules above hold for it as for any worker.

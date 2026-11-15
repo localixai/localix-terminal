@@ -13,6 +13,18 @@
   tab, a link to the web opens a page, and a picture is shown as its words: the page loads
   nothing.
 
+### Changed
+
+- **The README, the site and the docs are about the terminal, not its command.** Their first
+  steps are the window's: open a folder, start your agent, watch it work, point at what is
+  wrong, plan on the board. `llxterm`, the program agents reach the window through, is no
+  longer taught there: "Agents in the window" says what an agent can do in it and how the app
+  connects it, the protocol's page is gone, and saving a secret is something your agent asks
+  you to do.
+- **Claude Code's line above the prompt says Localix Terminal**, as do its notices and `/tabs`,
+  where it said "desk", the app's name before it was Localix Terminal; so do the plugin's
+  descriptions in `/plugin`.
+
 ### Fixed
 
 - **A Markdown file with link definitions follows its text as fast as any other.** Drawn as a

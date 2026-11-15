@@ -98,8 +98,8 @@ const landing: LandingContent = {
     title: 'Start in three steps',
     aside: 'Free · MIT license',
     steps: [
-      { title: 'Install', text: `The download, or [one line in a terminal](${DOCS}/getting-started). The app is all there is: it holds the window, the \`llxterm\` command and the MCP server.` },
-      { title: 'Open a project', text: '`llxterm open .` in a folder, or Open Folder… (⌘O) in the window.' },
+      { title: 'Install', text: `The download, or [one line in a terminal](${DOCS}/getting-started). The app is all there is: it holds the window and connects your agents to it.` },
+      { title: 'Open a project', text: 'Open Folder… (⌘O) in the window: the project opens as you left it.' },
       { title: 'Open a terminal', text: 'Your shell, or an agent you have installed: it starts in a terminal of the project, already connected to the window.' },
     ],
     links: [

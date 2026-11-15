@@ -6,7 +6,7 @@ const docs: DocsConfig = {
   index: {
     title: 'Localix Terminal docs',
     description:
-      'How to install Localix Terminal, connect your coding agents, and work in the window: terminal sessions, the browser, the board, the Store, and the one command agents use.',
+      'How to install Localix Terminal, connect your coding agents, and work in the window: terminal sessions, the browser, the board, the Store, and what your agents do in it.',
   },
   groups: [
     {
@@ -21,13 +21,13 @@ const docs: DocsConfig = {
     },
     {
       title: 'For agents',
-      blurb: 'The one command an agent or a script works in the window with.',
+      blurb: 'What your agents can do in the window, and how they reach it.',
       pages: ['window-tool'],
     },
     {
       title: 'Reference',
-      blurb: 'The switches, the protocol, and what the app does and does not allow.',
-      pages: ['configuration', 'protocol', 'security'],
+      blurb: 'The switches, and what the app does and does not allow.',
+      pages: ['configuration', 'security'],
     },
   ],
   unlisted: {},

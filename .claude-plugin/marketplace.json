@@ -2,13 +2,13 @@
   "name": "llxterm",
   "owner": { "name": "rsaryev" },
   "metadata": {
-    "description": "llxterm: a native window of browser pages and terminals that agents work in and a person watches"
+    "description": "Localix Terminal: the terminal for you and your coding agents"
   },
   "plugins": [
     {
       "name": "llxterm",
       "source": "./plugins/claude-code",
-      "description": "A window of browser pages and terminals Claude works in and you watch, with a pane for its tabs and your comments",
+      "description": "Localix Terminal for Claude Code: Claude opens pages and terminals beside its own and plans on the project's board, in the window you watch, with a line for its tabs, its cards and your comments",
       "version": "0.1.7",
       "license": "MIT",
       "keywords": ["browser", "terminal", "window", "screenshot"]

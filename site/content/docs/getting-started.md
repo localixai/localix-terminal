@@ -1,6 +1,6 @@
 # Getting started
 
-Install the app, open a folder as a project, and open a terminal or start an agent in it. The app is all there is to install: it holds the window, the `llxterm` command, the MCP server and, on macOS, the Claude Code plugin, and puts each in place for you.
+Install the app, open a folder as a project, and open a terminal or start an agent in it. The app is all there is to install: it holds the window and what connects your agents to it (an MCP server and, on macOS, the Claude Code plugin), and puts each in place for you.
 
 ## Install
 
@@ -16,7 +16,7 @@ The script checks `SHA256SUMS` before it writes anything; `LLXTERM_VERSION=0.1.0
 
 ### Linux
 
-The program goes to `~/.local/share/llxterm`, and `llxterm setup command` puts the command on your `PATH` and the app among your applications. Pages need WebKitGTK 4.1 and GTK 3, glibc 2.35+ (Ubuntu 22.04+), and a display (X or Wayland). Without a display, terminals still work.
+The program goes to `~/.local/share/llxterm`, and the script puts the app among your applications. Pages need WebKitGTK 4.1 and GTK 3, glibc 2.35+ (Ubuntu 22.04+), and a display (X or Wayland). Without a display, terminals still work.
 
 ```sh
 sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0
@@ -34,13 +34,7 @@ On macOS, `cargo build --release && scripts/bundle-macos.sh` makes `target/relea
 
 ## Open a project
 
-Opened, the app links `llxterm` into `~/.local/bin` and brings the window to you.
-
-```sh
-llxterm open .
-```
-
-That opens the current folder as a project. In the window, **Open Folder…** (⌘O) does the same. A project you come back to shows what it had open. With nothing left open, the window offers New Page, New Terminal, Board and Open Folder… with their keys, and under them the mark of each coding agent you have installed.
+Opened, the app brings the window to you. **Open Folder…** (⌘O) opens a folder as a project, and a project you come back to shows what it had open. With nothing left open, the window offers New Page, New Terminal, Board and Open Folder… with their keys, and under them the mark of each coding agent you have installed.
 
 ## Start an agent
 

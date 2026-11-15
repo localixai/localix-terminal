@@ -7,7 +7,7 @@ allowed-tools: Bash(llxterm window:*)
 
 # llxterm: the board
 
-The project's board is a tab of the llxterm window, kept by the desk (and written out to
+The project's board is a tab of the llxterm window, kept by the app (and written out to
 `.localix/board.json` in the project), so it outlives sessions. As it is now:
 
 !`llxterm window --board 2>&1`

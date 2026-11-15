@@ -1,22 +1,19 @@
-# desk for Claude Code
+# Localix Terminal for Claude Code
 
-Claude opens real pages and terminals in a window you watch, and plans its work as cards on a board
-there. It works the desk the way it works anything else, from its shell: `llxterm window '<json>'`
-is one call (open, interact, screenshot, close, show, list), and its answer is the tab's snapshot,
-a page's outline with a ref for each control (`[e12]`) that `click`, `fill` and `select` act on.
-The desk itself knows no model; this plugin is Claude Code's side of it.
+Claude opens real pages and terminals in the Localix Terminal window you watch, beside the
+terminal it runs in, and plans its work as cards on the project's board there. It reads a page
+as an outline with a ref for each control, and clicks and fills by those refs. The app knows no
+model; this plugin is Claude Code's side of it.
 
 ## Install
 
 1. Install **Localix Terminal**, the app (https://github.com/localixai/localix-terminal#install), and open it once.
 2. In the app, **Settings → Integrations → Claude Code → Add** installs this plugin from the app
-   itself, of the app's version, and keeps it in step when the app updates (`llxterm setup
-   claude-code` does the same in a terminal). The plugin's `bin/llxterm` (on the Bash tool's
-   `PATH`) runs the app's program: on the `PATH`, in `~/.local/bin`, or in the app. Nothing is
-   downloaded.
+   itself, of the app's version, and keeps it in step when the app updates. The plugin reaches
+   the app through the app's own program; nothing is downloaded.
    Without the app's button, the plugin of this repository installs at Claude Code's prompt
    with `/plugin install llxterm --marketplace localixai/localix-terminal`; the app still has to be
-   installed, as the plugin runs its program.
+   installed.
 3. Optional: **Hold Claude to its board card** (`finish_cards`, off by default): Claude stopping with
    its own card still in Doing is asked once to finish it first.
 
@@ -28,14 +25,14 @@ settings) so calls do not each ask.
 - **Skill `window`** (the model's, hidden from the `/` menu): when to open pages and terminals and
   how, the calls and their fields.
 - **Skill `board`** (the model's): when to plan work on the board, how to cut it into cards, and how
-  to hand cards to subagents. It loads with the board as it is (`llxterm window --board`).
+  to hand cards to subagents. It loads with the board as it is.
 - **Agent `llxterm:worker`**: a subagent that takes one card, does it, and hands it in for your
   review (or blocks it with what it needs). Start several for cards that touch different files.
 - **Commands**: `/tabs` (this project's tabs and your latest comments, in the chat), `/llxterm:end`
   (close this project's tabs), `/llxterm:stop` (quit Localix Terminal).
 - **A mod** (`hooks/register.tsx`):
   - follows the comments you send from the window and what you do on the board
-    (`llxterm window --said --follow --json`), and sends each to Claude as a message; a card you
+    as they come, and sends each to Claude as a message; a card you
     send back that a running subagent had goes to that subagent too;
   - keeps each worker's name on the board as its task gives it ("your name on the board:
     cart-button"), or gives it one from its description; a worker's call on the board without that
@@ -43,8 +40,8 @@ settings) so calls do not each ask.
   - a worker whose run ends with its card still in Doing is sent word once to hand it in, release
     it or block it; if it ends so again, Claude hears which card;
   - a line above the prompt: tabs, who has which card, how many wait for your review or are blocked;
-  - when the session ends, closes the tabs the project opened (`llxterm window --end`), only where
-    the desk runs;
+  - when the session ends, closes the tabs the project opened, only while
+    the app runs;
   - in a terminal of Localix Terminal (`TERM_PROGRAM=llxterm`), tells Claude that a page you ask for
     ("open google") opens as a tab of the window, not in another browser it has the tools of (Claude
     in Chrome, a built-in browser pane), unless you name that browser.

@@ -42,7 +42,7 @@ const site: SiteConfig = {
   },
   maker: { label: 'Localix Lab', href: 'https://localix.ai' },
   footer: {
-    note: 'Localix Terminal is MIT-licensed and open source. The app and its command carry the name Localix Terminal, llxterm.',
+    note: 'Localix Terminal is MIT-licensed and open source.',
     links: [
       { label: 'Docs', href: '/docs' },
       { label: 'GitHub', href: GITHUB },
