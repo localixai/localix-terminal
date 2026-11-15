@@ -27,7 +27,7 @@
     "@lezer/common": "1.5.5",
     "@lezer/highlight": "1.2.5",
     "@lezer/lr": "1.4.12",
-    "@localix-ai/flowdown": "0.5.2",
+    "@localix-ai/flowdown": "0.6.0",
     "highlight.js": "11.12.0"
   }
 }

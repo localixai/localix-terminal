@@ -15,6 +15,10 @@
 
 ### Fixed
 
+- **A Markdown file with link definitions follows its text as fast as any other.** Drawn as a
+  document, a file with a line such as `[docs]: https://…` was read whole each time its text
+  changed; with flowdown 0.6.0 it is read block by block, each block finding the definitions of
+  the others, and only what changed is drawn again.
 - **The README and the site no longer say the app listens on no port.** It does on the
   loopback, from the first page a window opens from disk until that window closes, to serve that
   page's directory, as the security notes said two lines further down. They now say what
