@@ -45,14 +45,14 @@ impl Tabs {
 
     /// The tabs `shown` (one, or two side by side), each its id and its part of the window: its
     /// size, and `left` and `top` points from the window's corner. The others stand beside,
-    /// out of sight.
-    pub(in super::super) fn layout(&self, shown: &[Pane]) {
+    /// out of sight, at the size `whole` of the pages' part and `top` points down: a page out
+    /// of sight is laid out as one in sight is, so an agent reads and works it the same, and
+    /// shown whole again it is drawn as it stands, with nothing to lay out anew.
+    pub(in super::super) fn layout(&self, shown: &[Pane], whole: LogicalSize<f64>, top: f64) {
         for slot in &self.slots {
             let pane = shown.iter().find(|pane| pane.0 == slot.id);
             let here = pane.is_some();
-            let (_, size, left, top) =
-                pane.copied()
-                    .unwrap_or((0, LogicalSize::new(0.0, 0.0), 0.0, 0.0));
+            let (_, size, left, top) = pane.copied().unwrap_or((0, whole, 0.0, top));
             let away = |x: f64| {
                 if here {
                     left + x

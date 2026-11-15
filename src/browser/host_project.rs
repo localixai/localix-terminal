@@ -107,11 +107,13 @@ impl On<'_> {
         }
     }
 
-    /// The person goes to project `project`: its last tab shown, else, coming from another, the
-    /// app opens what it had open (or nothing: the window's start of a new tab). Already there with no tab (the
-    /// person closed them), nothing is opened again: what they asked for next opens alone.
+    /// The person goes to project `project`: its last tab shown and given the keys, else, coming
+    /// from another, no tab is shown (the one left behind goes out of sight with its project)
+    /// and the app opens what this one had open, or nothing: the window's start of a new tab.
+    /// Already there with no tab (the person closed them), nothing is opened again: what they
+    /// asked for next opens alone.
     pub(super) fn go_project(&mut self, project: &str) {
-        let Some(open) = self.deck.as_ref() else {
+        let Some(open) = self.deck.as_mut() else {
             return self.shared.heard(project, Heard::Asked(Asked::Project));
         };
         let own: Vec<String> = (open.listing(self.shared).into_iter())
@@ -128,9 +130,13 @@ impl On<'_> {
             Some(key) => {
                 let _ = act(self.deck, Click::Show(key), self.shared);
             }
-            None => self.shared.heard(project, Heard::Asked(Asked::Project)),
+            None => {
+                open.show_nothing();
+                self.shared.heard(project, Heard::Asked(Asked::Project));
+            }
         }
         if let Some(open) = self.deck.as_ref() {
+            open.focus_shown();
             open.refresh(self.shared);
         }
     }
@@ -182,9 +188,10 @@ impl On<'_> {
         }
     }
 
-    /// The window kept on the project shown: a tab of it shown as the person left it; when the
-    /// window came to show another project's tab (one closed, its neighbour shown), the shown
-    /// project's own instead, or, with none left, the window follows the tab it shows.
+    /// The window kept on the project shown: the tab it shows is one of that project's, as the
+    /// person left it. When it came to show another project's tab (one closed, its neighbour
+    /// shown), the shown project's own takes its place, or, with none left, no tab: the window
+    /// never follows a tab into a project the person did not go to.
     pub(super) fn settle(&mut self) {
         let Some(open) = self.deck.as_ref() else {
             return;
@@ -205,23 +212,20 @@ impl On<'_> {
             }
             return;
         }
-        if scope.awaiting() {
-            return;
-        }
         let project = scope.shown().to_string();
         let own: Vec<String> = (listed.iter())
             .filter(|tab| tab.group == project)
             .map(|tab| tab.id.clone())
             .collect();
-        match scope.go(&project, &own).as_deref().and_then(Key::parse) {
+        let next = scope.go(&project, &own);
+        drop(scope);
+        match next.as_deref().and_then(Key::parse) {
             Some(key) => {
-                drop(scope);
                 let _ = act(self.deck, Click::Show(key), self.shared);
             }
             None => {
-                if scope.showed(&shown.group, &shown.id) {
-                    drop(scope);
-                    self.shared.heard(&shown.group, Heard::Showing);
+                if let Some(open) = self.deck.as_mut() {
+                    open.show_nothing();
                 }
             }
         }

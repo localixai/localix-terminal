@@ -15,6 +15,9 @@
 
 ### Changed
 
+- **The window stays on the project you are in.** Closing a project's last tab left the window
+  on a tab of another project; it now stays, with no tab and its start of a new one. Going to a
+  project gives the keys to the tab it shows, with no click needed first.
 - **The README, the site and the docs are about the terminal, not its command.** Their first
   steps are the window's: open a folder, start your agent, watch it work, point at what is
   wrong, plan on the board. `llxterm`, the program agents reach the window through, is no
@@ -27,6 +30,19 @@
 
 ### Fixed
 
+- **A project with no tab open no longer shows another project's tab.** Going to a project
+  with nothing open left the tab of the project before it on the screen, a running agent's
+  terminal among them, under the new project's name: what was typed went to it, the key that
+  closes a tab closed it, and after a few seconds the window could go back to that project by
+  itself. The window now shows no tab there, its start of a new one, and nothing of a project
+  out of sight takes a key.
+- **An agent reads and works a page that is out of sight.** A page of a project not shown, or
+  one behind the tab in sight, was laid out with no size, so its outline came back empty and
+  nothing on it could be clicked or filled by ref until the person looked at it. It now keeps
+  the size of the pages' part out of sight, and is drawn as it stands when shown again.
+- **Going back to a project shows its files at once.** The side emptied and filled again on
+  every switch while the tree was read from the disk; it now shows the tree as it was left,
+  and what changed meanwhile is laid over it.
 - **A Markdown file with link definitions follows its text as fast as any other.** Drawn as a
   document, a file with a line such as `[docs]: https://…` was read whole each time its text
   changed; with flowdown 0.6.2 it is read block by block, each block finding the definitions of

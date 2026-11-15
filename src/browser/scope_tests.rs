@@ -26,11 +26,9 @@ fn going_to_a_project_shows_its_last_tab_and_clears_its_mark() {
     // Its last tab closed: its first; none open: none.
     assert_eq!(scope.go("1", &["w4".to_string()]).as_deref(), Some("w4"));
     assert_eq!(scope.go("3", &[]), None);
+    // The window is on it all the same, with no tab to show: nothing of another is in sight.
     assert_eq!(scope.shown(), "3");
-    // Till a tab of it shows, the window waits for the app to open what it had.
-    assert!(scope.awaiting());
-    scope.showed("3", "t5");
-    assert!(!scope.awaiting());
+    assert!(!scope.in_sight("1") && !scope.in_sight("2"));
 }
 
 #[test]

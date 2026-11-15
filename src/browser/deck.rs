@@ -30,6 +30,8 @@ mod dropping;
 mod render;
 #[path = "deck_said.rs"]
 mod said;
+#[path = "deck_shown.rs"]
+mod showing;
 
 #[path = "deck_acts.rs"]
 mod acts;
@@ -54,6 +56,9 @@ pub(super) enum Shown {
     Web,
     /// A terminal session's screen: its panel's id.
     Term(u32),
+    /// No tab: the project shown has none open, whatever the other projects hold out of sight.
+    /// The start of a new tab has the tabs' place.
+    Nothing,
 }
 
 /// A tab on its way to another window: its page or its panel, with its view as it is.
@@ -221,15 +226,6 @@ impl Deck {
         }
     }
 
-    /// Whether no tab is shown: every one closed. The window stays, and the browser's toolbar
-    /// takes the pages' part as the start of a new tab.
-    fn blank(&self) -> bool {
-        match self.shown {
-            Shown::Web => self.web.is_none(),
-            Shown::Term(id) => self.term(id).is_none_or(|open| open.held != Held::Live),
-        }
-    }
-
     /// The browser is gone from the window (closed by the agent, or its last tab by the person).
     /// The window stays, with no tab left too: then its start of a new tab shows.
     pub(super) fn remove_web(&mut self) {
@@ -244,38 +240,9 @@ impl Deck {
         }
     }
 
-    /// Show `shown`, if it is there.
-    pub(super) fn show(&mut self, shown: Shown) {
-        let there = match shown {
-            Shown::Web => self.web.is_some(),
-            Shown::Term(id) => self.term(id).is_some(),
-        };
-        if there {
-            self.shown = shown;
-        }
-    }
-
     pub(super) fn titled(&mut self, id: u32, title: String) {
         if let Some(open) = self.terms.iter_mut().find(|open| open.id == id) {
             open.title = title;
-        }
-    }
-
-    /// The tab shown, as the strip names it: none while an ended screen shows.
-    pub(super) fn shown_key(&self) -> Option<Key> {
-        match self.shown {
-            Shown::Web => self.web.as_ref().map(|web| Key::Web(web.active_id())),
-            Shown::Term(id) => (self.term(id))
-                .filter(|open| open.held == Held::Live)
-                .map(|_| Key::Term(id)),
-        }
-    }
-
-    /// Whether tab `key` is open in the window.
-    fn there(&self, key: Key) -> bool {
-        match key {
-            Key::Web(id) => (self.web.as_ref()).is_some_and(|web| web.has(id)),
-            Key::Term(id) => self.term(id).is_some_and(|open| open.held == Held::Live),
         }
     }
 
@@ -359,22 +326,6 @@ impl Deck {
     )]
     pub(super) fn is_window(&self, _window: usize) -> bool {
         false
-    }
-
-    /// What is shown is still a tab: else the newest terminal's, else the browser. (An ended
-    /// screen the history menu showed is let go of here too.)
-    fn settle(&mut self) {
-        let gone = match self.shown {
-            Shown::Web => self.web.is_none(),
-            Shown::Term(id) => self.term(id).is_none_or(|open| open.held != Held::Live),
-        };
-        if gone {
-            let live = self.terms.iter().rev().find(|open| open.held == Held::Live);
-            self.shown = match live {
-                Some(open) => Shown::Term(open.id),
-                None => Shown::Web,
-            };
-        }
     }
 }
 

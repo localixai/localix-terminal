@@ -337,7 +337,8 @@ define colours of its own beyond its `--ground`.
 - **A file no page shows is such a place too** (an archive, a program, picked in the tree or
   answered by an address): "No Preview for" and the file's name, in a document titled with
   that name. The app downloads nothing and opens no other app unasked.
-- **The one exception is the window with no tab left.** The whole pages' part is empty, so it
+- **The one exception is the window with no tab to show**: none left, or the project shown has
+  none open, whatever the other projects hold out of sight. The whole pages' part is empty, so it
   offers what opens a tab, as a menu does: New Page, New Terminal, Board, Open Folder…, each with
   its key as Settings sets it, quiet until pointed at. Under them, the coding agents installed:
   each its mark alone, an icon button whose name is its tooltip, which starts it in a terminal.

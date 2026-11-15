@@ -362,13 +362,44 @@ pub(crate) fn first(browser: &Browser) {
     assert_eq!(groups, ["alpha", "beta <i>"]);
     // Closed by the person, a terminal is in the history menu, still running; a click there makes
     // it a tab again, its screen as live as before.
-    // Its project's last tab closed, the window goes to the tab it shows next (alpha's); gone
-    // back to, it lists none, and its history holds the terminal.
+    // Its project's last tab closed, the window stays on that project, with no tab: it never
+    // follows a tab into a project the person did not go to. Left and gone back to, it lists
+    // none, and its history holds the terminal.
     browser.click("close t8");
+    switcher("beta <i>", false);
+    own(0);
+    browser.go("alpha");
     switcher("alpha", false);
+    own(1);
+    assert_eq!(showing(browser).map(|(seen, _)| seen), Some(tab.clone()));
     browser.go("beta <i>");
     switcher("beta <i>", false);
     own(0);
+    // A project with no tab shows none: the other project's terminal is out of sight, the
+    // start of a new tab has its place, and the key that closes a tab closes nothing of the
+    // project left behind.
+    let start = "document.documentElement.hasAttribute('data-blank')";
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let (seen, _) = showing(browser).expect("the window stays");
+        if seen.is_empty() && browser.peek_nav(start) == Ok(json!(true)) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{seen} of another project shows in one with no tab"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    browser.click("key close");
+    std::thread::sleep(Duration::from_millis(300));
+    let (seen, tabs) = showing(browser).expect("the window stays");
+    assert!(seen.is_empty(), "{seen} shows after the key");
+    assert!(
+        tabs.contains(&tab),
+        "the key closed {tab} of another project"
+    );
+    switcher("beta <i>", false);
     browser.click("history");
     let at = menu_entry(browser, "t8", "hidden");
     browser.click(&format!("visit {at}"));
@@ -484,8 +515,10 @@ fn history_menu(browser: &Browser) {
         listed.iter().map(|tab| tab.id.clone()).collect()
     };
     assert_eq!(ids(&after), ids(&before));
-    let back = before.iter().find(|tab| tab.shown).unwrap().id.clone();
-    browser.click(&format!("show {back}"));
+    // The tab shown before is shown again; its project had none (the window showed none).
+    if let Some(back) = before.iter().find(|tab| tab.shown) {
+        browser.click(&format!("show {}", back.id));
+    }
 }
 
 /// Entry `key` of the history menu once it says `state`: its number.

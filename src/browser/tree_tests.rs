@@ -101,7 +101,7 @@ fn news_is_laid_over_what_is_held_and_a_folder_no_longer_open_is_let_go_of() {
 }
 
 #[test]
-fn a_tree_is_in_sight_from_its_first_window_to_its_last_and_held_only_so_long() {
+fn a_tree_is_in_sight_from_its_first_window_to_its_last() {
     let mut trees = Trees::default();
     assert_eq!(trees.sight(1, Some("7")), [("7".to_string(), true)]);
     assert_eq!(trees.sight(1, Some("7")), [], "the same again is no news");
@@ -114,11 +114,46 @@ fn a_tree_is_in_sight_from_its_first_window_to_its_last_and_held_only_so_long() 
     assert_eq!(trees.sight(1, Some("9")), [("9".to_string(), true)]);
     assert!(trees.whole("7").is_some(), "window 2 shows it still");
     assert_eq!(trees.sight(2, None), [("7".to_string(), false)]);
-    assert!(trees.whole("7").is_none(), "let go of with its last window");
-    // News that comes after is of a tree nobody shows.
-    trees.take("7", tree(&[""], vec![branch("", &[], &["a"])]));
-    assert!(trees.whole("7").is_none());
     assert_eq!(trees.sight(1, None), [("9".to_string(), false)]);
+}
+
+#[test]
+fn a_tree_out_of_sight_is_kept_as_it_was_and_drawn_at_once_when_gone_back_to() {
+    let mut trees = Trees::default();
+    trees.sight(1, Some("7"));
+    trees.take("7", tree(&[""], vec![branch("", &[], &["a"])]));
+    // The window goes to another project: the app stops reading this one's tree, and what
+    // the window held of it stays, so that coming back draws it before the app has read it.
+    assert_eq!(
+        trees.sight(1, Some("9")),
+        [("7".to_string(), false), ("9".to_string(), true)]
+    );
+    assert_eq!(whole(&trees, "7")["dirs"][0]["f"][0][0], "a");
+    // News that comes after is of a tree nobody shows: what is kept stays as it was.
+    trees.take("7", tree(&[""], vec![branch("", &[], &["b"])]));
+    assert_eq!(whole(&trees, "7")["dirs"][0]["f"][0][0], "a");
+    // Back in sight, the app is asked to read it anew, and its news is laid over what was kept.
+    assert_eq!(
+        trees.sight(1, Some("7")),
+        [("9".to_string(), false), ("7".to_string(), true)]
+    );
+    assert_eq!(whole(&trees, "7")["dirs"][0]["f"][0][0], "a");
+    trees.take("7", tree(&[""], vec![branch("", &[], &["b"])]));
+    assert_eq!(whole(&trees, "7")["dirs"][0]["f"][0][0], "b");
+}
+
+#[test]
+fn only_the_trees_left_last_are_kept_out_of_sight() {
+    let mut trees = Trees::default();
+    for key in 0..=KEPT + 1 {
+        let key = key.to_string();
+        trees.sight(1, Some(&key));
+        trees.take(&key, tree(&[""], vec![branch("", &[], &["a"])]));
+    }
+    // The one in sight and the `KEPT` left before it are held; the first one left is let go.
+    assert!(trees.whole("0").is_none(), "the tree left longest ago");
+    assert!(trees.whole("1").is_some());
+    assert!(trees.whole(&(KEPT + 1).to_string()).is_some());
 }
 
 #[test]

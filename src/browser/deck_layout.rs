@@ -14,9 +14,10 @@ use super::super::tabs::{pin, place};
 use super::{Deck, Shown};
 
 impl Deck {
-    /// The keys go to the tab shown, after the person switched to it themselves: never while
-    /// the window is not the key window (an agent's switch, or another app in front), while the
-    /// person types in the strip, or while a menu is open.
+    /// The keys go to the tab shown, after the person switched to it themselves (with no tab
+    /// shown, to the start of a new one): never while the window is not the key window (an
+    /// agent's switch, or another app in front), while the person types in the strip, or while
+    /// a menu is open.
     pub(in super::super) fn focus_shown(&self) {
         if self.typing || self.covered() || !self.frame.is_key() {
             return;
@@ -24,7 +25,10 @@ impl Deck {
         let view = match self.shown {
             Shown::Web => self.web.as_ref().map(Tabs::active),
             Shown::Term(id) => self.term(id).map(|open| &open.webview),
+            Shown::Nothing => None,
         };
+        // No tab shown: the start of a new one takes them, never a tab out of sight.
+        let view = view.or_else(|| self.nav.as_ref().filter(|_| self.blank()));
         if let Some(view) = view {
             let _ = view.focus();
         }
@@ -261,7 +265,8 @@ impl Deck {
                 }
                 None => vec![],
             };
-            web.layout(&pages);
+            let (whole, _, under) = self.area(self.nav.is_some());
+            web.layout(&pages, whole, under);
         }
         for open in &self.terms {
             let spot = match halves {

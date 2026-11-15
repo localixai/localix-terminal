@@ -92,6 +92,19 @@ change_events, change_cursors                          -- the feed, as now
   project.
 - **An agent in another project** never moves the window: its project's dot lights in the
   switcher, its events wait in the Event Center.
+- **The tab shown is one of the project shown, or none.** Going to a project shows its last
+  tab and gives it the keys; a project with no tab open shows none (the window's start of a
+  new tab), and so does one whose last tab closes: the window never follows a tab into a
+  project the person did not go to. A tab of a project out of sight is out of sight and out
+  of the keys' reach, so nothing typed or pressed lands in it. This is kept in one place
+  (`On::settle`, `browser/host_project.rs`), after every command that may change the tab
+  shown.
+- **Out of sight is not out of work.** A terminal and a page out of sight keep the size of
+  their part of the window (`browser/tabs_layout.rs`), so a program draws and an agent reads
+  and works a page there as in sight.
+- **Going back is drawn at once.** A project's tabs stay as they were, out of sight, and the
+  side shows its tree of files as it was left (the trees left last are kept,
+  `browser/tree.rs`) while the app reads it anew.
 - **Close Project** (⌃⌘W) closes its tabs as the person's close does (a terminal's program runs on
   out of sight, in its history as any closed terminal); its history, board and events stay. The
   window goes to the project used last with tabs open, else Home.

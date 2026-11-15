@@ -1,7 +1,10 @@
 //! A project's tree of files, as the side shows it. The window holds what the app last told of
 //! each tree in sight (`Browser::tree`), so a window opened later, or a page loaded again, is
 //! drawn at once; the side's page is told only what is new. A tree is in sight while a window's
-//! side shows it, and the app is told as the first window shows it and the last one stops.
+//! side shows it, and the app is told as the first window shows it and the last one stops:
+//! out of sight it is neither read nor watched. What was held of the trees left last stays, so
+//! a project gone back to shows its tree at once, as it was, and the app's fresh reading is
+//! laid over it when it comes.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -11,11 +14,16 @@ use serde_json::{Value, json};
 use super::file_icons;
 use super::told::{Branch, Tree};
 
+/// How many trees out of sight are kept as they were, the ones left last.
+pub(super) const KEPT: usize = 8;
+
 /// What the windows hold of the trees.
 #[derive(Default)]
 pub(super) struct Trees {
-    /// Each tree in sight, by its project's key.
+    /// Each tree in sight, and the ones kept out of sight, by its project's key.
     held: HashMap<String, Held>,
+    /// The trees kept out of sight, the one left last at the end.
+    left: Vec<String>,
     /// The project whose tree each window shows, by the window.
     sights: HashMap<u64, String>,
     /// What each window's side was last given: the pictures, and a tree whole (`Told`).
@@ -59,7 +67,7 @@ impl Trees {
 
     /// Window `window` shows `sight`'s tree from now on (none: no tree). Answers each project
     /// whose tree came into sight (`true`) or went out of every window's (`false`): what is
-    /// held of one out of sight is let go of.
+    /// held of one out of sight is kept as it was while it is among the `KEPT` left last.
     pub(super) fn sight(&mut self, window: u64, sight: Option<&str>) -> Vec<(String, bool)> {
         let was = match sight {
             Some(key) => self.sights.insert(window, key.to_string()),
@@ -72,13 +80,18 @@ impl Trees {
         if let Some(was) = was
             && !self.sights.values().any(|shown| *shown == was)
         {
-            self.held.remove(&was);
+            self.left.push(was.clone());
             changed.push((was, false));
         }
-        if let Some(key) = sight
-            && self.sights.values().filter(|shown| *shown == key).count() == 1
-        {
-            changed.push((key.to_string(), true));
+        if let Some(key) = sight {
+            self.left.retain(|left| left != key);
+            if self.sights.values().filter(|shown| *shown == key).count() == 1 {
+                changed.push((key.to_string(), true));
+            }
+        }
+        while self.left.len() > KEPT {
+            let gone = self.left.remove(0);
+            self.held.remove(&gone);
         }
         if sight.is_none() {
             self.told.remove(&window);

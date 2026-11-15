@@ -112,6 +112,20 @@ pub(crate) fn scenario(browser: &Browser, origin: &str) {
         .and_then(|rest| rest.split("): ").nth(1))
         .unwrap_or_else(|| panic!("no file named in\n{shot}"));
     assert!(std::path::Path::new(path).is_file(), "{path}");
+    // The person goes to another project: the page is out of sight, and the agent works it
+    // as before, since it keeps its size there (its outline lists what a view that size shows).
+    std::fs::create_dir_all(home.join("other/.git")).unwrap();
+    let other = desk.project(&home.join("other")).unwrap();
+    browser.go(&llxterm::projects::key(other.id));
+    let listed = browser.listing().unwrap_or_default();
+    assert!(!listed.iter().any(|at| at.shown), "{listed:?}");
+    let away = desk
+        .window(
+            &call,
+            &json!({"action": "interact", "tab": tab, "fill": {city.clone(): "Rome"}}),
+        )
+        .unwrap();
+    assert!(away.contains(&format!("Filled {city}.")), "{away}");
     desk.end(&owner);
     let _ = std::fs::remove_dir_all(&home);
 }
