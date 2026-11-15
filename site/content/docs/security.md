@@ -4,12 +4,12 @@ The app has no approval prompt of its own: the agent's permission to run the com
 
 ## What the app listens on
 
-Only a unix socket (0600) in a 0700 directory, and it serves only the user's own processes. It makes no listening network connection.
+Commands come only over a unix socket (0600) in a 0700 directory, and it serves only the user's own processes. Nothing listens on the network. From the first page a window opens from disk until that window closes, the app also listens on the loopback (127.0.0.1, a port the system picks) to serve that page's directory: see Pages, below.
 
 ## Pages
 
 - Pages are untrusted. A per-run token keeps a page from answering for the probe script.
-- Only `http` and `https` load, plus your project's files served on loopback under an unguessable prefix: no dot-files, nothing outside the project.
+- Only `http` and `https` load, plus your project's files served on loopback under an unguessable prefix: no dot-files, nothing outside the project, and only to a request that names that address.
 - A page sees anything you are signed in to in this WebView. Do not let an agent type real passwords or card numbers it can read, or buy, book or submit personal data, unless you asked for exactly that.
 - Dialogs are never accepted on a page's say-so: `confirm` and `prompt` get Cancel unless the call says `dialog: "accept"`.
 

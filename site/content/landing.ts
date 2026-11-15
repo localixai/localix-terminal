@@ -51,8 +51,8 @@ const CARDS: Card[] = [
   },
   {
     tag: 'Native',
-    title: 'No model, no account, no port',
-    text: 'One small Rust program with the system’s own WebView, no Electron. The agents are the ones you already run; the app listens only on a socket of your own user.',
+    title: 'No model, no account, no network port',
+    text: 'One small Rust program with the system’s own WebView, no Electron. The agents are the ones you already run; the app takes commands only on a socket of your own user, and serves a page you open from disk on the loopback.',
     links: [{ href: `${DOCS}/security`, label: 'Security' }],
     media: terminal(
       [
@@ -61,12 +61,12 @@ const CARDS: Card[] = [
             [['hi', 'The app'], ['dim', 'about 6 MB on macOS, signed and notarized']],
             [['hi', 'Models'], ['dim', 'none inside: it calls no model and knows no agent']],
             [['hi', 'Account'], ['dim', 'none: nothing to sign in to']],
-            [['hi', 'Network'], ['dim', 'no listening port: a unix socket, mode 0600']],
+            [['hi', 'Network'], ['dim', 'a unix socket, mode 0600; the loopback for your own pages']],
             [['hi', 'License'], ['dim', 'MIT']],
           ],
         },
       ],
-      'What the app is made of: about 6 megabytes, no model, no account, no listening port, MIT-licensed',
+      'What the app is made of: about 6 megabytes, no model, no account, nothing listening on the network, MIT-licensed',
     ),
   },
 ];

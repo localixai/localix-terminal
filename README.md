@@ -76,8 +76,9 @@ has no model and no account of its own: the agents are the ones you already run.
 - **Files and an editor**: the project's tree, live as an agent changes it, and its files in tabs.
 - **Projects**: a project is a folder. Its sessions, tabs, history and board are its own, and it
   opens as you left it, even after a restart.
-- **Native and local**: one small Rust program, no Electron, no account and no model inside; it
-  listens on no port, only on a socket of your own user.
+- **Native and local**: one small Rust program, no Electron, no account and no model inside;
+  nothing listens on the network: commands come over a socket of your own user, and a page opened
+  from disk is served on the loopback.
 
 <details>
 <summary>Each part in detail</summary>
@@ -91,7 +92,7 @@ has no model and no account of its own: the agents are the ones you already run.
 - **An editor**: a file picked in the tree opens in a tab on the right of what you look at, the next one in its place. Syntax colours for the common languages, a script with no ending coloured by the program its first line names (`#!/bin/sh`); ⌘S saves the file as the disk wrote it (its line ends kept). A Markdown file opens drawn as a document, by [flowdown](https://flowdown.dev): the button in its corner, or ⇧⌘V, turns to its text and back, a link to another file of the project opens that file, and a picture is shown as its words, since the page loads nothing. A file changed on disk is followed while you have not edited it; where both changed, a save writes nothing and says so. What you left unsaved is kept with the file, past the tab and the app. Text up to 2 MB; a picture (SVG too), a film, a sound or a PDF opens as a page that shows or plays it, and what no page shows (an archive, a program) says so in one line.
 - **Projects**: a project is a folder. Its tabs, history, board and events are its own, and it opens as you left it, even after a restart.
 - **Windows your way**: Split View, several windows (⌘N), tabs torn off into their own window, a side that shuts to a rail, every shortcut yours to change.
-- **Native and local**: one small Rust program, no Electron, no account and no model inside; it listens on no port, only on a socket of your own user.
+- **Native and local**: one small Rust program, no Electron, no account and no model inside; nothing listens on the network: commands come over a socket of your own user, and a page opened from disk is served on the loopback.
 
 </details>
 
@@ -284,8 +285,8 @@ In a terminal: ⌘K clears, ⌘← ⌘→ line start and end, ⌥← ⌥→ word
 
 llxterm has no approval prompt of its own: **the agent's permission to run the command is the approval.** Allowing `llxterm window *` lets an agent open pages, run scripts in them and start programs as you. Scope it as you would a shell.
 
-- The app listens only on a unix socket (0600) in a 0700 directory, and serves only the user's own processes; no network connections.
-- Pages are untrusted. A per-run token keeps a page from answering for the probe script. Only `http` and `https` load, plus your project's files served on loopback under an unguessable prefix (no dot-files, nothing outside the project).
+- The app takes commands only on a unix socket (0600) in a 0700 directory, and serves only the user's own processes. Nothing listens on the network. The one TCP port is on the loopback (127.0.0.1, a port the system picks), open from the first page a window opens from disk until that window closes: see the next point.
+- Pages are untrusted. A per-run token keeps a page from answering for the probe script. Only `http` and `https` load, plus your project's files served on loopback under an unguessable prefix (no dot-files, nothing outside the project, and only to a request that names that address).
 - A page sees anything you are signed in to in this WebView. Do not let an agent type real passwords or card numbers it can read, or buy, book or submit personal data, unless you asked for exactly that.
 - Dialogs are never accepted on a page's say-so: `confirm` and `prompt` get Cancel unless the call says `dialog: "accept"`.
 - Passwords the agent should not see: save with `llxterm secret NAME < FILE` and use `{{secret:NAME}}` in a page's `fill` or a terminal's `input`. The app types the value; answers show the placeholder. Screenshots show what the page draws.

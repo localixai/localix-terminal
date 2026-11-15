@@ -15,6 +15,11 @@
 
 ### Fixed
 
+- **The README and the site no longer say the app listens on no port.** It does on the
+  loopback, from the first page a window opens from disk until that window closes, to serve that
+  page's directory, as the security notes said two lines further down. They now say what
+  listens where: commands on a socket of your own user, your pages on 127.0.0.1, nothing on the
+  network.
 - **A script with no ending has its colours.** A file whose name says nothing of its language
   (`bootstrap`, `lab-ci`) is coloured by the program its first line names: `#!/bin/sh`,
   `#!/usr/bin/env python3`, `node`, `bun`, `ruby`, `php`, `lua`, `swift`.
