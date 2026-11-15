@@ -68,7 +68,7 @@ pub(super) const SCRIPTS: &[Script] = &[
     Script {
         name: "preview",
         text: include_str!("vendor/preview.js"),
-        sha384: "iM4qS6z2/W6N2BYLB8Ohtf6ciC9tNcppjnqJ5oyL/Rv+9qMqF7iG5ac0zrb4puSX",
+        sha384: "dQd35ClvvCeHH5TjPltHo3s3+XnXN8ZOhnowwgGjz//Rz2GnZLRmj1geO95LMOt5",
     },
     Script {
         name: "python",

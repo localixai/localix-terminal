@@ -29,7 +29,7 @@
         "@lezer/common": "1.5.5",
         "@lezer/highlight": "1.2.5",
         "@lezer/lr": "1.4.12",
-        "@localix-ai/flowdown": "0.6.0",
+        "@localix-ai/flowdown": "0.6.1",
         "highlight.js": "11.12.0",
       },
     },
@@ -113,7 +113,7 @@
 
     "@lezer/yaml": ["@lezer/yaml@1.0.4", "", { "dependencies": { "@lezer/common": "^1.2.0", "@lezer/highlight": "^1.0.0", "@lezer/lr": "^1.4.0" } }, "sha512-2lrrHqxalACEbxIbsjhqGpSW8kWpUKuY6RHgnSAFZa6qK62wvnPxA8hGOwOoDbwHcOFs5M4o27mjGu+P7TvBmw=="],
 
-    "@localix-ai/flowdown": ["@localix-ai/flowdown@0.6.0", "", { "peerDependencies": { "highlight.js": "^11.0.0", "katex": ">=0.16.0", "react": "^18.2.0 || ^19.0.0" }, "optionalPeers": ["highlight.js", "katex", "react"] }, "sha512-YPQclwi//NG2LXhfpVKlZGwL+9bhp3nT03YAP/cImH3yCR4RShZhLwn3M4U+eZFgdBGyskR3uRRTt1URAXitmw=="],
+    "@localix-ai/flowdown": ["@localix-ai/flowdown@0.6.1", "", { "peerDependencies": { "highlight.js": "^11.0.0", "katex": ">=0.16.0", "react": "^18.2.0 || ^19.0.0" }, "optionalPeers": ["highlight.js", "katex", "react"] }, "sha512-IbxrOckEavG/5OJ55x2S9ZZEz//kPBg4TZQHL4UTFkF8uSkqsMzo1TKC9RfqasZRxvqJlf55GQORMhGy59Qpbg=="],
 
     "@marijn/find-cluster-break": ["@marijn/find-cluster-break@1.0.4", "", {}, "sha512-Wy0V7+SGUjnF9/TkiM1hKVDPj7jKXduPNboMVtHTA8dySMURWqfg/JZ9E2Sq8JgSJmkl7k7Qe9FLeMSrSraWmQ=="],
 
