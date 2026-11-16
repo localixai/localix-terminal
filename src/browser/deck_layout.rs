@@ -58,7 +58,7 @@ impl Deck {
     }
 
     /// Whether the strip has the whole window: a menu is open, or a dialog is up.
-    fn covered(&self) -> bool {
+    pub(super) fn covered(&self) -> bool {
         self.menu.is_some() || (self.strip.is_some() && super::super::dialog::up())
     }
 

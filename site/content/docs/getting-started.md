@@ -1,6 +1,6 @@
 # Getting started
 
-Install the app, open a folder as a project, and open a terminal or start an agent in it. The app is all there is to install: it holds the window and what connects your agents to it (an MCP server and, on macOS, the Claude Code plugin), and puts each in place for you.
+Install the app, open a folder as a project, and open a terminal or start an agent in it. The app is all there is to install: it holds the window and what connects your agents to it (the `llxterm` command, its MCP server and the Claude Code plugin), and hands them to the agents in its own terminals. Nothing is written into an agent's settings or your home.
 
 ## Install
 
@@ -16,7 +16,7 @@ The script checks `SHA256SUMS` before it writes anything; `LLXTERM_VERSION=0.1.0
 
 ### Linux
 
-The program goes to `~/.local/share/llxterm`, and the script puts the app among your applications. Pages need WebKitGTK 4.1 and GTK 3, glibc 2.35+ (Ubuntu 22.04+), and a display (X or Wayland). Without a display, terminals still work.
+The program goes to `~/.local/share/llxterm`; `~/.local/share/llxterm/llxterm open` opens the app. Pages need WebKitGTK 4.1 and GTK 3, glibc 2.35+ (Ubuntu 22.04+), and a display (X or Wayland). Without a display, terminals still work.
 
 ```sh
 sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0
@@ -27,7 +27,7 @@ sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0
 Rust 1.89+; on Linux also `libwebkit2gtk-4.1-dev` and `libgtk-3-dev`.
 
 ```sh
-cargo install --locked --git https://github.com/localixai/localix-terminal && llxterm setup command
+cargo install --locked --git https://github.com/localixai/localix-terminal && llxterm open
 ```
 
 On macOS, `cargo build --release && scripts/bundle-macos.sh` makes `target/release/bundle/macos/Localix Terminal.app`, signed ad hoc for this Mac.

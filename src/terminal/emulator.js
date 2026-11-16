@@ -63,12 +63,17 @@ try {
 } catch {
   window.IntersectionObserver = InSight;
 }
+// The proposed API is on for the search addon alone (find.js): it lights the matches through
+// xterm's decorations, which xterm keeps behind it. Only the page's own scripts run (its policy
+// names their hashes), so a program's output reaches none of it.
 const term = new Terminal({
-  scrollback: 5000, allowTransparency: true, allowProposedApi: false,
+  scrollback: 5000, allowTransparency: true, allowProposedApi: true,
   cursorBlink: false, cursorStyle: "block", cursorInactiveStyle: "outline",
   // A program that picks its own colours picks them for a dark ground or a light one, not
   // for this window's: what would not be read on it is darkened or lightened until it is.
   minimumContrastRatio: 4.5,
+  // Option-drag selects text even where a program took the mouse (an editor, a multiplexer).
+  macOptionClickForcesSelection: true,
   // A link the program writes (OSC 8) opens as the links found in the text do: with ⌘-click, as
   // a tab of the window. xterm's own handler would ask with a dialog and open a window the
   // panel denies.
@@ -90,8 +95,8 @@ addEventListener("desk-look", (event) => {
 });
 term.open(document.getElementById("t"));
 // What this page posts (panel.rs): the keys and pastes as a terminal sends them (k), its size
-// once it is ready (r) and when the pane changes (s), and its menu asked for where the person
-// right-clicked, with the items of its menu.
+// once it is ready (r) and when the pane changes (s), a program's copy (c), and its menu asked
+// for where the person right-clicked, with the items of its menu.
 // An address is opened in a new tab (o) by ⌘-click only: a click alone selects or moves the cursor.
 function openTab(event, uri) {
   if (event.metaKey) post("o " + uri);
@@ -149,39 +154,28 @@ term.registerLinkProvider({
 // whether or not a page is there; the page answering too would type a second reply into the
 // program's input. A private query (CSI ? 6 n) is not this one and goes on.
 term.parser.registerCsiHandler({ final: "n" }, (params) => params[0] === 6);
-term.onData((data) => post("k" + data));
-// The keys a Mac terminal has: ⌘K clears, ⌘←/⌘→ go to the line's start and end, ⌥←/⌥→ by
-// words, ⌘⌫/⌥⌫ delete to the start and the word before, ⌘↑/⌘↓ scroll to the top and bottom, ⌘A
-// selects all. Sent as the readline keys every shell and REPL reads; the window's own shortcuts
-// (⌘T, ⌘W…) go on to its menu.
-// The scrollback and the screen go; a shell draws its prompt again at the top. A full-screen
-// program is sent nothing: a form feed would be typed into it.
-function clearScreen() {
-  term.clear();
-  if (term.buffer.active.type === "normal") post("k\f");
-}
-const SENT = {
-  "meta+ArrowLeft": "\x01", "meta+ArrowRight": "\x05", "alt+ArrowLeft": "\x1bb", "alt+ArrowRight": "\x1bf",
-  "meta+Backspace": "\x15", "alt+Backspace": "\x17", "meta+Delete": "\x0b", "alt+Delete": "\x1bd",
-};
-term.attachCustomKeyEventHandler((event) => {
-  if (event.type !== "keydown" || event.ctrlKey || event.shiftKey) return true;
-  const name = (event.metaKey ? "meta+" : event.altKey ? "alt+" : "") + event.key;
-  const done = (run) => {
-    event.preventDefault();
-    run();
-    return false;
-  };
-  if (SENT[name]) return done(() => post("k" + SENT[name]));
-  if (!event.metaKey || event.altKey) return true;
-  switch (event.key.toLowerCase()) {
-    case "k": return done(clearScreen);
-    case "arrowup": return done(() => term.scrollToTop());
-    case "arrowdown": return done(() => term.scrollToBottom());
-    case "a": return done(() => term.selectAll());
-    default: return true;
-  }
+// A program's copy (OSC 52: the places it names, then its text in base64) goes to the window,
+// which puts it on the pasteboard only from the terminal that has the keys, and only so much
+// (panel.rs). A program asking to read the pasteboard (`?`) is never answered, and a copy longer
+// than the window takes (`COPIED_MAX`, 1 MiB, is this much base64) is not posted at all.
+const COPIED_BASE64 = 1398104;
+term.parser.registerOscHandler(52, (data) => {
+  const text = data.slice(data.indexOf(";") + 1);
+  const fits = text.length <= COPIED_BASE64;
+  if (data.includes(";") && text && text !== "?" && fits) post("c " + text);
+  return true;
 });
+term.onData((data) => post("k" + data));
+// The scrollback and the screen go; a shell draws its prompt again at the top. A full-screen
+// program (an editor, a pager, a multiplexer) keeps its screen: it draws all of it itself, and
+// what was wiped would stay wiped until it did again: ⌘K (keyboard.js) does nothing there, and
+// the menu has no Clear.
+const shellScreen = () => term.buffer.active.type === "normal";
+function clearScreen() {
+  if (!shellScreen()) return;
+  term.clear();
+  post("k\f");
+}
 const sized = (kind) => post(kind + " " + term.cols + " " + term.rows);
 term.onResize(() => sized("s"));
 // The menu is the system's: the page names its items and does the one picked (`chosen`), the
@@ -194,7 +188,7 @@ const MENU = [
   ],
   [
     { label: "Select All", run: () => term.selectAll() },
-    { label: "Clear", run: clearScreen },
+    { label: "Clear", when: shellScreen, run: clearScreen },
   ],
 ];
 addEventListener("contextmenu", (event) => {
@@ -240,7 +234,11 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   term.options.theme = theme();
 });
 term.focus();
-addEventListener("focus", () => term.focus());
+// The window in front again gives the keys to the terminal, or leaves them in the find row
+// while it is open (find.js).
+addEventListener("focus", () => {
+  if (!finding()) term.focus();
+});
 // A click anywhere in the page, the scrollbar's track too, is a click in the terminal.
 document.addEventListener("mousedown", () => term.focus());
 // The session's output, base64: raw bytes as the program wrote them.

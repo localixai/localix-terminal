@@ -20,8 +20,8 @@ pub(super) type Post = Box<dyn Fn(Cmd) -> bool + Send + Sync>;
 
 /// What a panel's page posts: keys the person typed or pasted (`k` and them), its size once it
 /// has loaded (`r COLS ROWS`) and when its pane changes (`s COLS ROWS`), an address they opened
-/// (`o URL`), or its menu asked for where they right-clicked, and whether something is selected
-/// (`m X Y 1`).
+/// (`o URL`), a program's copy (`c BASE64`, OSC 52), or its menu asked for where they
+/// right-clicked, and whether something is selected (`m X Y 1`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Said<'a> {
     Typed(&'a str),
@@ -30,6 +30,54 @@ pub(super) enum Said<'a> {
     Open(&'a str),
     /// The page's menu, where the person right-clicked: its own items.
     Menu(u32, u32, Vec<Entry>),
+    /// The text a program asked to put on the pasteboard (OSC 52), at most `COPIED_MAX` bytes of
+    /// UTF-8; the window decides whether it goes there.
+    Copied(String),
+}
+
+/// The most a program puts on the pasteboard at once: more than any selection a person makes in
+/// a terminal, and far less than a program could flood the app with.
+pub(super) const COPIED_MAX: usize = 1 << 20;
+
+/// What a program's copy says, base64 with or without its padding: its text, if it is text and
+/// no longer than `COPIED_MAX`. Longer is not decoded at all.
+fn copied(payload: &str) -> Option<String> {
+    use base64::engine::{self, DecodePaddingMode, GeneralPurposeConfig};
+    if payload.is_empty() || payload.len() > COPIED_MAX.div_ceil(3) * 4 {
+        return None;
+    }
+    let lenient =
+        GeneralPurposeConfig::new().with_decode_padding_mode(DecodePaddingMode::Indifferent);
+    let engine = engine::GeneralPurpose::new(&base64::alphabet::STANDARD, lenient);
+    let bytes = base64::Engine::decode(&engine, payload).ok()?;
+    if bytes.len() > COPIED_MAX {
+        return None;
+    }
+    String::from_utf8(bytes).ok()
+}
+
+/// Where the person's keys are, as a program's copy asks it: the window reads it from its deck
+/// and the system (`Frame::is_key`, `platform::has_keys`); a check gives it as it likes, with no
+/// window the system made key.
+pub(super) trait Keys {
+    /// Whether terminal `id` is in sight: the tab shown, or a half of the split.
+    fn in_sight(&self, id: u32) -> bool;
+    /// Whether the window is the key one: the person's keys come to it.
+    fn key_window(&self) -> bool;
+    /// Whether terminal `id`'s page holds the window's keys (its first responder).
+    fn typing(&self, id: u32) -> bool;
+}
+
+/// A program's copy from terminal `id` (OSC 52), given to `write` (the pasteboard) only while
+/// that terminal is in sight and has the person's keys in the key window: a program out of
+/// sight, or in a pane the person is not typing in, cannot change what they paste next.
+/// Whether it was written.
+pub(super) fn copy_where(keys: &dyn Keys, id: u32, text: &str, write: impl FnOnce(&str)) -> bool {
+    let here = keys.in_sight(id) && keys.key_window() && keys.typing(id);
+    if here {
+        write(text);
+    }
+    here
 }
 
 /// What a page's size message says of the page.
@@ -59,6 +107,9 @@ pub(super) fn said(body: &str) -> Option<Said<'_>> {
                 .is_some_and(|start| start.eq_ignore_ascii_case(scheme))
         });
         return web.then_some(Said::Open(address));
+    }
+    if let Some(payload) = body.strip_prefix("c ") {
+        return copied(payload).map(Said::Copied);
     }
     // "m x y [items]": the page's menu, the items as `choice::Entry` reads them.
     let mut parts = body.strip_prefix("m ")?.splitn(3, ' ');
@@ -270,6 +321,7 @@ pub(super) fn open(
     let keys = Arc::clone(&slot);
     let menus = proxy.clone();
     let opens = proxy.clone();
+    let copies = proxy.clone();
     let webview = own_page(WebViewBuilder::new())
         // The first click in a window that is not the key one reaches the page: the person
         // never clicks twice, once to wake the window and once to do what they meant.
@@ -299,6 +351,9 @@ pub(super) fn open(
             }
             Some(Said::Menu(x, y, items)) => {
                 let _ = menus.send_event(Cmd::PanelMenu(id, (x, y), items));
+            }
+            Some(Said::Copied(text)) => {
+                let _ = copies.send_event(Cmd::PanelCopy(id, text));
             }
             None => {}
         })

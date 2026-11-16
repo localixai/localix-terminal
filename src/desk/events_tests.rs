@@ -11,6 +11,11 @@ impl Events for Told {
     fn publish(&self, event: &str, owner: Option<&str>, params: Value) {
         crate::lock(&self.0).push((event.to_string(), owner.map(String::from), params));
     }
+
+    fn publish_project(&self, event: &str, project: ProjectId, params: Value) {
+        let to = format!("project {project}");
+        crate::lock(&self.0).push((event.to_string(), Some(to), params));
+    }
 }
 
 #[test]
@@ -58,15 +63,17 @@ fn a_comment_is_announced_kept_until_acknowledged_and_a_closed_tab_is_announced(
     assert!(desk.feed.settled(std::time::Duration::from_secs(5)));
     {
         let told = crate::lock(&told.0);
-        assert_eq!(told[0].0, "comment/added");
-        assert_eq!(told[0].1.as_deref(), Some(mine.owner.as_str()));
-        assert_eq!(told[0].2["agent"], "me");
-        assert_eq!(
-            told[0].2["project"],
-            mine.project.path.display().to_string()
-        );
-        assert_eq!(told[0].2["text"], "this button is wrong");
-        assert_eq!(told[0].2["id"], said[0].id);
+        // The terminal's opening is told too (`tab/changed`): the comment is the one note.
+        let comments: Vec<_> = (told.iter())
+            .filter(|(event, ..)| event == "comment/added")
+            .collect();
+        assert_eq!(comments.len(), 1, "{told:?}");
+        let (_, owner, note) = comments[0];
+        assert_eq!(owner.as_deref(), Some(mine.owner.as_str()));
+        assert_eq!(note["agent"], "me");
+        assert_eq!(note["project"], mine.project.path.display().to_string());
+        assert_eq!(note["text"], "this button is wrong");
+        assert_eq!(note["id"], said[0].id);
     }
     // Told is not delivered: it stays until a call carries it, or it is acknowledged.
     assert_eq!(desk.pending(&mine.owner).len(), 1);
@@ -144,6 +151,55 @@ fn a_tab_the_person_opened_and_closed_is_told_to_no_subscriber() {
         crate::lock(&told.0)
             .iter()
             .all(|(event, ..)| event != "tab/closed")
+    );
+    desk.shutdown();
+}
+
+#[test]
+fn a_tab_opened_and_a_board_changed_are_told_to_whom_they_concern() {
+    let told = Arc::new(Told::default());
+    let events: Arc<dyn Events> = Arc::<Told>::clone(&told);
+    let desk = Desk::new(
+        None,
+        false,
+        std::env::temp_dir().join("desk-test-shots"),
+        events,
+        Arc::new(crate::store::Store::memory().unwrap()),
+    );
+    let scratch = Scratch::new();
+    let mine = caller(&desk, scratch.path(), Some("me"));
+    let me = mine.call();
+    desk.window(&me, &json!({"action": "open", "kind": "board"}))
+        .unwrap();
+    desk.window(
+        &me,
+        &json!({"action": "interact", "tab": "b1", "op": "add", "title": "Header"}),
+    )
+    .unwrap();
+    assert!(desk.feed.settled(std::time::Duration::from_secs(5)));
+    let told = crate::lock(&told.0).clone();
+    // The board's tab is the caller's own: told to it alone.
+    assert!(
+        told.iter()
+            .any(|(event, owner, params)| event == "tab/changed"
+                && owner.as_deref() == Some(mine.owner.as_str())
+                && params["tab"] == "b1"),
+        "{told:?}"
+    );
+    // The board is the project's: told to every agent of it, with its cards as they are now.
+    let board = told
+        .iter()
+        .rev()
+        .find(|(event, ..)| event == "board/changed")
+        .unwrap();
+    assert_eq!(
+        board.1.as_deref(),
+        Some(format!("project {}", mine.project.id).as_str())
+    );
+    let cards = board.2["board"]["cards"].as_array().unwrap();
+    assert!(
+        cards.iter().any(|card| card["title"] == "Header"),
+        "{board:?}"
     );
     desk.shutdown();
 }

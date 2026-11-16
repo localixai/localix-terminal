@@ -306,9 +306,9 @@ define colours of its own beyond its `--ground`.
   under the mark, what the release says is new (the one part that scrolls), Restart to Update
   and Later. Later puts it off: its row under the toolbar (the offer bar) comes back another
   day, and Settings always has it.
-- **What else can wait is never a dialog.** An integration to add: a row under the toolbar (the
-  offer bar), one at a time, with the button that does it and Not Now. It fades in, takes no
-  focus, and comes back later when put off.
+- **What else can wait is never a dialog.** An offer: a row under the toolbar (the offer bar),
+  one at a time, with the button that does it and Not Now. It fades in, takes no focus, and
+  comes back later when put off.
 - **Notices** don't carry the only copy of something important:
   - one with a timer pauses while the pointer or focus is on it, and has a close button;
   - they keep off the window's bottom edge;
@@ -392,6 +392,23 @@ The tokens (`frame.css`) set the timings; a component never picks its own durati
 
   `frame.css` already limits every transition to colours and opacity under it.
 
+## Find
+
+- **Find is the Edit menu's**: Find… (⌘F), Find Next (⌘G) and Find Previous (⇧⌘G) are rows of
+  the shortcut table, under the system's editing, and greyed over a tab that has no find. The
+  window only tells the tab shown which step to take (`Deck::find_text`); the tab keeps its
+  query and its count.
+- **A terminal's find is a row under its screen**, as the editor's: a hairline above, 8 pt
+  above and below, the gutter's 16 pt at the sides; the window's text field (`.field`, 24 pt
+  here, as the editor's), the count in Callout and `--ink-2` with a width that does not change
+  as it counts, and quiet icon buttons (`.btn.plain.ico`, 24 pt): the previous match, the next,
+  and Close at the end. The screen ends over the row, so it covers no line.
+- **Every match is lit** in the accent over the terminal's ground at 25% (as `--acc-2`), the one
+  shown at 60% (as `--acc-4`) with the accent as its edge; in an inactive window the accent's
+  grey. The count says "3 of 12", "No results", or "1,000+" past the most it lights.
+- **The keys stay in the row** while it is open: Return and ⇧Return walk the matches, Esc closes
+  it and gives the keys back to the terminal, and nothing typed there reaches the program.
+
 ## A file drawn to read
 
 - **A Markdown file opens as a document**, drawn from its text: one column, 720 pt wide at
@@ -435,6 +452,12 @@ when its gap is closed.
   its text) are keys of its page alone: none has a home in the menu bar yet, and none is in
   the shortcut table, so Settings cannot change them.
 - A document drawn from a Markdown file has no Find: ⌘F answers only over the text.
+- A web page has no Find yet: the Edit menu's Find is greyed over one. It goes in as a branch of
+  `Deck::find_text`, the menu and the keys staying as they are.
+- The editor's Find is CodeMirror's own row and keys, not the Edit menu's: over an editor the
+  menu's Find is greyed, while ⌘F in its text still opens its row.
+- Elsewhere than macOS no shortcut has a key, Find among them: only macOS's menu bar sends
+  what a shortcut does.
 
 ## Sources
 

@@ -11,6 +11,7 @@ Every command of the window has a key, and every key is yours to change. Setting
 | ⇧⌘], ⇧⌘[ | Next and previous tab. |
 | ⌘W, ⇧⌘T | Close the tab, reopen the last closed. |
 | ⇧⌘A | Search the tabs. |
+| ⌘F, ⌘G, ⇧⌘G | Find in a terminal's output, the next match and the one before. |
 | ⌘N | New window. |
 | ⇧⌘\ | Split View: the tab beside the next one of its project, or whole again. |
 | ⌘O | Open a folder as a project. |

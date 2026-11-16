@@ -58,19 +58,54 @@ fn a_frame_sits_in_the_middle_and_never_past_the_window() {
     // Taller than the window: drawn smaller to fit, its layout still the frame's.
     let tall = frame("iPhone 15 Pro", 393.0, 852.0);
     let placed = place(part, 84.0, Some(&tall));
-    assert!((placed.scale - 700.0 / 852.0).abs() < 1e-9, "{placed:?}");
+    // A hair under the exact scale (`HAIR`), so that WebKit's rounding never lays it out under.
+    assert!((placed.scale - 700.0 / 852.0).abs() < 1e-4, "{placed:?}");
     assert!((placed.size.height - 700.0).abs() < 1e-9, "{placed:?}");
-    assert!((placed.size.width / placed.scale - 393.0).abs() < 1e-9);
     assert_eq!(placed.down, 84.0);
     // Wider than the window: the same, never past it.
     let desktop = frame("Desktop", 1440.0, 900.0);
     let placed = place(LogicalSize::new(960.0, 800.0), 50.0, Some(&desktop));
-    assert!((placed.scale - 960.0 / 1440.0).abs() < 1e-9, "{placed:?}");
+    assert!((placed.scale - 960.0 / 1440.0).abs() < 1e-4, "{placed:?}");
     assert!(placed.size.width <= 960.0 && placed.size.height <= 800.0);
     assert_eq!(placed.across, 0.0);
     // A window with no room left: no scale of nothing.
     let none = place(LogicalSize::new(0.0, 0.0), 50.0, Some(&desktop));
     assert!(none.scale > 0.0 && none.scale.is_finite(), "{none:?}");
+}
+
+/// The view takes whole points (the system rounds what it is given), and the page lays out at
+/// its points over the scale, which WebKit cuts down to a whole CSS pixel: each side must come
+/// out the frame's, a little over it so that WebKit's own rounding of the scale cannot take it
+/// under. The window as the display run leaves it (1280 × 681 for the pages) is the case that
+/// drew a phone 392 wide.
+#[test]
+fn a_frame_drawn_smaller_lays_out_at_its_own_size() {
+    let parts = [
+        (1280.0, 681.0),
+        (1200.0, 700.0),
+        (960.0, 800.0),
+        (1281.5, 613.0),
+    ];
+    let custom = [("Custom", 3000.0, 2000.0), ("Custom", 4000.0, 300.0)];
+    for (width, height) in parts {
+        let part = LogicalSize::new(width, height);
+        for (name, w, h) in PRESETS.iter().copied().chain(custom) {
+            let placed = place(part, 40.0, Some(&frame(name, w, h)));
+            let (size, said) = (placed.size, format!("{name} in {part:?}: {placed:?}"));
+            assert_eq!(size.width, size.width.round(), "{said}");
+            assert_eq!(size.height, size.height.round(), "{said}");
+            assert!(size.width <= width && size.height <= height, "{said}");
+            // At its own size the page is drawn at 1, which nothing rounds.
+            let over = if placed.scale < 1.0 { 1e-3 } else { 0.0 };
+            for (points, side) in [(size.width, w), (size.height, h)] {
+                let css = points / placed.scale;
+                assert!(
+                    css - side >= over && css < side + 1.0,
+                    "{said}: {css} for {side}"
+                );
+            }
+        }
+    }
 }
 
 #[test]

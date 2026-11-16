@@ -15,8 +15,8 @@ use serde_json::Value;
 use super::plugin::{Plugin, Plugins, by_status, words};
 use super::server::{Seen, Servers, Wanted};
 use super::{Agent, var};
+use crate::agents::{self, Ran};
 use crate::catalog::{Env, PluginFormat, Runs};
-use crate::setup::reach::{self, Ran};
 
 const MOST: Duration = Duration::from_secs(60);
 
@@ -38,7 +38,7 @@ pub(super) fn shared_skills(env: &Env) -> PathBuf {
 
 /// Codex's `config.toml`.
 fn config(env: &Env) -> PathBuf {
-    reach::config_file("codex", &env.home, var(env))
+    agents::config_file("codex", &env.home, var(env))
         .unwrap_or_else(|| env.home.join(".codex/config.toml"))
 }
 
@@ -77,8 +77,8 @@ pub(super) fn headers_table(wanted: &Wanted<'_>) -> Option<String> {
 
 /// The value `key` of table `table` in Codex's TOML, with the table's name quoted or not.
 fn value(text: &str, table: &str, name: &str, key: &str) -> Option<Value> {
-    reach::toml_value(text, &format!("{table}.{name}"), key)
-        .or_else(|| reach::toml_value(text, &format!("{table}.\"{name}\""), key))
+    agents::toml_value(text, &format!("{table}.{name}"), key)
+        .or_else(|| agents::toml_value(text, &format!("{table}.\"{name}\""), key))
 }
 
 /// Server `key` in Codex's TOML.
@@ -120,7 +120,7 @@ impl Servers for Mcp {
         let file = config(env);
         let text =
             std::fs::read_to_string(&file).map_err(|why| format!("{}: {why}", file.display()))?;
-        reach::write_over(&file, &(text + &table))
+        agents::write_over(&file, &(text + &table))
     }
 
     fn take_out(&self, agent: &Agent, env: &Env, key: &str) -> Result<(), String> {
@@ -161,7 +161,7 @@ impl Plugins for Market {
     fn has(&self, env: &Env, plugin: &Plugin<'_>) -> Option<String> {
         let file = config(env);
         let text = std::fs::read_to_string(&file).ok()?;
-        let on = reach::toml_value(&text, &format!("plugins.\"{}\"", plugin.id()), "enabled");
+        let on = agents::toml_value(&text, &format!("plugins.\"{}\"", plugin.id()), "enabled");
         if on != Some(Value::Bool(true)) {
             return None;
         }

@@ -11,8 +11,8 @@ use std::time::Duration;
 use super::plugin::{Plugin, Plugins, by_status, words};
 use super::server::{Seen, Servers, Wanted};
 use super::{Agent, var};
+use crate::agents::{self, Ran};
 use crate::catalog::{Env, PluginFormat, Runs};
-use crate::setup::reach::{self, Ran};
 
 const MOST: Duration = Duration::from_secs(60);
 
@@ -32,7 +32,7 @@ pub(super) static COPILOT: Agent = Agent {
 
 /// Its MCP servers' file, in its home.
 fn config(env: &Env) -> PathBuf {
-    reach::config_file("copilot", &env.home, var(env))
+    agents::config_file("copilot", &env.home, var(env))
         .unwrap_or_else(|| env.home.join(".copilot/mcp-config.json"))
 }
 
@@ -83,7 +83,7 @@ impl Servers for Mcp {
     }
 
     fn seen(&self, text: &str, key: &str) -> Option<Seen> {
-        Seen::of(reach::json(text)?.get("mcpServers")?.get(key)?)
+        Seen::of(agents::json(text)?.get("mcpServers")?.get(key)?)
     }
 
     fn add(&self, agent: &Agent, env: &Env, wanted: &Wanted<'_>) -> Result<(), String> {
@@ -101,7 +101,7 @@ struct Market;
 
 /// Copilot's `settings.json`, read.
 fn settings(env: &Env) -> Option<serde_json::Value> {
-    reach::json(&std::fs::read_to_string(home(env).join("settings.json")).ok()?)
+    agents::json(&std::fs::read_to_string(home(env).join("settings.json")).ok()?)
 }
 
 impl Plugins for Market {

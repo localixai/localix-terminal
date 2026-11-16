@@ -5,17 +5,16 @@ terminal it runs in, and plans its work as cards on the project's board there. I
 as an outline with a ref for each control, and clicks and fills by those refs. The app knows no
 model; this plugin is Claude Code's side of it.
 
-## Install
+## Where it runs
 
-1. Install **Localix Terminal**, the app (https://github.com/localixai/localix-terminal#install), and open it once.
-2. In the app, **Settings → Integrations → Claude Code → Add** installs this plugin from the app
-   itself, of the app's version, and keeps it in step when the app updates. The plugin reaches
-   the app through the app's own program; nothing is downloaded.
-   Without the app's button, the plugin of this repository installs at Claude Code's prompt
-   with `/plugin install llxterm --marketplace localixai/localix-terminal`; the app still has to be
-   installed.
-3. Optional: **Hold Claude to its board card** (`finish_cards`, off by default): Claude stopping with
-   its own card still in Doing is asked once to finish it first.
+The plugin is part of **Localix Terminal** (https://github.com/localixai/localix-terminal#install)
+and is never installed: Claude Code 2.1.280 and later, started in a terminal of the app, loads it
+from the app's copy of it (`CLAUDE_CODE_PLUGIN_DIRS`), of the app's version; its mod needs
+2.1.287. Elsewhere Claude Code knows nothing of it. The plugin reaches the app through the
+app's own program, which those terminals put first on the `PATH`.
+
+**Hold Claude to its board card** (`finish_cards`, off by default): Claude stopping with its own
+card still in Doing is asked once to finish it first.
 
 The skills allow `Bash(llxterm:*)` while they are in use; allow it for the session (or in your
 settings) so calls do not each ask.
@@ -31,9 +30,12 @@ settings) so calls do not each ask.
 - **Commands**: `/tabs` (this project's tabs and your latest comments, in the chat), `/llxterm:end`
   (close this project's tabs), `/llxterm:stop` (quit Localix Terminal).
 - **A mod** (`hooks/register.tsx`):
-  - follows the comments you send from the window and what you do on the board
-    as they come, and sends each to Claude as a message; a card you
-    send back that a running subagent had goes to that subagent too;
+  - follows the app through one `llxterm window --watch`, which prints a line as the app comes
+    or goes, a tab opens, changes or closes, the board changes or you comment: nothing is asked
+    again and again;
+  - sends the comments you send from the window and what you do on the board to Claude as
+    messages, as they come; a card you send back that a running subagent had goes to that
+    subagent too;
   - keeps each worker's name on the board as its task gives it ("your name on the board:
     cart-button"), or gives it one from its description; a worker's call on the board without that
     name as `who` is refused with the name to pass, so it acts on its own cards and no other's;
@@ -56,6 +58,6 @@ Two sessions in one project share its tabs; use `--as NAME` to keep them apart.
 ## Developing
 
 `claude --plugin-dir plugins/claude-code` runs Claude Code with this plugin;
-`claude plugin validate .` checks the marketplace and `claude plugin validate plugins/claude-code` the plugin.
+`claude plugin validate plugins/claude-code` checks it.
 `bun test plugins/claude-code/hooks` runs the hooks' tests (`register.spec.ts`, against a mocked
 host).

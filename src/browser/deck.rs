@@ -26,6 +26,8 @@ mod construction;
 mod documents;
 #[path = "deck_drop.rs"]
 mod dropping;
+#[path = "deck_find.rs"]
+mod finding;
 #[path = "deck_render.rs"]
 mod render;
 #[path = "deck_said.rs"]

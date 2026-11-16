@@ -5,7 +5,7 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc::SyncSender;
 
 use crate::browser::deck::Deck;
-use crate::browser::panel::Opening;
+use crate::browser::panel::{self, Opening};
 use crate::browser::strip::{Click, Key};
 use crate::browser::{Asked, Heard, frame, platform, strip};
 
@@ -63,6 +63,7 @@ impl On<'_> {
             Cmd::Paint(id) => self.paint(id),
             Cmd::PanelMenu(id, at, items) => self.panel_menu(id, at, &items),
             Cmd::PanelLink(id, url) => self.panel_link(id, url),
+            Cmd::PanelCopy(id, text) => self.panel_copy(id, &text),
             Cmd::Reveal(id) => self.reveal(id),
             Cmd::Unanswered(id, at) => self.unanswered(id, at),
             Cmd::Unpanel(id) => {
@@ -83,7 +84,6 @@ impl On<'_> {
                 crate::browser::alerts::told(&crate::lock(&shared.center), proxy);
                 self.announce();
             }
-            Cmd::Offered(id, on) => self.offered(id, on),
             Cmd::Go(project) => self.go_project(&project),
             Cmd::Arranged(_, arranged) => self.arranged(arranged),
             Cmd::Tree(project, news) => {
@@ -212,6 +212,14 @@ impl On<'_> {
         }
     }
 
+    /// A program's copy from terminal `id` (OSC 52), on the pasteboard where the rule says
+    /// (`panel::copy_where`), read against this window.
+    fn panel_copy(&self, id: u32, text: &str) {
+        if let Some(deck) = self.deck.as_ref() {
+            panel::copy_where(deck, id, text, platform::copy);
+        }
+    }
+
     /// Terminal `id`'s newest frame, run in its page.
     fn paint(&mut self, id: u32) {
         let open = self.deck.as_ref().and_then(|open| open.term(id));
@@ -256,5 +264,23 @@ impl On<'_> {
             (Ok(()), Some(open)) => open.refresh(self.shared),
             _ => alive.alive.store(false, Ordering::SeqCst),
         }
+    }
+}
+
+/// A window's own answer to where the person's keys are, for a program's copy: what it shows,
+/// whether the system made it the key window, and which of its pages is the first responder.
+impl panel::Keys for Deck {
+    fn in_sight(&self, id: u32) -> bool {
+        let key = Key::Term(id);
+        self.shown_key() == Some(key)
+            || (self.pair()).is_some_and(|(left, right)| left == key || right == key)
+    }
+
+    fn key_window(&self) -> bool {
+        self.frame.is_key()
+    }
+
+    fn typing(&self, id: u32) -> bool {
+        (self.term(id)).is_some_and(|open| platform::has_keys(&open.webview))
     }
 }

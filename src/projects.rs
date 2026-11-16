@@ -23,8 +23,13 @@ pub struct Project {
 
 /// The project folder `dir` is in: the nearest folder at or above it with a `.git`, else `dir`.
 pub fn root_of(dir: &Path) -> PathBuf {
+    repository_of(dir).unwrap_or_else(|| dir.to_path_buf())
+}
+
+/// The nearest folder at or above `dir` with a `.git`, if there is one.
+pub fn repository_of(dir: &Path) -> Option<PathBuf> {
     let found = dir.ancestors().find(|at| at.join(".git").exists());
-    found.unwrap_or(dir).to_path_buf()
+    found.map(Path::to_path_buf)
 }
 
 /// The home folder: Home's.
@@ -163,6 +168,11 @@ pub fn owner(project: &Project, agent: Option<&str>) -> String {
         Some(name) => format!("{}/{name}", project.id),
         None => project.id.to_string(),
     }
+}
+
+/// The project of `owner` (as [`owner`] names one): the part before its agent's name.
+pub fn project_of(owner: &str) -> Option<ProjectId> {
+    owner.split('/').next()?.parse().ok()
 }
 
 /// Project `id`'s key in the window, which groups its tabs by it.

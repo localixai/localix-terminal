@@ -89,6 +89,39 @@ pub(in super::super) fn loading(_webview: &wry::WebView) -> bool {
     true
 }
 
+/// Whether `webview` holds its window's keys: the view, or one inside it, is that window's
+/// first responder. They reach it while the window is the key one (`Frame::is_key`).
+#[cfg(target_os = "macos")]
+pub(in super::super) fn has_keys(webview: &wry::WebView) -> bool {
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyObject, Bool};
+    use objc2::{class, msg_send};
+    use wry::WebViewExtMacOS;
+    let view = webview.webview();
+    // SAFETY: an NSView answers its window, or nil.
+    let window: Option<Retained<AnyObject>> = unsafe { msg_send![&*view, window] };
+    let Some(window) = window else {
+        return false;
+    };
+    // SAFETY: an NSWindow answers its first responder, an NSResponder or nil.
+    let responder: Option<Retained<AnyObject>> = unsafe { msg_send![&*window, firstResponder] };
+    let Some(responder) = responder else {
+        return false;
+    };
+    // SAFETY: every NSObject answers `isKindOfClass:` with a BOOL.
+    let a_view: Bool = unsafe { msg_send![&*responder, isKindOfClass: class!(NSView)] };
+    // SAFETY: an NSView (checked just above) answers `isDescendantOf:` another view, a BOOL.
+    a_view.as_bool() && unsafe { msg_send![&*responder, isDescendantOf: &*view] }
+}
+
+/// GTK's: the view is its window's focus widget. The window has the focus (`Frame::is_key`).
+#[cfg(not(target_os = "macos"))]
+pub(in super::super) fn has_keys(webview: &wry::WebView) -> bool {
+    use gtk::prelude::WidgetExt;
+    use wry::WebViewExtUnix;
+    webview.webview().is_focus()
+}
+
 /// `webview`, one of the app's own pages, in the system's appearance: WebKit then gives its
 /// pages the person's accent (`-apple-system-control-accent`), the system's selection, link and
 /// focus ring colours, and follows the view's light or dark, where otherwise it answers fixed

@@ -3,11 +3,16 @@
 
 use serde_json::Value;
 
+use crate::projects::ProjectId;
+
 /// Where the desk says what happened.
 pub trait Events: Send + Sync {
-    /// `event` (`comment/added`, `tab/closed`) with its `params`, for `owner`'s
+    /// `event` (`comment/added`, `tab/changed`, `tab/closed`) with its `params`, for `owner`'s
     /// subscribers, or for everyone when there is no owner.
     fn publish(&self, event: &str, owner: Option<&str>, params: Value);
+    /// `event` (`board/changed`) with its `params`, for the subscribers of project `project`:
+    /// its own agent's and every named agent's of it.
+    fn publish_project(&self, event: &str, project: ProjectId, params: Value);
 }
 
 /// Nobody is told: a desk driven directly.
@@ -15,6 +20,7 @@ pub struct Quiet;
 
 impl Events for Quiet {
     fn publish(&self, _event: &str, _owner: Option<&str>, _params: Value) {}
+    fn publish_project(&self, _event: &str, _project: ProjectId, _params: Value) {}
 }
 
 /// The person's notes about a tab, as the agent reads them: theirs, and untrusted where they

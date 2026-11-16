@@ -197,6 +197,7 @@ fn a_restored_screen_shows_dimmed_before_the_programs_output() {
         None,
         None,
         "one\ntwo",
+        &crate::terminal::Own::default(),
     )
     .unwrap();
     let until = session.wait(Some("after"), 0, Duration::from_secs(10));

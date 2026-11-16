@@ -1,5 +1,5 @@
 //! The commands that call the app: `window` (one call, `--end`, `--said`, `--said --follow
-//! [--json]`) and `status`/`quit`. The CLI is a client of the protocol like any other: its call carries an
+//! [--json]`, `--watch`) and `status`/`quit`. The CLI is a client of the protocol like any other: its call carries an
 //! idempotency key, so one asked again after a broken connection is not done twice, and a
 //! picture comes as bytes that it saves where the calling agent can read them.
 
@@ -39,6 +39,9 @@ enum Mode {
     Said,
     /// `--board`: the owner's open cards, read from the board's file.
     Board,
+    /// `--watch`: the app, the owner's tabs and board and the person's comments, a JSON line
+    /// for each change (follow.rs).
+    Watch,
 }
 
 fn parse(args: &[String]) -> Result<Window, String> {
@@ -46,12 +49,13 @@ fn parse(args: &[String]) -> Result<Window, String> {
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--end" | "--said" | "--board" if parsed.mode != Mode::Call => {
-                return Err("one of --end, --said and --board only".into());
+            "--end" | "--said" | "--board" | "--watch" if parsed.mode != Mode::Call => {
+                return Err("one of --end, --said, --board and --watch only".into());
             }
             "--end" => parsed.mode = Mode::End,
             "--said" => parsed.mode = Mode::Said,
             "--board" => parsed.mode = Mode::Board,
+            "--watch" => parsed.mode = Mode::Watch,
             "--follow" => parsed.follow = true,
             // As before, `--said --json` follows: `--json` is a way of following.
             "--json" => {
@@ -77,7 +81,7 @@ fn parse(args: &[String]) -> Result<Window, String> {
         return Err("--follow and --json go with --said".into());
     }
     if parsed.mode != Mode::Call && parsed.json.is_some() {
-        return Err("--end, --said and --board take no JSON".into());
+        return Err("--end, --said, --board and --watch take no JSON".into());
     }
     Ok(parsed)
 }
@@ -120,6 +124,7 @@ pub(super) fn window(args: &[String]) -> u8 {
         Mode::Call => None,
         Mode::Board => return board(&caller.project),
         Mode::Said if parsed.follow => return crate::follow::follow(&caller, parsed.json_lines),
+        Mode::Watch => return crate::follow::watch(&caller),
         Mode::Said => Some("window/said"),
         Mode::End => Some("window/end"),
     };

@@ -11,9 +11,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use serde_json::{Value, json};
 
 use super::Agent;
+use crate::agents::shown;
 use crate::catalog::capital;
 use crate::catalog::{Env, Listing, Plan, With};
-use crate::setup::reach::shown;
 
 /// The file that marks a skill's folder as this app's.
 const MARK: &str = ".llxterm.json";

@@ -32,7 +32,7 @@ const fn at(
 
 /// Every shortcut, in the order Settings lists them. The chords follow the system's browsers and
 /// editors, so the hand already knows them.
-const SHORTCUTS: [Shortcut; 29] = [
+const SHORTCUTS: [Shortcut; 32] = [
     at(
         "open-folder",
         "Open Folder\u{2026}",
@@ -97,6 +97,22 @@ const SHORTCUTS: [Shortcut; 29] = [
     ),
     at("find-tab", "Search Tabs", "Tabs", "cmd+shift+a", "key find"),
     at("split", "Split View", "Tabs", "cmd+shift+\\", "key split"),
+    // Find in what is shown (a terminal's output), in the Edit menu where the system keeps it.
+    at(
+        "find-text",
+        "Find\u{2026}",
+        "Edit",
+        "cmd+f",
+        "key find text",
+    ),
+    at("find-next", "Find Next", "Edit", "cmd+g", "key find next"),
+    at(
+        "find-previous",
+        "Find Previous",
+        "Edit",
+        "cmd+shift+g",
+        "key find previous",
+    ),
     at("address", "Open Location", "Page", "cmd+l", "key address"),
     at("reload", "Reload Page", "Page", "cmd+r", "reload"),
     at(
@@ -182,6 +198,17 @@ pub(super) const OF_PAGE: [&str; 6] = [
 #[cfg(any(target_os = "macos", test))]
 pub(in super::super) fn of_page(does: &str) -> bool {
     OF_PAGE.contains(&does)
+}
+
+/// What only a tab that finds in what it shows can do: Find, Find Next and Find Previous. Over
+/// a tab with no find (a web page, the board, Settings) these are off (`Deck::finds`).
+#[cfg(any(target_os = "macos", test))]
+pub(super) const OF_FIND: [&str; 3] = ["key find text", "key find next", "key find previous"];
+
+/// Whether what a shortcut `does` needs a tab that finds.
+#[cfg(any(target_os = "macos", test))]
+pub(in super::super) fn of_find(does: &str) -> bool {
+    OF_FIND.contains(&does)
 }
 
 /// The groups of the catalog, in its order: Settings lists them so, and each is a menu of the

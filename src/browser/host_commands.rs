@@ -75,6 +75,8 @@ pub(in super::super) enum Cmd {
     PanelMenu(u32, (u32, u32), Vec<super::super::choice::Entry>),
     /// An address the person opened from a panel's text (`o` of its page).
     PanelLink(u32, String),
+    /// The text a program in a panel asked to put on the pasteboard (`c` of its page, OSC 52).
+    PanelCopy(u32, String),
     /// A page tab waits for what was asked of it at this count: does its view still load
     /// (unloaded.rs)?
     Unanswered(u32, u64),
@@ -95,8 +97,6 @@ pub(in super::super) enum Cmd {
     Noted(Noted),
     /// Tell the strip what the window holds (a tab's title changed, its page loaded).
     Strip,
-    /// Integration `.0` was read: on (`.1`) or off. The offer bar is drawn again.
-    Offered(&'static str, bool),
     /// The window goes to the project of this key (one the app just made, the person's pick).
     Go(String),
     /// The layout of the windows' projects (`Browser::arranged`), and the windows open, the main
@@ -175,6 +175,7 @@ impl Cmd {
             | Cmd::Unpanel(id)
             | Cmd::PanelMenu(id, ..)
             | Cmd::PanelLink(id, _)
+            | Cmd::PanelCopy(id, _)
             | Cmd::Titled(id, _) => term(*id),
             Cmd::Eval { tab: Some(id), .. }
             | Cmd::Navigate { tab: Some(id), .. }
@@ -186,9 +187,7 @@ impl Cmd {
             | Cmd::Capture { tab: Some(id), .. } => web(*id),
             Cmd::Act(Click::Show(key) | Click::Close(key), _) => Route::Pane(key.name()),
             Cmd::Pressed(window, ..) => Route::Pressed(*window),
-            Cmd::Strip | Cmd::Arranged(..) | Cmd::Tree(..) | Cmd::Restyle | Cmd::Offered(..) => {
-                Route::All
-            }
+            Cmd::Strip | Cmd::Arranged(..) | Cmd::Tree(..) | Cmd::Restyle => Route::All,
             Cmd::Eval { .. }
             | Cmd::Navigate { .. }
             | Cmd::Frame(..)
@@ -244,11 +243,11 @@ impl Cmd {
             | Cmd::Paint(_)
             | Cmd::PanelMenu(..)
             | Cmd::PanelLink(..)
+            | Cmd::PanelCopy(..)
             | Cmd::Unanswered(..)
             | Cmd::Restyle
             | Cmd::Tree(..)
             | Cmd::Noted(_)
-            | Cmd::Offered(..)
             | Cmd::NewWindow(_)
             | Cmd::Dressed(_)
             | Cmd::Listing(_)

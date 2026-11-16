@@ -24,16 +24,26 @@ type Ran = { exitCode: number; stdout: string }
 /** How the mock host answers one `$.process.run`; a rejection is a program that failed. */
 type Runner = (argv: string[], timeoutMs: number) => Promise<Ran>
 
-/** What the desk answers, wherever its program is. */
-const answer = (argv: string[]): Ran => {
-  if (argv.includes('status')) return { exitCode: 0, stdout: 'running\nwindow: shown\nterminals: 0\n' }
-  return { exitCode: 0, stdout: 'No tabs open.' }
-}
+/** What the desk answers a call. */
+const answer = (_argv: string[]): Ran => ({ exitCode: 0, stdout: 'No tabs open.' })
 
-/** A session on a mock host whose programs answer as `runner` says; its hooks, once started. */
-async function session(runner: Runner, vars: Record<string, string> = {}) {
+/** What the watcher prints, by default: the app runs. */
+const RUNNING = [{ app: 'llxterm 0.2.0 (pid 7)', window: 'open', terminals: '1', tabs: ['t1 zsh'] }]
+
+/** A session on a mock host whose programs answer as `runner` says and whose watcher prints
+ * `watched` (one JSON line each, handed over in pieces) before it ends; the host grants the
+ * watcher's pauses `sleeps` times, then refuses. Its hooks, once started. */
+async function session(
+  runner: Runner,
+  vars: Record<string, string> = {},
+  watched: unknown[] = RUNNING,
+  sleeps = 0,
+) {
   const calls: { argv: string[]; timeoutMs: number }[] = []
   const spawned: string[][] = []
+  const timers: number[] = []
+  const paused: number[] = []
+  const submitted: string[] = []
   const appended: { message: { type: string; content: { type: string; text: string }[] } }[] = []
   type Handler = (api: unknown, event: unknown, next: (event: unknown) => Promise<unknown>) => Promise<unknown>
   const hooks = new Map<string, Handler>()
@@ -50,11 +60,19 @@ async function session(runner: Runner, vars: Record<string, string> = {}) {
       append: async (row: (typeof appended)[number]) => { appended.push(row) },
     },
     fs: { read: async () => '{"cards":[]}' },
-    ui: { status: () => undefined },
+    ui: { status: () => undefined, toast: () => undefined },
     command: { register: async () => undefined },
+    prompt: { submit: async ({ text }: { text: string }) => { submitted.push(text) } },
+    agent: { list: async () => [] },
     clock: {
-      every: () => undefined,
-      sleep: async () => { throw new Error('the mock host ended') },
+      every: (ms: number) => { timers.push(ms) },
+      sleep: async (ms: number) => {
+        paused.push(ms)
+        if (paused.length > sleeps) {
+          followed()
+          throw new Error('the mock host ended')
+        }
+      },
     },
     process: {
       run: async (argv: string[], init: { timeoutMs: number }) => {
@@ -65,7 +83,9 @@ async function session(runner: Runner, vars: Record<string, string> = {}) {
       spawn: ({ argv }: { argv: string[] }) => ({
         async *[Symbol.asyncIterator]() {
           spawned.push(argv)
-          followed()
+          const text = watched.map(line => `${JSON.stringify(line)}\n`).join('')
+          // In pieces that cut lines apart, as a pipe hands them over.
+          for (let at = 0; at < text.length; at += 7) yield { stream: 'stdout', text: text.slice(at, at + 7) }
         },
       }),
     },
@@ -75,13 +95,9 @@ async function session(runner: Runner, vars: Record<string, string> = {}) {
   await hooks.get('session.start')!(api, {}, next)
   await following
   const hook = (name: string, event: unknown) => hooks.get(name)!(api, event, next)
-  return { calls, spawned, appended, hook }
+  return { calls, spawned, timers, paused, submitted, appended, hook }
 }
 
-/** A program that cannot start, as a missing one fails: at once. */
-const missing = async (): Promise<Ran> => {
-  throw new Error('ENOENT: no such file or directory')
-}
 /** A program that started and hangs: the host kills it once its time is out, and rejects. */
 const hung = (timeoutMs: number) =>
   new Promise<Ran>((_, reject) => setTimeout(() => reject(new Error('timed out')), timeoutMs))
@@ -132,17 +148,41 @@ test('a turn that an error ended is said however short, and one the person stopp
   expect(asked(calls, before)).toEqual(['Claude stopped on an error', ''])
 })
 
-test('a program missing from the PATH is tried once, then the one that ran is asked first', async () => {
-  const local = '/home/test/.local/bin/llxterm'
-  const { calls, spawned, hook } = await session(async argv => (argv[0] === local ? answer(argv) : missing()))
-  // The first look finds the program: the PATH's fails, then ~/.local/bin's runs.
-  expect(calls.slice(0, 2).map(call => call.argv[0])).toEqual(['llxterm', local])
-  const later = calls.slice(1).map(call => call.argv[0])
-  expect(later.every(program => program === local)).toBe(true)
-  expect(spawned[0]?.[0]).toBe(local)
-  const before = calls.length
+test('the app is called by its own program, and no timer runs nor status is asked during a session', async () => {
+  const { calls, spawned, timers, hook } = await session(async argv => answer(argv), { LLXTERM_BIN: '/Apps/LT.app/bin' })
+  expect(spawned).toEqual([['/Apps/LT.app/bin/llxterm', 'window', '--project', '/work/project/nested', '--watch']])
   await hook('turn.complete', { durationMs: 31_000, answer: 'Done' })
-  expect(calls.slice(before).map(call => call.argv[0])).toEqual([local])
+  expect(calls.length).toBeGreaterThan(0)
+  expect(calls.every(call => call.argv[0] === '/Apps/LT.app/bin/llxterm')).toBe(true)
+  expect(calls.some(call => call.argv.includes('status'))).toBe(false)
+  expect(timers).toEqual([])
+})
+
+test("the watcher's lines keep the line above the prompt and a comment wakes Claude", async () => {
+  const watched = [
+    ...RUNNING,
+    { board: { cards: [{ id: 'c1', title: 'Cart', column: 'doing', who: 'tests' }, { id: 'c2', title: 'Header', column: 'review' }] } },
+    { said: 'The person commented (#1) on https://shop.test: make it red' },
+  ]
+  const { submitted, hook } = await session(async argv => answer(argv), {}, watched)
+  const tabs = (await hook('command.run', {})) as { text: string }
+  expect(tabs.text).toContain('llxterm 0.2.0 (pid 7) · window open')
+  expect(tabs.text).toContain('  t1 zsh')
+  expect(tabs.text).toContain('Board: 0 todo · 1 doing · 1 in review · 0 done')
+  expect(tabs.text).toContain('https://shop.test: make it red')
+  expect(submitted).toEqual(['The person commented (#1) on https://shop.test: make it red'])
+  // The app gone, the pane says so and nothing is asked of it.
+  const gone = await session(async argv => answer(argv), {}, [...RUNNING, { app: 'not running' }])
+  const before = gone.calls.length
+  await gone.hook('turn.complete', { durationMs: 31_000, answer: 'Done' })
+  expect(gone.calls).toHaveLength(before)
+  expect(((await gone.hook('command.run', {})) as { text: string }).text).toContain('not running')
+})
+
+test('a watcher that ends is started again after a pause that doubles, not in a loop', async () => {
+  const { spawned, paused } = await session(async argv => answer(argv), {}, [], 4)
+  expect(spawned).toHaveLength(5)
+  expect(paused).toEqual([5000, 10_000, 20_000, 40_000, 60_000])
 })
 
 test('a hung app is not asked again under another name, and the session ends without waiting long', async () => {

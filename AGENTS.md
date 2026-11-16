@@ -142,8 +142,9 @@ Each of these has already cost a round.
   `serve`, and the other way round; check the one that was not used while developing.
 - **Nothing waits for a chance redraw.** What must be shown is shown when its cause happens,
   with the window in front or behind.
-- **A debug build never rewrites the person's setup** (the agents' entries, the command's
-  link).
+- **Nothing is written into an agent's settings or the person's home.** Agents reach the app
+  only through its terminals' environment (`reach`); the Store writes into an agent only on the
+  person's yes.
 
 ## A change is done when
 
@@ -162,13 +163,15 @@ One pass, and the person has nothing to send back for a detail that could have b
 
 ## Running a build on this machine
 
-The app is the server: `~/.local/bin/llxterm` links into `~/Applications/Localix Terminal.app`.
+The app is the server, in `~/Applications/Localix Terminal.app`; its terminals have its `llxterm`
+first on their `PATH`. Outside them, call the bundle's program:
+`~/Applications/"Localix Terminal.app"/Contents/MacOS/llxterm`.
 
 1. Build and bundle: `cargo build --release && scripts/bundle-macos.sh`.
 2. Replace the bundle whole. `ditto` it to `Localix Terminal.app.new`, then move that over the old one.
-   Never copy over the link or the binary.
-3. Restart: run `llxterm quit`, wait until the old process is gone (`pgrep -f "LLX
-   Desk.app/Contents/MacOS"`; an `open` sent sooner fails with error -600), then
+   Never copy over the binary.
+3. Restart: run `llxterm quit`, wait until the old process is gone (`pgrep -f "Localix
+   Terminal.app/Contents/MacOS"`; an `open` sent sooner fails with error -600), then
    `env -i HOME="$HOME" USER="$USER" PATH=/usr/bin:/bin open -g -a ~/Applications/"Localix Terminal.app" --args serve`.
    The bare environment matters: an app opened from an agent's shell hands that session's
    variables to every terminal the person opens in it. Under `serve` the window opens when the

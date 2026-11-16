@@ -35,23 +35,33 @@ impl Consumer for Relay {
                     (desk.events).publish("comment/added", Some(owner), desk.note(owner, &said));
                 }
             }
-            // A tab of no one's (the person's in no project's own) is told to no one.
+            // A tab of no one's (the person's in no project's own) is told to no one. One that
+            // opened or changed (its title) is told as a change: a subscriber reads the tabs
+            // again itself.
             (
                 Entity::Pane {
                     owner: Some(owner),
                     key,
                 },
-                Op::Deleted,
+                op,
             ) => {
-                (desk.events).publish("tab/closed", Some(owner), json!({"tab": key}));
+                let event = match op {
+                    Op::Upserted => "tab/changed",
+                    Op::Deleted => "tab/closed",
+                };
+                (desk.events).publish(event, Some(owner), json!({"tab": key}));
+            }
+            // A board is every agent's of its project: it is told to them all, as it is now.
+            (Entity::Board { project }, _) => {
+                let board = (desk.feed.store()).read(|db| crate::board::store::load(db, *project));
+                let board = serde_json::to_value(board?).map_err(|why| why.to_string())?;
+                (desk.events).publish_project("board/changed", *project, json!({"board": board}));
             }
             // What subscribers are not told of.
             (Entity::Said { .. }, Op::Deleted)
-            | (Entity::Pane { owner: None, .. }, Op::Deleted)
-            | (Entity::Pane { .. }, Op::Upserted)
+            | (Entity::Pane { owner: None, .. }, Op::Upserted | Op::Deleted)
             | (
-                Entity::Board { .. }
-                | Entity::Terminal { .. }
+                Entity::Terminal { .. }
                 | Entity::Ask { .. }
                 | Entity::Window { .. }
                 | Entity::Workspace { .. }

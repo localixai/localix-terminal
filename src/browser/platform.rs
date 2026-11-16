@@ -8,8 +8,8 @@ mod views;
 pub(super) use bounds::bound;
 pub(super) use views::{Follow, OVER_PAGES, follow};
 pub(super) use views::{
-    Pane, clear, keep_rendering, keep_tab_rendering, loading, reparent, see_through, stack,
-    system_appearance, to_front,
+    Pane, clear, has_keys, keep_rendering, keep_tab_rendering, loading, reparent, see_through,
+    stack, system_appearance, to_front,
 };
 
 use tao::event_loop::EventLoopWindowTarget;
@@ -47,7 +47,7 @@ pub(super) fn dock(
 }
 
 #[cfg(not(target_os = "macos"))]
-pub(super) use super::menu_gtk::{page_shown, quit_through};
+pub(super) use super::menu_gtk::{quit_through, showing};
 
 /// `question` asked in GTK's dialog, which holds the loop until it is answered; `done` takes
 /// whether the person went on. One signature with macOS, where the question is a sheet.
@@ -64,7 +64,7 @@ pub(super) fn confirm(
 /// their system asks it.
 #[cfg(target_os = "macos")]
 pub(super) use super::{
-    app_menu::{page_shown, quit_through},
+    app_menu::{quit_through, showing},
     appkit::confirm,
 };
 

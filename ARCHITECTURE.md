@@ -18,7 +18,7 @@ Localix Terminal.app                  the server (server.rs): lock, socket, one 
 desk/                         the window tool's actions over a project's tabs; the app's life
    |        |         |
    v        v         v
-browser/  terminal/  board/          setup/  what the app puts in place: the command, the plugin, MCP
+browser/  terminal/  board/          reach/  what the app's terminals are told: the command, the plugin, MCP
 ```
 
 ## Module boundaries
@@ -104,7 +104,7 @@ normal tests in CI.
   The side lists the project's tabs; a terminal that runs a coding agent (`agents.rs`, by its
   command) shows the agent's mark, and under its name the title its program sets (OSC 0/2, kept
   aside by `terminal/screen.rs`). The person's settings (`settings.rs`: theme, transparency,
-  fonts, the shortcuts they changed) are kept in `settings.json` under the config directory and
+  fonts, which Option key is Meta in a terminal, the shortcuts they changed) are kept in `settings.json` under the config directory and
   shown in a tab of the window's own (`host_settings.rs`, `settings.html`). Every shortcut
   (`shortcuts.rs`) is a click the strip already knows, fired by the app's hidden menu
   (`app_menu.rs`, macOS), so a key, a menu item and a button never do different things. The app
@@ -158,11 +158,24 @@ normal tests in CI.
   when a window shows it. What is typed is queued and written by a thread of its own, so a
   program that reads nothing never holds the window. Output is untrusted. The model (`vt100`, what agents read) gets only
   text and CSI sequences, but the window's xterm paints the program's raw bytes: the page's own
-  configuration (no clipboard addon, a link handler limited to http and https, `Said::Open`, the
-  CSP) is the boundary there. A
+  configuration (no clipboard addon, a search addon that only reads the buffer, a link handler
+  limited to http and https, `Said::Open`, the CSP) is the boundary there. A program's copy (OSC 52) is the one way its output reaches the
+  pasteboard: the page passes it on (`Said::Copied`, at most 1 MiB of UTF-8), and the window
+  writes it only while that terminal is in sight and has the keys in the key window
+  (`Frame::is_key`, `platform::has_keys`; the rule is `panel::copy_where`, over the window's
+  `panel::Keys`, so a test gives the keys without the system making a window key); a
+  request to read the pasteboard is never answered. The person's keys are the page's
+  `keyboard.js`: the Mac keys, LF for Shift+Enter, and which Option is Meta (`option` of the
+  window's look, from Settings, none by default), whose Return is ESC CR. A
   terminal starts with the caller's environment, but for the variables its integration names
   its own in `LLXTERM_SCRUB` (the Claude Code plugin's launcher lists Claude Code's session
-  variables), so the core knows no agent's names.
+  variables), so the core knows no agent's names. Over that environment a terminal is told what it is
+  (`terminal::Own`, set by `desk/term/env.rs`): `LLXTERM_PANE` (its key, `t3`),
+  `LLXTERM_PANE_PROJECT` (its project's folder), the folder of the app's command first on its
+  `PATH` (named `LLXTERM_BIN`, which the shell's files put first again after the person's
+  profile sets a `PATH`), and the variables the server hands the desk (`reach`). A call names
+  its terminal by `LLXTERM_PANE` in the environment it sends, else by its lineage, so a program
+  in tmux, whose lineage is lost, is still known (`Desk::pane_named`).
 - **`files.rs`, `files/`** are a project's files: a folder listed one at a time (`files.rs`),
   heard from the system while it is in sight (`watch.rs` over `fsevents.rs` and `inotify.rs`,
   no timer), the folders a person left open (`kept.rs`), one file as an editor holds it with a
@@ -206,7 +219,9 @@ normal tests in CI.
   notice at least once, re-reads the owner for what it needs, and reconciles from the owners after a
   notice it could not handle. Notices of what does not outlive a run (a pane, a terminal) are passed
   over after a restart. The entity kinds are one enum every consumer matches whole. Its consumers:
-  `desk/relay.rs` tells subscribers (`comment/added`, `tab/closed`) through the server's hub; `desk/center.rs` is the Event Center; `desk/board_file.rs` writes boards out.
+  `desk/relay.rs` tells subscribers (`comment/added`; `tab/changed` and `tab/closed` to the
+  tab's owner; `board/changed`, with the board as it is now, to every agent of its project)
+  through the server's hub; `desk/center.rs` is the Event Center; `desk/board_file.rs` writes boards out.
 - **`desk/center.rs`, `desk/center/`** are the Event Center: what waits for the person, gathered from
   its sources (`event.rs`: what an event is and how it is shown; `sources.rs`: the agent's asks, a
   card in Review or blocked, a program that ended) whenever the feed says something changed, kept in its journal (`journal.rs`:
@@ -234,10 +249,13 @@ normal tests in CI.
   `idempotencyKey` is done once (`server/idem.rs`, kept server-wide: the retry arrives on a new
   connection), a panic is that request's error. Only the user's own processes are served, and a client talks only to its
   user's own server (the peer's uid, `wire/peer.rs`). The server notifies by subscription (`server/hub.rs`): `comment/added` (kept by the
-  desk until acknowledged, and told again on every subscribe), `tab/closed`, `app/quitting`.
+  desk until acknowledged, and told again on every subscribe), `tab/changed`, `tab/closed`,
+  `board/changed`, `app/quitting`.
   `client.rs` and `client/link.rs` are the other end: `client::ask` is the one request every adapter
   makes, with the caller (`client/params.rs`: its project, from `--project DIR`,
-  `LLXTERM_PROJECT` or its folder, and its agent, `--as NAME`); when nothing listens it starts the
+  `LLXTERM_PROJECT`, the repository around its folder, else the project of the terminal it runs
+  in (`LLXTERM_PANE_PROJECT`) when its folder is in that project's, else its folder; and its
+  agent, `--as NAME`); when nothing listens it starts the
   server: the app through LaunchServices, in the
   background, when this program is the app's (`bundle.rs`), else this program as `serve`. The CLI,
   `--said --follow` and `mcp.rs` (an MCP server on stdio whose one tool is the window tool as
@@ -246,14 +264,17 @@ normal tests in CI.
   revision in every request and words a result for each, `mcp/running.rs` holds the calls being
   worked, so one the agent cancels is not answered and one it follows hears that it still runs)
   are its clients; `llxterm window --board` reads a project's board from its
-  file and starts nothing.
+  file and starts nothing. The followers (`follow.rs`: `--said --follow`, and `--watch`,
+  `follow/watch.rs`, the Claude Code plugin's one source of what its line above the prompt
+  shows) are subscriptions that never start the app: one waits for the app's socket through the
+  files' watch of its folder, and ends as its parent does (`follow/wake.rs`: kqueue's
+  `NOTE_EXIT`, a pidfd), looking now and then only where the system cannot say.
 - **`cli/app.rs`** is the program opened as the app (Localix Terminal.app from the Finder or the Dock;
-  `llxterm open` elsewhere): it sets up what is always on, then is the server with its window
-  brought to the person at once. On macOS `llxterm open` asks the system to open the bundle, as the
+  `llxterm open` elsewhere): it is the server with its window brought to the person at once. On macOS `llxterm open` asks the system to open the bundle, as the
   Dock does, and returns once it has (`cli/app.rs`); the app is not that terminal's. `llxterm
   open DIR` brings the window on that folder as a project
   (`window/present` with `go`). `scripts/bundle-macos.sh` builds the bundle (Info.plist, icon and
-  entitlements in `packaging/macos`, the Claude Code plugin as a marketplace in `Contents/Resources/claude-code`);
+  entitlements in `packaging/macos`, the Claude Code plugin in `Contents/Resources/claude-code`);
   `scripts/dmg.sh` makes the release files from it, the disk image and the zip (notarized with
   `--notarize`, as the release workflow does). The app is for Apple Silicon only.
   `packaging/homebrew/llxterm.rb` is the cask a tap takes, filled in per release.
@@ -271,7 +292,7 @@ normal tests in CI.
   `source/`) reads one place listings come from into batches, resuming from the mark it left;
   the `Index` (`index.rs`, `index/`) keeps them in a SQLite file of its own with full-text
   search, a derived file that is rebuilt rather than migrated; a `Target` (`target.rs`,
-  `target/`) puts a listing into one agent through the places and programs `setup` knows, says
+  `target/`) puts a listing into one agent through the places and programs `agents` knows, says
   what it would do first (`plan`), and reads files only to say what is installed (`has`).
   `archive.rs` fetches and unpacks a repository's archive, refusing what would leave its
   folder. `kind.rs` and `kind/` are the Store's tab over these ports (`person.rs` what the
@@ -299,24 +320,13 @@ normal tests in CI.
   `place.rs` says where the app is and starts it again once this process ended. Only an app
   installed from a release is replaced. The restart itself is the desk's (`lifecycle.rs`), as a
   quit is: it asks first when programs run.
-- **`setup.rs`, `setup/`** are the integrations, reached from Settings → Integrations and from
-  `llxterm setup`: the command (`command.rs`: a link in `~/.local/bin` to the program, the login
-  shell's profile when its PATH lacks it; a desktop entry on Linux), the Claude Code plugin
-  (`claude.rs`: installed from the bundle's marketplace with `claude plugin`), and the window tool
-  in the other agents of the window's that take MCP servers (`mcp_hosts.rs`: one table of Codex,
-  Gemini CLI, Copilot, OpenCode, Hermes — each put in and taken out with its own `mcp add` /
-  `remove`, OpenCode's JSON written as it has none; whether it is there read from its
-  configuration file, `mcp_hosts/place.rs` saying where the agent keeps it (its own variable,
-  as the login shell has it, or the profile in use) and `mcp_hosts/read.rs` reading the
-  server's command out of its JSON, TOML or YAML). The app puts every one in
-  place itself (`doctor.rs`: a round of `opened` and `auto` when the server starts, opened or
-  started by a call, and one every hour while it runs), for each agent installed; what the person takes out is remembered in the store's `state`
-  (`integration.declined.<id>`) and left out. The person's programs run as their terminal would
-  (`shell.rs`: their login shell's PATH, a deadline each, an answer for one that asks). An
-  integration names the agent it is for and what to offer. Before its first round puts this app's
-  in, the doctor takes out once what LLX Desk, as the app was called up to 0.1.6, put in under its
-  own name (`former.rs`: the `llx-desk` link, desktop entry, agents' servers and Claude Code
-  plugin), each only when what it runs is gone or is this app.
+- **`agents.rs`, `agents/`** are what the app knows of the person's own setup for their coding
+  agents, which the Store installs into on the person's yes and the window looks for agents by:
+  their login shell's PATH and the variables that move an agent's folder, a program of theirs
+  run within a deadline and stopped past it (`shell.rs`), and where each agent keeps its
+  configuration and how a file of it is read (JSON with comments, a TOML table's values) and
+  written whole (`config.rs`). It writes nothing by itself. `setup.rs` is only the name
+  `catalog/target/` still imports it by.
 - **`browser/alerts.rs`, `browser/alerts_macos.rs`** say what waits for the person outside the
   Event Center's list, read from that list and never a source of their own: which tabs wait (the
   strip's dot and second line), and, on macOS in the app's bundle, a silent notice for each new
@@ -325,16 +335,32 @@ normal tests in CI.
 - **`offers.rs`, `browser/offer.rs`** are what the app offers the person at the moment it fits:
   one quiet bar under the strip: the agent's mark, the button that does it, and a cross that puts it off (Not Now). `offers.rs` keeps their answers
   (`answers` in the store; the window asks through `browser::Answers`): taken is never offered again, put off waits a day, three,
-  a week, then a month. `browser/offer.rs` says what to offer for the tab shown; today an agent in
-  front in the terminal shown (`terminal/foreground.rs`: the terminal's foreground process, by the
-  name it was started as, read when another group comes in front) whose integration is off. Another offer is
-  a source there and an id of its own; the bar, the answers and the waits are shared.
+  a week, then a month. `browser/offer.rs` says what to offer for the tab shown; today an update
+  that is ready. Another offer is a source there and an id of its own; the bar, the answers and
+  the waits are shared. It also keeps the agent in front in each terminal
+  (`terminal/foreground.rs`: the terminal's foreground process, by the name it was started as,
+  read when another group comes in front), which the side marks it by.
 - **`browser/dialog.rs`** is the window's dialog: the one look of everything the app asks or
   announces in its window (a question, an update that is ready). It holds what a dialog says and
   the dialogs up, one shown at a time; the strip's page draws it over the whole window
   (`dialog.js`, `dialog.css`), and `host_dialog.rs` asks, announces and carries the answer back.
   A new dialog is a `Dialog` asked there, never a page's own markup. With the window away a
   question is the system's alert (`appkit/sheet.rs`).
+- **`reach.rs`, `reach/`** are how what runs in the app's terminals reaches the app, through
+  their environment alone: nothing is written into an agent's settings or the person's home.
+  `command_dir` is the folder whose `llxterm` is this program (the bundle's
+  `Contents/Resources/bin`, one link to the program; a build's own folder). `variables` are
+  each agent's own way to add a layer to its settings without replacing the person's, read
+  anew for each terminal: Claude Code's `CLAUDE_CODE_PLUGIN_DIRS` names the app's copy of its
+  plugin (`claude.rs`; the copy, made once per version in the data folder, whole or not at all,
+  is `copy.rs`, since Claude Code writes into a plugin folder it loads and the bundle is
+  sealed), and not where its managed settings refuse plugin folders or cannot be read
+  (`managed.rs`: the server's cached settings, the configuration profile, the managed files,
+  ranked and combined as Claude Code does); Gemini CLI's `GEMINI_CLI_SYSTEM_DEFAULTS_PATH` and
+  OpenCode's `OPENCODE_CONFIG` name a file of the app's that declares the MCP server by its
+  bare command (`layers.rs`), a variable the person set left as it is. Codex, GitHub Copilot
+  CLI and Hermes have no such variable: they find `llxterm` on the `PATH`. The server hands
+  both to the desk as it starts (`Desk::tell_terminals`), so the desk names no agent.
 - **`paths.rs`** is where the server lives: its lock and socket at one fixed place per user
   (`llxterm-<uid>` in the user's temporary directory), its files in the home (`LLXTERM_HOME`, which
   moves nothing else). A test build (feature `test-server`, turned on only by the crate's own dev-dependency)

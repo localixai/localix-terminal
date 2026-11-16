@@ -6,6 +6,9 @@
 /// (P10), and the adapters reach the app through the client. A new module gets a row here.
 pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
     // Foundations: nothing of the crate.
+    // The person's own setup for their coding agents: their login shell's PATH and variables,
+    // their programs run within a deadline, and their agents' configuration files.
+    ("agents", &["fds"]),
     ("bundle", &[]),
     ("fds", &[]),
     ("fetch", &[]),
@@ -26,26 +29,28 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
     ("files", &["projects", "store"]),
     ("feed", &["layout", "projects", "store"]),
     ("secrets", &["paths"]),
+    // What the app's terminals are told for the agents run in them: where the program is, and
+    // the app's own data folder for what it names, and a system tool run within a deadline.
+    ("reach", &["bundle", "fetch", "paths"]),
     ("terminal", &["fds", "page"]),
     // An editor's page and what it is told: it knows no file but the text it is handed.
     ("editor", &["page"]),
-    ("setup", &["bundle", "fds", "paths", "store"]),
     // The app kept up to date: it knows where the app is, and nothing of the window or the desk.
     ("update", &["bundle", "fetch", "paths"]),
     // The Store's catalogue: what is published, kept and searched, and put into the agents
-    // through the places `setup` knows. It knows no window and no desk.
+    // through the places `agents` knows. It knows no window and no desk.
     (
         "catalog",
-        &["fetch", "kind", "page", "paths", "setup", "store"],
+        &["agents", "fetch", "kind", "page", "paths", "store"],
     ),
     // The answers are kept in the store and given to the window through `browser::Answers`.
     ("offers", &["browser", "store"]),
-    // The window: Settings → Integrations reaches setup, its Updates the updater; it draws what
-    // it is sent.
+    // The window: its agents are looked for on the login shell's PATH, its Updates are the
+    // updater's; it draws what it is sent.
     (
         "browser",
         &[
-            "bundle", "kind", "page", "paths", "setup", "shots", "update", "view",
+            "agents", "bundle", "kind", "page", "paths", "shots", "update", "view",
         ],
     ),
     // The window tool, over the window, the terminals and the kept owners.
@@ -56,11 +61,12 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
             "projects", "secrets", "served", "shots", "store", "terminal", "update", "view",
         ],
     ),
-    // The socket: every method onto the desk, holding the window's handle.
+    // The socket: every method onto the desk, holding the window's handle; it tells the desk
+    // what the terminals are told for the agents.
     (
         "server",
         &[
-            "browser", "desk", "fds", "paths", "projects", "shots", "store", "wire",
+            "browser", "desk", "fds", "paths", "projects", "reach", "shots", "store", "wire",
         ],
     ),
     // The adapters. `cli/app.rs` is the program opened as the app: the server with its window.
@@ -69,11 +75,12 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
         "cli",
         &[
             "board", "browser", "bundle", "catalog", "client", "follow", "kind", "mcp", "out",
-            "paths", "secrets", "server", "setup", "shots",
+            "paths", "secrets", "server", "shots",
         ],
     ),
     ("mcp", &["client", "out"]),
-    ("follow", &["client"]),
+    // A follower waits for the app's socket with the files' watch of its folder.
+    ("follow", &["client", "files", "paths"]),
     ("harness", &["client"]),
 ];
 
@@ -93,7 +100,7 @@ pub(crate) const EXCEPTIONS: &[(&str, &str, &str)] = &[
     (
         "cli",
         "desk",
-        "`window` with no JSON prints this build's tool description, starting nothing",
+        "`window` with no JSON and `guide` print this build's tool description, starting nothing",
     ),
     (
         "mcp",

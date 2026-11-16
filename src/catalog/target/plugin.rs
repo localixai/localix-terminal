@@ -9,9 +9,9 @@ use std::time::Duration;
 use serde_json::Value;
 
 use super::Agent;
+use crate::agents::{Ran, failure};
 use crate::catalog::capital;
 use crate::catalog::{Env, Listing, Plan, PluginFormat, Recipe};
-use crate::setup::reach::{Ran, failure};
 
 /// How long a plugin's command may take: a marketplace is cloned, a plugin copied.
 const MOST: Duration = Duration::from_secs(180);

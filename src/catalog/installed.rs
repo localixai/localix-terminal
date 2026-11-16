@@ -72,7 +72,7 @@ impl Installed {
         let Some(file) = &self.file else { return };
         let written = serde_json::to_string_pretty(&self.held)
             .map_err(|why| why.to_string())
-            .and_then(|text| crate::setup::reach::write_over(file, &text));
+            .and_then(|text| crate::agents::write_over(file, &text));
         if let Err(why) = written {
             log::warn!("the Store's note of what it installed was not kept: {why}");
         }

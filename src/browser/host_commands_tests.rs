@@ -108,7 +108,6 @@ fn unnamed_too() -> Vec<(Cmd, Route, Drawn)> {
         (Cmd::Restyle, Route::All, Drawn::Itself),
         (Cmd::Noted(noted), Route::Current, Drawn::Itself),
         (Cmd::Strip, Route::All, Drawn::Told),
-        (Cmd::Offered("x", true), Route::All, Drawn::Itself),
         (Cmd::Go(String::new()), Route::Current, Drawn::Settles),
         (Cmd::Arranged(vec![], vec![]), Route::All, Drawn::Settles),
         (Cmd::NewWindow(2), Route::Current, Drawn::Itself),

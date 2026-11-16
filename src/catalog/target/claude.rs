@@ -12,8 +12,8 @@ use serde_json::{Value, json};
 use super::plugin::{Plugin, Plugins, by_status, claude_outcome, words};
 use super::server::{Seen, Servers, Wanted};
 use super::{Agent, var};
+use crate::agents::{self, Ran};
 use crate::catalog::{Env, PluginFormat, Runs};
-use crate::setup::reach::{self, Ran};
 
 /// How long an `mcp` command may take.
 const MOST: Duration = Duration::from_secs(60);
@@ -30,15 +30,15 @@ pub(super) static CLAUDE: Agent = Agent {
 };
 
 fn skills(env: &Env) -> PathBuf {
-    reach::claude_dir(&env.home, var(env)).join("skills")
+    agents::claude_dir(&env.home, var(env)).join("skills")
 }
 
 /// A record of Claude Code's under its plugins folder, read as JSON.
 fn record(env: &Env, name: &str) -> Option<Value> {
-    let file = reach::claude_dir(&env.home, var(env))
+    let file = agents::claude_dir(&env.home, var(env))
         .join("plugins")
         .join(name);
-    reach::json(&std::fs::read_to_string(file).ok()?)
+    agents::json(&std::fs::read_to_string(file).ok()?)
 }
 
 /// The entry Claude Code keeps for `wanted`.
@@ -72,11 +72,11 @@ impl Servers for Mcp {
     }
 
     fn file(&self, env: &Env) -> PathBuf {
-        reach::claude_json(&env.home, var(env))
+        agents::claude_json(&env.home, var(env))
     }
 
     fn seen(&self, text: &str, key: &str) -> Option<Seen> {
-        Seen::of(reach::json(text)?.get("mcpServers")?.get(key)?)
+        Seen::of(agents::json(text)?.get("mcpServers")?.get(key)?)
     }
 
     fn add(&self, agent: &Agent, env: &Env, wanted: &Wanted<'_>) -> Result<(), String> {

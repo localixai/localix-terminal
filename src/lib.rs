@@ -10,11 +10,12 @@
 //! The layers, from the window up: [`browser`] (the window and its pages), [`terminal`]
 //! (sessions), [`desk`] (the `window` actions over both, tabs kept per owner and project), [`board`]
 //! (the project's cards), [`projects`], [`ledger`] and [`layout`] (what the desk keeps of a
-//! project, its panes and its windows), [`store`] (the database under them), [`setup`] (what the
-//! app puts in place for the person's tools), [`server`] and [`client`] (the socket), [`cli`].
-//! The desk knows no model: an agent of any kind drives it through the CLI, and its integration
-//! (a plugin) is its own.
+//! project, its panes and its windows), [`store`] (the database under them), [`reach`] (how
+//! what runs in the app's terminals reaches it), [`server`] and [`client`] (the socket), [`cli`].
+//! The desk knows no model: an agent of any kind drives it through the CLI, and its plugin is
+//! its own.
 
+pub(crate) mod agents;
 pub mod board;
 pub mod browser;
 pub mod bundle;
@@ -39,10 +40,10 @@ pub mod out;
 pub mod page;
 pub mod paths;
 pub mod projects;
+pub mod reach;
 pub mod secrets;
 pub mod served;
 pub mod server;
-pub mod setup;
 pub mod shots;
 pub mod store;
 pub mod terminal;

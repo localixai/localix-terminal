@@ -1,5 +1,7 @@
 //! A terminal's tab: starting a program in a session, typing into it, reading its screen.
 
+mod env;
+
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, OnceLock, Weak};
 
@@ -80,7 +82,11 @@ impl Desk {
         let id = self.next_terminal.fetch_add(1, Ordering::SeqCst);
         let typed: Arc<OnceLock<Weak<Session>>> = Arc::default();
         let painter = self.painter(id, command, (group, aside), &typed);
-        let session = Session::start_after(command, dir, vars, painter, before)
+        let folder = crate::projects::of_key(group)
+            .and_then(|project| self.project_by_id(project))
+            .map(|project| project.path);
+        let own = env::own(id, folder.as_deref(), vars);
+        let session = Session::start_after(command, dir, vars, painter, before, &own)
             .map_err(|e| format!("could not start it: {e}"))?;
         let session = Arc::new(session);
         let _ = typed.set(Arc::downgrade(&session));
@@ -114,7 +120,7 @@ impl Desk {
         });
         // What its program says it is doing (the title it sets) shows under the tab's name, and
         // which program is in front (a coding agent typed in its shell among them) is the window's
-        // to know: its mark on the tab, its integration offered.
+        // to know: its mark on the tab.
         // Where it is (the bar's crumbs) is asked again as its shell prompts (it sets the title)
         // and as another program comes in front.
         if let Some(browser) = self.browser.clone() {

@@ -1,8 +1,6 @@
 #!/bin/sh
-# The plugin's `llxterm`, on the Bash tool's PATH: the program of Localix Terminal.app, which is all
-# there is to install (opened once, it puts `llxterm` in ~/.local/bin, and Settings →
-# Integrations installs this plugin). Found on the PATH, in ~/.local/bin, or in the app where
-# macOS keeps apps; never downloaded.
+# The plugin's `llxterm`, on the Bash tool's PATH: the program of Localix Terminal.app, which its
+# terminals put first on the PATH. The plugin is loaded only in them; never downloaded.
 set -eu
 
 say() { printf 'llxterm: %s\n' "$*" >&2; }
@@ -32,12 +30,5 @@ if [ -z "${LLXTERM_WRAPPED:-}" ]; then
   IFS=$old_ifs
 fi
 
-for program in \
-  "$HOME/.local/bin/llxterm" \
-  "$HOME/Applications/Localix Terminal.app/Contents/MacOS/llxterm" \
-  "/Applications/Localix Terminal.app/Contents/MacOS/llxterm"; do
-  [ -x "$program" ] && exec "$program" "$@"
-done
-
-say "Localix Terminal is not installed: get it from https://github.com/localixai/localix-terminal/releases and open it once"
+say "no llxterm on the PATH: the plugin works in the terminals of Localix Terminal"
 exit 127

@@ -98,7 +98,7 @@ const landing: LandingContent = {
     title: 'Start in three steps',
     aside: 'Free · MIT license',
     steps: [
-      { title: 'Install', text: `The download, or [one line in a terminal](${DOCS}/getting-started). The app is all there is: it holds the window and connects your agents to it.` },
+      { title: 'Install', text: `The download, or [one line in a terminal](${DOCS}/getting-started). The app is all there is: it holds the window, and your agents find it in its terminals.` },
       { title: 'Open a project', text: 'Open Folder… (⌘O) in the window: the project opens as you left it.' },
       { title: 'Open a terminal', text: 'Your shell, or an agent you have installed: it starts in a terminal of the project, already connected to the window.' },
     ],

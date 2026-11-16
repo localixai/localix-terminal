@@ -1,6 +1,7 @@
 //! The person's settings for the window: its appearance (theme, how much of the desktop shows
-//! through, the fonts), where what an agent opens lands, and the shortcuts they changed. Kept in `settings.json` under the
-//! config directory, read once, written whole on each change; a file that does not read is
+//! through, the fonts), which Option key a terminal takes for Meta, where what an agent opens
+//! lands, and the shortcuts they changed. Kept in `settings.json` under the config directory,
+//! read once, written whole on each change; a file that does not read is
 //! the defaults (and left as it is until the person changes something, when it is kept beside as
 //! `settings.json.bad`).
 
@@ -8,6 +9,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -31,6 +33,20 @@ pub(super) enum Transparency {
     #[default]
     Standard,
     High,
+}
+
+/// Which Option key is Meta in a terminal: with it, Option and a key send ESC and the key, as
+/// shells, editors and coding agents read Alt; the other Option types the layout's characters.
+/// Neither by default: many layouts (German, French, Nordic, Polish) type @ [ ] { } | \ ~ with
+/// either Option, and a person who wants Meta chooses the side.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(super) enum OptionMeta {
+    Left,
+    Right,
+    Both,
+    #[default]
+    Off,
 }
 
 /// The fonts offered, each a CSS stack that falls back to the system's.
@@ -81,6 +97,7 @@ pub(super) struct Settings {
     pub ui_font: String,
     pub code_font: String,
     pub font_size: u8,
+    pub option_meta: OptionMeta,
     pub updates: super::updates::Updates,
     /// The shortcuts the person changed, by id: a chord, or none (taken off).
     pub shortcuts: BTreeMap<String, Option<String>>,
@@ -94,10 +111,19 @@ impl Default for Settings {
             ui_font: "system".into(),
             code_font: "system".into(),
             font_size: 13,
+            option_meta: OptionMeta::Off,
             updates: super::updates::Updates::Auto,
             shortcuts: BTreeMap::new(),
         }
     }
+}
+
+/// `into` made what `change` names under `name`, one of its choices; what was wrong with it.
+fn chosen<T: DeserializeOwned>(change: &Value, name: &str, into: &mut T) -> Result<(), String> {
+    if let Some(value) = change.get(name) {
+        *into = serde_json::from_value(value.clone()).map_err(|why| why.to_string())?;
+    }
+    Ok(())
 }
 
 fn stack(fonts: &[(&str, &str, &'static str)], id: &str) -> &'static str {
@@ -107,8 +133,9 @@ fn stack(fonts: &[(&str, &str, &'static str)], id: &str) -> &'static str {
 }
 
 impl Settings {
-    /// What the window's own pages are told: the fonts, as CSS, and each shortcut's chord as
-    /// the system draws it, for the buttons' hints.
+    /// What the window's own pages are told: the fonts, as CSS, which Option key a terminal
+    /// takes for Meta (`option`), and each shortcut's chord as the system draws it, for the
+    /// buttons' hints.
     pub(super) fn look(&self) -> Value {
         let keys: serde_json::Map<String, Value> = shortcuts::resolved(&self.shortcuts)
             .into_iter()
@@ -118,6 +145,7 @@ impl Settings {
             "ui": stack(&UI_FONTS, &self.ui_font),
             "mono": stack(&CODE_FONTS, &self.code_font),
             "size": self.font_size,
+            "option": self.option_meta,
             "keys": keys,
         })
     }
@@ -126,17 +154,10 @@ impl Settings {
     /// `{"reset": id}`, `{"reset": "all"}`), made to these settings; what was wrong with it.
     pub(super) fn change(&mut self, change: &Value) -> Result<(), String> {
         let text = |name: &str| change.get(name).and_then(Value::as_str);
-        if let Some(theme) = change.get("theme") {
-            self.theme = serde_json::from_value(theme.clone()).map_err(|why| why.to_string())?;
-        }
-        if let Some(level) = change.get("transparency") {
-            self.transparency =
-                serde_json::from_value(level.clone()).map_err(|why| why.to_string())?;
-        }
-        if let Some(updates) = change.get("updates") {
-            self.updates =
-                serde_json::from_value(updates.clone()).map_err(|why| why.to_string())?;
-        }
+        chosen(change, "theme", &mut self.theme)?;
+        chosen(change, "transparency", &mut self.transparency)?;
+        chosen(change, "updates", &mut self.updates)?;
+        chosen(change, "option_meta", &mut self.option_meta)?;
         if let Some(font) = text("ui_font") {
             if !UI_FONTS.iter().any(|(id, _, _)| *id == font) {
                 return Err(format!("no font {font}"));
@@ -232,6 +253,7 @@ impl Settings {
                 "ui_font": default.ui_font,
                 "code_font": default.code_font,
                 "size": default.font_size,
+                "option_meta": default.option_meta,
                 "updates": default.updates,
             },
             "ui_fonts": fonts(&UI_FONTS),

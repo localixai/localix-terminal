@@ -14,9 +14,9 @@ use std::path::PathBuf;
 use serde_json::Value;
 
 use super::Agent;
+use crate::agents::shown;
 use crate::catalog::capital;
 use crate::catalog::{Env, Listing, Need, Plan, Recipe, Runs, With};
-use crate::setup::reach::shown;
 
 /// An agent's own part of keeping MCP servers.
 pub(super) trait Servers: Sync {

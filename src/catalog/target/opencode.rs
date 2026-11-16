@@ -1,6 +1,6 @@
 //! OpenCode: skills in `<its config>/skills` (`XDG_CONFIG_HOME`, else `~/.config/opencode`);
 //! MCP servers in its `opencode.json`, which it has no command to write: the entry is written
-//! there by setup's one writer of that file (the app's own entry's), in the shape of the
+//! there by `agents::opencode_server`, in the shape of the
 //! OpenCode installed (its first configuration: `mcp.<key>`, with `enabled`). It takes no
 //! plugins of a marketplace.
 
@@ -10,8 +10,8 @@ use serde_json::{Value, json};
 
 use super::server::{Seen, Servers, Wanted};
 use super::{Agent, var};
+use crate::agents;
 use crate::catalog::{Env, Runs};
-use crate::setup::reach;
 
 pub(super) static OPENCODE: Agent = Agent {
     id: "opencode",
@@ -25,7 +25,7 @@ pub(super) static OPENCODE: Agent = Agent {
 };
 
 fn config(env: &Env) -> PathBuf {
-    reach::config_file("opencode", &env.home, var(env))
+    agents::config_file("opencode", &env.home, var(env))
         .unwrap_or_else(|| env.home.join(".config/opencode/opencode.json"))
 }
 
@@ -66,10 +66,10 @@ pub(super) fn entry(wanted: &Wanted<'_>) -> Value {
 fn write(env: &Env, key: &str, entry: Option<Value>) -> Result<(), String> {
     let file = config(env);
     let text = std::fs::read_to_string(&file).unwrap_or_default();
-    let written = reach::opencode_server(&text, key, entry)?;
+    let written = agents::opencode_server(&text, key, entry)?;
     match written == text {
         true => Ok(()),
-        false => reach::write_over(&file, &written),
+        false => agents::write_over(&file, &written),
     }
 }
 
@@ -85,7 +85,7 @@ impl Servers for Mcp {
     }
 
     fn seen(&self, text: &str, key: &str) -> Option<Seen> {
-        Seen::of(reach::json(text)?.get("mcp")?.get(key)?)
+        Seen::of(agents::json(text)?.get("mcp")?.get(key)?)
     }
 
     fn add(&self, _: &Agent, env: &Env, wanted: &Wanted<'_>) -> Result<(), String> {

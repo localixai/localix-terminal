@@ -2,7 +2,8 @@
 # reads (/etc/profile, then the person's first of .bash_profile, .bash_login, .profile), and
 # has the shell say when a command starts and how it ended, so a wait on the terminal knows.
 # None of the person's files is changed. The shell itself is not a login one: it ends with
-# `exit`, not `logout`, and reads no .bash_logout.
+# `exit`, not `logout`, and reads no .bash_logout. The app's command is put first on PATH again
+# after those files, which may set a PATH of their own (path_helper in /etc/profile on macOS).
 if [ -r /etc/profile ]; then
   . /etc/profile
 fi
@@ -13,6 +14,14 @@ for _llxterm_file in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile";
   fi
 done
 unset _llxterm_file
+if [ -n "${LLXTERM_BIN-}" ]; then
+  _llxterm_path=":$PATH:"
+  _llxterm_path=${_llxterm_path//":$LLXTERM_BIN:"/:}
+  _llxterm_path=${_llxterm_path#:}
+  _llxterm_path=${_llxterm_path%:}
+  PATH="$LLXTERM_BIN${_llxterm_path:+:$_llxterm_path}"
+  unset _llxterm_path
+fi
 # A shell with a DEBUG trap of its own is left as it is: there is one such trap.
 if [[ $- == *i* && -z $(trap -p DEBUG) ]]; then
   # Set from the start, and read as `${name-}`: a profile may make an unset name an error.

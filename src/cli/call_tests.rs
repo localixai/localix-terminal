@@ -65,6 +65,10 @@ fn a_flag_that_applies_to_nothing_is_refused_and_the_plugins_calls_still_parse()
     assert!(parsed(&["--project", "/x", "--said", "--follow", "--json"]).is_ok());
     assert!(parsed(&["--project", "/x", "--end"]).is_ok());
     assert!(parsed(&["--as", "me", "--board"]).is_ok());
+    assert!(parsed(&["--project", "/x", "--watch"]).is_ok());
+    assert!(parsed(&["--watch", "--said"]).is_err());
+    assert!(parsed(&["--watch", "--json"]).is_err());
+    assert!(parsed(&["--watch", "{}"]).is_err());
     // `--said --json` follows, as it always did.
     assert!(parsed(&["--said", "--json"]).is_ok());
     assert!(parsed(&["--json"]).is_err());

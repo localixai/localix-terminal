@@ -1,5 +1,5 @@
 //! What the app offers the person, and what they answered: any part of the app may offer
-//! something (an integration where its agent runs, a setting worth turning on), by an id of its
+//! something (an update that is ready, a setting worth turning on), by an id of its
 //! own. The window shows it at once, in a bar under the strip, with a button that does it and
 //! Not Now. Taken, it is never offered again; put off, it waits a while, longer each time
 //! (a day, three, a week, then a month). Kept in the store (`answers`): the person's answers

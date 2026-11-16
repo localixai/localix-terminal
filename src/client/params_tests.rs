@@ -45,3 +45,38 @@ fn the_variables_an_integration_names_its_own_stay_out() {
     let names: Vec<_> = kept.iter().map(|(name, _)| name.as_str()).collect();
     assert_eq!(names, ["CLAUDE_CODE_USE_BEDROCK", "PATH"]);
 }
+
+#[test]
+fn a_call_from_a_folder_of_no_repository_in_a_terminals_project_is_that_projects() {
+    let scratch = crate::testing::Scratch::new();
+    let project = scratch.path().join("notes");
+    let deeper = project.join("2026/november");
+    std::fs::create_dir_all(&deeper).unwrap();
+    let pane = Some(project.clone().into_os_string());
+    assert_eq!(project_of(&deeper, None, pane.clone()), project);
+    // Without the terminal's word, the folder is a project of its own.
+    assert_eq!(project_of(&deeper, None, None), deeper);
+    // A folder outside the terminal's project is not of it.
+    let elsewhere = scratch.path().join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    assert_eq!(project_of(&elsewhere, None, pane), elsewhere);
+}
+
+#[test]
+fn a_call_inside_a_repository_keeps_it_and_a_named_project_comes_first() {
+    let scratch = crate::testing::Scratch::new();
+    let project = scratch.path().join("notes");
+    let repository = project.join("site");
+    std::fs::create_dir_all(repository.join(".git")).unwrap();
+    std::fs::create_dir_all(repository.join("src")).unwrap();
+    let pane = Some(project.into_os_string());
+    assert_eq!(
+        project_of(&repository.join("src"), None, pane.clone()),
+        repository
+    );
+    let named = Some(std::ffi::OsString::from("/elsewhere"));
+    assert_eq!(
+        project_of(&repository, named, pane),
+        PathBuf::from("/elsewhere")
+    );
+}

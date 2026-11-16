@@ -62,6 +62,7 @@ impl On<'_> {
                 return;
             }
             Keyed::Find => return open.find_tab(self.shared),
+            Keyed::FindText(step) => return open.find_text(step),
             Keyed::Address => return open.keyed_in_strip("address"),
             Keyed::Size => return open.keyed_in_strip("size"),
             Keyed::Split => return self.split_view(),

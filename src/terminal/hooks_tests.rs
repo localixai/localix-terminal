@@ -23,13 +23,19 @@ impl Drop for Home {
     }
 }
 
+/// Where the shells of this test run keep the app's files: a folder of this process's own, so
+/// two runs of the tests at once never write over each other's.
+fn shell_files() -> PathBuf {
+    std::env::temp_dir().join(format!("llxterm-test-shell-{}", std::process::id()))
+}
+
 /// A zsh of the person's in `home`, whose `.zshrc` (in `zdotdir`, when it has one) names its
 /// prompt `ready> `; `None` where there is no zsh.
 fn zsh(home: &Path, zdotdir: Option<&str>, more: &[(&str, &str)]) -> Option<Session> {
     let shell = ["/bin/zsh", "/usr/bin/zsh"]
         .into_iter()
         .find(|shell| Path::new(shell).exists())?;
-    super::keep_in(std::env::temp_dir().join("llxterm-test-shell"));
+    super::keep_in(shell_files());
     let rc = zdotdir.map_or_else(|| home.to_path_buf(), |own| home.join(own));
     std::fs::create_dir_all(&rc).unwrap();
     std::fs::write(rc.join(".zshrc"), "PS1='ready> '\nFROM_RC=yes\n").unwrap();
@@ -115,7 +121,7 @@ fn bash_with(home: &Path, profile: &str) -> Option<Session> {
     if !Path::new(shell).exists() {
         return None;
     }
-    super::keep_in(std::env::temp_dir().join("llxterm-test-shell"));
+    super::keep_in(shell_files());
     std::fs::write(home.join(".bash_profile"), profile).unwrap();
     let vars = vec![
         ("SHELL".to_string(), shell.to_string()),
@@ -206,5 +212,58 @@ fn a_bash_whose_own_prompt_command_ends_in_a_semicolon_or_is_strict_keeps_its_pr
             !screen.contains("syntax error") && !screen.contains("unbound variable"),
             "{name}: {screen}"
         );
+    }
+}
+
+/// A folder of the app's command, holding an `llxterm` that says `ours`, gone with the test.
+fn command_folder(home: &Path) -> PathBuf {
+    let bin = home.join("app-bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let program = bin.join("llxterm");
+    std::fs::write(&program, "#!/bin/sh\necho ours\n").unwrap();
+    let executable = std::os::unix::fs::PermissionsExt::from_mode(0o755);
+    std::fs::set_permissions(&program, executable).unwrap();
+    bin
+}
+
+/// `shell` started in `home` as a terminal of the app's whose command is in `bin`, at its first
+/// prompt.
+fn told(shell: &str, home: &Path, bin: &Path) -> Session {
+    super::keep_in(shell_files());
+    let vars = vec![
+        ("SHELL".to_string(), shell.to_string()),
+        ("HOME".to_string(), home.to_string_lossy().into_owned()),
+        ("PATH".to_string(), "/usr/bin:/bin".to_string()),
+    ];
+    let own = super::super::Own {
+        bin: Some(bin.to_path_buf()),
+        vars: Vec::new(),
+    };
+    let session = Session::start_after("", home, Some(&vars), None, "", &own).unwrap();
+    assert_eq!(
+        session.wait(Some("ready>"), 0, DEFAULT_WAIT),
+        Until::Matched,
+        "{}",
+        session.snapshot()
+    );
+    session
+}
+
+#[test]
+fn the_apps_command_stays_on_path_after_a_profile_sets_its_own() {
+    // A profile that sets PATH whole, as `path_helper` reorders it or a person writes it.
+    let profile = "PS1='ready> '\nexport PATH=/usr/bin:/bin\n";
+    for (name, shell) in [("zsh", "/bin/zsh"), ("bash", "/bin/bash")] {
+        if !Path::new(shell).exists() {
+            continue;
+        }
+        let home = Home::new(&format!("path-{name}"));
+        std::fs::write(home.0.join(".zshrc"), profile).unwrap();
+        std::fs::write(home.0.join(".bash_profile"), profile).unwrap();
+        let bin = command_folder(&home.0);
+        let session = told(shell, &home.0, &bin);
+        session.type_in("llxterm\n", &[]).unwrap();
+        let until = session.wait(Some("ours"), 0, DEFAULT_WAIT);
+        assert_eq!(until, Until::Matched, "{shell}: {}", session.snapshot());
     }
 }

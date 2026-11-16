@@ -12,13 +12,11 @@ pub struct Caller {
 }
 
 impl Caller {
-    /// The caller in `cwd`, named `agent`: its project is `LLXTERM_PROJECT` when set (an
-    /// integration that knows it better), else the project around `cwd` (`projects::root_of`).
+    /// The caller in `cwd`, named `agent`: its project is the one [`project_of`] says, from
+    /// `LLXTERM_PROJECT` and the terminal's `LLXTERM_PANE_PROJECT`.
     pub fn of(cwd: &std::path::Path, agent: Option<String>) -> Self {
-        let named = std::env::var_os("LLXTERM_PROJECT")
-            .filter(|dir| !dir.is_empty())
-            .map(PathBuf::from);
-        let project = named.unwrap_or_else(|| crate::projects::root_of(cwd));
+        let named = std::env::var_os("LLXTERM_PROJECT");
+        let project = project_of(cwd, named, std::env::var_os("LLXTERM_PANE_PROJECT"));
         let project = std::path::absolute(&project).unwrap_or(project);
         Self { project, agent }
     }
@@ -54,6 +52,28 @@ impl Caller {
         }
         Value::Object(params)
     }
+}
+
+/// The project of a caller in `cwd`: `named` when set (an integration that knows it better),
+/// else the repository around `cwd`; in no repository, the project of the terminal of the app's
+/// it runs in (`pane`) when `cwd` is in that project's folder (a folder project, or a call from
+/// tmux whose lineage is lost), else `cwd`.
+fn project_of(
+    cwd: &std::path::Path,
+    named: Option<std::ffi::OsString>,
+    pane: Option<std::ffi::OsString>,
+) -> PathBuf {
+    let set =
+        |dir: Option<std::ffi::OsString>| dir.filter(|dir| !dir.is_empty()).map(PathBuf::from);
+    if let Some(named) = set(named) {
+        return named;
+    }
+    if let Some(repository) = crate::projects::repository_of(cwd) {
+        return repository;
+    }
+    set(pane)
+        .filter(|pane| cwd.starts_with(pane))
+        .unwrap_or_else(|| cwd.to_path_buf())
 }
 
 /// The variables a program the desk starts gets: this process's, but those the caller's

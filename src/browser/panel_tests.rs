@@ -122,6 +122,33 @@ fn a_page_opens_only_a_web_address_in_a_tab() {
 }
 
 #[test]
+fn a_programs_copy_is_its_text_up_to_a_mebibyte_and_nothing_else() {
+    use base64::Engine;
+    let encode = |text: &[u8]| base64::engine::general_purpose::STANDARD.encode(text);
+    assert_eq!(
+        said(&format!("c {}", encode("héllo\n".as_bytes()))),
+        Some(Said::Copied("héllo\n".into()))
+    );
+    // Padding left off, as some programs send it, still reads.
+    assert_eq!(said("c aGk"), Some(Said::Copied("hi".into())));
+    let most = "x".repeat(COPIED_MAX);
+    assert_eq!(
+        said(&format!("c {}", encode(most.as_bytes()))),
+        Some(Said::Copied(most.clone()))
+    );
+    // One byte past the limit, base64 that is not, text that is not UTF-8, or nothing: refused.
+    for bad in [
+        format!("c {}", encode(format!("{most}x").as_bytes())),
+        "c not base64!".into(),
+        format!("c {}", encode(&[0xff, 0xfe])),
+        "c ".into(),
+        "c ?".into(),
+    ] {
+        assert_eq!(said(&bad), None, "{bad:.40}");
+    }
+}
+
+#[test]
 fn out_of_sight_frames_run_a_while_later_and_at_once_when_shown() {
     let (panel, sent) = recorded(true);
     assert!(!panel.slot.shown(false));
@@ -141,4 +168,69 @@ fn out_of_sight_frames_run_a_while_later_and_at_once_when_shown() {
     assert_eq!(panel.slot.latest().as_deref(), Some("W(1);W(2);W(3);"));
     // Shown again with nothing waiting, nothing is due.
     assert!(!panel.slot.shown(true));
+}
+
+/// Where the person's keys are, as a check gives them: no window the system made key is needed.
+struct Held {
+    shown: u32,
+    beside: Option<u32>,
+    key_window: bool,
+    typing: Option<u32>,
+}
+
+impl Keys for Held {
+    fn in_sight(&self, id: u32) -> bool {
+        self.shown == id || self.beside == Some(id)
+    }
+    fn key_window(&self) -> bool {
+        self.key_window
+    }
+    fn typing(&self, id: u32) -> bool {
+        self.typing == Some(id)
+    }
+}
+
+#[test]
+fn a_programs_copy_goes_only_from_the_terminal_the_person_types_in() {
+    let copied = |held: &Held, id: u32| {
+        let mut written = vec![];
+        let went = copy_where(held, id, "probe", |text| written.push(text.to_owned()));
+        assert_eq!(went, !written.is_empty());
+        written
+    };
+    let typing = Held {
+        shown: 3,
+        beside: Some(4),
+        key_window: true,
+        typing: Some(3),
+    };
+    assert_eq!(copied(&typing, 3), ["probe"], "the terminal with the keys");
+    // The other half of the split is in sight, but the keys are in this one.
+    assert!(copied(&typing, 4).is_empty(), "the half without the keys");
+    assert!(copied(&typing, 5).is_empty(), "a terminal out of sight");
+    let typing_there = Held {
+        typing: Some(4),
+        ..typing
+    };
+    assert_eq!(
+        copied(&typing_there, 4),
+        ["probe"],
+        "the half with the keys"
+    );
+    let away = Held {
+        key_window: false,
+        ..typing_there
+    };
+    assert!(
+        copied(&away, 4).is_empty(),
+        "another window or app has the keys"
+    );
+    // Out of sight, a page that still holds its window's keys copies nothing.
+    let hidden = Held {
+        shown: 9,
+        beside: None,
+        key_window: true,
+        typing: Some(3),
+    };
+    assert!(copied(&hidden, 3).is_empty(), "a terminal out of sight");
 }

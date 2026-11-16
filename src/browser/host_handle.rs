@@ -169,7 +169,7 @@ impl Browser {
     }
 
     /// Terminal `key` runs `program` in front now (none: none known): a coding agent there is
-    /// shown as such, and its integration offered when it is off.
+    /// shown as such, by its mark.
     pub fn runs(&self, key: &str, program: Option<&str>) {
         if self.shared.offers.runs(key, program) {
             let _ = self.proxy.send_event(Cmd::Strip);

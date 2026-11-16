@@ -124,20 +124,53 @@ pub(crate) fn place(size: LogicalSize<f64>, top: f64, frame: Option<&Frame>) -> 
             scale: 1.0,
         };
     };
-    let fits = (size.width / frame.width).min(size.height / frame.height);
-    let scale = if fits.is_finite() && fits > 0.0 {
-        fits.min(1.0)
+    let sides = (frame.width.round(), frame.height.round());
+    let fits = (size.width / sides.0).min(size.height / sides.1);
+    let (width, height, scale) = if fits.is_finite() && fits > 0.0 && fits < 1.0 {
+        smaller(size, sides, fits)
     } else {
-        1.0
+        (sides.0, sides.1, 1.0)
     };
-    let width = (frame.width * scale).min(size.width);
-    let height = (frame.height * scale).min(size.height);
     Placed {
         across: ((size.width - width) / 2.0).floor().max(0.0),
         down: top + ((size.height - height) / 2.0).floor().max(0.0),
         size: LogicalSize::new(width, height),
         scale,
     }
+}
+
+/// How far under the exact scale a smaller page is drawn: WebKit keeps the scale with less
+/// precision than this and cuts the page's width and height down to whole CSS pixels, so at the
+/// exact scale a side could come out one under the frame's.
+const HAIR: f64 = 1e-5;
+
+/// The whole points and the scale of a frame `sides` drawn smaller (`fits` of it) in the pages'
+/// part `room`. The system takes a view's size in whole points (what it is given is rounded), and
+/// the page lays out at those points over the scale: so the points are chosen whole, and the
+/// scale from them, such that both sides lay out at the frame's. The sides tried go down a point
+/// at a time from the first whole points at or over the exact ones (never past the part); the
+/// one with the largest scale is taken, and with none exact, the first, which keeps both sides
+/// at least the frame's.
+fn smaller(room: LogicalSize<f64>, sides: (f64, f64), fits: f64) -> (f64, f64, f64) {
+    const TRIED: u8 = 8;
+    let most = |side: f64, room: f64| {
+        (side * fits - 1e-9)
+            .ceil()
+            .clamp(1.0, room.floor().max(1.0))
+    };
+    let (wide, tall) = (most(sides.0, room.width), most(sides.1, room.height));
+    let scaled = |w: f64, h: f64| ((w / sides.0).min(h / sides.1) * (1.0 - HAIR), w, h);
+    let exact =
+        |(scale, w, h): &(f64, f64, f64)| w / scale < sides.0 + 1.0 && h / scale < sides.1 + 1.0;
+    let tried = (0..TRIED).flat_map(|less| {
+        (0..TRIED).map(move |fewer| (wide - f64::from(less), tall - f64::from(fewer)))
+    });
+    let found = (tried.filter(|&(w, h)| w >= 1.0 && h >= 1.0))
+        .map(|(w, h)| scaled(w, h))
+        .filter(exact)
+        .max_by(|a, b| a.0.total_cmp(&b.0));
+    let (scale, w, h) = found.unwrap_or_else(|| scaled(wide, tall));
+    (w, h, scale)
 }
 
 /// The strip's size menu: the whole window, each preset with its sides, and Rotate while a size

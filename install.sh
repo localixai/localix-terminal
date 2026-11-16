@@ -1,10 +1,10 @@
 #!/bin/sh
 # Installs Localix Terminal, the app, which is all there is to install:
 #   curl -fsSL https://raw.githubusercontent.com/localixai/localix-terminal/main/install.sh | sh
-# macOS: Localix Terminal.app into ~/Applications. Linux: the program into ~/.local/share/llxterm, the
-# `llxterm` command and the app's desktop entry put in place by the program itself
-# (`llxterm setup command`). LLXTERM_VERSION=0.1.0 picks a release. The download's checksum is
-# verified against the release's SHA256SUMS before anything is written.
+# macOS: Localix Terminal.app into ~/Applications. Linux: the program into ~/.local/share/llxterm.
+# Nothing else is put anywhere: `llxterm` and the agents' plugin are in the app's own terminals.
+# LLXTERM_VERSION=0.1.0 picks a release. The download's checksum is verified against the
+# release's SHA256SUMS before anything is written.
 set -eu
 
 REPO=localixai/localix-terminal
@@ -46,7 +46,7 @@ main() {
     Linux/x86_64) archive=llxterm-x86_64-unknown-linux-gnu.tar.gz ;;
     *)
       say "there is no release build for $(uname -s) $arch; build it from source:"
-      say "  cargo install --locked --git https://github.com/$REPO && llxterm setup command"
+      say "  cargo install --locked --git https://github.com/$REPO && llxterm open"
       exit 1
       ;;
   esac
@@ -111,8 +111,7 @@ main() {
       ;;
   esac
 
-  "$program" setup command
-  say "installed $("$program" --version). Open Localix Terminal (or run \`llxterm open\`); Settings → Integrations connects your agents (Claude Code, Codex, Gemini CLI, Copilot, OpenCode, Hermes), the Claude Code plugin on macOS."
+  say "installed $("$program" --version). Open Localix Terminal (or run \`\"$program\" open\`): your coding agents reach it from its own terminals."
 }
 
 main "$@"

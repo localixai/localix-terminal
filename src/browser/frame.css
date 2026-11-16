@@ -109,6 +109,12 @@ html[data-reduced] body{background:transparent}
 :where(.btn){font:inherit;font-size:13px;line-height:16px;font-weight:500;height:24px;padding:0 12px;display:inline-flex;align-items:center;border:0;border-radius:var(--r-2);color:inherit;background:var(--ov-1);box-shadow:var(--hair-in);transition:background-color var(--t-out) var(--ease)}
 :where(.btn:hover:not(:disabled)){background:var(--ov-2);transition:none}
 :where(.btn:active:not(:disabled)){background:var(--ov-3);transition:none}
+/* A quiet one (`.plain`): no fill or hairline at rest, the quiet ink; pointed at, a fill and the
+   text's colour. An icon alone (`.ico`) is a square, its words its tooltip and name. */
+:where(.btn.plain){background:transparent;box-shadow:none;color:var(--ink-2)}
+:where(.btn.plain:hover:not(:disabled)){background:var(--ov-2);color:var(--fg)}
+:where(.btn.plain:active:not(:disabled)){background:var(--ov-3)}
+:where(.btn.ico){width:28px;height:28px;padding:0;justify-content:center}
 :where(.btn.go){background:var(--accent);color:var(--on-acc);box-shadow:none}
 :where(.btn.go:hover:not(:disabled)){background:var(--accent);filter:brightness(1.08)}
 :where(.btn.go:active:not(:disabled)){background:var(--accent);filter:brightness(.92)}

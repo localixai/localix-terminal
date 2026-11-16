@@ -10,8 +10,8 @@ use std::time::Duration;
 use super::plugin::by_status;
 use super::server::{Seen, Servers, Wanted};
 use super::{Agent, codex, var};
+use crate::agents;
 use crate::catalog::{Env, Runs};
-use crate::setup::reach;
 
 const MOST: Duration = Duration::from_secs(60);
 
@@ -62,12 +62,12 @@ impl Servers for Mcp {
     }
 
     fn file(&self, env: &Env) -> PathBuf {
-        reach::config_file("gemini", &env.home, var(env))
+        agents::config_file("gemini", &env.home, var(env))
             .unwrap_or_else(|| env.home.join(".gemini/settings.json"))
     }
 
     fn seen(&self, text: &str, key: &str) -> Option<Seen> {
-        Seen::of(reach::json(text)?.get("mcpServers")?.get(key)?)
+        Seen::of(agents::json(text)?.get("mcpServers")?.get(key)?)
     }
 
     fn add(&self, agent: &Agent, env: &Env, wanted: &Wanted<'_>) -> Result<(), String> {

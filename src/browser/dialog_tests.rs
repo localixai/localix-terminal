@@ -61,7 +61,7 @@ fn dialogs_are_shown_one_at_a_time_and_one_asked_again_is_not_shown_twice() {
 fn a_releases_notes_are_read_as_headings_points_and_sentences_in_plain_words() {
     let read = notes(
         "The window asks in its own dialog.\n\n### Added\n\n- **Dialogs**: one look, see\n  \
-         [the rules](docs/ui.md).\n- `llxterm setup` runs on its own.\n\n## Fixed\n* A tab.",
+         [the rules](docs/ui.md).\n- `llxterm open` runs on its own.\n\n## Fixed\n* A tab.",
     );
     assert_eq!(
         read,
@@ -69,7 +69,7 @@ fn a_releases_notes_are_read_as_headings_points_and_sentences_in_plain_words() {
             Note::Text("The window asks in its own dialog.".into()),
             Note::Head("Added".into()),
             Note::Item("Dialogs: one look, see the rules.".into()),
-            Note::Item("llxterm setup runs on its own.".into()),
+            Note::Item("llxterm open runs on its own.".into()),
             Note::Head("Fixed".into()),
             Note::Item("A tab.".into()),
         ]

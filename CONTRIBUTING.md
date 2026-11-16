@@ -7,7 +7,7 @@ cargo build
 cargo clippy --all-targets -- -D warnings
 cargo test                                   # unit tests, and the CLI against a server with no window
 bun test plugins/claude-code/hooks/register.spec.ts  # plugin hooks with a mocked host; Bun 1.3+
-bun test src/browser                               # UI gestures, frame cadence and motion lifecycle
+bun test src/browser src/terminal                  # UI gestures, frame cadence, motion, the terminal page's keys
 bunx tsc -p plugins/claude-code                    # the plugin's types (see below)
 shellcheck install.sh scripts/*.sh plugins/claude-code/bin/llxterm
 cargo deny --locked check                          # advisories, licences and sources (deny.toml)
@@ -40,8 +40,8 @@ LLXTERM_DISPLAY_TESTS=1 cargo test --test browser   # real windows: needs a disp
 
 ## Releasing
 
-1. Set the new version in `Cargo.toml`, `plugins/claude-code/.claude-plugin/plugin.json`
-   and `.claude-plugin/marketplace.json`; `scripts/check-versions.sh` says when they differ.
+1. Set the new version in `Cargo.toml` and `plugins/claude-code/.claude-plugin/plugin.json`;
+   `scripts/check-versions.sh` says when they differ.
 2. Rename `## Unreleased` in `CHANGELOG.md` to `## 0.2.0` (the version) and open a new `## Unreleased`
    above it; that section is the release's notes.
 3. Commit, then `git tag v0.2.0 && git push origin main v0.2.0`. The Release workflow first checks that
@@ -65,7 +65,7 @@ files and publishes nothing; they stay on the run as artifacts. The Apple secret
 
 `scripts/e2e.sh [--update] [dark|light]` is the end-to-end run, at a Mac: it builds this tree,
 starts its app beside yours (its own socket, data and settings in a scratch folder, so your app
-keeps running and your setup is left alone), and uses it on the demo project in
+keeps running), and uses it on the demo project in
 `scripts/e2e/project` as a person and an agent do: a board worked by two agents, an agent in a
 terminal, a file, a page, the Store and Settings, in dark and in light. Each step is checked by
 what the `window` tool reports, what is written to the project and what the window offers to

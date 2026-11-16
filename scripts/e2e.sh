@@ -28,8 +28,6 @@ if [ "${1:-}" = --update ]; then update=1; shift; fi
 # picture takes.
 x=166 y=112 width=1180 height=740 margin=56
 failed=0
-# What the person's command links to before the run: it must be the same after.
-linked=$(readlink "$HOME/.local/bin/llxterm" 2>/dev/null || true)
 if [ -z "${E2E_APP:-}" ]; then
   cargo build --release --quiet
   scripts/bundle-macos.sh >/dev/null
@@ -315,8 +313,6 @@ scenes() {
   fi
   shot document
   call "{\"action\":\"close\",\"tab\":\"$doc\"}" >/dev/null
-  # The app under test is not the one the person uses: their command still runs theirs.
-  has "the person's command is left as it was" "$(readlink "$HOME/.local/bin/llxterm" 2>&1)" "$linked"
 }
 
 project

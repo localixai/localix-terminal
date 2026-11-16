@@ -13,6 +13,13 @@ pub fn app() -> Option<PathBuf> {
     of(&exe).map(Path::to_path_buf)
 }
 
+/// The bundle's resources (`…/Contents/Resources`): the folder of the command its terminals
+/// put on their PATH (`bin`, a link to the program) and the Claude Code plugin. None for a
+/// program outside a bundle.
+pub fn resources() -> Option<PathBuf> {
+    app().map(|app| app.join("Contents").join("Resources"))
+}
+
 /// Whether this app is where it stays: not run from a mounted disk image or from the place the
 /// system moves a downloaded one to (App Translocation), both gone at eject or restart. What is
 /// written into the person's tools names this program, so it waits for a bundle that is in

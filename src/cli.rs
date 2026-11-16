@@ -1,4 +1,4 @@
-//! The command line, a client of the app: `llxterm window`, `status`, `quit`, `mcp`, `setup`,
+//! The command line, a client of the app: `llxterm window`, `guide`, `status`, `quit`, `mcp`,
 //! `open`, `secret`. Exit codes: 0 done, 1 the call failed (the output says why), 3 the app could
 //! not be reached or the arguments are wrong. `serve` is the app's own launch, not the person's.
 
@@ -6,7 +6,6 @@ mod app;
 mod call;
 mod former;
 mod secret;
-mod setup;
 
 use std::process::ExitCode;
 
@@ -24,20 +23,19 @@ Usage:
   llxterm window '<json>' --peek        as above, a look for a pane: what the person sent stays for your
                                          own next call
   llxterm window                        how to call it: the actions and their arguments (JSON Schema)
+  llxterm guide                         the window tool's guide: what each kind of tab does and takes
   llxterm window --end [--as NAME]      close the caller's tabs
   llxterm window --said [--as NAME]     print what the person sent from the window since last asked
   llxterm window --board                the project's open cards, for an agent starting work (read
                                          from its file: the app need not run); nothing when none is open
   llxterm window --said --follow [--json]   keep waiting, and print each comment as it comes (for a
                                          monitor); --json: each one a JSON string on one line
+  llxterm window --watch                the app, this project's tabs and board, and the person's
+                                         comments: a JSON line for each change, as it comes
   llxterm status                        what the app holds (exit 3 when it is not running)
   llxterm quit                          quit the app: its tabs and terminals end
   llxterm mcp [--as NAME]               the window tool as an MCP server on stdio, for an agent
-                                         whose host speaks MCP (Settings → Integrations adds it)
-  llxterm setup [<id> [--off] | all | mcp]
-                                         what the app puts in place by itself: the command, the
-                                         Claude Code plugin, the window tool in Codex, Gemini CLI,
-                                         Copilot, OpenCode, Hermes; `--off` takes one out for good
+                                         in a terminal of the app's whose host speaks MCP
   llxterm open [DIR]                    the app: the window to you (the app's icon does the same);
                                          with DIR, on that folder as a project (`llxterm open .`)
   llxterm secret NAME < FILE            save a secret (a password) a call types as {{secret:NAME}}, never shown
@@ -49,6 +47,8 @@ current directory; --project DIR or LLXTERM_PROJECT names another). --as NAME is
 with tabs of its own.
 Give the JSON as the argument, or `-` to read it from stdin.
 A call starts the app, out of sight, when it is not running.
+In a terminal of the app's, `llxterm` is on the PATH, LLXTERM_PANE names the terminal (t3) and
+LLXTERM_PANE_PROJECT its project's folder, which a call from a folder in it with no repository of its own takes.
 Environment: LLXTERM_PROJECT (the project, when not the one around the current directory); LLXTERM_HOME (where its log, screenshots and comments go).
 Exit codes: 0 done, 1 the call failed, 3 the app could not be reached or the arguments are wrong.";
 
@@ -75,6 +75,13 @@ pub fn run(args: Vec<String>) -> ExitCode {
             OK
         }
         Some("window") => call::window(&rest),
+        Some("guide") if !rest.is_empty() => call::usage("guide takes no arguments"),
+        // The tool's description as this build has it, for an agent that runs the command and
+        // speaks no MCP; it starts nothing.
+        Some("guide") => {
+            say(&crate::desk::description());
+            OK
+        }
         Some("serve") => return serve(&rest),
         Some(name @ ("status" | "quit")) if !rest.is_empty() => {
             call::usage(&format!("{name} takes no arguments"))
@@ -85,7 +92,6 @@ pub fn run(args: Vec<String>) -> ExitCode {
         Some("quit") => call::admin("app/quit", OK),
         Some("secret") => secret::run(&rest),
         Some("mcp") => crate::mcp::run(&rest),
-        Some("setup") => setup::run(&rest),
         Some("open") => match rest.as_slice() {
             [] => app::open(),
             [help] if matches!(help.as_str(), "-h" | "--help") => {
@@ -123,11 +129,6 @@ fn serve(args: &[String]) -> ExitCode {
         Ok(crate::server::Binding::Running) => return ExitCode::SUCCESS,
         Err(why) => return ExitCode::from(call::usage(&format!("cannot serve: {why}"))),
     };
-    // The server a call started looks after the agents as the app opened does. A build for
-    // development does not: what it would write names a program that is gone with the next build.
-    if crate::bundle::in_place() && !cfg!(debug_assertions) {
-        app::keep_well();
-    }
     let serve = Serving {
         headless: flags.contains(&"--headless"),
         windowless: flags.contains(&"--no-window"),

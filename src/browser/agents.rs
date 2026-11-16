@@ -230,7 +230,7 @@ pub(super) fn learn(proxy: &EventLoopProxy<Cmd>) {
     let asked = std::thread::Builder::new()
         .name("desk-agents-path".into())
         .spawn(move || {
-            let Some(login) = crate::setup::login_path() else {
+            let Some(login) = crate::agents::login_path() else {
                 return;
             };
             *crate::lock(&KNOWN) = Some(Known::on(merged(&login, &process_path())));

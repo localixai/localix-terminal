@@ -64,7 +64,7 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
-      - run: bun test src/browser plugins/claude-code/hooks
+      - run: bun test src/browser src/terminal plugins/claude-code/hooks
       # Advisories, licences and sources of the dependency tree, as deny.toml says.
       - run: cargo deny --locked check
       - name: The app bundles and its signature holds (ad hoc, nothing is notarized)

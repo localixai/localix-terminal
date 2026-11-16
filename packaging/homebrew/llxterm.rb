@@ -20,13 +20,11 @@ cask "llxterm" do
   depends_on macos: ">= :monterey"
 
   app "Localix Terminal.app"
-  binary "#{appdir}/Localix Terminal.app/Contents/MacOS/llxterm"
 
   uninstall quit: "io.github.rsaryev.localix-terminal"
 
   zap trash: [
     "~/.config/llxterm",
-    "~/.local/bin/llxterm",
     "~/.local/share/llxterm",
     "~/Library/Caches/io.github.rsaryev.localix-terminal",
     "~/Library/HTTPStorages/io.github.rsaryev.localix-terminal",

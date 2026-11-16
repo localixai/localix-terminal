@@ -2,23 +2,24 @@
 
 What llxterm is to an agent: one command, `llxterm window '<json>'`, that reaches the one app
 of the user, which holds the window and all its state. The desk calls no model and knows no agent:
-an integration (a plugin of the agent's host) adds what that host offers on top of the same
-command. Each part below is built test first; a live check uses a hidden window only.
+an integration (a plugin of the agent's host, loaded in the app's own terminals) adds what
+that host offers on top of the same command. Each part below is built test first; a live check uses a hidden window only.
 
 ## Layers
 
 ```text
 an agent ──shell──▶ llxterm window '<json>' ──one socket a call──▶ the app ──▶ window, tabs, PTYs
                                                                      (one per user, holds
-an integration ──▶ llxterm window --said --follow ══one socket══▶      all the state)
+an integration ──▶ llxterm window --watch ═══════one socket══▶      all the state)
 ```
 
 - Every agent drives the desk the same way, from its shell: a call is a process that connects,
   asks, prints the answer and exits. Nothing of an agent's host is in the crate.
 - The app is the only owner of the window, and there is one per user (below).
-- An integration keeps what its host needs: a follower of the person's comments
-  (`--said --follow`), the board in brief at a session's start (`llxterm window --board`), its own
-  instructions (skills), its own model and settings.
+- An integration keeps what its host needs: one follower of the app's events (`--watch`: the
+  app, its tabs, the board and the person's comments, or `--said --follow` for the comments
+  alone), the board in brief at a session's start (`llxterm window --board`), its own
+  instructions (skills), its own model and settings. It looks at nothing now and then.
 
 ## One app per user
 
@@ -63,10 +64,10 @@ One thing moves: the app. The command, the MCP server and the Claude Code plugin
 
 - **The app.** `install.sh` (or the release's `Localix-Terminal-macos.zip`) replaces it whole. A running
   app is the old one until it quits; the next call starts the new one.
-- **The command and the MCP entries** name the app's program, so they follow it; an MCP entry
-  that names a program that moved is written again when the app opens (`setup::auto`).
-- **The plugin** is in the app's bundle, of its version; the app opened after an update brings an
-  installed plugin to that version (`claude plugin update`).
+- **The command, the MCP server and the plugin** reach the agents only through the app's
+  terminals' environment (`reach`): the bundle's `llxterm` first on their `PATH`, the app's copy
+  of its plugin, the settings files that declare its server by the bare command. A terminal
+  started after an update is told the new ones; nothing outside the app names its program.
 - **Client and server.** `initialize` compares protocol versions; a server of another protocol is
   named, never joined: quit it, and the next call starts this build's.
 
@@ -76,4 +77,4 @@ One thing moves: the app. The command, the MCP server and the Claude Code plugin
 2. The protocol: `initialize`, ids and pipelining, notifications, binary screenshots, idempotent
    retries.
 3. The app as the server; the API that describes itself; the adapters on it (CLI, MCP, plugin).
-4. Setup from the app: the command, the plugin, the MCP hosts.
+4. The app's terminals reach the app: the command, the plugin, the MCP server.

@@ -6,7 +6,7 @@ mod catalog;
 
 pub(super) use catalog::{Shortcut, every};
 #[cfg(any(target_os = "macos", test))]
-pub(super) use catalog::{groups, of_page};
+pub(super) use catalog::{groups, of_find, of_page};
 
 use std::collections::BTreeMap;
 

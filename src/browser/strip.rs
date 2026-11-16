@@ -15,7 +15,7 @@ mod made;
 pub use made::made;
 use made::{MADE, made_of};
 
-pub(super) use input::{Click, Keyed, Tool, click, moved};
+pub(super) use input::{Click, Finding, Keyed, Tool, click, moved};
 
 use serde_json::json;
 
@@ -394,7 +394,7 @@ pub(super) const PAGE: &str = include_str!("strip.html");
 
 /// The SHA-384 of the page's one script, its resize helper, the dialog's script and the tree's in:
 /// the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "yYlS2wuCSP0nuvMNrIlwtf1mszIYQi5qaJ+jbkqH2+im6EoamaSRoeQzzow4/pCK";
+const SCRIPT_SHA384: &str = "Wh7UobY7bL/1RNaCyXrfHgxxmpAl7VulLokQI101wFPzYnSdEblazYHkJwG5QXhP";
 
 /// The strip's page: the trusted UI's resize helper, the window's dialog (dialog.rs) and the side's
 /// tree of files (tree.rs) inlined, so it opens without external resources, its bars as tall as the window lays them out (`BAR`, `NAV`, `ROW`: its style, not

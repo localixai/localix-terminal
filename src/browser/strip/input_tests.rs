@@ -176,6 +176,17 @@ fn every_shortcut_is_a_click_the_strip_knows() {
     assert_eq!(click("key tab 3"), Some(Click::Key(Keyed::Tab(3))));
     assert_eq!(click("key tab 9"), None);
     assert_eq!(click("key tab last"), Some(Click::Key(Keyed::LastTab)));
+    // Find in what is shown takes a step; `find` alone is still the side's Search Tabs.
+    for (words, step) in [
+        ("key find text", Finding::Open),
+        ("key find next", Finding::Next),
+        ("key find previous", Finding::Previous),
+    ] {
+        assert_eq!(click(words), Some(Click::Key(Keyed::FindText(step))));
+        assert!(["open", "next", "previous"].contains(&step.word()));
+    }
+    assert_eq!(click("key find"), Some(Click::Key(Keyed::Find)));
+    assert_eq!(click("key find more"), None);
 }
 
 #[test]

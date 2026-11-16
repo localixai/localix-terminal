@@ -1,6 +1,7 @@
-//! What the Claude Code plugin reads from the desk, pinned on both sides: the plugin parses
-//! `status` and a `list` as text and keeps a card's columns in its own types, so a change of
-//! wording or of a column here fails these tests rather than the pane in a session.
+//! What the Claude Code plugin reads from the desk, pinned on both sides: its watcher
+//! (`llxterm window --watch`, follow/watch.rs) reads `status` and a `list` as text, and the
+//! plugin keeps a card's columns in its own types, so a change of wording or of a column here
+//! fails these tests rather than the pane in a session.
 
 use super::*;
 
@@ -13,11 +14,23 @@ fn plugin(path: &str) -> String {
 #[test]
 fn status_and_a_list_read_as_the_plugin_parses_them() {
     let hooks = plugin("hooks/register.tsx");
-    // The plugin takes `window: ` and `terminals: ` lines of `status`, and a tab's line by its key.
-    for parsed in ["field('window')", "field('terminals')", r"/^[wtb]\d+ /"] {
+    // The plugin reads the watcher's lines: the app and the tabs, the board, a comment.
+    for read in ["'--watch'", "'app' in line", "'board' in line", "line.said"] {
+        assert!(hooks.contains(read), "the plugin no longer reads {read}");
+    }
+    // The watcher takes `window: ` and `terminals: ` lines of `status`, and a tab's line by its
+    // key, as below.
+    let watch =
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/follow/watch.rs"))
+            .unwrap();
+    for parsed in [
+        "field(\"window\")",
+        "field(\"terminals\")",
+        "Some('w' | 't' | 'b')",
+    ] {
         assert!(
-            hooks.contains(parsed),
-            "the plugin no longer parses {parsed}"
+            watch.contains(parsed),
+            "the watcher no longer parses {parsed}"
         );
     }
 

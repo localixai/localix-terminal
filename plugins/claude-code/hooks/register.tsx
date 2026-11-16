@@ -94,7 +94,7 @@ let deskRun: ((argv: string[], timeoutMs?: number) => Promise<{ exitCode: number
 const CALL_MS = 5000
 /** The call that closes the tabs as the session ends: short, so a hung app never holds the exit. */
 const END_MS = 1500
-/** The desk runs: telling it something then starts nothing. */
+/** The desk runs, as its watcher last said: telling it something then starts nothing. */
 let deskUp = false
 /** The session told the Event Center it waits for the person. */
 let waiting = false
@@ -108,10 +108,18 @@ const SHOWN_MOST = 120
 const WORKER = 'llxterm:worker'
 /** A worker's name on the board as its task gives it: `your name on the board: cart-button`. */
 const NAMED = /your name on the board:\s*`?([A-Za-z0-9._-]+)/i
-/** How long a follower that ended waits before it is started again. */
-const FOLLOW_RETRY_MS = 5000
-/** The session ended: the comment follower is not started again. */
+/** How long a watcher that ended waits before it is started again, the first time; each time
+ * after, twice as long, up to `WATCH_MOST_MS`. */
+const WATCH_RETRY_MS = 5000
+const WATCH_MOST_MS = 60_000
+/** The session ended: the watcher is not started again. */
 let ended = false
+
+/** A line of `llxterm window --watch`: the app and this project's tabs, the board, or a comment. */
+type Watched =
+  | { app: string; window?: string; terminals?: string; tabs?: string[] }
+  | { board: { cards?: BoardCard[] } | null }
+  | { said: string }
 /** The workers sent word once to finish their card. */
 const nudged = new Set<string>()
 /** The main agent's cards it was last asked to finish, named. */
@@ -136,35 +144,12 @@ export const register: Register = (on, options) => {
     if ((await $.env.get('TERM_PROGRAM')) === 'llxterm') {
       await $.session.append({ message: { type: 'user', content: [{ type: 'text', text: BROWSER }] } }).catch(() => undefined)
     }
-    // The program: the one on PATH, else Localix Terminal.app's (its link in ~/.local/bin, or the app
-    // where macOS keeps apps). Never installed from here: the pane only reads.
-    const home = await $.env.get('HOME')
-    const candidates = [
-      'llxterm',
-      `${home ?? ''}/.local/bin/llxterm`,
-      `${home ?? ''}/Applications/Localix Terminal.app/Contents/MacOS/llxterm`,
-      '/Applications/Localix Terminal.app/Contents/MacOS/llxterm',
-    ]
-    // Resolved at each call, from the one that last ran (`found`), then the rest in order: a
-    // program that could not start once (not installed yet) is tried again, and one missing from
-    // the PATH costs no failed start on every look. Only a program that cannot start is passed
-    // over: one that started and outlasted its time is the app, slow or hung, and every other
-    // candidate is the same app, so it is not asked again.
-    let found = 0
-    const run = async (argv: string[], timeoutMs = CALL_MS) => {
-      const from = found
-      const order = [...candidates.slice(from), ...candidates.slice(0, from)]
-      for (const [step, program] of order.entries()) {
-        const started = Date.now()
-        const ran = await $.process.run([program, ...argv], { timeoutMs }).catch(() => undefined)
-        if (ran) {
-          found = (from + step) % candidates.length
-          return ran
-        }
-        if (Date.now() - started >= timeoutMs) return undefined
-      }
-      return undefined
-    }
+    // The program: the app's own, which its terminals put first on the PATH (`LLXTERM_BIN` names
+    // its folder): the plugin is loaded only in them. Never installed from here.
+    const bin = await $.env.get('LLXTERM_BIN')
+    const program = bin ? `${bin}/llxterm` : 'llxterm'
+    const run = (argv: string[], timeoutMs = CALL_MS) =>
+      $.process.run([program, ...argv], { timeoutMs }).catch(() => undefined)
     deskRun = run
     // The session's folder names its project: every call says it (`--project`), so the desk
     // takes the same project the session works in, wherever the hook's process runs. The
@@ -176,54 +161,15 @@ export const register: Register = (on, options) => {
     const root = top && top.exitCode === 0 && top.stdout.trim() ? top.stdout.trim() : cwd
     boardFile = `${root}/.localix/board.json`
 
-    // The status line an earlier version pinned: its notice read like a warning.
-    $.ui.status(undefined)
     await $.command.register({ name: 'tabs', description: "This project's tabs and the person's latest comments" })
 
-    // What the app holds, every few seconds. `status` never starts the app, and the tabs are
-    // listed only while one runs, so the pane never opens a window by itself. The board is read
-    // from its file, so it shows with the app not running.
-    // Each look writes only what changed since the last: a quiet desk redraws nothing.
-    const wrote = new Map<string, string>()
-    const changed = (key: string, value: unknown) => {
-      const text = JSON.stringify(value)
-      if (wrote.get(key) === text) return false
-      wrote.set(key, text)
-      return true
-    }
-    const look = async () => {
-      const list = await cards($)
+    // The board as its file holds it, once: it shows with the app not running. The app tells
+    // each change after, through the watcher.
+    const showBoard = async (list: BoardCard[] | undefined) => {
       const brief = list && list.length ? summary(list) : null
-      if (changed('board', brief)) await update($, board, () => brief)
-      const status = await run(['status'])
-      if (!status || status.exitCode !== 0) {
-        deskUp = false
-        waiting = false
-        const gone = { app: 'not running', window: '-', terminals: '0', tabs: [] }
-        if (changed('desk', gone)) await update($, desk, d => ({ ...d, ...gone }))
-        return
-      }
-      const lines = status.stdout.split('\n')
-      const field = (name: string) => lines.find(l => l.startsWith(`${name}: `))?.slice(name.length + 2) ?? '-'
-      deskUp = true
-      // A look for the pane: `--peek` leaves the person's notes for Claude's own next call.
-      const listed = await run(['window', ...project, '--peek', '{"action":"list"}'])
-      const tabs = (listed?.stdout ?? '').split('\n').filter(l => /^[wtb]\d+ /.test(l))
-      const held = { app: lines[0] ?? 'running', window: field('window'), terminals: field('terminals'), tabs }
-      if (changed('desk', held)) await update($, desk, d => ({ ...d, ...held }))
+      await update($, board, () => brief)
     }
-    // One look at a time: a slow call does not pile ticks up behind it.
-    let looking = false
-    const refresh = async () => {
-      if (looking) return
-      looking = true
-      try {
-        await look()
-      } finally {
-        looking = false
-      }
-    }
-    $.clock.every(3000, () => void refresh().catch(() => undefined))
+    await showBoard(await cards($))
 
     // A note the person left for a subagent's card goes to that subagent while it runs; the main
     // agent hears it too, and that it went there.
@@ -244,43 +190,61 @@ export const register: Register = (on, options) => {
       void $.prompt.submit({ text })
     }
 
-    // The person's comments and what they do on the board, as they come: kept for the pane, and
-    // each one a turn of its own, so Claude wakes without anyone typing. Each round looks first,
-    // which settles which program; a follower that cannot start or ends is started again a few
-    // seconds later, until the session ends.
+    // What the window, the board and the person say, as they come: kept for the pane, and each
+    // comment a turn of its own, so Claude wakes without anyone typing.
+    const heard = async (line: Watched) => {
+      if ('app' in line) {
+        deskUp = line.app !== 'not running'
+        if (!deskUp) waiting = false
+        const held = deskUp
+          ? { app: line.app, window: line.window ?? '-', terminals: line.terminals ?? '0', tabs: line.tabs ?? [] }
+          : { app: 'not running', window: '-', terminals: '0', tabs: [] }
+        await update($, desk, d => ({ ...d, ...held }))
+      } else if ('board' in line) {
+        await showBoard(Array.isArray(line.board?.cards) ? line.board.cards : undefined)
+      } else if (typeof line.said === 'string' && line.said.trim()) {
+        const text = line.said.trim()
+        await update($, desk, d => ({ ...d, comments: [...d.comments, { at: time(), text: words(text) }].slice(-20) }))
+        $.ui.toast(`Localix Terminal: ${words(text).slice(0, 80)}`)
+        await tell(text)
+      }
+    }
+
+    // One watcher for the session (`llxterm window --watch`): it waits for the app when none
+    // runs and ends with the session, so nothing here looks again and again. Each line is one
+    // JSON object; what the pipe hands over comes in pieces of any size, so the lines are put
+    // together again before one is read. It ends by itself only when it cannot run: started
+    // again later, each wait twice the last.
     ended = false
     void (async () => {
+      let pause = WATCH_RETRY_MS
       while (!ended) {
         try {
-          await refresh()
-          // Each note is one JSON string on a line of its own (`--json`): what the pipe hands over
-          // comes in pieces of any size, so the lines are put together again before one is read, and
-          // a note's own lines (its picture's path last) never come as a turn of their own.
-          const follow = $.process.spawn({ argv: [candidates[found] ?? 'llxterm', 'window', ...project, '--said', '--follow', '--json'] })
+          const watch = $.process.spawn({ argv: [program, 'window', ...project, '--watch'] })
           let held = ''
-          for await (const piece of follow) {
+          for await (const piece of watch) {
             if (piece.stream !== 'stdout') continue
             held += piece.text
             const lines = held.split('\n')
             held = lines.pop() ?? ''
             for (const line of lines) {
-              let text: string
+              let said: Watched
               try {
-                text = String(JSON.parse(line)).trim()
+                said = JSON.parse(line) as Watched
               } catch {
                 continue
               }
-              if (!text) continue
-              await update($, desk, d => ({ ...d, comments: [...d.comments, { at: time(), text: words(text) }].slice(-20) }))
-              $.ui.toast(`Localix Terminal: ${words(text).slice(0, 80)}`)
-              await tell(text)
+              pause = WATCH_RETRY_MS
+              await heard(said)
             }
           }
         } catch {
-          // The follower could not start or broke: the next round starts it again.
+          // The watcher could not start or broke: it is started again after the pause.
         }
+        if (ended) break
         // A wait that is refused means the module is gone: the loop ends with it.
-        if (!(await $.clock.sleep(FOLLOW_RETRY_MS).then(() => true, () => false))) break
+        if (!(await $.clock.sleep(pause).then(() => true, () => false))) break
+        pause = Math.min(pause * 2, WATCH_MOST_MS)
       }
     })()
 

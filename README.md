@@ -63,8 +63,8 @@ has no model and no account of its own: the agents are the ones you already run.
 
 - **Terminal sessions**: real shells on a PTY. A coding agent running in one is a session: it
   shows the agent's mark and its title, and the files and pages opened in it are its own tabs.
-- **Any CLI agent**: Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode and Hermes are
-  connected when the app opens; any other MCP host takes one entry.
+- **Any CLI agent**: Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode and Hermes find
+  the window from the app's own terminals, with nothing installed into them.
 - **A window agents can use**: an agent opens a page beside its terminal and clicks in it,
   drives a terminal, takes a screenshot, plans on the board and searches the Store, while you
   watch.
@@ -84,8 +84,8 @@ has no model and no account of its own: the agents are the ones you already run.
 <details>
 <summary>Each part in detail</summary>
 
-- **Terminals**: real shells on a PTY, split and dragged like any tab; a coding agent running in one shows its mark and its session's title, and it is a session: the files and pages opened in it are its own, a row of tabs on the terminal's right with one in sight, so the side lists your sessions and each keeps its documents to itself. A file or a page asked from no terminal joins the session you look at, else the project's last; the row scrolls sideways when its tabs do not fit, a tab dragged along it stays where you leave it, and a tab that shows a file has the picture the tree gives that file. What a program asks its terminal to tell you (a notification: OSC 9, OSC 777) waits in the Event Center until you type in that terminal.
-- **Agents**: Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode and Hermes are connected when the app opens. They open pages and terminals, click by ref, plan on the board, and hear your comments; an Event Center tells you what waits for you. With its plugin, Claude Code says there when it asks you a question, stops on an error or finishes a long turn: one line on its terminal, with the agent's mark, gone as soon as it goes on. What waits also marks its tab with a dot and its words, counts on the Dock's icon, and, while you are in another app, comes as a silent macOS notice whose click shows the tab. A session that runs outside the window has no tab yet: its line's **Continue Here** (or its notice's click) continues it in a terminal of its project.
+- **Terminals**: real shells on a PTY, split and dragged like any tab; a coding agent running in one shows its mark and its session's title, and it is a session: the files and pages opened in it are its own, a row of tabs on the terminal's right with one in sight, so the side lists your sessions and each keeps its documents to itself. A file or a page asked from no terminal joins the session you look at, else the project's last; the row scrolls sideways when its tabs do not fit, a tab dragged along it stays where you leave it, and a tab that shows a file has the picture the tree gives that file. What a program asks its terminal to tell you (a notification: OSC 9, OSC 777) waits in the Event Center until you type in that terminal. ⌘F finds in a terminal's output, its scrollback too: every match lit, ⌘G and ⇧⌘G (or Return and ⇧Return) to walk them, Esc to close.
+- **Agents**: Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode and Hermes reach the window from its own terminals. They open pages and terminals, click by ref, plan on the board, and hear your comments; an Event Center tells you what waits for you. With its plugin, Claude Code says there when it asks you a question, stops on an error or finishes a long turn: one line on its terminal, with the agent's mark, gone as soon as it goes on. What waits also marks its tab with a dot and its words, counts on the Dock's icon, and, while you are in another app, comes as a silent macOS notice whose click shows the tab. A session that runs outside the window has no tab yet: its line's **Continue Here** (or its notice's click) continues it in a terminal of its project.
 - **A browser**: real pages on the system WebView, with history, an address bar that knows the project's pages, phone and tablet sizes, and comments you pin to an element. A page that never comes (a dev server that has stopped) says so in one line and keeps its address, so ⌘R tries it again.
 - **A board**: the project's kanban (Backlog, Todo, Doing, Review, Done, Discarded), kept in the project as `.localix/board.json` for git.
 - **A Store**: plugins, skills and MCP servers for your coding agents in one searchable list (⇧⌘S). Pick one and install it into Claude Code, Codex, Gemini CLI, GitHub Copilot or OpenCode; before anything is written or run you are shown exactly what it would do.
@@ -100,8 +100,9 @@ has no model and no account of its own: the agents are the ones you already run.
 ## Install
 
 **macOS 12+ on Apple Silicon**, or Linux with WebKitGTK. The app is all there is to install: it
-holds the window and what connects your agents to it (an MCP server, and on macOS the Claude
-Code plugin), and puts each in place for you.
+holds the window and what connects your agents to it (the `llxterm` command, its MCP server and
+the Claude Code plugin), and hands them to the agents in its own terminals. Nothing is written
+into an agent's settings or your home.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/localixai/localix-terminal/main/install.sh | sh
@@ -115,29 +116,31 @@ open, or, with nothing left open, New Page, New Terminal, Board and Open Folder�
 keys, and under them the mark of each coding agent you have installed, which starts it in a
 terminal (no terminal opens unasked).
 
-The app connects your agents by itself and keeps them connected: when it starts, however it
-was started, and every hour while it runs, for whichever is installed (one you install later,
-or an entry another program rewrote, is put right without opening the app again): the Claude
-Code plugin on macOS (skills, a worker subagent, a mod that follows your comments), and the window tool as
-an MCP server in Codex, Gemini CLI, GitHub Copilot, OpenCode and Hermes, each put in with the
-agent's own `mcp add`. **Settings → Integrations** (⌘,) shows them; one you remove stays removed
-until you add it back. Any other MCP host takes the entry *Copy MCP Entry* gives. An agent whose configuration you moved (`CODEX_HOME`,
-`GEMINI_CLI_HOME`, `COPILOT_HOME`, `XDG_CONFIG_HOME`, `HERMES_HOME`, a Hermes profile) is
-connected there, as your login shell sets it, and an entry already in place is left as you have
-it. Gemini CLI starts no MCP server in a folder you have not trusted
-in it: trust the project's folder there (`/permissions trust`) and the tool appears.
+Your agents reach the app only in its own terminals, and find it there with nothing installed;
+outside Localix Terminal they are as you set them. `llxterm` is on the
+`PATH` there (the app's own program, kept first even after your profile sets a `PATH`), and
+`llxterm guide` prints how to use the window tool. Claude Code 2.1.280 and later loads the
+plugin from the app's copy of it (`CLAUDE_CODE_PLUGIN_DIRS`; the comments mod needs 2.1.287),
+unless your organization's managed settings turn plugin folders off. Gemini CLI 0.3 and later
+and OpenCode get the window tool as an MCP server from a settings file of the app's that their
+own variable names (`GEMINI_CLI_SYSTEM_DEFAULTS_PATH`, `OPENCODE_CONFIG`), merged with yours by
+name; one you set yourself is left as it is. Gemini CLI starts no MCP server in a folder you
+have not trusted in it: trust the project's folder there (`/permissions trust`) and the tool
+appears. Codex, GitHub Copilot and Hermes find `llxterm` on the `PATH`. Each terminal also says which it is: `LLXTERM_PANE` (`t3`) and
+`LLXTERM_PANE_PROJECT` (its project's folder), so a call from inside tmux there still lands
+beside its terminal and in its project.
 
 <details>
 <summary>More install options</summary>
 
 - The script checks `SHA256SUMS` before it writes anything; `LLXTERM_VERSION=0.1.0` picks another release.
 - **Updates**: an app installed from a release updates itself. It downloads a newer release while you work, checks it as the script does (the checksum, and on macOS the Developer ID signature and the notarization), and installs it when you choose Restart to Update. A version that is ready is announced once, in a dialog that names both versions and lists what is new; Later puts it off, and its row under the toolbar comes back another day. Settings → Updates shows how far it is and can turn the looking off; a build from source is updated the way it was made.
-- **Linux**: the program goes to `~/.local/share/llxterm`, and the script puts the app among your applications. Pages need WebKitGTK 4.1 and GTK 3 (`sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0`), glibc 2.35+ (Ubuntu 22.04+), and a display (X or Wayland). Without one, terminals still work.
+- **Linux**: the program goes to `~/.local/share/llxterm`; `~/.local/share/llxterm/llxterm open` opens the app. Pages need WebKitGTK 4.1 and GTK 3 (`sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0`), glibc 2.35+ (Ubuntu 22.04+), and a display (X or Wayland). Without one, terminals still work.
 - **The app from source** (macOS): `cargo build --release && scripts/bundle-macos.sh` makes `target/release/bundle/macos/Localix Terminal.app`, signed ad hoc for this Mac.
 - **From source**, Rust 1.89+ (on Linux also `libwebkit2gtk-4.1-dev` and `libgtk-3-dev`):
 
   ```sh
-  cargo install --locked --git https://github.com/localixai/localix-terminal && llxterm setup command
+  cargo install --locked --git https://github.com/localixai/localix-terminal && llxterm open
   ```
 
 </details>
@@ -160,7 +163,7 @@ in it: trust the project's folder there (`/permissions trust`) and the tool appe
 What waits for you (a question, a card in Review, a program that ended) is under the Event
 Center's bell (⇧⌘E).
 
-Agents work the window through one tool, `window`, which the app connects to each of them.
+Agents work the window through one tool, `window`, which the app hands to each of them in its terminals.
 
 <details>
 <summary>What an agent can do in the window</summary>
@@ -204,7 +207,7 @@ get `CLICOLOR=1`. You can still opt out in your shell profile or for one command
 | ⌘1…⌘8, ⌘9 | the project's tab by its place (one setting for the row), the last | ⌘L | address field |
 | ⇧⌘], ⇧⌘[ | next, previous tab | ⌘R, ⌘[, ⌘] | reload, back, forward |
 | ⌘T, ⌥⌘T, ⇧⌘B, ⇧⌘S | new page, terminal, board, Store | ⇧⌘M | page size |
-| ⌘N | new window | | |
+| ⌘N | new window | ⌘F, ⌘G, ⇧⌘G | find in a terminal's output, the next and the previous match |
 | ⌘W, ⇧⌘T | close the tab, reopen the last closed | ⇧⌘C, ⌘↩ | comment on the page, send |
 | ⇧⌘A | search the tabs | ⌘Y, ⇧⌘E | history, Event Center |
 | ⌘, | Settings | ⌘M | put the window away |
@@ -212,9 +215,9 @@ get `CLICOLOR=1`. You can still opt out in your shell profile or for one command
 | ⇧⌘\ | split view: the tab beside the next one of its project, or whole again | | |
 | ⇧⌘O | open the page in your default browser | | |
 
-In a terminal: ⌘K clears, ⌘← ⌘→ line start and end, ⌥← ⌥→ words, ⌘⌫ ⌥⌫ delete to the start and a word, ⌘↑ ⌘↓ top and bottom.
+In a terminal: ⌘F opens a find row under it (Return and ⇧Return walk the matches, Esc closes it and gives the keys back), ⌘K clears (a full-screen program such as an editor or tmux keeps its screen), ⌘← ⌘→ line start and end, ⌥← ⌥→ words, ⌘⌫ ⌥⌫ delete to the start and a word, ⌘↑ ⌘↓ top and bottom. ⇧↩ sends LF, a new line in a coding agent's prompt instead of submitting, and Enter at a shell. Option types your layout's characters until Settings → Terminal makes the left, the right or both Option keys Meta (⌥B and ⌥F move by words in a shell, as Alt does; ⌥↩ sends ESC CR). Option-drag selects text even where a program took the mouse, rather than a column. A program can copy to the pasteboard (OSC 52, as tmux and vim over ssh do) from the terminal you are typing in, up to 1 MiB of text; no program can read the pasteboard.
 
-**Settings** (⌘, or the gear at the top of the column): theme, how much of the desktop the glass lets through, the interface and code fonts, the terminals' font size, and every shortcut: click its keys and press new ones (⌫ takes it off; one already taken asks first), reset one or all. They apply at once and are kept in `~/.config/llxterm/settings.json`.
+**Settings** (⌘, or the gear at the top of the column): theme, how much of the desktop the glass lets through, the interface and code fonts, the terminals' font size, which Option key is Meta in a terminal (left, right, both or neither), and every shortcut: click its keys and press new ones (⌫ takes it off; one already taken asks first), reset one or all. They apply at once and are kept in `~/.config/llxterm/settings.json`.
 
 </details>
 

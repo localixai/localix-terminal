@@ -91,7 +91,7 @@ impl Deck {
         let arranged = shared.arranged_here();
         let listed = self.listed(shared, &arranged);
         let shown_key = (listed.iter().find(|tab| tab.shown)).and_then(|tab| Key::parse(&tab.id));
-        let bar = shown_key.and_then(|key| shared.offers.bar(key, &self.proxy));
+        let bar = shown_key.and_then(|_| shared.offers.bar());
         crate::lock(&self.offer).clone_from(&bar);
         self.keep_stacks(&arranged);
         self.layout();

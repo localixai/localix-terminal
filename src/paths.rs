@@ -47,13 +47,6 @@ pub(crate) fn named(asked: Option<std::ffi::OsString>) -> Option<PathBuf> {
     asked.filter(|dir| !dir.is_empty()).map(PathBuf::from)
 }
 
-/// Whether this app runs apart from the person's (`LLXTERM_RUNTIME` names its directory). Such
-/// an app leaves the person's setup alone: the command's link and the agents' entries stay
-/// those of the app they use.
-pub fn apart() -> bool {
-    named(std::env::var_os("LLXTERM_RUNTIME")).is_some()
-}
-
 /// `base/llxterm-<uid>`.
 pub(crate) fn under(base: &Path, uid: u32) -> PathBuf {
     base.join(format!("llxterm-{uid}"))

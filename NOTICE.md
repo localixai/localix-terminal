@@ -69,3 +69,13 @@ The scripts in `src/editor/vendor/` are built by `scripts/editor` from the MIT-l
 Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
 
 Licensed under the MIT License, whose text is above.
+
+## The terminal
+
+`src/terminal/vendor/xterm.js` and `xterm.css` are [xterm.js](https://xtermjs.org) 6.0.0
+(`@xterm/xterm`), and `src/terminal/vendor/addon-search.js` is its search addon 0.16.0
+(`@xterm/addon-search`), built from the same commit; each is the published file, byte for byte.
+
+Copyright (c) 2017, The xterm.js authors (https://github.com/xtermjs/xterm.js)
+
+Licensed under the MIT License, whose text is above.

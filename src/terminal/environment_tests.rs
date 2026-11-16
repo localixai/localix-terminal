@@ -74,3 +74,68 @@ fn a_command_the_app_starts_finds_what_the_persons_own_terminal_finds() {
     let theirs = [("PATH".to_string(), "/opt/tools".to_string())];
     assert_eq!(super::command_path(Some(&theirs), person), None);
 }
+
+/// What `command` prints in a terminal of the app's, told `own`, started with `vars`.
+fn run_own(command: &str, vars: &[(&str, &str)], own: &super::super::Own) -> String {
+    let vars: Vec<(String, String)> = (vars.iter())
+        .map(|(name, value)| ((*name).to_string(), (*value).to_string()))
+        .collect();
+    let session =
+        Session::start_after(command, &std::env::temp_dir(), Some(&vars), None, "", own).unwrap();
+    assert_eq!(session.wait(None, 0, DEFAULT_WAIT), Until::Exited);
+    session.text()
+}
+
+#[test]
+fn a_terminal_opened_with_an_agents_environment_says_which_terminal_it_is_itself() {
+    // An agent in t1 opens a terminal with its own environment: the new one is t9, not t1.
+    let own = super::super::Own {
+        bin: None,
+        vars: vec![
+            ("LLXTERM_PANE".into(), "t9".into()),
+            ("LLXTERM_PANE_PROJECT".into(), "/work/shop".into()),
+        ],
+    };
+    let vars = [("PATH", "/usr/bin:/bin"), ("LLXTERM_PANE", "t1")];
+    let text = run_own(
+        r#"printf '%s %s' "$LLXTERM_PANE" "$LLXTERM_PANE_PROJECT""#,
+        &vars,
+        &own,
+    );
+    assert_eq!(text, "t9 /work/shop");
+}
+
+#[test]
+fn the_apps_command_is_first_on_a_terminals_path() {
+    let bin = std::env::temp_dir().join(format!("llxterm-bin-{}", std::process::id()));
+    std::fs::create_dir_all(&bin).unwrap();
+    let program = bin.join("llxterm");
+    std::fs::write(&program, "#!/bin/sh\necho ours\n").unwrap();
+    let executable = std::os::unix::fs::PermissionsExt::from_mode(0o755);
+    std::fs::set_permissions(&program, executable).unwrap();
+    let own = super::super::Own {
+        bin: Some(bin.clone()),
+        vars: Vec::new(),
+    };
+    let vars = [("PATH", "/usr/bin:/bin")];
+    let text = run_own(
+        r#"llxterm; printf '%s\n%s' "$PATH" "$LLXTERM_BIN""#,
+        &vars,
+        &own,
+    );
+    let _ = std::fs::remove_dir_all(&bin);
+    assert_eq!(
+        text,
+        format!("ours\n{0}:/usr/bin:/bin\n{0}", bin.display()),
+        "the app's command runs, its folder first and named"
+    );
+}
+
+#[test]
+fn the_apps_folder_is_put_first_once() {
+    let bin = std::path::Path::new("/app/bin");
+    let first = |path: &str| super::super::environment::first_on(bin, Some(&path.into()));
+    assert_eq!(first("/usr/bin:/bin"), "/app/bin:/usr/bin:/bin");
+    assert_eq!(first("/usr/bin:/app/bin:/bin"), "/app/bin:/usr/bin:/bin");
+    assert_eq!(super::super::environment::first_on(bin, None), "/app/bin");
+}

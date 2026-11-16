@@ -9,15 +9,23 @@ use std::sync::Mutex;
 use serde_json::Value;
 
 use crate::desk::Events;
+use crate::projects::ProjectId;
 use crate::wire::Message;
 use crate::wire::pipe::Outbox;
 
 /// The notifications the app sends.
-pub(super) const EVENTS: [&str; 3] = ["comment/added", "tab/closed", "app/quitting"];
+pub(super) const EVENTS: [&str; 5] = [
+    "comment/added",
+    "tab/changed",
+    "tab/closed",
+    "board/changed",
+    "app/quitting",
+];
 
 struct Subscription {
     out: Outbox,
-    /// Only this owner's events, and the ones of no owner (the app quitting).
+    /// Only this owner's events, its project's (the board), and the ones of no owner (the app
+    /// quitting).
     owner: String,
     events: BTreeSet<String>,
 }
@@ -77,13 +85,13 @@ impl Hub {
     }
 }
 
-impl Events for Hub {
-    fn publish(&self, event: &str, owner: Option<&str>, params: Value) {
+impl Hub {
+    /// `event` to every subscriber to it that `concerned` takes.
+    fn told(&self, event: &str, params: Value, concerned: impl Fn(&Subscription) -> bool) {
         // Who is concerned is copied out, so no lock is held while the queues are written.
         let outs: Vec<Outbox> = crate::lock(&self.subscriptions)
             .values()
-            .filter(|sub| sub.events.contains(event))
-            .filter(|sub| owner.is_none_or(|theirs| sub.owner == theirs))
+            .filter(|sub| sub.events.contains(event) && concerned(sub))
             .map(|sub| sub.out.clone())
             .collect();
         let bytes = Message::notification(event, params).encode(None);
@@ -91,6 +99,20 @@ impl Events for Hub {
             // A queue that is full is a client that does not read: it misses this one.
             out.offer(bytes.clone());
         }
+    }
+}
+
+impl Events for Hub {
+    fn publish(&self, event: &str, owner: Option<&str>, params: Value) {
+        self.told(event, params, |sub| {
+            owner.is_none_or(|theirs| sub.owner == theirs)
+        });
+    }
+
+    fn publish_project(&self, event: &str, project: ProjectId, params: Value) {
+        self.told(event, params, |sub| {
+            crate::projects::project_of(&sub.owner) == Some(project)
+        });
     }
 }
 

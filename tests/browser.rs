@@ -29,8 +29,13 @@ use llxterm::view::{Action, ViewError};
 
 #[path = "support/board.rs"]
 mod board;
+#[path = "support/find.rs"]
+mod find;
 #[path = "support/panel.rs"]
 mod panel;
+#[cfg(target_os = "macos")]
+#[path = "support/pasteboard.rs"]
+mod pasteboard;
 #[cfg(target_os = "macos")]
 #[path = "support/presence.rs"]
 mod presence;
@@ -38,6 +43,8 @@ mod presence;
 mod refs;
 #[path = "support/terminal_colors.rs"]
 mod terminal_colors;
+#[path = "support/terminal_keys.rs"]
+mod terminal_keys;
 #[path = "support/told.rs"]
 mod told;
 #[cfg(target_os = "macos")]
@@ -846,6 +853,10 @@ fn sizes(driver: &WebviewDriver) {
 fn waits_for_the_person(browser: &browser::Browser, driver: &WebviewDriver) {
     let page = driver.observe().unwrap();
     browser.click("comment");
+    // The click is the loop's to carry out, and the scroll below is asked from another thread:
+    // a call answered by the loop after the click, which it carries out in order, makes it the
+    // person's turn before the scroll asks for it.
+    assert!(browser.listing().is_some(), "the window is open");
     let mover = driver.clone();
     let (sender, done) = std::sync::mpsc::sync_channel(1);
     std::thread::spawn(move || {

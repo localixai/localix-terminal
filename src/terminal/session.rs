@@ -137,11 +137,12 @@ impl Session {
         vars: Option<&[(String, String)]>,
         painter: Option<Painter>,
     ) -> io::Result<Self> {
-        Self::start_after(command, dir, vars, painter, "")
+        Self::start_after(command, dir, vars, painter, "", &super::Own::default())
     }
 
     /// `start`, its screen showing `before` first, dimmed (the last screen of the terminal it
-    /// takes the place of, restored): the program's output follows under it.
+    /// takes the place of, restored): the program's output follows under it. `own` is what the
+    /// terminal is told about itself, over `vars`.
     ///
     /// # Errors
     /// As `start`.
@@ -151,8 +152,9 @@ impl Session {
         vars: Option<&[(String, String)]>,
         painter: Option<Painter>,
         before: &str,
+        own: &super::Own,
     ) -> io::Result<Self> {
-        let Pty { mut child, master } = pty::spawn(command, dir, vars)?;
+        let Pty { mut child, master } = pty::spawn(command, dir, vars, own)?;
         let ends = master
             .try_clone()
             .and_then(|reader| Ok((reader, master.try_clone()?)));

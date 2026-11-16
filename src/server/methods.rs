@@ -195,7 +195,10 @@ pub(super) fn window_call(shared: &Shared, conn: &Conn, params: &Value) -> Outco
                 )
             })?;
         let vars = environment(params);
-        let from = conn.peer.and_then(|pid| shared.desk.pane_of(pid));
+        // The terminal the caller's environment names, else the one its process descends from:
+        // a program in tmux, or started apart, has lost its lineage but keeps the variable.
+        let from = (shared.desk.pane_named(vars.as_deref()))
+            .or_else(|| conn.peer.and_then(|pid| shared.desk.pane_of(pid)));
         let runs = (conn.peer.and_then(crate::desk::agent_of))
             .map(|(program, folder)| (program, folder.unwrap_or_else(|| cwd.clone())));
         let call = Call {

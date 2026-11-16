@@ -183,3 +183,26 @@ fn updates_are_looked_for_unless_the_person_chose_to_ask() {
     let kept: Settings = serde_json::from_str(r#"{"theme": "dark"}"#).unwrap();
     assert_eq!(kept.updates, Updates::Auto);
 }
+
+#[test]
+fn neither_option_is_meta_unless_the_person_chose_one_and_the_terminals_are_told() {
+    let mut settings = Settings::default();
+    // Many layouts type @ [ ] { } | \ ~ with either Option: both keep typing by default.
+    assert_eq!(settings.option_meta, OptionMeta::Off);
+    assert_eq!(settings.page()["defaults"]["option_meta"], "off");
+    assert!(look_script(&settings).contains(r#""option":"off""#));
+    for (chosen, meant) in [
+        ("left", OptionMeta::Left),
+        ("right", OptionMeta::Right),
+        ("both", OptionMeta::Both),
+        ("off", OptionMeta::Off),
+    ] {
+        settings.change(&json!({"option_meta": chosen})).unwrap();
+        assert_eq!(settings.option_meta, meant);
+        assert_eq!(settings.page()["settings"]["option_meta"], chosen);
+        assert!(look_script(&settings).contains(&format!(r#""option":"{chosen}""#)));
+    }
+    assert!(settings.change(&json!({"option_meta": "middle"})).is_err());
+    let kept: Settings = serde_json::from_str(r#"{"theme": "dark"}"#).unwrap();
+    assert_eq!(kept.option_meta, OptionMeta::Off);
+}

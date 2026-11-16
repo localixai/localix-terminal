@@ -134,9 +134,10 @@ impl Looping {
             shared: &self.shared,
         };
         self.presenter.sync(&mut stage);
-        // The app menu's page-only items follow the window in use, whichever was drawn last.
+        // The app menu's page-only and Find items follow the window in use, whichever was drawn
+        // last.
         if let Some(deck) = self.windows.current().as_ref() {
-            platform::page_shown(deck.page_shown());
+            platform::showing(deck.page_shown(), deck.finds());
         }
         let shown = self.windows.all().any(Deck::is_shown);
         if shown != self.docked {

@@ -1,6 +1,7 @@
-//! The app's menu bar (macOS): the app's own menu (About, Settings, Hide, Quit), Edit, and a
-//! menu for each group of the shortcuts (shortcuts.rs: Tabs, Page, Window), each item doing what
-//! its click on the strip does, so a key, a menu item and a button never do different things.
+//! The app's menu bar (macOS): the app's own menu (About, Settings, Hide, Quit), Edit (the
+//! system's editing, then the Edit group's shortcuts: Find), and a menu for each other group of
+//! the shortcuts (shortcuts.rs: Tabs, Page, Window), each item doing what its click on the strip
+//! does, so a key, a menu item and a button never do different things.
 //! Made again when the person changes a shortcut. Quitting from the Dock or the system comes
 //! here too (`quit_through`): the desk asks, then ends the app itself.
 
@@ -19,6 +20,8 @@ use super::shortcuts::{self, Chord, Shortcut};
 
 /// The group whose shortcuts are the app's own menu's.
 const APP: &str = "Localix Terminal";
+/// The group whose shortcuts follow the system's editing in the Edit menu.
+const EDIT: &str = "Edit";
 /// What the app's menu says of quitting, which it holds last.
 const QUIT: &str = "quit";
 
@@ -104,13 +107,17 @@ extern "C" fn fire(_this: &AnyObject, _sel: Sel, sender: *mut AnyObject) {
 
 /// Whether a web page is shown now: what only a page can do is greyed while none is.
 static PAGE: AtomicBool = AtomicBool::new(false);
+/// Whether what is shown finds in itself (a terminal): Find is greyed while it does not.
+static FINDS: AtomicBool = AtomicBool::new(false);
 
-/// A web page is shown now (`shown`), or a terminal, the board, the settings.
-pub(super) fn page_shown(shown: bool) {
-    PAGE.store(shown, Ordering::Relaxed);
+/// What the window in use shows now: a web page (`page`), and whether that tab finds (`finds`).
+pub(super) fn showing(page: bool, finds: bool) {
+    PAGE.store(page, Ordering::Relaxed);
+    FINDS.store(finds, Ordering::Relaxed);
 }
 
-/// Whether an item may be picked now: what needs a page, only while one is shown.
+/// Whether an item may be picked now: what needs a page, only while one is shown; Find, only
+/// over a tab that finds.
 extern "C" fn validate(_this: &AnyObject, _sel: Sel, item: *mut AnyObject) -> Bool {
     // SAFETY: AppKit hands the NSMenuItem it asks about, alive for the call.
     let Some(item) = (unsafe { item.as_ref() }) else {
@@ -123,7 +130,10 @@ extern "C" fn validate(_this: &AnyObject, _sel: Sel, item: *mut AnyObject) -> Bo
         .as_ref()
         .and_then(|(_, does)| does.get(usize::try_from(tag).ok()?));
     let page_only = does.is_some_and(|does| shortcuts::of_page(does));
-    Bool::new(!page_only || PAGE.load(Ordering::Relaxed))
+    let finding = does.is_some_and(|does| shortcuts::of_find(does));
+    Bool::new(
+        (!page_only || PAGE.load(Ordering::Relaxed)) && (!finding || FINDS.load(Ordering::Relaxed)),
+    )
 }
 
 /// What the shortcut items call: one object for the process.
@@ -249,15 +259,19 @@ pub(super) fn install(proxy: &EventLoopProxy<Cmd>) {
         .map(|(s, c)| (*s, c.clone()))
         .collect();
     add(&bar, &holding(APP, &app_menu(&mut items, &mine)));
-    let edit = menu("Edit");
+    let edit = menu(EDIT);
     for (title, action, key) in edits() {
         add(&edit, &item(title, Some(action), key));
     }
-    add(&bar, &holding("Edit", &edit));
+    separator(&edit);
+    for (shortcut, chord) in resolved.iter().filter(|(s, _)| s.group == EDIT) {
+        items.add(&edit, shortcut, chord.as_ref());
+    }
+    add(&bar, &holding(EDIT, &edit));
     let app = appkit::app();
     for group in shortcuts::groups()
         .into_iter()
-        .filter(|group| *group != APP)
+        .filter(|group| *group != APP && *group != EDIT)
     {
         let held = menu(group);
         for (shortcut, chord) in resolved.iter().filter(|(s, _)| s.group == group) {

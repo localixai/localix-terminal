@@ -133,7 +133,7 @@ pub(super) struct Shared {
     pub(super) unloaded: super::unloaded::Unloaded,
     /// Where the person put the window, for the process.
     pub(super) kept: Mutex<super::placement::Kept>,
-    /// What the offer bar knows: the agents in the terminals, the integrations' states.
+    /// What the offer bar knows, and the agents in the terminals.
     pub(super) offers: super::offer::Offers,
     /// Where each terminal is now (its program's folder), by tab key: its menu works there.
     pub(super) folders: Mutex<HashMap<String, std::path::PathBuf>>,

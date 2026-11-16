@@ -1,9 +1,10 @@
 #!/bin/sh
 # Builds Localix Terminal.app around a release build: the program as the app's executable, its icon and
-# Info.plist (packaging/macos), the version Cargo.toml says, and the Claude Code plugin as a
-# marketplace of its own (Contents/Resources/claude-code), which Settings → Integrations installs
-# from (src/setup/claude.rs). The app is all there is to install: opened, it is the server and
-# links `llxterm` into ~/.local/bin (src/cli/app.rs); the CLI and the app are the one program.
+# Info.plist (packaging/macos), the version Cargo.toml says, the Claude Code plugin
+# (Contents/Resources/claude-code), which its terminals load a copy of (src/reach/claude.rs), and
+# a folder with one link to the program for its terminals' PATH (Contents/Resources/bin). The app
+# is all there is to install, and it puts nothing anywhere else; the CLI and the app are the one
+# program.
 #   scripts/bundle-macos.sh [target/release/llxterm] [out-dir]
 # Signed ad hoc, so the system runs it here, unless LLXTERM_SIGN names an identity
 # ("Developer ID Application: …"): then it is signed with that, with a secure timestamp, and a
@@ -28,11 +29,11 @@ plutil -lint "$stage/Contents/Info.plist" >/dev/null
 cp "$binary" "$stage/Contents/MacOS/llxterm"
 chmod 0755 "$stage/Contents/MacOS/llxterm"
 cp packaging/macos/llxterm.icns "$stage/Contents/Resources/llxterm.icns"
-market="$stage/Contents/Resources/claude-code"
-mkdir -p "$market/.claude-plugin"
-rsync -a --exclude .DS_Store --exclude node_modules plugins/claude-code/ "$market/plugin/"
-sed 's#"\./plugins/claude-code"#"./plugin"#' .claude-plugin/marketplace.json > "$market/.claude-plugin/marketplace.json"
-grep -q '"./plugin"' "$market/.claude-plugin/marketplace.json" || { echo "the marketplace does not point at its plugin" >&2; exit 1; }
+# The folder the app's terminals put first on their PATH (src/reach.rs): one relative link to the
+# program, so nothing else of the bundle is on it, sealed by the bundle's signature.
+mkdir -p "$stage/Contents/Resources/bin"
+ln -s ../../MacOS/llxterm "$stage/Contents/Resources/bin/llxterm"
+rsync -a --exclude .DS_Store --exclude node_modules --exclude '*.spec.ts' plugins/claude-code/ "$stage/Contents/Resources/claude-code/"
 printf 'APPL????' > "$stage/Contents/PkgInfo"
 # The one signature of the bundle covers its program and its resources, but a Mach-O file among the
 # resources would not be signed as code: it has to be signed before the bundle, so it stops here.

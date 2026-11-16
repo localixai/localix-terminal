@@ -1,10 +1,10 @@
 # Agents in the window
 
-Your agents work in the window through one tool, `window`, which the app connects to each of them by itself. With it an agent opens what you would open, acts in it, and you watch.
+Your agents work in the window through one tool, `window`, which the app hands to each of them in its own terminals. With it an agent opens what you would open, acts in it, and you watch.
 
 ## How an agent reaches it
 
-Nothing to set up: the app [connects the agents you have](agents.md) when it opens, Claude Code through its plugin and the others as an MCP tool. When an agent needs the window and the app is not running, it starts in the background and never takes your keys.
+Nothing to set up: an agent started in a terminal of the window [has it already](agents.md), Claude Code through its plugin and the others as an MCP tool or the `llxterm` command. When an agent needs the window and the app is not running, it starts in the background and never takes your keys.
 
 ## Pages
 

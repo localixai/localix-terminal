@@ -4,6 +4,27 @@
 
 ### Added
 
+- **Find in a terminal's output.** ⌘F opens a find row under the terminal, as the editor's:
+  what you type is searched as you type, case ignored, over the scrollback and the screen (a
+  full-screen program's screen alone), every match lit and the one shown more, with "3 of 12"
+  or "No results" beside it. Return or ⌘G goes to the next match, ⇧Return or ⇧⌘G to the one
+  before, and Esc closes the row and gives the keys back to the terminal; nothing typed there
+  reaches the program. Find, Find Next and Find Previous are in the Edit menu and Settings, so
+  their keys are yours to change.
+- **The app's terminals connect your agents with nothing installed.** `llxterm` is on their
+  `PATH` (the bundle's `Contents/Resources/bin`, one link to the app's program), put first
+  again after your profile or `path_helper` sets a `PATH`; `llxterm guide` prints the window
+  tool's guide. Claude Code 2.1.280 and later loads the plugin from the app's copy of it in its
+  data folder (`CLAUDE_CODE_PLUGIN_DIRS`, after any folders you name; its hooks module needs
+  2.1.287), and not where managed settings turn plugin folders off or cannot be read. Gemini CLI
+  (`GEMINI_CLI_SYSTEM_DEFAULTS_PATH`) and OpenCode (`OPENCODE_CONFIG`) read a settings file of
+  the app's that declares the window tool's MCP server, merged with your own servers; a variable
+  you set is left alone. Nothing is written into an agent's settings.
+- **A terminal says which it is.** `LLXTERM_PANE` (`t3`) and `LLXTERM_PANE_PROJECT` (its
+  project's folder): a call names its terminal by them before its lineage, so one from inside
+  tmux lands beside its terminal, and a call from a folder of the project with no repository of
+  its own is of that project.
+
 - **A Markdown file opens as a document.** A `.md` file picked in the tree, or opened by an
   agent, is drawn to read by flowdown, the lab's own renderer: headings, tables, callouts and
   code in the editor's colours, on the window's ground. The icon button in its corner, or ⇧⌘V,
@@ -12,6 +33,18 @@
   opened at a line, opens as its text. A link to a file of the project opens that file in a
   tab, a link to the web opens a page, and a picture is shown as its words: the page loads
   nothing.
+- **Shift+Enter is a newline in a coding agent's prompt.** ⇧↩ sends LF (Ctrl+J), which Claude
+  Code reads as a new line rather than the end of the message with nothing to set up, and a
+  shell as Enter.
+- **Option can be Meta in a terminal.** Settings → Terminal → Option key as Meta makes the left
+  Option, the right one or both send Escape and the key, as readline, editors and agents read
+  Alt (⌥B, ⌥F move by words), and open terminals take it at once. It is off until you choose:
+  many layouts (German, French, Nordic, Polish) type @ [ ] { } | \ ~ with Option. ⌥↩ sends ESC
+  CR from an Option that is Meta, and is Enter from one that is not.
+- **A program can copy to the pasteboard** (OSC 52, as tmux, vim and programs over ssh do):
+  only from the terminal you are typing in, in the window in front, up to 1 MiB of text. A
+  request to read the pasteboard is never answered. Option-drag now selects text even where a
+  program took the mouse, and no longer makes a column selection.
 
 ### Changed
 
@@ -27,8 +60,34 @@
 - **Claude Code's line above the prompt says Localix Terminal**, as do its notices and `/tabs`,
   where it said "desk", the app's name before it was Localix Terminal; so do the plugin's
   descriptions in `/plugin`.
+- **Claude Code's line above the prompt follows the app's events.** The plugin ran `llxterm
+  status` and listed the tabs every 3 seconds of every session; it now starts one `llxterm
+  window --watch`, which prints a line as the app comes or goes, as a tab of the session's
+  opens, changes or closes, as the board changes and as you comment. The app tells
+  `tab/changed` and `board/changed` to its subscribers for it. A follower (`--watch`, `--said
+  --follow`) waits for the app's socket through the system's notices of its folder and ends
+  when the program that started it does, instead of looking every half second and every two.
+
+### Removed
+
+- **Installing into agents, and agents outside the app's terminals.** `llxterm setup`,
+  Settings → Integrations and its Copy MCP Entry, the offer bar's "Add to …", the `llxterm`
+  link in `~/.local/bin` and the profile line it added, the Linux desktop entry, the Claude Code
+  marketplace in the bundle and the repository, and the round that put all of them in place
+  when the app started and every hour are gone. Nothing is written into an agent's settings or
+  your home: your agents reach the app only in its own terminals, through their environment.
+  The Homebrew cask no longer links `llxterm` into its `bin`. Entries an earlier version wrote
+  are left as they are.
 
 ### Fixed
+
+- **A page size drawn smaller to fit the window lays out at that size.** A phone's page in a
+  window too short for it was a CSS pixel narrower than the phone (392 for 393): its view is
+  placed in whole points now, and its scale taken from them.
+
+- **⌘K no longer wipes a full-screen program.** In an editor, a pager or tmux, ⌘K cleared the
+  screen the program had drawn and left it blank until the program drew again; it now leaves
+  that screen alone, and the terminal's menu offers Clear only at a shell.
 
 - **A project with no tab open no longer shows another project's tab.** Going to a project
   with nothing open left the tab of the project before it on the screen, a running agent's

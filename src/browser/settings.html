@@ -84,15 +84,11 @@ button:disabled,select:disabled{opacity:.4;cursor:default;pointer-events:none}
 .foot{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px}
 .foot span{color:var(--ink-2);font-size:11px;line-height:14px}
 .empty{padding:14px;color:var(--ink-2);text-align:center}
-/* Integrations. */
-.state{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--ink-3)}
-.state.on{background:-apple-system-green}
 /* The app's update: what it says turns red when it failed; a download draws a hairline that
    fills, under its row. */
 #u-says.failed{color:-apple-system-red}
 #u-bar{height:2px;background:var(--ov-2)}
 #u-bar i{display:block;height:100%;width:0;background:var(--accent);transition:width var(--t-move) var(--ease)}
-.state.unavailable{background:transparent;box-shadow:inset 0 0 0 1px var(--ink-3)}
 /* A notice of what happened: at the top, away from the window's bottom edge; it fades in and out
    in place, stays while the pointer is on it, and closes on a click. */
 #err{position:fixed;left:50%;top:16px;transform:translateX(-50%);padding:8px 14px;border-radius:var(--r-3);max-width:80vw;background:#b45309;color:#fff;font-size:13px;line-height:16px;box-shadow:var(--sh-pop);opacity:0;visibility:hidden;transition:opacity var(--t-out) var(--ease),visibility 0s var(--t-out)}
@@ -104,7 +100,7 @@ input[type=text],input:not([type]),input[type=search]{cursor:text}
 <body>
 <main>
   <h1>Settings</h1>
-  <p class="lead">How the window looks, the keys that work it, and the tools it reaches. Changes apply at once.</p>
+  <p class="lead">How the window looks, the keys that work it, and its updates. Changes apply at once.</p>
 
   <h2>Appearance</h2>
   <div class="card">
@@ -127,9 +123,12 @@ input[type=text],input:not([type]),input[type=search]{cursor:text}
 running 230 tests  <span class="p">ok</span>  0O 1lI {}[]=&gt; -&gt;</div>
   </div>
 
-  <h2>Integrations</h2>
-  <div class="card" id="integrations"><div class="empty">Looking for tools…</div></div>
-  <div class="foot"><span>Another MCP host?</span><button class="btn" id="copy-mcp">Copy MCP Entry</button></div>
+  <h2>Terminal</h2>
+  <div class="card">
+    <div class="row"><div class="l"><b>Option key as Meta</b><small>Option and a key send Escape and the key, as shells and editors expect; an Option that is not Meta types its characters.</small></div>
+      <button class="ic gone" data-reset="option_meta" aria-label="Reset Option key as Meta"></button>
+      <select id="option_meta" aria-label="Option key as Meta"></select></div>
+  </div>
 
   <h2>Updates</h2>
   <div class="card">
@@ -157,6 +156,7 @@ const post = (change) => window.ipc && window.ipc.postMessage("k" + JSON.stringi
 const THEMES = [["system", "System"], ["light", "Light"], ["dark", "Dark"]];
 const LEVELS = [["off", "Off"], ["low", "Low"], ["standard", "Standard"], ["high", "High"]];
 const UPDATES = [["auto", "Download Automatically"], ["manual", "Only When I Check"]];
+const OPTIONS = [["left", "Left Option"], ["right", "Right Option"], ["both", "Both"], ["off", "Off"]];
 const GLASSY = "How much of the desktop shows through the glass.";
 const REDUCED = "Reduced by Accessibility settings (Display > Reduce transparency).";
 const RESET = ["M3.5 8a4.5 4.5 0 1 0 1.4-3.3", "M3.5 3v2.2h2.2"];
@@ -203,7 +203,7 @@ function choices(id, list, value) {
   select.value = value;
 }
 const fontList = (fonts) => fonts.map((font) => [font.id, font.name]);
-for (const id of ["theme", "transparency", "ui_font", "code_font", "updates"]) {
+for (const id of ["theme", "transparency", "ui_font", "code_font", "updates", "option_meta"]) {
   document.getElementById(id).addEventListener("change", (event) => change(id, event.target.value));
 }
 const step = (by) => cur && data && change("font_size", Math.min(data.sizes[1], Math.max(data.sizes[0], cur.font_size + by)));
@@ -215,11 +215,12 @@ addEventListener("desk-look", () => cur && show());
 
 // The setting a reset button is for: its name in the settings, and in the defaults the page is
 // told (settings.rs `page`); the words for the default it goes back to.
-const RESETS = { theme: "theme", transparency: "transparency", ui_font: "ui_font", code_font: "code_font", font_size: "size", updates: "updates" };
+const RESETS = { theme: "theme", transparency: "transparency", ui_font: "ui_font", code_font: "code_font", font_size: "size", updates: "updates",
+  option_meta: "option_meta" };
 function defaultLabel(name) {
   const value = data.defaults[RESETS[name]];
   if (name === "font_size") return value + " pt";
-  const list = { theme: THEMES, transparency: LEVELS, updates: UPDATES }[name];
+  const list = { theme: THEMES, transparency: LEVELS, updates: UPDATES, option_meta: OPTIONS }[name];
   if (list) return list.find(([key]) => key === value)?.[1];
   return data[name === "ui_font" ? "ui_fonts" : "code_fonts"].find((font) => font.id === value)?.name;
 }
@@ -228,7 +229,7 @@ for (const button of document.querySelectorAll("button[data-reset]")) {
   button.append(icon(RESET));
   button.addEventListener("click", () => data && change(name, data.defaults[RESETS[name]]));
 }
-// The Appearance rows as `cur` has them, set in place: nothing is made again, so a hover or a
+// The rows of choices as `cur` has them, set in place: nothing is made again, so a hover or a
 // focus is not lost, and the transitions play.
 function show() {
   choices("theme", THEMES, cur.theme);
@@ -239,6 +240,7 @@ function show() {
   document.getElementById("transparency").disabled = reduced;
   document.getElementById("tnote").textContent = reduced ? REDUCED : GLASSY;
   choices("updates", UPDATES, cur.updates);
+  choices("option_meta", OPTIONS, cur.option_meta);
   choices("ui_font", fontList(data.ui_fonts), cur.ui_font);
   choices("code_font", fontList(data.code_fonts), cur.code_font);
   document.getElementById("size").textContent = cur.font_size + " pt";
@@ -500,30 +502,6 @@ function drawKeys() {
   drawFoot();
 }
 
-// The integrations (setup.rs `states`), each with its state and the act it takes; the answer
-// to a click comes as I again, and T says how it went.
-function I(list) {
-  const card = document.getElementById("integrations");
-  card.replaceChildren(...list.map((one) => {
-    const row = el("div", "row");
-    const label = el("div", "l");
-    const title = el("b");
-    title.append(el("span", "state " + one.state), one.title);
-    label.append(title, el("small", null, one.state === "on" ? one.note : one.gives + (one.note ? " — " + one.note : "")));
-    row.append(label);
-    if (one.state !== "unavailable") {
-      const on = one.state === "on";
-      const act = el("button", "btn", on ? "Remove" : "Add");
-      act.addEventListener("click", () => {
-        act.disabled = true;
-        act.textContent = on ? "Removing…" : "Adding…";
-        post({ integration: one.id, on: !on });
-      });
-      row.append(act);
-    }
-    return row;
-  }));
-}
 // The app's update (updates.rs `row`): the build that runs, how far an update is, and the one
 // act it takes now. The answer to a click comes as U again.
 function U(row) {
@@ -566,7 +544,6 @@ T.later = () => {
   toast.addEventListener("mouseleave", () => T.later());
   toast.addEventListener("click", () => { clearTimeout(T.hide); toast.className = ""; });
 }
-document.getElementById("copy-mcp").addEventListener("click", () => post({ copy: "mcp" }));
 
 // The answer to a change, or the first reading: it overwrites what the page showed ahead of
 // it, an error too (the settings are then as they were kept).

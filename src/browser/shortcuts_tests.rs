@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use super::catalog::OF_PAGE;
+use super::catalog::{OF_FIND, OF_PAGE};
 use super::*;
 
 #[test]
@@ -104,6 +104,31 @@ fn what_needs_a_page_is_in_the_catalog() {
         assert!(every().iter().any(|s| s.does == does), "{does}");
     }
     assert!(of_page("reload") && !of_page("key address") && !of_page("send"));
+}
+
+#[test]
+fn find_is_three_rows_of_the_edit_menu_for_what_can_find() {
+    let row = |id: &str| every().into_iter().find(|s| s.id == id).unwrap();
+    for (id, title, keys, does) in [
+        ("find-text", "Find\u{2026}", "cmd+f", "key find text"),
+        ("find-next", "Find Next", "cmd+g", "key find next"),
+        (
+            "find-previous",
+            "Find Previous",
+            "cmd+shift+g",
+            "key find previous",
+        ),
+    ] {
+        let shortcut = row(id);
+        assert_eq!(
+            (shortcut.title, shortcut.group, shortcut.keys, shortcut.does),
+            (title, "Edit", keys, does)
+        );
+        assert!(OF_FIND.contains(&does) && of_find(does) && !of_page(does));
+    }
+    // Search Tabs is the side's, not a find in what is shown.
+    assert!(!of_find("key find"));
+    assert!(groups().contains(&"Edit"));
 }
 
 #[test]

@@ -88,7 +88,7 @@ pub(super) fn target(id: &str) -> &'static dyn Target {
 }
 
 #[test]
-fn every_agent_is_named_as_the_window_and_setup_name_it() {
+fn every_agent_is_named_as_the_window_names_it() {
     let ids: Vec<&str> = all().iter().map(|target| target.id()).collect();
     assert_eq!(ids, ["claude", "codex", "gemini", "copilot", "opencode"]);
     let names: Vec<&str> = all().iter().map(|target| target.name()).collect();

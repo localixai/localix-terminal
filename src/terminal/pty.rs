@@ -11,6 +11,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::OnceLock;
 
 use super::{COLUMNS, ROWS, environment, hooks};
+use environment::Own;
 
 /// Who says the person's `PATH` (their login shell's): given once by the app, which can ask
 /// their shell; without it a command has the environment's own.
@@ -41,11 +42,12 @@ pub(super) struct Pty {
 /// Start `command` (the user's shell when empty, as a login shell, as a terminal app starts it:
 /// it reads the person's profile, so an app started from the Finder still gives them their
 /// PATH; a command is given that PATH, [`command_path`]) in `dir`. The environment comes from `vars`, else this process, with the terminal's own
-/// identity and color capabilities applied before the shell reads the person's profile.
+/// identity (`own`) and color capabilities applied before the shell reads the person's profile.
 pub(super) fn spawn(
     command: &str,
     dir: &Path,
     vars: Option<&[(String, String)]>,
+    own: &Own,
 ) -> io::Result<Pty> {
     let (master, slave) = open()?;
     let shell = vars
@@ -54,12 +56,12 @@ pub(super) fn spawn(
         .or_else(|| std::env::var("SHELL").ok())
         .unwrap_or_else(|| "sh".into());
     // The person's shell by its name, when it is what starts.
-    let own = command.trim().is_empty().then(|| {
+    let shell_name = command.trim().is_empty().then(|| {
         Path::new(&shell)
             .file_name()
             .map_or_else(|| "sh".into(), |name| name.to_string_lossy().into_owned())
     });
-    let mut program = match &own {
+    let mut program = match &shell_name {
         Some(name) => {
             let mut login = Command::new(&shell);
             login.arg0(format!("-{name}"));
@@ -71,11 +73,15 @@ pub(super) fn spawn(
             sh
         }
     };
-    environment::apply(&mut program, vars);
-    match &own {
+    environment::apply(&mut program, vars, own);
+    match &shell_name {
         Some(name) => hooks::apply(&mut program, name, vars),
         None => {
             if let Some(path) = command_path(vars, || PERSON_PATH.get().and_then(|ask| ask())) {
+                let path = match &own.bin {
+                    Some(bin) => environment::first_on(bin, Some(&path)),
+                    None => path,
+                };
                 program.env("PATH", path);
             }
         }

@@ -1,10 +1,8 @@
 //! llxterm opened as an app: Localix Terminal.app from the Finder, Spotlight or the Dock (macOS), or
-//! `llxterm open` (the desktop entry elsewhere). It puts what is always on in place (the
-//! `llxterm` command, setup.rs) and brings what the person turned on to this version, then is
-//! the server itself, its window brought to the person at once: with no tab in it yet, their
-//! shell in their home. When a server of this build runs already (one a client started), the
-//! window is asked of it instead; one of another build is stopped, and the app takes its place:
-//! the person opened this app.
+//! `llxterm open` (the desktop entry elsewhere). It is the server itself, its window brought to
+//! the person at once: with no tab in it yet, their shell in their home. When a server of this
+//! build runs already (one a client started), the window is asked of it instead; one of another
+//! build is stopped, and the app takes its place: the person opened this app.
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -14,29 +12,16 @@ use serde_json::json;
 use super::{Serving, serving};
 use crate::client::{Start, Trouble, ask};
 
-/// The app opened: set up, then the server run with its window brought to the person. What
-/// happened goes to `app.log` in the desk's home, where a person who wonders can read it.
+/// The app opened: the server run with its window brought to the person. What happened goes
+/// to `app.log` in the desk's home, where a person who wonders can read it.
 pub(super) fn run() -> u8 {
     crate::server::log_to_home();
     let mut said = vec![];
-    // What is written into the person's tools names this program: not one that is on a disk image
-    // or in a download's temporary place, which is gone at eject or restart.
-    let in_place = crate::bundle::in_place();
-    if !in_place {
-        said.push(
-            "not set up: move Localix Terminal to Applications, and open it from there".into(),
-        );
-    }
     let home = std::env::var_os("HOME").map(PathBuf::from);
     match bind_taking_over(&mut said) {
         Ok(crate::server::Binding::Bound(bound)) => {
             said.push("the app serves".into());
             note(&said);
-            // The person's own programs run (`claude`, their login shell, which may take
-            // seconds): not before the window.
-            if in_place {
-                keep_well();
-            }
             let serve = Serving {
                 headless: false,
                 windowless: false,
@@ -46,11 +31,6 @@ pub(super) fn run() -> u8 {
         }
         Ok(crate::server::Binding::Running) => {
             let code = present(&mut said, home.as_deref());
-            // After the window: the command may wait for the person's login shell. The server
-            // that runs looks after the rest (its doctor).
-            if in_place {
-                said.extend(crate::setup::opened());
-            }
             note(&said);
             code
         }
@@ -210,16 +190,6 @@ pub(super) fn open_in(dir: &str) -> u8 {
             super::UNREACHABLE
         }
         Err(Trouble::None) => super::UNREACHABLE,
-    }
-}
-
-/// The doctor started (setup/doctor.rs): the integrations put right now and every hour, what
-/// it did written to the log.
-pub(super) fn keep_well() {
-    if let Err(why) = crate::setup::keep_well(note) {
-        note(&[format!(
-            "the agents are not looked after (no thread: {why})"
-        )]);
     }
 }
 

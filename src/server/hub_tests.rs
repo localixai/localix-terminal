@@ -61,3 +61,27 @@ fn a_step_is_told_to_the_connection_that_asked_and_a_gone_one_is_forgotten() {
     hub.unsubscribe(1);
     assert_eq!(hub.count(), 1);
 }
+
+#[test]
+fn a_board_change_reaches_every_subscriber_of_its_project_and_no_other() {
+    let hub = Hub::default();
+    let mut own = subscriber(&hub, 1, "7", &["board/changed"]);
+    let mut worker = subscriber(&hub, 2, "7/tests", &["board/changed"]);
+    let mut other = subscriber(&hub, 3, "70", &["board/changed"]);
+    let mut not_asked = subscriber(&hub, 4, "7", &["tab/changed"]);
+    hub.publish_project("board/changed", 7, json!({"board": null}));
+    assert_eq!(next(&mut own).as_deref(), Some("board/changed"));
+    assert_eq!(next(&mut worker).as_deref(), Some("board/changed"));
+    assert_eq!(next(&mut other), None);
+    assert_eq!(next(&mut not_asked), None);
+}
+
+#[test]
+fn a_tab_that_changed_is_told_to_its_owner_only() {
+    let hub = Hub::default();
+    let mut own = subscriber(&hub, 1, "7", &["tab/changed"]);
+    let mut worker = subscriber(&hub, 2, "7/tests", &["tab/changed"]);
+    hub.publish("tab/changed", Some("7/tests"), json!({"tab": "t2"}));
+    assert_eq!(next(&mut worker).as_deref(), Some("tab/changed"));
+    assert_eq!(next(&mut own), None);
+}

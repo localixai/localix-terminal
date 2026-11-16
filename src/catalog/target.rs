@@ -5,7 +5,7 @@
 //! A kind of listing is put in the same way for every agent, and only what differs is the
 //! agent's: a skill is a folder copied where it reads skills (skill.rs), an MCP server an entry
 //! in its configuration (server.rs), a plugin its own program's install (plugin.rs). Where an
-//! agent keeps things comes from `setup`, which knows it for the app's own entries. Everything
+//! agent keeps things, and how its programs are run, comes from `crate::agents`. Everything
 //! is under the `Env` given (its home, its variables), and a program is looked for on its PATH
 //! only, so a test names a temporary home and never the person's. What is installed is read
 //! from the agents' files alone (`has`): no program starts to draw the Store.
@@ -23,13 +23,13 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use super::{Env, Listing, Plan, Recipe, With};
-use crate::setup::reach::{self, Ran};
+use crate::agents::{self, Ran};
 use plugin::Plugins;
 use server::Servers;
 
 /// A coding agent the Store puts listings into.
 pub trait Target: Sync {
-    /// The agent's id, as the window's agents (browser/agents.rs) and setup name it: `claude`.
+    /// The agent's id, as the window's agents (browser/agents.rs) name it: `claude`.
     fn id(&self) -> &'static str;
     /// Its name where a person reads it: `Claude Code`.
     fn name(&self) -> &'static str;
@@ -85,8 +85,8 @@ pub fn env() -> Env {
         home: std::env::var_os("HOME")
             .map(PathBuf::from)
             .unwrap_or_default(),
-        path: crate::setup::login_path().unwrap_or_default(),
-        vars: reach::login_vars(),
+        path: agents::login_path().unwrap_or_default(),
+        vars: agents::login_vars(),
     }
 }
 
@@ -100,7 +100,7 @@ impl Target for Agent {
     }
 
     fn present(&self, env: &Env) -> bool {
-        reach::which(self.program, &env.path).is_some()
+        agents::which(self.program, &env.path).is_some()
     }
 
     fn takes(&self, listing: &Listing) -> bool {
@@ -165,7 +165,7 @@ impl Agent {
 
     /// Its program run with `args` as the person's terminal would, within `most`.
     fn run(&self, env: &Env, args: &[&str], most: Duration) -> Result<Ran, String> {
-        let program = reach::which(self.program, &env.path).ok_or_else(|| {
+        let program = agents::which(self.program, &env.path).ok_or_else(|| {
             format!(
                 "{} is not installed (no `{}` on the PATH)",
                 self.name, self.program
@@ -175,11 +175,11 @@ impl Agent {
         if !env.home.as_os_str().is_empty() {
             vars.insert("HOME".into(), env.home.display().to_string());
         }
-        reach::run(&program, args, &env.path, &vars, most)
+        agents::run(&program, args, &env.path, &vars, most)
     }
 }
 
-/// Variable `name` of `env`, as setup's places read one.
+/// Variable `name` of `env`, as `crate::agents` reads one.
 fn var(env: &Env) -> impl Fn(&str) -> Option<String> + '_ {
     |name| env.var(name).map(String::from)
 }

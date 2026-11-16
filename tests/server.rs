@@ -21,7 +21,33 @@ fn help_and_the_tool_description_need_no_server() {
         text.contains("Tabs of one window") && text.contains("\"properties\""),
         "{text}"
     );
+    // The guide is the tool's description, for an agent that runs the command and has no MCP.
+    let guide = home.run(tmp, &["guide"]);
+    let text = String::from_utf8_lossy(&guide.stdout);
+    assert!(guide.status.success(), "{text}");
+    assert!(
+        text.starts_with("Tabs of one window") && text.contains("- terminal (`t` tabs)"),
+        "{text}"
+    );
+    assert_eq!(home.run(tmp, &["guide", "more"]).status.code(), Some(3));
     assert!(!home.socket().exists(), "a server was started");
+}
+
+#[test]
+fn a_terminal_has_the_apps_command_and_says_which_terminal_and_project_it_is() {
+    let home = home("told");
+    let project = home.dir().join("shop");
+    std::fs::create_dir_all(project.join(".git")).unwrap();
+    // The terminal's PATH has this build's program first.
+    let command = r#"printf 'is=%s:%s:%s.' "$LLXTERM_PANE" "$LLXTERM_PANE_PROJECT" "$(command -v llxterm)"; sleep 20"#;
+    let open = serde_json::json!({"action": "open", "kind": "terminal", "command": command, "wait_for": "."});
+    let (ok, text) = home.window(&project, &open.to_string());
+    let program = std::fs::canonicalize(env!("CARGO_BIN_EXE_llxterm")).unwrap();
+    let project = std::fs::canonicalize(&project).unwrap();
+    assert!(ok, "{text}");
+    let said: String = text.split_whitespace().collect();
+    let expected = format!("is=t1:{}:{}.", project.display(), program.display());
+    assert!(said.contains(&expected), "{text}");
 }
 
 #[test]
@@ -404,6 +430,93 @@ fn follow_json_gives_each_note_whole_on_one_line() {
     );
     follow.kill().unwrap();
     follow.wait().unwrap();
+}
+
+#[test]
+fn watch_prints_the_state_then_each_change_and_waits_for_an_app_that_is_gone() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    use std::time::Duration;
+    let home = home("watch");
+    let project = home.dir().join("shop");
+    std::fs::create_dir_all(project.join(".git")).unwrap();
+    let project = std::fs::canonicalize(&project).unwrap();
+    let call = |json: &str| {
+        let (ok, text) = home.window(&project, json);
+        assert!(ok, "{text}");
+    };
+    let open = r#"{"action":"open","kind":"terminal","command":"sleep 60","yield_ms":300}"#;
+    call(open);
+    let mut watch = home
+        .command(&project, &["window", "--watch"])
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let (lines, printed) = std::sync::mpsc::sync_channel::<serde_json::Value>(64);
+    let out = watch.stdout.take().unwrap();
+    std::thread::Builder::new()
+        .name("watch-reader".into())
+        .spawn(move || {
+            for line in BufReader::new(out).lines().map_while(Result::ok) {
+                let _ = lines.send(serde_json::from_str(&line).unwrap());
+            }
+        })
+        .unwrap();
+    // The first line or the next one that says what `want` looks for.
+    let next = |what: &str, want: &dyn Fn(&serde_json::Value) -> bool| loop {
+        let line = printed
+            .recv_timeout(Duration::from_secs(10))
+            .unwrap_or_else(|_| panic!("no line {what}"));
+        if want(&line) {
+            return line;
+        }
+    };
+    let has_tab = |line: &serde_json::Value, key: &str| {
+        (line["tabs"].as_array().into_iter().flatten()).any(|tab| {
+            tab.as_str()
+                .is_some_and(|tab| tab.starts_with(&format!("{key} ")))
+        })
+    };
+    let state = next("of the app", &|line| line["app"].is_string());
+    assert!(
+        state["app"].as_str().unwrap().starts_with("llxterm "),
+        "{state}"
+    );
+    assert!(has_tab(&state, "t1"), "{state}");
+    // A tab opened, a card added, a comment sent: each a line, as it happens.
+    call(r#"{"action":"open","kind":"board"}"#);
+    next("with the board's tab", &|line| has_tab(line, "b1"));
+    call(r#"{"action":"interact","tab":"b1","op":"add","title":"Cart on mobile"}"#);
+    let board = next("of the board", &|line| line["board"].is_object());
+    assert_eq!(
+        board["board"]["cards"][0]["title"], "Cart on mobile",
+        "{board}"
+    );
+    let (client, _) = home.client();
+    client
+        .request(
+            "test/say",
+            serde_json::json!({"tab": "t1", "words": "make it red"}),
+        )
+        .unwrap();
+    let said = next("of the comment", &|line| line["said"].is_string());
+    assert!(
+        said["said"].as_str().unwrap().contains("make it red"),
+        "{said}"
+    );
+    // The app goes and comes back: the watcher says so, and goes on.
+    drop(client);
+    home.kill_app();
+    next("of the app gone", &|line| line["app"] == "not running");
+    home.start(&[]);
+    call(open);
+    next("of the app back", &|line| {
+        line["app"]
+            .as_str()
+            .is_some_and(|app| app.starts_with("llxterm "))
+    });
+    watch.kill().unwrap();
+    watch.wait().unwrap();
 }
 
 #[test]

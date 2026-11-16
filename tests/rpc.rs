@@ -4,6 +4,7 @@
 
 use std::os::unix::net::UnixStream;
 use std::sync::Arc;
+use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
 use llxterm::client::{Client, Error, Link};
@@ -27,6 +28,17 @@ fn caller(agent: &str, more: Value) -> Value {
         params.extend(more);
     }
     params
+}
+
+/// The next event `received` brings past the `tab/changed` and `board/changed` the first,
+/// unnamed subscription may still have on their way when it is narrowed.
+fn next_named(received: &Receiver<(String, Value)>) -> (String, Value) {
+    loop {
+        let (method, note) = received.recv_timeout(Duration::from_secs(5)).unwrap();
+        if method != "tab/changed" && method != "board/changed" {
+            return (method, note);
+        }
+    }
 }
 
 const OPEN_SLEEPER: &str =
@@ -174,14 +186,23 @@ fn a_comment_reaches_a_subscriber_and_is_told_again_until_it_is_acknowledged() {
         "window/call",
         window("o", &serde_json::from_str(OPEN_SLEEPER).unwrap()),
     );
+    // With none named, every event the app sends.
     let subscribed = asked(&client, "events/subscribe", caller("o", json!({})));
-    assert!(subscribed["events"].as_array().unwrap().len() == 3);
+    let every = subscribed["events"].as_array().unwrap();
+    assert_eq!(every.len(), 5, "{subscribed}");
+    for event in ["tab/changed", "board/changed"] {
+        assert!(every.contains(&json!(event)), "{subscribed}");
+    }
+    // Asked again, the subscription is what is named now.
+    let named = json!({"events": ["comment/added", "tab/closed", "app/quitting"]});
+    asked(&client, "events/subscribe", caller("o", named));
+    let comments = || caller("o", json!({"events": ["comment/added"]}));
     asked(
         &client,
         "test/say",
         json!({"tab": "t1", "words": "this button is wrong"}),
     );
-    let (method, note) = received.recv_timeout(Duration::from_secs(5)).unwrap();
+    let (method, note) = next_named(&received);
     assert_eq!(method, "comment/added");
     assert_eq!(
         (
@@ -194,7 +215,7 @@ fn a_comment_reaches_a_subscriber_and_is_told_again_until_it_is_acknowledged() {
 
     // A client that was away subscribes again and is told what was not acknowledged.
     let (again, received_again) = home.client();
-    asked(&again, "events/subscribe", caller("o", json!({})));
+    asked(&again, "events/subscribe", comments());
     let (_, replay) = received_again.recv_timeout(Duration::from_secs(5)).unwrap();
     assert_eq!(replay["id"], note["id"]);
     asked(
@@ -203,7 +224,7 @@ fn a_comment_reaches_a_subscriber_and_is_told_again_until_it_is_acknowledged() {
         caller("o", json!({"ids": [note["id"]]})),
     );
     let (third, received_third) = home.client();
-    asked(&third, "events/subscribe", caller("o", json!({})));
+    asked(&third, "events/subscribe", comments());
     assert!(
         received_third
             .recv_timeout(Duration::from_millis(400))
@@ -223,13 +244,13 @@ fn a_comment_reaches_a_subscriber_and_is_told_again_until_it_is_acknowledged() {
         "window/call",
         window("o", &json!({"action": "close", "tab": "t1"})),
     );
-    let (method, closed) = received.recv_timeout(Duration::from_secs(5)).unwrap();
+    let (method, closed) = next_named(&received);
     assert_eq!(
         (method.as_str(), closed["tab"].clone()),
         ("tab/closed", json!("t1"))
     );
     asked(&client, "app/quit", json!({}));
-    let (method, _) = received.recv_timeout(Duration::from_secs(5)).unwrap();
+    let (method, _) = next_named(&received);
     assert_eq!(method, "app/quitting");
     let (method, _) = heard_by_other.recv_timeout(Duration::from_secs(5)).unwrap();
     assert_eq!(method, "app/quitting");

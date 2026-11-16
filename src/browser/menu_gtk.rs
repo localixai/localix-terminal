@@ -125,4 +125,4 @@ pub(super) fn confirm(question: &super::Confirm) -> bool {
 pub(super) fn quit_through(_proxy: &tao::event_loop::EventLoopProxy<super::host::Cmd>) {}
 
 /// Elsewhere there is no menu bar to grey.
-pub(super) fn page_shown(_shown: bool) {}
+pub(super) fn showing(_page: bool, _finds: bool) {}

@@ -23,12 +23,7 @@ body{margin:0;cursor:default;user-select:none;-webkit-user-select:none}
 #offer{display:none;height:36px;padding:0 8px 8px;box-sizing:border-box}
 #offer.on{display:block}
 #offer .card{height:100%;display:flex;align-items:center;gap:12px;padding:0 2px 0 10px;border-radius:var(--r-3);font-size:12px;line-height:15px;background:var(--ov-1);box-shadow:var(--sh-hair)}
-#offer .mk{flex:none;width:14px;height:14px;display:flex}
-#offer .mk svg{width:14px;height:14px}
-#offer .mk:empty{display:none}
 #offer .says{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
-#offer.busy .says{color:var(--ink-2)}
-#offer.failed .says{color:-apple-system-red}
 @keyframes offer-in{from{opacity:0}to{opacity:1}}
 #offer.on .card{animation:offer-in var(--t-out) var(--ease)}
 #offer button{flex:none;border:0;color:inherit;font:500 12px/24px var(--ui-font,var(--ui-sys));transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
@@ -422,7 +417,7 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
     </div>
   </div>
   <div id="blank"></div>
-  <div id="offer"><div class="card"><span class="mk"></span><span class="says"></span><button class="take"></button><button class="later"><svg viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"/></svg></button></div></div>
+  <div id="offer"><div class="card"><span class="says"></span><button class="take"></button><button class="later"><svg viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"/></svg></button></div></div>
   <div id="tabs"></div>
   <div id="menu"></div>
   <div id="sug"></div>
@@ -1643,14 +1638,13 @@ function under(menu, id) {
 // The offer bar: what the app offers now (offer.rs), or null. Its words are set as text.
 function O(bar) {
   const row = document.getElementById("offer");
-  row.className = bar ? "on" + (bar.busy ? " busy" : "") + (bar.failed ? " failed" : "") : "";
+  row.className = bar ? "on" : "";
   if (!bar) return;
   row.querySelector(".says").textContent = row.querySelector(".says").title = bar.says;
-  row.querySelector(".mk").replaceChildren(...(bar.agent ? agentMark(bar.agent).childNodes : []));
   const take = row.querySelector(".take");
   take.hidden = !bar.take;
   take.textContent = bar.take || "";
-  // Putting it off (or closing what came of it) is the cross: its words are its tooltip.
+  // Putting it off is the cross: its words are its tooltip.
   const later = row.querySelector(".later");
   later.hidden = !bar.later;
   later.title = bar.later || "";

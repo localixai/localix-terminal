@@ -233,7 +233,7 @@ impl Sources {
         };
         let done = serde_json::to_string_pretty(&written)
             .map_err(|why| why.to_string())
-            .and_then(|text| crate::setup::reach::write_over(file, &text));
+            .and_then(|text| crate::agents::write_over(file, &text));
         if let Err(why) = done {
             log::warn!("the Store's list of sources was not kept: {why}");
         }

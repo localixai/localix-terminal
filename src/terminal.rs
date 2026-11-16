@@ -1,6 +1,7 @@
 //! Terminal sessions and their tabs. A [`Session`] is a program in a PTY whose screen is kept as a
-//! terminal shows it. A tab's page is xterm.js (vendored, run by its SHA-384): the session paints
-//! its raw output into it (`W(...)`), the page sends back the keys, pastes and its size.
+//! terminal shows it. A tab's page is xterm.js with its search addon (vendored, each run by its
+//! SHA-384): the session paints its raw output into it (`W(...)`), the page sends back the keys,
+//! pastes and its size, and finds in what it shows (`findText`, from the window's Find).
 
 mod environment;
 mod foreground;
@@ -13,6 +14,7 @@ mod pty;
 mod screen;
 mod session;
 
+pub use environment::Own;
 pub use hooks::keep_in as keep_shell_files_in;
 pub use marks::Ended;
 pub use pty::look_for_commands_on;
@@ -27,20 +29,28 @@ pub const ROWS: u16 = 40;
 const XTERM: &str = include_str!("terminal/vendor/xterm.js");
 const XTERM_SHA384: &str = "f/1U6Z9wM4D71a5eRXEZnyOTMOvjqxr2XLwh+Go1OvIl3L3tOcvUrzudnhbECwl4";
 const XTERM_CSS: &str = include_str!("terminal/vendor/xterm.css");
+/// xterm.js's search addon, vendored (`@xterm/addon-search` 0.16.0, built with xterm.js 6.0.0):
+/// what the page's find bar searches the buffer with and lights the matches by.
+const SEARCH: &str = include_str!("terminal/vendor/addon-search.js");
+const SEARCH_SHA384: &str = "dj0JnorfKQCQPwELv9I4mHsG6e1V3oaf+DLu0hmYSx6DJ+meQBPtk42UbmpNKOAg";
 
-/// The emulator page's own script after the pages' kit, and their SHA-384: the page's policy runs it by that hash.
+/// The emulator page's own script after the pages' kit (the terminal, the person's keys, find),
+/// and their SHA-384: the page's policy runs it by that hash.
 pub(crate) const GLUE: &str = concat!(
     include_str!("page/kit.js"),
-    include_str!("terminal/emulator.js")
+    include_str!("terminal/emulator.js"),
+    include_str!("terminal/keyboard.js"),
+    include_str!("terminal/find.js")
 );
 pub(crate) const GLUE_SHA384: &str =
-    "PfqxqwYTOgtcf9rkgFnWEaw5YUTwRSdnqOQo4XnA0ekYyzNQ+DuZDYxSGT0UjU06";
+    "WNsE0KeiGwNqPCHsJ3i9kC/HE5BJeVbDIQVa6Z2RQWiLgYzlxv/ph7+LxoAL87bx";
 
 /// The page that shows a session in xterm.js, titled `title`, in the window's light or dark.
 /// Its policy runs its own scripts only, by their hashes.
 pub fn page(title: &str) -> String {
     let title = crate::page::escaped(title);
-    let scripts = format!("'sha384-{XTERM_SHA384}' 'sha384-{GLUE_SHA384}'");
+    let scripts =
+        format!("'sha384-{XTERM_SHA384}' 'sha384-{SEARCH_SHA384}' 'sha384-{GLUE_SHA384}'");
     fill(
         include_str!("terminal/emulator.html"),
         &[
@@ -48,6 +58,7 @@ pub fn page(title: &str) -> String {
             ("title", &title),
             ("css", XTERM_CSS),
             ("xterm", XTERM),
+            ("search", SEARCH),
             ("glue", GLUE),
         ],
     )
