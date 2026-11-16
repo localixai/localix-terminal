@@ -1,7 +1,8 @@
-//! What a terminal of the app's is told: which terminal it is and of which project, and what
-//! the server says every terminal gets (the folder of the app's command, and the variables the
-//! programs in it find the app by). A call whose program's lineage is lost (in tmux, or started
-//! apart) is known by the terminal its environment names.
+//! What a terminal of the app's is told: which terminal it is and of which project, that it reads
+//! what a program says of its state, and what the server says every terminal gets (the folder of
+//! the app's command, and the variables the programs in it find the app by). A call whose
+//! program's lineage is lost (in tmux, or started apart) is known by the terminal its environment
+//! names.
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -26,6 +27,9 @@ static TOLD: OnceLock<Told> = OnceLock::new();
 /// into another repository calls as that one.
 const PANE: &str = "LLXTERM_PANE";
 const PANE_PROJECT: &str = "LLXTERM_PANE_PROJECT";
+/// The terminal reads what a program says of its state (OSC 7501): an agent's integration that
+/// would say the same in words of its own leaves it to the terminal.
+const PROGRAM_STATUS: &str = "LLXTERM_PROGRAM_STATUS";
 
 impl Desk {
     /// The terminals to come get the app's command from `bin` first on their `PATH`, and what
@@ -59,6 +63,7 @@ pub(super) fn own(id: u32, folder: Option<&Path>, vars: Option<&[(String, String
         own.vars = (told.agents)(&var);
     }
     own.vars.push((PANE.into(), format!("t{id}")));
+    own.vars.push((PROGRAM_STATUS.into(), "1".into()));
     if let Some(folder) = folder {
         own.vars
             .push((PANE_PROJECT.into(), folder.display().to_string()));

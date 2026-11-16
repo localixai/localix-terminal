@@ -166,3 +166,25 @@ fn a_page_with_no_title_of_its_own_is_named_for_the_file_it_shows() {
     }
     assert_eq!(named("", ""), "");
 }
+
+#[test]
+fn what_a_page_found_comes_back_sealed_for_the_tab_the_window_named() {
+    let shared = events::fresh();
+    let said = r#"{"found":{"tab":3,"query":"needle","at":1,"of":12}}"#;
+    let Some(Said::Found(found)) = shared.ipc(&sealed(&shared, said), None) else {
+        panic!("a sealed find is what the page found");
+    };
+    assert_eq!((found.tab, found.query.as_str()), (3, "needle"));
+    assert_eq!((found.at, found.of), (1, 12));
+    // Unsealed, or not what a find says, it is nothing.
+    assert!(shared.ipc(said, None).is_none());
+    for junk in [
+        r#"{"found":{"tab":"3","query":"needle","at":1,"of":12}}"#,
+        r#"{"found":{"tab":3,"at":1,"of":12}}"#,
+        r#"{"found":{"tab":3,"query":"needle","at":-2,"of":12}}"#,
+        r#"{"found":{"tab":3,"query":"needle","at":12,"of":12}}"#,
+        r#"{"found":7}"#,
+    ] {
+        assert!(shared.ipc(&sealed(&shared, junk), None).is_none(), "{junk}");
+    }
+}

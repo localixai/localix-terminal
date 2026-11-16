@@ -9,13 +9,20 @@
 //! which the person slides shut and open; where the pages lie in a column (GTK), a row of them
 //! under the strip.
 
+mod history;
 mod input;
 mod made;
+mod marks;
+mod page_calls;
 
 pub use made::made;
 use made::{MADE, made_of};
 
-pub(super) use input::{Click, Finding, Keyed, Tool, click, moved};
+pub(super) use history::{Row, State, menu};
+pub(super) use input::{Click, Finding, Keyed, Seek, Tool, click, moved};
+pub(super) use marks::Marks;
+pub use marks::Working;
+pub(super) use page_calls::{Found, comment, find, found};
 
 use serde_json::json;
 
@@ -161,8 +168,8 @@ pub(super) struct Item {
     pub group: String,
     /// The coding agent a terminal runs in front (offer.rs), when it is known.
     pub agent: Option<&'static str>,
-    /// The words of what waits for the person in it (alerts.rs), when something does.
-    pub waits: Option<String>,
+    /// What waits for the person in it, and what its program says it is at work on.
+    pub marks: Marks,
     /// A session's document: the tab that stands for its session in the lists (session.rs).
     /// It is a tab of the documents' row, not of the side.
     pub of: Option<String>,
@@ -222,9 +229,7 @@ pub(super) fn script(
                 tab["agent"] = json!(agent.id);
                 tab["name"] = json!(agent.name);
             }
-            if let Some(waits) = &item.waits {
-                tab["waits"] = json!(waits);
-            }
+            marks::mark(&mut tab, &item.marks);
             // A tab that shows a file carries the picture the tree gives that file: a file in
             // the editor by the path it shows, a page by the file it is named for.
             let file = match kind {
@@ -286,52 +291,6 @@ pub(super) fn visited(visited: &[super::Visited]) -> String {
     format!("VI({})", json!(visited))
 }
 
-/// What became of a tab the history menu lists.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum State {
-    Open,
-    /// A terminal the person closed: its program runs on, its screen live out of sight.
-    Hidden,
-    /// A terminal whose session ended: its last screen is kept.
-    Ended,
-    /// A browser tab closed: its page opens again in a new one.
-    Closed,
-}
-
-/// An entry of the history menu: its row in the project's ledger, and its tab's key while open.
-pub(super) struct Row {
-    pub at: i64,
-    pub key: Option<Key>,
-    /// What it is, as the strip names it: `web`, `term` or `board`.
-    pub kind: &'static str,
-    pub title: String,
-    /// A browser tab's page.
-    pub detail: String,
-    pub state: State,
-    pub group: String,
-}
-
-/// The call that opens the history menu on `rows` (newest first), or closes it.
-pub(super) fn menu(rows: Option<&[Row]>) -> String {
-    let shown = rows.map(|rows| {
-        let rows: Vec<_> = rows
-            .iter()
-            .map(|row| {
-                let state = match row.state {
-                    State::Open => "open",
-                    State::Hidden => "hidden",
-                    State::Ended => "ended",
-                    State::Closed => "closed",
-                };
-                json!({"at": row.at, "key": row.key.map(Key::name), "kind": row.kind, "title": row.title,
-                    "detail": row.detail, "state": state, "group": row.group})
-            })
-            .collect();
-        rows
-    });
-    format!("M({})", json!(shown))
-}
-
 /// The Event Center as the strip shows it: `events` (a JSON list, newest first), and the list itself while it is `open`.
 pub(super) fn center(events: &str, open: bool) -> String {
     let events = if events.is_empty() { "[]" } else { events };
@@ -379,25 +338,16 @@ pub(super) fn turn(turn: Turn) -> String {
     format!("A({})", json!(what))
 }
 
-/// The call that turns commenting on or off in a page, with the run's call `key`; a page whose
-/// marks are of an earlier batch than `sent` drops them. Nobody waits for its reply: call 0,
-/// whose reply no call takes.
-pub(super) fn comment(key: &str, on: bool, sent: u32) -> String {
-    format!(
-        "{}, 'comment', {{ on: {on}, sent: {sent} }}) : false",
-        super::script::head(key, 0, "")
-    )
-}
-
 /// The strip's page: dressed in the frame's stylesheet, clear over the window's glass.
 pub(super) const PAGE: &str = include_str!("strip.html");
 
 /// The SHA-384 of the page's one script, its resize helper, the dialog's script and the tree's in:
 /// the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "Wh7UobY7bL/1RNaCyXrfHgxxmpAl7VulLokQI101wFPzYnSdEblazYHkJwG5QXhP";
+const SCRIPT_SHA384: &str = "I+pX0KXSMxkaLDmEH5WQatVUMwpBEinDHu6ZxV3Z2hYX1SFuRORgfHua+6rWMytB";
 
-/// The strip's page: the trusted UI's resize helper, the window's dialog (dialog.rs) and the side's
-/// tree of files (tree.rs) inlined, so it opens without external resources, its bars as tall as the window lays them out (`BAR`, `NAV`, `ROW`: its style, not
+/// The strip's page: the trusted UI's resize helper, the window's dialog (dialog.rs), the side's
+/// tree of files (tree.rs) and the toolbar's find row (its markup, words and keys shared with the
+/// terminal's, then what its steps do over a page, `page_find.js`) inlined, so it opens without external resources, its bars as tall as the window lays them out (`BAR`, `NAV`, `ROW`: its style, not
 /// its script), and the agents' `marks` (JSON) in it as data its script reads, never as script.
 pub(super) fn page(marks: &str) -> String {
     // Inside a script element only `</script` ends it: no `<` of the data reaches the parser.
@@ -407,6 +357,9 @@ pub(super) fn page(marks: &str) -> String {
         .replacen("/*DIALOG_CSS*/", include_str!("dialog.css"), 1)
         .replacen("/*TREE_JS*/", include_str!("tree.js"), 1)
         .replacen("/*TREE_CSS*/", include_str!("tree.css"), 1)
+        .replacen("<!--FIND_ROW-->", crate::page::FIND_ROW, 1)
+        .replacen("/*FIND_ROW_JS*/", include_str!("../page/find.js"), 1)
+        .replacen("/*PAGE_FIND_JS*/", include_str!("page_find.js"), 1)
         .replacen("{{hash}}", SCRIPT_SHA384, 1)
         .replacen("{{bar}}", &BAR.to_string(), 1)
         .replacen("{{nav}}", &NAV.to_string(), 1)

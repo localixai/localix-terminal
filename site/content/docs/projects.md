@@ -18,7 +18,7 @@ The project's pages, terminals, board and Settings are a column on the left. Dra
 
 ## Split View
 
-⇧⌘\, a tab's menu, or a tab dragged from the column onto the pages makes one tab of two panes: the project's two tabs side by side, listed in the column as a pair. Drag the line between them to resize, and double-click it to even them. Split proportions are kept across project switches and restarts.
+⇧⌘\, a tab's menu, or a tab dragged from the column onto the pages makes one tab of several panes: the project's two tabs side by side, or the tab dragged beside the pane you let it go over, on the side of the edge it is nearest, listed in the column as one row. ⌘D and ⇧⌘D open a new terminal right of, or under, the pane in use, in the folder its shell is in; "+" → Split Right with… or Split Down with… starts an agent there. A session takes more terminals this way and keeps one row of documents for all of them. Drag a line between panes to resize, double-click it to even them; the Pane menu moves the keys (⌥⌘ and an arrow, ⌥⌘] and ⌥⌘[), a divider (⌃⌘ and an arrow) and evens the tab (⌃⌘=), ⇧⌘↩ zooms the pane in use over the tab and back (the column marks the tab with how many panes are hidden), and ⌘W closes the pane in use. Split proportions are kept across project switches and restarts.
 
 ## Several windows
 

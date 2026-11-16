@@ -8,7 +8,7 @@ use serde_json::json;
 
 use super::super::tests::{Caller, caller, desk_on};
 use super::super::{Call, Desk};
-use crate::browser::Halves;
+use crate::browser::Side;
 use crate::layout;
 use crate::testing::Scratch;
 
@@ -148,7 +148,7 @@ fn what_an_agent_opens_from_a_terminal_joins_its_session_on_the_right() {
     );
 
     // The next one is the document in sight, and the one before waits behind it: one tab still.
-    desk.split_resized("t1", 3000).unwrap();
+    desk.resized("t1", &[], 1, 3000).unwrap();
     file(&desk, &from(&mine, "t1"), "b.rs");
     assert_eq!(panes(&desk, &mine), [["t1", "f2"]]);
     assert_eq!(docs(&desk, &mine), [["f1", "f2"]]);
@@ -265,14 +265,9 @@ fn a_session_made_whole_keeps_its_documents_until_it_is_split_again() {
     let mine = caller(&desk, scratch.path(), None);
     open(&desk, &mine.call());
     file(&desk, &from(&mine, "t1"), "a.rs");
-    let halves = Halves {
-        shown: "t1",
-        beside: "f1",
-        right: true,
-    };
 
     // The person makes the tab whole: the terminal alone, its document still its own.
-    desk.whole_told(halves);
+    desk.whole_told("t1");
     assert_eq!(panes(&desk, &mine), [["t1"]]);
     assert_eq!(docs(&desk, &mine), [["f1"]]);
 
@@ -282,7 +277,7 @@ fn a_session_made_whole_keeps_its_documents_until_it_is_split_again() {
     assert_eq!(docs(&desk, &mine), [["f1", "f2"]]);
 
     // The person puts a document beside the terminal again: that one is in sight.
-    desk.split_told(halves);
+    desk.split_told("f1", "t1", Side::Right);
     assert_eq!(
         tabs(&desk, &mine),
         [(vec!["t1".to_string(), "f1".into()], Some("t1".into()))]
@@ -291,7 +286,7 @@ fn a_session_made_whole_keeps_its_documents_until_it_is_split_again() {
     // A document closed by the window tells its split whole too, and that is no one's wish.
     desk.window(&mine.call(), &json!({"action": "close", "tab": "f1"}))
         .unwrap();
-    desk.whole_told(halves);
+    desk.whole_told("f1");
     assert_eq!(panes(&desk, &mine), [["t1", "f2"]]);
     desk.shutdown();
 }
@@ -305,22 +300,14 @@ fn a_document_shown_by_the_person_is_the_one_in_sight_and_the_halves_change_side
     file(&desk, &from(&mine, "t1"), "b.rs");
 
     // The person picks the tab of f1 over the stack: it is in sight and in use.
-    desk.split_told(Halves {
-        shown: "f1",
-        beside: "t1",
-        right: false,
-    });
+    desk.split_told("t1", "f1", Side::Left);
     assert_eq!(
         tabs(&desk, &mine),
         [(vec!["t1".to_string(), "f1".into()], Some("f1".into()))]
     );
 
     // They carry the terminal to the right: the documents are on the left from now.
-    desk.split_told(Halves {
-        shown: "t1",
-        beside: "f1",
-        right: false,
-    });
+    desk.split_told("f1", "t1", Side::Left);
     assert_eq!(
         tabs(&desk, &mine),
         [(vec!["f1".to_string(), "t1".into()], Some("t1".into()))]

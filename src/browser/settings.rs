@@ -1,6 +1,6 @@
 //! The person's settings for the window: its appearance (theme, how much of the desktop shows
-//! through, the fonts), which Option key a terminal takes for Meta, where what an agent opens
-//! lands, and the shortcuts they changed. Kept in `settings.json` under the config directory,
+//! through, the fonts), which Option key a terminal takes for Meta, whether agents go on in their
+//! terminals as the app opens, and the shortcuts they changed. Kept in `settings.json` under the config directory,
 //! read once, written whole on each change; a file that does not read is
 //! the defaults (and left as it is until the person changes something, when it is kept beside as
 //! `settings.json.bad`).
@@ -99,6 +99,7 @@ pub(super) struct Settings {
     pub font_size: u8,
     pub option_meta: OptionMeta,
     pub updates: super::updates::Updates,
+    pub resume_agents: super::agents::Resuming,
     /// The shortcuts the person changed, by id: a chord, or none (taken off).
     pub shortcuts: BTreeMap<String, Option<String>>,
 }
@@ -113,6 +114,7 @@ impl Default for Settings {
             font_size: 13,
             option_meta: OptionMeta::Off,
             updates: super::updates::Updates::Auto,
+            resume_agents: super::agents::Resuming::On,
             shortcuts: BTreeMap::new(),
         }
     }
@@ -158,6 +160,7 @@ impl Settings {
         chosen(change, "transparency", &mut self.transparency)?;
         chosen(change, "updates", &mut self.updates)?;
         chosen(change, "option_meta", &mut self.option_meta)?;
+        chosen(change, "resume_agents", &mut self.resume_agents)?;
         if let Some(font) = text("ui_font") {
             if !UI_FONTS.iter().any(|(id, _, _)| *id == font) {
                 return Err(format!("no font {font}"));
@@ -255,6 +258,7 @@ impl Settings {
                 "size": default.font_size,
                 "option_meta": default.option_meta,
                 "updates": default.updates,
+                "resume_agents": default.resume_agents,
             },
             "ui_fonts": fonts(&UI_FONTS),
             "code_fonts": fonts(&CODE_FONTS),

@@ -206,3 +206,17 @@ fn neither_option_is_meta_unless_the_person_chose_one_and_the_terminals_are_told
     let kept: Settings = serde_json::from_str(r#"{"theme": "dark"}"#).unwrap();
     assert_eq!(kept.option_meta, OptionMeta::Off);
 }
+
+#[test]
+fn agents_go_on_in_their_terminals_unless_the_person_turned_it_off() {
+    use crate::browser::agents::Resuming;
+    let mut settings = Settings::default();
+    assert_eq!(settings.resume_agents, Resuming::On);
+    assert_eq!(settings.page()["defaults"]["resume_agents"], "on");
+    settings.change(&json!({"resume_agents": "off"})).unwrap();
+    assert_eq!(settings.resume_agents, Resuming::Off);
+    assert_eq!(settings.page()["settings"]["resume_agents"], "off");
+    assert!(settings.change(&json!({"resume_agents": "later"})).is_err());
+    let kept: Settings = serde_json::from_str(r#"{"theme": "dark"}"#).unwrap();
+    assert_eq!(kept.resume_agents, Resuming::On);
+}

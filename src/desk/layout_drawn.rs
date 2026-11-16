@@ -4,7 +4,7 @@
 use super::Desk;
 use crate::browser::{Ledger, Past, TabKind, Visited};
 use crate::feed::Entity;
-use crate::layout::{self, Tree, WindowId};
+use crate::layout::{self, WindowId};
 use crate::ledger::{self, Kind, Row};
 use crate::projects::{self, ProjectId};
 
@@ -112,30 +112,21 @@ impl Desk {
     }
 }
 
-/// Tab `tab` by its panes' keys: the ones in sight, its documents, and whether it is kept
-/// whole; none when none of its panes in sight has a key.
+/// Tab `tab` by its panes' keys: its tree, its documents, and whether it is kept whole; none
+/// when none of its panes has a key.
 fn arranging(
     tab: &layout::Tab,
     keys: &std::collections::HashMap<Row, String>,
 ) -> Option<crate::browser::Arranging> {
-    let (across, shares) = match &tab.tree {
-        Tree::Leaf { .. } | Tree::Stack { .. } => (true, vec![1.0]),
-        Tree::Branch { across, children } => {
-            (*across, children.iter().map(|child| child.share).collect())
-        }
-    };
     let named = |panes: Vec<Row>| -> Vec<String> {
         (panes.into_iter())
             .filter_map(|pane| keys.get(&pane).cloned())
             .collect()
     };
-    let panes = named(tab.tree.visible());
-    let focused = tab.focused.and_then(|pane| keys.get(&pane).cloned());
-    (!panes.is_empty()).then_some(crate::browser::Arranging {
-        panes,
-        across,
-        shares,
-        focused,
+    let tree = tab.tree.named(&|pane| keys.get(pane).cloned())?;
+    Some(crate::browser::Arranging {
+        tree,
+        focused: tab.focused.and_then(|pane| keys.get(&pane).cloned()),
         docs: named(tab.tree.stacked()),
         all: named(tab.tree.panes()),
         whole: tab.whole,

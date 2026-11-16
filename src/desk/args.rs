@@ -107,18 +107,21 @@ pub fn schema() -> Value {
         json!({"type": "integer", "minimum": 100, "maximum": MAX_YIELD_MS, "description": "The longest the call waits, in ms (a page waits at most 15000)."}),
     );
     p.extend(file_fields());
+    p.extend(layout_fields());
     p.extend(board_fields());
-    p.insert("ask".into(), ask_field());
+    p.extend(said_fields());
     (crate::kind::abouts().into_iter()).for_each(|about| kinds::fields(&mut p, about));
     json!({"type": "object", "required": ["action"], "properties": p})
 }
 
-/// `interact`'s ask of the person.
-pub(super) fn ask_field() -> Value {
-    json!({"type": "string", "description": "interact, any tab: what only the person can do there \
+/// `interact`'s fields of what an agent says: its ask of the person, and its session's id.
+fn said_fields() -> Map<String, Value> {
+    let ask = json!({"type": "string", "description": "interact, any tab: what only the person can do there \
         (sign in, a code, a decision), as one line. It waits in their Event Center until they press \
         Done, which reaches you as their note, or comment; one a tab, a new one replaces it, \
-        `\"\"` takes it back. Never for news or progress: the Event Center is for what wants them."})
+        `\"\"` takes it back. Never for news or progress: the Event Center is for what wants them."});
+    let session = super::restore::agent_resume::session_field();
+    Map::from_iter([("ask".into(), ask), ("session".into(), session)])
 }
 
 /// The fields of opening a file in an editor's tab.
@@ -134,6 +137,27 @@ fn file_fields() -> Map<String, Value> {
     put(
         "line",
         json!({"type": "integer", "description": "file, open: the line to show the person."}),
+    );
+    p
+}
+
+/// The fields of where a tab goes in the window: a new one beside another, one zoomed.
+fn layout_fields() -> Map<String, Value> {
+    let mut p = Map::new();
+    let mut put = |name: &str, value: Value| {
+        p.insert(name.to_string(), value);
+    };
+    put(
+        "beside",
+        json!({"type": "string", "description": "open: a tab of the project to open beside, in its tab: a terminal on its `side`; a page or a file among its documents."}),
+    );
+    put(
+        "side",
+        json!({"type": "string", "enum": ["right", "down"], "description": "open, with `beside`: where a terminal goes (right when not given)."}),
+    );
+    put(
+        "zoom",
+        json!({"type": "boolean", "description": "show: true fills its tab with it, the tab's other panes put by and running; false shows them again."}),
     );
     p
 }

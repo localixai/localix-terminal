@@ -5,7 +5,7 @@ use std::sync::mpsc::SyncSender;
 use crate::WindowTab;
 use crate::kind::{Given, Question};
 
-use super::super::strip::{Click, Key};
+use super::super::strip::{Click, Found, Key, Seek};
 use super::super::windows::Route;
 use super::{Arranged, Clip, Confirm, Dressing, Noted, Shot, Window, panel};
 
@@ -91,6 +91,10 @@ pub(in super::super) enum Cmd {
     NavClicked(String),
     /// The person clicked in the documents' row: said as the strip says it, its points the row's.
     DocsClicked(String),
+    /// A step of the toolbar's find row in the page shown (deck_find.rs).
+    Seek(Seek),
+    /// What a page found for its tab's find row.
+    Found(Found),
     /// The person's settings changed: the window takes them.
     Restyle,
     /// A comment the person made on a page: pictured, then held.
@@ -119,6 +123,9 @@ pub(in super::super) enum Cmd {
     Adopt,
     /// For checks: how the window is dressed, once tinted again.
     Dressed(SyncSender<Option<Dressing>>),
+    /// For checks: which of the window's views holds its keys (`nav`, `strip`, `side`, or a
+    /// tab's key).
+    Keys(SyncSender<Option<String>>),
     /// The window's tabs; `None` while it is closed.
     Listing(SyncSender<Option<Vec<WindowTab>>>),
     /// Show or close a tab by its key, for the agent: the task goes on whatever closes.
@@ -185,6 +192,7 @@ impl Cmd {
             | Cmd::CloseTab { id, .. }
             | Cmd::Frame(Some(id), _)
             | Cmd::Capture { tab: Some(id), .. } => web(*id),
+            Cmd::Found(found) => web(found.tab),
             Cmd::Act(Click::Show(key) | Click::Close(key), _) => Route::Pane(key.name()),
             Cmd::Pressed(window, ..) => Route::Pressed(*window),
             Cmd::Strip | Cmd::Arranged(..) | Cmd::Tree(..) | Cmd::Restyle => Route::All,
@@ -201,10 +209,12 @@ impl Cmd {
             | Cmd::SideClicked(_)
             | Cmd::NavClicked(_)
             | Cmd::DocsClicked(_)
+            | Cmd::Seek(_)
             | Cmd::Noted(_)
             | Cmd::Go(_)
             | Cmd::Adopt
             | Cmd::Dressed(_)
+            | Cmd::Keys(_)
             | Cmd::Listing(_)
             | Cmd::Presence(_)
             | Cmd::NewWindow(_)
@@ -248,8 +258,11 @@ impl Cmd {
             | Cmd::Restyle
             | Cmd::Tree(..)
             | Cmd::Noted(_)
+            | Cmd::Seek(_)
+            | Cmd::Found(_)
             | Cmd::NewWindow(_)
             | Cmd::Dressed(_)
+            | Cmd::Keys(_)
             | Cmd::Listing(_)
             | Cmd::Presence(_)
             | Cmd::Pressed(..)

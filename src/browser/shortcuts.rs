@@ -3,10 +3,11 @@
 //! defaults; the person's settings hold only what they changed (a chord, or none).
 
 mod catalog;
+mod panes;
 
 pub(super) use catalog::{Shortcut, every};
 #[cfg(any(target_os = "macos", test))]
-pub(super) use catalog::{groups, of_find, of_page};
+pub(super) use catalog::{groups, of_find, of_page, of_split, of_zoom};
 
 use std::collections::BTreeMap;
 

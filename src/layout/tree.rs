@@ -1,10 +1,16 @@
 //! A tab's tree of panes, and what changes it: a pane split in, taken out, a branch resized.
-//! Plain data: the store's rows of it are read and written in `nodes`.
+//! Plain data: the store's rows of it are read and written in `nodes`. A tree names its panes
+//! by the ledger's rows; the window draws the same tree by the panes' keys (`Tree<String>`),
+//! so both lay it out by one geometry (`geometry.rs`).
 
 use serde::Serialize;
 
 use crate::ledger::Row as PaneId;
 
+#[path = "geometry.rs"]
+pub mod geometry;
+#[path = "shape.rs"]
+mod shape;
 #[path = "stack.rs"]
 mod stack;
 
@@ -13,32 +19,40 @@ mod stack;
 /// the other, each with its share of the branch.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "node", rename_all = "snake_case")]
-pub enum Tree {
-    Leaf { pane: PaneId },
-    Stack { panes: Vec<PaneId>, shown: PaneId },
-    Branch { across: bool, children: Vec<Share> },
+pub enum Tree<P = PaneId> {
+    Leaf {
+        pane: P,
+    },
+    Stack {
+        panes: Vec<P>,
+        shown: P,
+    },
+    Branch {
+        across: bool,
+        children: Vec<Share<P>>,
+    },
 }
 
 /// A child of a branch and its share of it (the shares of a branch add up to 1).
 #[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct Share {
+pub struct Share<P = PaneId> {
     pub share: f64,
-    pub tree: Tree,
+    pub tree: Tree<P>,
 }
 
 /// The least share a pane keeps of its branch.
 pub const LEAST: f64 = 0.1;
 
-impl Tree {
+impl<P: Clone + PartialEq> Tree<P> {
     /// Pane `pane`, alone.
-    pub const fn leaf(pane: PaneId) -> Self {
+    pub const fn leaf(pane: P) -> Self {
         Self::Leaf { pane }
     }
 
     /// Its panes, in order: left to right, top to bottom.
-    pub fn panes(&self) -> Vec<PaneId> {
+    pub fn panes(&self) -> Vec<P> {
         match self {
-            Self::Leaf { pane } => vec![*pane],
+            Self::Leaf { pane } => vec![pane.clone()],
             Self::Stack { panes, .. } => panes.clone(),
             Self::Branch { children, .. } => (children.iter())
                 .flat_map(|child| child.tree.panes())
@@ -47,23 +61,23 @@ impl Tree {
     }
 
     /// Whether pane `pane` is one of its.
-    pub fn holds(&self, pane: PaneId) -> bool {
+    pub fn holds(&self, pane: &P) -> bool {
         match self {
-            Self::Leaf { pane: it } => *it == pane,
-            Self::Stack { panes, .. } => panes.contains(&pane),
+            Self::Leaf { pane: it } => it == pane,
+            Self::Stack { panes, .. } => panes.contains(pane),
             Self::Branch { children, .. } => children.iter().any(|child| child.tree.holds(pane)),
         }
     }
 
     /// Whether it is pane `pane` alone, or the stack `pane` is in: what a pane is put beside.
-    fn is(&self, pane: PaneId) -> bool {
+    fn is(&self, pane: &P) -> bool {
         !matches!(self, Self::Branch { .. }) && self.holds(pane)
     }
 
     /// Pane `new` beside pane `at` (beside the whole stack `at` is in): after it (right of it,
     /// or under it) or before. In a branch of the same way it is one more child, sharing `at`'s
     /// share; else `at` becomes a branch of the two, half each. Whether `at` is one of its.
-    pub fn split(&mut self, at: PaneId, new: PaneId, across: bool, after: bool) -> bool {
+    pub fn split(&mut self, at: &P, new: P, across: bool, after: bool) -> bool {
         let share = |share: f64, tree: Self| Share { share, tree };
         if let Self::Branch {
             across: way,
@@ -78,7 +92,8 @@ impl Tree {
                 children.insert(at_place, share(half, Self::leaf(new)));
                 return true;
             }
-            return (children.iter_mut()).any(|child| child.tree.split(at, new, across, after));
+            return (children.iter_mut())
+                .any(|child| child.tree.split(at, new.clone(), across, after));
         }
         if !self.is(at) {
             return false;
@@ -93,25 +108,25 @@ impl Tree {
     }
 
     /// Pane `new` in the place of pane `old`, with its share. Whether `old` is one of its.
-    pub fn replace(&mut self, old: PaneId, new: PaneId) -> bool {
+    pub fn replace(&mut self, old: &P, new: P) -> bool {
         match self {
-            Self::Leaf { pane } if *pane == old => {
+            Self::Leaf { pane } if pane == old => {
                 *pane = new;
                 true
             }
             Self::Leaf { .. } => false,
             Self::Stack { panes, shown } => {
-                let Some(at) = panes.iter().position(|pane| *pane == old) else {
+                let Some(at) = panes.iter().position(|pane| pane == old) else {
                     return false;
                 };
-                panes[at] = new;
-                if *shown == old {
-                    *shown = new;
+                if shown == old {
+                    shown.clone_from(&new);
                 }
+                panes[at] = new;
                 true
             }
             Self::Branch { children, .. } => {
-                (children.iter_mut()).any(|child| child.tree.replace(old, new))
+                (children.iter_mut()).any(|child| child.tree.replace(old, new.clone()))
             }
         }
     }
@@ -119,35 +134,18 @@ impl Tree {
     /// The tree without pane `pane`: its share goes to the rest of its branch, and a branch left
     /// with one child is that child; out of a stack, the pane after it is in sight when it was
     /// (else the one before). None when `pane` was all of it.
-    pub fn without(self, pane: PaneId) -> Option<Self> {
+    pub fn without(self, pane: &P) -> Option<Self> {
         match self {
-            Self::Leaf { pane: it } => (it != pane).then_some(self),
+            Self::Leaf { pane: ref it } => (it != pane).then_some(self),
             Self::Stack { panes, shown } => stack::without(panes, shown, pane),
             Self::Branch { across, children } => {
-                let mut kept: Vec<Share> = (children.into_iter())
+                let kept: Vec<Share<P>> = (children.into_iter())
                     .filter_map(|child| {
                         let share = child.share;
                         child.tree.without(pane).map(|tree| Share { share, tree })
                     })
                     .collect();
-                match kept.len() {
-                    0 => None,
-                    1 => kept.pop().map(|child| child.tree),
-                    _ => {
-                        let whole: f64 = kept.iter().map(|child| child.share).sum();
-                        for child in &mut kept {
-                            child.share = if whole > 0.0 {
-                                child.share / whole
-                            } else {
-                                1.0 / 2.0
-                            };
-                        }
-                        Some(Self::Branch {
-                            across,
-                            children: kept,
-                        })
-                    }
-                }
+                joined(across, kept)
             }
         }
     }
@@ -180,8 +178,32 @@ impl Tree {
     }
 }
 
+/// The children `kept` of a branch of way `across` once others left it: their shares made
+/// whole again in their proportions, a branch of one its child alone, none of none.
+fn joined<P>(across: bool, mut kept: Vec<Share<P>>) -> Option<Tree<P>> {
+    match kept.len() {
+        0 => None,
+        1 => kept.pop().map(|child| child.tree),
+        _ => {
+            let whole: f64 = kept.iter().map(|child| child.share).sum();
+            let count = kept.len() as f64;
+            for child in &mut kept {
+                child.share = if whole > 0.0 {
+                    child.share / whole
+                } else {
+                    1.0 / count
+                };
+            }
+            Some(Tree::Branch {
+                across,
+                children: kept,
+            })
+        }
+    }
+}
+
 /// `children` given `whole` between them, in their proportions now.
-fn spread(children: &mut [Share], whole: f64) {
+fn spread<P>(children: &mut [Share<P>], whole: f64) {
     let now: f64 = children.iter().map(|child| child.share).sum();
     let count = children.len() as f64;
     for child in children {

@@ -125,6 +125,7 @@ pub(super) fn builder<'a>(
         builder = builder.with_ipc_handler(move |request| {
             let command = match ipc.ipc(request.body(), from) {
                 Some(Said::Noted(noted)) => Cmd::Noted(noted),
+                Some(Said::Found(found)) => Cmd::Found(found),
                 Some(Said::Close(id)) => {
                     // Nobody waits for the answer.
                     let (reply, _) = std::sync::mpsc::sync_channel(1);

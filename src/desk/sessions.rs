@@ -174,8 +174,8 @@ fn session_in(
     Ok(last)
 }
 
-/// The terminal a tab of `tree` is the session of: the pane documents join it by. None for
-/// documents alone, the board, and panes the person put side by side.
+/// The terminal a tab of `tree` is the session of: the pane documents join it by, its first
+/// terminal. None for documents alone, the board, and a tab that holds more than terminals.
 fn terminal_of(db: &crate::store::Connection, tree: &Tree) -> Result<Option<Row>, String> {
     if matches!(tree, Tree::Stack { .. }) {
         return Ok(None);
@@ -227,7 +227,7 @@ fn join_loose(
         }
     }
     if let Some(sight) = sight {
-        tree.show(sight);
+        tree.show(&sight);
     }
     layout::set_tree(tx, session.id, &tree, session.focused.or(Some(anchor)))?;
     if was_shown {

@@ -1,31 +1,31 @@
-//! A split window, from the person's side: the window splits (its tab shown beside another of
-//! its project's) or is whole again, and a press in the half not in use makes it the one in use.
+//! A split tab, from the person's side: the window splits (its tab shown beside another of its
+//! project's, or a tab carried onto the pages beside the pane it is let go over, on the side of
+//! the edge it is nearest), a pane goes out to a tab of its own, a divider is let go of, and a
+//! press on a pane puts the keys there. Each is drawn at once (split.rs) and told to the layout
+//! as one operation; its notice brings the tree back. The keyboard's are host_panes.rs.
 
 use super::On;
 use super::clicks::act;
-use crate::browser::deck::Deck;
-use crate::browser::session;
-use crate::browser::split;
+use crate::browser::split::{self, Held, Own};
 use crate::browser::strip::{Click, Key};
-use crate::browser::{Halves, Heard};
+use crate::browser::{Heard, Side};
+use crate::layout::Tree;
 
-/// What the window tells the layout of its split.
-enum Tell {
-    /// It is split so now.
-    Split(split::Kept),
-    /// The split the layout kept, of these two, is whole now.
-    Whole(split::Kept),
-}
+#[path = "host_panes.rs"]
+mod panes;
 
 impl On<'_> {
-    /// Split the window, the tab shown beside the next of its project's (else the one before),
-    /// or make it whole again.
+    /// Split View: in a tab of several panes, the pane in use goes out to a tab of its own (a
+    /// session of one terminal is made whole); else the tab shown beside the next of its
+    /// project's (else the one before), or a tab zoomed (a session made whole) drawn whole.
     pub(super) fn split_view(&mut self) {
         let Some(open) = self.deck.as_mut() else {
             return;
         };
-        if open.pair().is_some() {
-            self.unsplit();
+        if open.sight().len() >= 2 {
+            if let Some(shown) = open.shown_key() {
+                self.pane_out(shown);
+            }
             if let Some(open) = self.deck.as_ref() {
                 open.refresh(self.shared);
             }
@@ -38,100 +38,119 @@ impl On<'_> {
         let Some(key) = Key::parse(&shown.id) else {
             return;
         };
-        let arranged = self.shared.arranged_of(&shown.group);
-        // A session kept whole shows its document again; else the next tab the layout takes
-        // beside this one.
-        let back = (arranged.as_ref())
-            .and_then(|arranged| session::beside_whole(arranged, &shown.id))
-            .and_then(|kept| split::again(&kept, &shown.id));
-        let takes = |other: &Key| {
-            (arranged.as_ref()).is_none_or(|arranged| session::takes(arranged, key, *other))
+        // A tab zoomed (a session made whole among them) is drawn whole again; else the next
+        // tab the layout takes beside this one.
+        if self.unzoom() {
+            return;
+        }
+        let Some(open) = self.deck.as_mut() else {
+            return;
         };
         let tabs: Vec<Key> = (listed.iter())
             .filter(|tab| tab.group == shown.group)
             .filter_map(|tab| Key::parse(&tab.id))
-            .filter(|other| *other == key || takes(other))
+            .filter(|other| *other == key || open.takes(key, *other))
             .collect();
-        match (back, split::partner(&tabs, key)) {
-            (Some(beside), _) => {
-                open.split.beside = Some(beside);
-                open.split.grabbed = None;
-            }
-            (None, Some(partner)) => open.split_with(Some(partner)),
-            (None, None) => return,
+        let Some(partner) = split::partner(&tabs, key) else {
+            return;
+        };
+        self.split_with(key, partner, Side::Right);
+        if let Some(open) = self.deck.as_ref() {
+            open.refresh(self.shared);
         }
-        open.refresh(self.shared);
     }
 
-    /// Tab `key` beside the one shown, the window split; or the window whole again (none).
-    pub(super) fn split_beside(&mut self, key: Option<Key>) {
-        match key {
-            Some(_) => {
-                if let Some(open) = self.deck.as_mut() {
-                    open.split_with(key);
-                }
-            }
-            None => self.unsplit(),
+    /// Tab `key` beside the one shown, the window split; or, none, the pane `out` goes out to a
+    /// tab of its own (Move Pane to New Tab).
+    pub(super) fn split_beside(&mut self, key: Option<Key>, out: Key) {
+        let Some(open) = self.deck.as_ref() else {
+            return;
+        };
+        match (key, open.shown_key()) {
+            (Some(key), Some(shown)) => self.split_with(shown, key, Side::Right),
+            _ => self.pane_out(out),
         }
         if let Some(open) = self.deck.as_ref() {
             open.refresh(self.shared);
         }
     }
 
-    /// Tab `key` let go of over the pages at `x`, `y` of the window. A whole window splits, the
-    /// tab beside the shown one in that half. Split, the tab takes that half: the half in use shows
-    /// it there, the other has it beside; the shown tab let go of over the other half changes
-    /// sides with it.
+    /// Tab `key` put on `side` of pane `beside` of the tab shown: drawn at once, and the layout
+    /// told.
+    fn split_with(&mut self, beside: Key, key: Key, side: Side) {
+        let Some(open) = self.deck.as_mut() else {
+            return;
+        };
+        let was = open.split.own.clone();
+        let over = crate::browser::deck::Over::Pane(beside, side);
+        let Some(landed) = open.landed(key, over, was.as_ref()) else {
+            return;
+        };
+        self.tell_landed(key, &landed);
+    }
+
+    /// Where tab `key` landed drawn at once, and told: `key` on its side of the pane beside.
+    fn tell_landed(&mut self, key: Key, landed: &crate::browser::deck::Landed) {
+        let Some(open) = self.deck.as_mut() else {
+            return;
+        };
+        open.split.own = Some(Own {
+            tree: landed.tree.clone(),
+            base: open.base(),
+        });
+        let beside = landed.beside.name();
+        let side = landed.side;
+        let told = Heard::Split {
+            beside: &beside,
+            side,
+        };
+        self.shared.heard(&key.name(), told);
+    }
+
+    /// Tab `key` let go of over the pages at `x`, `y` of the window: beside the pane it was let
+    /// go over, on the side of it it was over, as it was laid out while it was carried.
     pub(super) fn dropped(&mut self, key: Key, x: f64, y: f64) {
         let Some(open) = self.deck.as_mut() else {
             return;
         };
-        // Laid out where it landed as it was carried: so it stays.
         let over = open.over(x, y);
-        if open.land() {
-            return open.refresh(self.shared);
+        let was = open.land();
+        match open.landed(key, over, was.as_ref()) {
+            Some(landed) => self.tell_landed(key, &landed),
+            // Let go where nothing changes: the tab shown as the person had made it.
+            None => open.split.own = was,
         }
-        let crate::browser::deck::Over::Half(right) = over else {
-            return;
-        };
-        let shown = open.shown_key();
-        match open.pair() {
-            None if Some(key) != shown => {
-                open.split.beside = Some(split::Beside { key, right });
-                open.split.grabbed = None;
-            }
-            None => return,
-            Some((left, right_half)) => {
-                let into = if right { right_half } else { left };
-                if Some(into) == shown {
-                    // The tab takes the half in use: the one beside stays.
-                    let beside = open.split.beside;
-                    if Some(key) != shown && beside.is_some_and(|beside| beside.key != key) {
-                        let _ = act(self.deck, Click::Show(key), self.shared);
-                        if let Some(open) = self.deck.as_mut() {
-                            open.split.beside = beside;
-                            open.refresh(self.shared);
-                        }
-                    }
-                    return;
-                }
-                if let Some(beside) = open.split.beside.as_mut() {
-                    if Some(key) == shown {
-                        beside.right = !beside.right;
-                    } else {
-                        *beside = split::Beside { key, right };
-                    }
-                }
-            }
+        if let Some(open) = self.deck.as_ref() {
+            open.refresh(self.shared);
         }
-        open.refresh(self.shared);
     }
 
-    /// The window's split and its project's as the layout keeps it, made one: the person split
-    /// it (or swapped, or resized), and the layout is told; the person shows one of the kept
-    /// split's two tabs, and the window splits as it was. A half's tab closed, the layout is
-    /// told the split is gone. Each change is told once, and nothing told is undone before the
-    /// layout tells it back.
+    /// Pane `key` out of the tab it shares: drawn at once (the tab shown without it, or it
+    /// alone when it is the one in use), and the layout told.
+    pub(super) fn pane_out(&mut self, key: Key) {
+        let Some(open) = self.deck.as_mut() else {
+            return;
+        };
+        let Some(shown) = open.shown_key() else {
+            return;
+        };
+        let tree = match key == shown {
+            true => Some(Tree::leaf(shown.name())),
+            false => open.tree().and_then(|tree| tree.without(&key.name())),
+        };
+        if let Some(tree) = tree {
+            open.split.own = Some(Own {
+                tree,
+                base: open.base(),
+            });
+        }
+        self.shared.heard(&key.name(), Heard::Whole);
+    }
+
+    /// The window's tree made one with the layout's as it tells it now: what the person did
+    /// that the layout has heard goes (split.rs `follow`); the pane they put the keys in, one
+    /// of a tab of several (zoomed or not), is told as the tab's focus; and a divider's view is made for each
+    /// divider the tree has.
     pub(super) fn keep_split(&mut self) {
         let Some(open) = self.deck.as_mut() else {
             return;
@@ -144,144 +163,44 @@ impl On<'_> {
         if shown.group.is_empty() {
             return;
         }
-        let (group, id) = (shown.group.clone(), shown.id.clone());
-        let group_of =
-            |name: &str| (listed.iter().find(|tab| tab.id == name)).map(|tab| tab.group.as_str());
-        let beside = open.split.beside.map(|beside| beside.key.name());
-        let arranged = self.shared.arranged_of(&group);
-        // A tab of another project, or one the layout does not take beside this one (a session
-        // keeps its documents and takes no other pane), is not beside it.
-        let astray = beside.is_some_and(|beside| {
-            group_of(&beside).is_some_and(|of| !of.is_empty() && of != group)
+        let id = shown.id.clone();
+        open.keep_stacks(&self.shared.arranged_here());
+        let tab = open.tab_holding(&id);
+        open.split.follow(tab.as_ref(), &id);
+        // A pane of a tab zoomed shown is the tab's focus too: the zoom goes to it.
+        let focus = tab.filter(|tab| {
+            tab.tree.visible().len() >= 2 && tab.focused.as_deref() != Some(id.as_str())
         });
-        let refused = match (&arranged, Key::parse(&id), open.split.beside) {
-            (Some(arranged), Some(key), Some(beside)) => !session::takes(arranged, key, beside.key),
-            _ => false,
-        };
-        if astray || refused {
-            open.split_with(None);
+        if focus.is_some() && open.split.focus.as_deref() != Some(id.as_str()) {
+            open.split.focus = Some(id.clone());
+            self.shared.heard(&id, Heard::Focused);
         }
-        let split_of = |arranged: &crate::browser::Arranged| session::split_of(arranged, &id);
-        let kept = arranged.as_ref().and_then(split_of);
-        // A session's panes are the layout's to keep: it hears of one closed by itself.
-        let session = (arranged.as_ref())
-            .and_then(|arranged| session::tab_of(arranged, &id))
-            .is_some_and(|tab| !tab.docs.is_empty());
-        let split_now = |open: &Deck| {
-            (open.pair().and(open.split.beside)).map(|beside| split::Kept {
-                shown: id.clone(),
-                beside: beside.key.name(),
-                right: beside.right,
-            })
-        };
-        // The layout keeps another split than the one this window drew from it: the app put a
-        // pane beside the tab shown, or took one away, and the window follows.
-        let drawn = (open.split.drawn.take()).filter(|(of, _)| *of == group);
-        if let Some((_, drawn)) = drawn {
-            let now = split_now(open);
-            match split::followed(now.as_ref(), drawn.as_ref(), kept.as_ref(), &id) {
-                split::Follow::Stay => {}
-                split::Follow::Beside(beside) => {
-                    open.split.beside = Some(beside);
-                    open.split.grabbed = None;
-                }
-                split::Follow::Whole => open.split_with(None),
-            }
-        }
-        open.split.drawn = Some((group.clone(), kept.clone()));
-        let now = split_now(open);
-        let told = open.split.told.clone();
-        let tell = match (now, kept) {
-            (Some(now), kept)
-                if kept.as_ref() != Some(&now) && !split::same(&now, kept.as_ref()) =>
-            {
-                (told != split::Told::of(Some(&now))).then_some(Tell::Split(now))
-            }
-            (Some(_), _) | (None, None) => None,
-            (None, Some(kept)) => {
-                let there = |name: &str| group_of(name) == Some(group.as_str());
-                if !there(&kept.shown) || !there(&kept.beside) {
-                    (told != split::Told::Whole && !session).then_some(Tell::Whole(kept))
-                } else {
-                    // Undone by the person and not yet told back: it stays undone.
-                    if told != split::Told::Whole
-                        && let Some(beside) = split::again(&kept, &id)
-                    {
-                        open.split.beside = Some(beside);
-                    }
-                    None
-                }
-            }
-        };
-        let pair = open.pair();
-        let saved = arranged
-            .as_ref()
-            .and_then(|arranged| split::share_of(arranged, pair?));
-        open.split.follow_share(pair, saved);
-        if let Some(tell) = tell {
-            open.split.told = match &tell {
-                Tell::Split(now) => split::Told::of(Some(now)),
-                Tell::Whole(_) => split::Told::Whole,
-            };
-            self.tell_split(&group, &tell);
-        }
+        open.lines_enough();
     }
 
-    /// Persist only the final size, never a write per pointer frame. Until projected back,
-    /// this pair keeps its new size instead of following an older layout snapshot.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "the rounded share is explicitly bounded to 1000..=9000"
-    )]
-    pub(super) fn split_sized(&mut self) {
-        let Some(open) = self.deck.as_mut() else {
-            return;
-        };
-        let Some((left, right)) = open.pair() else {
+    /// The person let go of a divider (`held`): only its final share is told, never one per
+    /// pointer frame; until the layout tells it back, the tree keeps it (split.rs).
+    pub(super) fn split_sized(&mut self, held: Option<Held>) {
+        let (Some(open), Some(held)) = (self.deck.as_ref(), held) else {
             return;
         };
         let Some(key) = open.shown_key() else { return };
-        let portion = (open.split.share * 10_000.0).round().clamp(1000.0, 9000.0) as u16;
-        open.split.sizing = Some(([left, right], f64::from(portion) / 10_000.0));
-        self.shared.heard(&key.name(), Heard::SplitResized(portion));
-    }
-
-    /// The person made the window whole: the layout is told which split it was.
-    fn unsplit(&mut self) {
-        let Some(open) = self.deck.as_mut() else {
-            return;
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "the rounded share is bounded to 1..=9999 first"
+        )]
+        let share = (held.share * 10_000.0).round().clamp(1.0, 9_999.0) as u16;
+        let resized = Heard::Resized {
+            path: &held.path,
+            at: held.at,
+            share,
         };
-        let shown = open.shown_key().map(Key::name).unwrap_or_default();
-        open.split_with(None);
-        let group = open.shown_project(self.shared);
-        let kept = (self.shared.arranged_of(&group).as_ref())
-            .and_then(|arranged| session::split_of(arranged, &shown));
-        if let Some(kept) = kept {
-            open.split.told = split::Told::Whole;
-            self.tell_split(&group, &Tell::Whole(kept));
-        }
-    }
-
-    /// The layout told of project `group`'s split: the one the window has now, or the one it
-    /// kept that is whole now.
-    fn tell_split(&self, group: &str, tell: &Tell) {
-        let (Tell::Split(kept) | Tell::Whole(kept)) = tell;
-        let halves = Halves {
-            shown: &kept.shown,
-            beside: &kept.beside,
-            right: kept.right,
-        };
-        let said = match tell {
-            Tell::Split(_) => Heard::Split(halves),
-            Tell::Whole(_) => Heard::Whole(halves),
-        };
-        self.shared.heard(group, said);
+        self.shared.heard(&key.name(), resized);
     }
 
     /// The layout of the window's projects, as the app keeps it: the order of their tabs and
-    /// their splits. Kept as told; the window draws it, splitting as kept when it shows one of
-    /// a split's tabs.
+    /// their trees. Kept as told; the window draws the tree of the tab its shown pane is in.
     pub(super) fn arranged(&mut self, arranged: Vec<crate::browser::Arranged>) {
         {
             let mut kept = crate::lock(&self.shared.arranged);
@@ -293,11 +212,8 @@ impl On<'_> {
         self.arranged_here();
     }
 
-    /// This window's layout as last told, drawn: what it told the layout is heard back.
+    /// This window's layout as last told, drawn: what the person did is heard back.
     pub(super) fn arranged_here(&mut self) {
-        if let Some(open) = self.deck.as_mut() {
-            open.split.told = split::Told::Nothing;
-        }
         self.keep_split();
         if let Some(open) = self.deck.as_ref() {
             open.refresh(self.shared);
@@ -305,7 +221,7 @@ impl On<'_> {
     }
 
     /// The person pressed `x`, `y` points from the top left of `window` (an NSWindow's address):
-    /// in the half of a split window not in use, that half's tab is the one in use now.
+    /// on a pane of a split tab not in use, that pane is the one in use now.
     pub(super) fn pressed(&mut self, window: usize, x: f64, y: f64) {
         let Some(open) = self.deck.as_ref() else {
             return;
@@ -314,7 +230,7 @@ impl On<'_> {
             return;
         }
         let Some(key) = open
-            .half_at(x, y)
+            .pane_at(x, y)
             .filter(|key| Some(*key) != open.shown_key())
         else {
             return;

@@ -11,6 +11,11 @@ use tao::event_loop::EventLoopProxy;
 
 use super::host::Cmd;
 
+#[path = "agents_resume.rs"]
+mod resume;
+pub(super) use resume::Resuming;
+pub use resume::{Launch, Resumed, launch, names_session, pinned, resumed};
+
 /// A coding agent's command line program.
 pub(super) struct Agent {
     /// How the window's pages name it (`claude`).

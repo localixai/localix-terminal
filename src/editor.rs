@@ -16,7 +16,7 @@ use vendored::{SCRIPTS, Script};
 
 /// The page's own script, and its SHA-384: the page's policy runs it by that hash.
 const GLUE: &str = include_str!("editor/page.js");
-const GLUE_SHA384: &str = "4ARKJHoi3RfCenlBibuEJ4l0Z+NTQbQ4aVm8mPRj3tZGq9EDfoD1XGBAs35eLZB1";
+const GLUE_SHA384: &str = "6CCd87ZiwbedsUSoqR+ogoK+Uk/HlTTAAJs18qeEGkQfhrZ6HB4/T0wV4B9h4rPP";
 
 fn vendored(name: &str) -> Option<&'static Script> {
     SCRIPTS.iter().find(|script| script.name == name)

@@ -139,3 +139,19 @@ fn a_file_is_opened_with_its_language_and_what_was_left_unsaved() {
     assert_eq!(saved(Saved::Conflict), r#"S({"conflict":true,"ok":false})"#);
     assert_eq!(saved(Saved::Failed("no")), r#"S({"ok":false,"why":"no"})"#);
 }
+
+#[test]
+fn the_editor_leaves_the_pane_menus_keys_to_the_menu() {
+    // The window's ⌘D and ⌥⌘arrows (the Pane menu) are the same over a file as anywhere: the
+    // editor's own bindings of them are taken out of its keymaps.
+    for key in [
+        "Mod-d",
+        "Mod-Alt-ArrowLeft",
+        "Mod-Alt-ArrowRight",
+        "Mod-Alt-ArrowUp",
+        "Mod-Alt-ArrowDown",
+    ] {
+        assert!(GLUE.contains(&format!("\"{key}\"")), "{key}");
+    }
+    assert!(GLUE.contains("keymap.of(ours(["));
+}

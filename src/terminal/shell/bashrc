@@ -1,6 +1,7 @@
 # Localix Terminal: a bash started in a terminal tab reads this file. It reads the files a login bash
 # reads (/etc/profile, then the person's first of .bash_profile, .bash_login, .profile), and
-# has the shell say when a command starts and how it ended, so a wait on the terminal knows.
+# has the shell say when a command starts and how it ended, and that its prompt is ready, so a
+# wait on the terminal knows.
 # None of the person's files is changed. The shell itself is not a login one: it ends with
 # `exit`, not `logout`, and reads no .bash_logout. The app's command is put first on PATH again
 # after those files, which may set a PATH of their own (path_helper in /etc/profile on macOS).
@@ -34,8 +35,9 @@ if [[ $- == *i* && -z $(trap -p DEBUG) ]]; then
     _llxterm_ran=
     return "$code"
   }
-  # Last at each prompt: the next command to run is the person's.
+  # Last at each prompt: the next command to run is the person's, and the prompt is ready.
   _llxterm_arm() {
+    builtin printf '\e]133;A\a'
     _llxterm_armed=1
   }
   # Before each command. The first after a prompt is the person's, unless it is the next

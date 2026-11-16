@@ -6,7 +6,7 @@ use std::sync::Arc;
 use serde_json::json;
 
 use super::super::tests::{caller, desk_on};
-use crate::browser::Halves;
+use crate::browser::Side;
 use crate::layout;
 use crate::testing::Scratch;
 
@@ -96,12 +96,7 @@ fn panes_opened_are_tabs_and_a_split_is_one_tab_of_two_kept_across_a_restart() {
 
     // The person puts t3 on the right of t1: one tab of the two, where t1 was.
     let group = crate::projects::key(project);
-    let halves = Halves {
-        shown: "t1",
-        beside: "t3",
-        right: true,
-    };
-    desk.split_told(halves);
+    desk.split_told("t3", "t1", Side::Right);
     assert_eq!(tabs(&store, project), [vec![one, three], vec![two]]);
     assert!(notices(&store).iter().any(|told| told == "tab"));
 
@@ -126,7 +121,7 @@ fn panes_opened_are_tabs_and_a_split_is_one_tab_of_two_kept_across_a_restart() {
 }
 
 #[test]
-fn a_split_made_whole_puts_the_other_pane_in_a_tab_after_it() {
+fn a_pane_taken_out_of_a_split_is_a_tab_of_its_own_after_it() {
     let store = Arc::new(crate::store::Store::memory().unwrap());
     let scratch = Scratch::new();
     let desk = desk_on(Arc::clone(&store));
@@ -142,18 +137,10 @@ fn a_split_made_whole_puts_the_other_pane_in_a_tab_after_it() {
             .unwrap()
     };
     let (one, two) = (row("t1"), row("t2"));
-    desk.split_told(Halves {
-        shown: "t2",
-        beside: "t1",
-        right: false,
-    });
+    desk.split_told("t1", "t2", Side::Left);
     assert_eq!(tabs(&store, project), [vec![one, two]]);
-    desk.whole_told(Halves {
-        shown: "t2",
-        beside: "t1",
-        right: false,
-    });
-    assert_eq!(tabs(&store, project), [vec![two], vec![one]]);
+    desk.whole_told("t2");
+    assert_eq!(tabs(&store, project), [vec![one], vec![two]]);
     desk.shutdown();
 }
 

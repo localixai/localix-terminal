@@ -53,7 +53,7 @@ impl Deck {
             // The host's: laid out without a refresh while the edge is dragged.
             Click::SideWidth(..)
             | Click::SplitMove(..)
-            | Click::SplitEven
+            | Click::SplitEven(_)
             | Click::Move(..)
             | Click::Place(..)
             | Click::DropOver(..)
@@ -92,9 +92,8 @@ impl Deck {
                 ids.join(", ")
             ));
         }
-        match closing {
-            true => self.stay_by(key, shared),
-            false => self.split_follows(key),
+        if closing {
+            self.stay_by(key, shared);
         }
         match (closing, key) {
             (false, Key::Web(id)) => {
@@ -162,7 +161,7 @@ impl Deck {
             | Click::Visit(_)
             | Click::Offer(_)
             | Click::SplitMove(..)
-            | Click::SplitEven
+            | Click::SplitEven(_)
             | Click::Move(..)
             | Click::Place(..)
             | Click::DropOver(..)
@@ -194,10 +193,10 @@ impl Deck {
     /// The person's settings, taken by the window and its own pages (never the browser's).
     pub(crate) fn restyle(&mut self, settings: &super::super::settings::Settings) {
         let script = super::super::settings::look_script(settings);
-        for page in [&self.strip, &self.side, &self.nav, &self.line, &self.docs]
+        let parts = [&self.strip, &self.side, &self.nav, &self.docs]
             .into_iter()
-            .flatten()
-        {
+            .flatten();
+        for page in parts.chain(&self.lines) {
             let _ = page.evaluate_script(&script);
         }
         for open in &self.terms {
@@ -346,11 +345,5 @@ impl Deck {
     ) -> Option<usize> {
         let strip = self.strip.as_ref()?;
         super::super::platform::show(strip, at, entries)
-    }
-
-    /// Split, the tab picked (`key`) takes the half in use, or changes places with the one beside.
-    fn split_follows(&mut self, key: Key) {
-        let was = self.shown_key();
-        self.split.beside = super::super::split::after_show(self.split.beside, was, key);
     }
 }

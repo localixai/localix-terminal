@@ -14,7 +14,12 @@ pub(super) trait Source: Sync {
 }
 
 /// Every source, gathered in turn.
-pub(super) const SOURCES: &[&dyn Source] = &[&Asks, &Boards, &Terminals];
+pub(super) const SOURCES: &[&dyn Source] = &[
+    &Asks,
+    &Boards,
+    &super::terminals::Terminals,
+    &super::resumes::Resumes,
+];
 
 /// What the agent asked the person: something to do on a tab, or that its session waits.
 struct Asks;
@@ -137,71 +142,5 @@ fn handed_in(card: &crate::board::Card) -> String {
         (Some("person"), _) => "You moved it to Review".to_string(),
         (by, Some(result)) => format!("{}: {result}", by.unwrap_or("agent")),
         (by, None) => format!("{} handed it in", by.unwrap_or("agent")),
-    }
-}
-
-/// The terminals whose program ended or has a note for the person, while their tab is open.
-struct Terminals;
-
-/// What a terminal has for the person: its command, how its program ended if it did, and the
-/// note it waits with.
-struct Had {
-    id: u32,
-    command: String,
-    ended: bool,
-    status: Option<i32>,
-    note: Option<(u32, String)>,
-}
-
-impl Source for Terminals {
-    fn gather(&self, desk: &Desk) -> Vec<Event> {
-        // The sessions' lock is let go before the registry's is taken.
-        let had: Vec<Had> = (crate::lock(&desk.sessions).iter())
-            .map(|(id, session)| Had {
-                id: *id,
-                command: session.command().trim().to_string(),
-                ended: session.ended(),
-                status: session.status(),
-                note: session.note(),
-            })
-            .filter(|had| had.ended || had.note.is_some())
-            .collect();
-        let registry = crate::lock(&desk.registry);
-        let mut events = vec![];
-        for had in had {
-            let key = format!("t{}", had.id);
-            let Some(owner) = registry.owner_named(&key) else {
-                continue;
-            };
-            let group = registry.group_of(&owner);
-            let title = if had.command.is_empty() {
-                "shell"
-            } else {
-                &had.command
-            };
-            let show = || Do::Open(Leads::Tab(key.clone()));
-            // The program's own words, plain: shown to the person as its title is.
-            if let Some((number, words)) = had.note {
-                let event = Event::new(format!("said:{key}:{number}"), Kind::Said, &group, &key)
-                    .says(title, words)
-                    .names_its_tab()
-                    .button("Show", show());
-                events.push(event);
-            }
-            if had.ended {
-                let (kind, detail) = match had.status {
-                    Some(0) => (Kind::Finished, "Finished".to_string()),
-                    Some(code) => (Kind::Failed, format!("Exited with {code}")),
-                    None => (Kind::Failed, "Ended".to_string()),
-                };
-                let event = Event::new(format!("ended:{key}"), kind, &group, &key)
-                    .says(title, detail)
-                    .names_its_tab()
-                    .button("Show", show())
-                    .button("Close", Do::Close { key: key.clone() });
-                events.push(event);
-            }
-        }
-        events
     }
 }

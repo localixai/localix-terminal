@@ -35,13 +35,35 @@ pub enum Heard<'a> {
     /// A page showed an address, or was titled: the ledger keeps it (popups too, which the
     /// window opened itself).
     Went(Went<'a>),
-    /// The window split in the project of this key (its halves' tabs): the layout keeps it.
-    Split(Halves<'a>),
-    /// The split of these two tabs made whole, or one of them gone: the layout keeps their tab
-    /// whole, and every other split as it is.
-    Whole(Halves<'a>),
-    /// They finished resizing this pane's split: the left half's share, in ten-thousandths.
-    SplitResized(u16),
+    /// They asked for a new pane (`asked`: a terminal, or an agent's program in one) on `side`
+    /// of pane `beside`, in its tab, in the project of this key: the desk opens it there, in
+    /// the folder of the terminal beside (else the project's), and it takes the keys.
+    SplitNew {
+        beside: &'a str,
+        side: Side,
+        asked: Asked,
+    },
+    /// They put this key's pane on `side` of pane `beside` (a tab carried onto the pages, or
+    /// Split View): one tab of them, `beside` still in focus.
+    Split { beside: &'a str, side: Side },
+    /// They took this key's pane out of the tab it shares (Move Pane to New Tab, Split View):
+    /// a tab of its own right after it; a session of one terminal is made whole instead, its
+    /// documents put by.
+    Whole,
+    /// They made the branches of the tab this key's pane is in even by what each child holds.
+    Equalized,
+    /// They let go of a divider of the tab this key's pane is in: the branch at `path` of its
+    /// tree gives its children before `at` `share` of it, in ten-thousandths.
+    Resized {
+        path: &'a [usize],
+        at: usize,
+        share: u16,
+    },
+    /// They put the keys in this key's pane, one of a tab of several: the tab's pane in focus.
+    Focused,
+    /// They zoomed this key's pane (`true`: alone over its tab's part, the rest put by and
+    /// running), or drew its tab whole again.
+    Zoomed(bool),
     /// They dragged the tab of this key's pane before the tab of pane `before` (none: to the
     /// end of its project's list): the layout keeps it.
     Moved {
@@ -139,29 +161,25 @@ pub struct Arranged {
     pub shown: Option<String>,
 }
 
-/// One tab: its panes in sight by their keys, left to right (a split's two, or one), side by
-/// side or not, each one's share, and the one in focus. `docs` are its documents (a session's
-/// files and pages, one of them in sight at most) and `all` every pane it has, in order.
-/// `whole`, the person keeps it to its pane in focus alone, the rest put by.
-#[derive(Debug, Clone, PartialEq, Default)]
+/// A tab's tree of panes as the window draws it: the layout's own tree, its panes named by
+/// their keys (`w1`, `t2`).
+pub type Drawn = crate::layout::Tree<String>;
+
+/// One tab: its tree by its panes' keys (a pane with no key this run left out), and the one in
+/// focus. `docs` are its documents (a session's files and pages, one of them in sight at most)
+/// and `all` every pane it has, in order. `whole`, the person keeps it to its pane in focus
+/// alone, the rest put by.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Arranging {
-    pub panes: Vec<String>,
-    pub across: bool,
-    pub shares: Vec<f64>,
+    pub tree: Drawn,
     pub focused: Option<String>,
     pub docs: Vec<String>,
     pub all: Vec<String>,
     pub whole: bool,
 }
 
-/// A project's split window: the tab in use, the one beside it, and whether that one is on the
-/// right.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Halves<'a> {
-    pub shown: &'a str,
-    pub beside: &'a str,
-    pub right: bool,
-}
+/// A way from a pane: where a new one goes beside it, or where the keys go.
+pub use crate::layout::geometry::Side;
 
 /// A question to the person: go on (`yes`) or Cancel. The desk words it; the window asks it as
 /// its system asks.

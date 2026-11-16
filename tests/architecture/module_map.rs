@@ -90,7 +90,7 @@ pub(crate) const EXCEPTIONS: &[(&str, &str, &str)] = &[
     (
         "browser",
         "layout",
-        "a split's drag stops at the layout's least share",
+        "the window draws a split tab by the layout's own tree and its geometry",
     ),
     (
         "client",

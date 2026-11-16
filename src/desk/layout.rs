@@ -4,11 +4,18 @@
 //! another (a split), a tab moved or shown. The window draws what this keeps.
 
 use crate::feed::{Entity, Op, Write};
+use crate::layout::geometry::Side;
 use crate::layout::{self, Tree, WindowId, WorkspaceId};
 use crate::ledger::Row;
 use crate::projects::ProjectId;
 
 use super::{Call, Desk};
+
+// A tab's zoom, and the layout as the window tool reaches it: of the layout's, kept apart.
+#[path = "layout_agent.rs"]
+mod agent;
+#[path = "layout_zoom.rs"]
+mod zoom;
 
 /// The notices of a change: each thing it changed, upserted.
 pub(super) fn told(write: &Write<'_, '_>, entities: &[Entity]) -> Result<(), String> {
@@ -143,7 +150,8 @@ impl Desk {
         told(write, &[Entity::Workspace { id: workspace }])
     }
 
-    /// Pane `pane` closed: out of its tab, which closes when it was all of it.
+    /// Pane `pane` closed: out of its tab, which closes when it was all of it, and whose zoom
+    /// ends (layout_zoom.rs).
     pub(super) fn unplace_pane(write: &Write<'_, '_>, pane: Row, now: u64) -> Result<(), String> {
         let Some(id) = layout::tab_of(write.tx(), pane)? else {
             return Ok(());
@@ -151,10 +159,13 @@ impl Desk {
         let Some(tab) = layout::tab(write.tx(), id)? else {
             return Ok(());
         };
-        match tab.tree.without(pane) {
+        match tab.tree.without(&pane) {
             Some(tree) => {
                 let focused = tab.focused.filter(|focused| *focused != pane);
                 layout::set_tree(write.tx(), id, &tree, focused)?;
+                if tab.whole {
+                    layout::set_whole(write.tx(), id, false)?;
+                }
                 told(write, &[Entity::Tab { id }])
             }
             None => {
@@ -164,64 +175,39 @@ impl Desk {
         }
     }
 
-    /// Pane `beside` put beside pane `shown`, on its right or its left, in `shown`'s tab: out
-    /// of the tab it was in (which closes when it was all of it). Each pane alone again first,
-    /// so the tab is the two of them. A session and a document are no such pair: the document
-    /// is shown in the session, or joins it (layout_split.rs).
-    pub(super) fn split_panes(&self, shown: Row, beside: Row, right: bool) -> Result<(), String> {
+    /// Pane `beside` put on `side` of pane `shown`, in `shown`'s tab, `shown` in focus and the
+    /// tab's zoom ended: out of the tab it was in (which closes when it was all of it), or, of
+    /// the same tab, out of its place there first. A session and a document are no such pair: the document is shown in
+    /// the session, or joins it; and a session takes no pane but a terminal (layout_split.rs).
+    pub(super) fn split_panes(&self, shown: Row, beside: Row, side: Side) -> Result<(), String> {
         let now = crate::board::now();
         self.feed.write(|write| {
-            if Self::split_session(write, (shown, beside), right, now)? {
+            if Self::split_session(write, (shown, beside), side, now)? {
                 return Ok(());
             }
             let Some(id) = layout::tab_of(write.tx(), shown)? else {
                 return Err("the pane in use is in no tab".to_string());
             };
-            if layout::tab_of(write.tx(), beside)? == Some(id) {
-                Self::unsplit_tab(write, id, shown, now)?;
-            }
-            Self::unplace_pane(write, beside, now)?;
             let Some(tab) = layout::tab(write.tx(), id)? else {
                 return Err("the pane in use is in no tab".to_string());
             };
-            let mut tree = tab.tree;
-            if !tree.split(shown, beside, true, right) {
+            let mut tree = match tab.tree.holds(&beside) {
+                true => (tab.tree.clone().without(&beside)).unwrap_or_else(|| Tree::leaf(shown)),
+                false => {
+                    Self::unplace_pane(write, beside, now)?;
+                    (layout::tab(write.tx(), id)?).map_or_else(|| tab.tree.clone(), |tab| tab.tree)
+                }
+            };
+            if !tree.split(&shown, beside, side.across(), side.forward()) {
                 return Err("the pane in use is not in its tab".to_string());
             }
             layout::set_tree(write.tx(), id, &tree, Some(shown))?;
+            layout::set_whole(write.tx(), id, false)?;
             told(
                 write,
                 &[Entity::Tab { id }, Entity::Workspace { id: tab.workspace }],
             )
         })
-    }
-
-    /// The tab of pane `kept` made of it alone: each other pane a tab of its own after it, in
-    /// the order they were in.
-    pub(super) fn unsplit_tab(
-        write: &Write<'_, '_>,
-        id: layout::TabId,
-        kept: Row,
-        now: u64,
-    ) -> Result<(), String> {
-        let Some(tab) = layout::tab(write.tx(), id)? else {
-            return Ok(());
-        };
-        let others: Vec<Row> = (tab.tree.panes().into_iter())
-            .filter(|pane| *pane != kept)
-            .collect();
-        if others.is_empty() {
-            return Ok(());
-        }
-        layout::set_tree(write.tx(), id, &Tree::leaf(kept), Some(kept))?;
-        for (after, pane) in others.into_iter().enumerate() {
-            let at = Some(tab.place + 1 + after);
-            layout::open_tab(write.tx(), tab.workspace, &Tree::leaf(pane), None, at, now)?;
-        }
-        told(
-            write,
-            &[Entity::Tab { id }, Entity::Workspace { id: tab.workspace }],
-        )
     }
 
     /// The window panes open in shows its workspace of project `project` (made when it has
@@ -258,7 +244,7 @@ impl Desk {
                 changed.push(Entity::Workspace { id: tab.workspace });
             }
             let mut tree = tab.tree.clone();
-            tree.show(pane);
+            tree.show(&pane);
             if tab.focused != Some(pane) || tree != tab.tree {
                 layout::set_tree(write.tx(), id, &tree, Some(pane))?;
                 changed.push(Entity::Tab { id });

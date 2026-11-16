@@ -29,7 +29,8 @@ settings) so calls do not each ask.
   review (or blocks it with what it needs). Start several for cards that touch different files.
 - **Commands**: `/tabs` (this project's tabs and your latest comments, in the chat), `/llxterm:end`
   (close this project's tabs), `/llxterm:stop` (quit Localix Terminal).
-- **A mod** (`hooks/register.tsx`):
+- **A mod** (`hooks/register.tsx`, with the board's reading in `board.ts` and the watcher in
+  `watch.ts`):
   - follows the app through one `llxterm window --watch`, which prints a line as the app comes
     or goes, a tab opens, changes or closes, the board changes or you comment: nothing is asked
     again and again;
@@ -47,8 +48,14 @@ settings) so calls do not each ask.
   - in a terminal of Localix Terminal (`TERM_PROGRAM=llxterm`), tells Claude that a page you ask for
     ("open google") opens as a tab of the window, not in another browser it has the tools of (Claude
     in Chrome, a built-in browser pane), unless you name that browser.
+  - in a terminal of the app, tells it the session's id as the session starts and again when
+    `/clear` or `/resume` gives it another, so the terminal resumes that session after the app
+    opens again (Settings, Terminal, Resume agents);
+  - in a terminal that reads program status (`LLXTERM_PROGRAM_STATUS=1`, and not inside tmux or
+    screen, whose own terminal hears Claude Code's report), leaves the line that Claude asks you
+    a question to the terminal;
 
-  All of it is the mod's own events (`agent.spawn`, `turn.complete`, `tool.call`, `session.end`),
+  All of it is the mod's own events (`agent.spawn`, `turn.start`, `turn.complete`, `tool.call`, `session.end`),
   none a classic hook or the prompt's content: an organization's security default keeps those out
   of reach of the plugins a person installs. The window as the browser is one row the mod adds
   to the conversation when the session starts, which Claude reads and you do not see.

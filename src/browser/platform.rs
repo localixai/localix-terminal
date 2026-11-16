@@ -47,7 +47,7 @@ pub(super) fn dock(
 }
 
 #[cfg(not(target_os = "macos"))]
-pub(super) use super::menu_gtk::{quit_through, showing};
+pub(super) use super::menu_gtk::{quit_through, showing, splitting, zooming};
 
 /// `question` asked in GTK's dialog, which holds the loop until it is answered; `done` takes
 /// whether the person went on. One signature with macOS, where the question is a sheet.
@@ -64,7 +64,7 @@ pub(super) fn confirm(
 /// their system asks it.
 #[cfg(target_os = "macos")]
 pub(super) use super::{
-    app_menu::{quit_through, showing},
+    app_menu::{quit_through, showing, splitting, zooming},
     appkit::confirm,
 };
 

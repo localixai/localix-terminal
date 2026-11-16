@@ -14,16 +14,18 @@ use super::super::{Arranged, platform};
 use super::{Deck, Part};
 
 impl Deck {
-    /// Each tab's documents kept as the layout `arranged` has them now.
-    pub(super) fn keep_stacks(&self, arranged: &HashMap<String, Arranged>) {
+    /// Each tab's documents, and each tab, kept as the layout `arranged` has them now.
+    pub(in super::super) fn keep_stacks(&self, arranged: &HashMap<String, Arranged>) {
         *crate::lock(&self.stacks) = session::stacks(arranged.values());
+        self.keep_tabs(arranged.values().flat_map(|one| one.tabs.clone()).collect());
     }
 
-    /// The document in sight: the tab shown, else the one beside it in a split window.
+    /// The document in sight: the tab shown, else one beside it in a split window.
     pub(super) fn doc_shown(&self) -> Option<Key> {
         self.docs.as_ref()?;
+        let sight = self.sight();
         let stacks = crate::lock(&self.stacks);
-        session::row(&stacks, self.shown_key(), self.pair()).map(|row| row.0)
+        session::row(&stacks, self.shown_key(), &sight).map(|row| row.0)
     }
 
     /// How much of the top of tab `key`'s pane the documents' row takes, in points.
@@ -34,21 +36,33 @@ impl Deck {
         }
     }
 
-    /// The tab shown once tab `key`, shown now, closes: the other half of a split window; of
+    /// The tab shown once tab `key`, shown now, closes: in a split window (or a tab zoomed), the
+    /// pane of the tab used last, else the neighbour that takes its share (`taker`); of
     /// documents alone, the one next to it. None leaves it to the window.
     pub(super) fn after_closed(&self, key: Key) -> Option<Key> {
-        if let Some((left, right)) = self.pair() {
-            return Some(if left == key { right } else { left });
+        let mut sight = self.sight();
+        // A tab zoomed is drawn whole again without it: the taker is one of all its panes.
+        if self.zoomed() == Some(true) {
+            sight = (self
+                .tab_tree()
+                .map(|tree| tree.visible())
+                .into_iter()
+                .flatten())
+            .filter_map(|key| Key::parse(&key))
+            .collect();
+        }
+        if sight.len() >= 2 {
+            return self.taker(key, &sight);
         }
         session::next(&crate::lock(&self.stacks), key)
     }
 
-    /// The row laid over the pane of the document in sight: `halves` of a split window, else
-    /// the tabs' whole part (`left`, `width` wide), from `top`; out of sight with none, or
-    /// while the pages stand aside (`aside`).
+    /// The row laid over the pane of the document in sight: its place in the tree laid out
+    /// (`panes`), else the tabs' whole part (`left`, `width` wide, from `top`); out of sight
+    /// with none, or while the pages stand aside (`aside`).
     pub(super) fn place_docs(
         &self,
-        halves: Option<[(Key, f64, f64); 2]>,
+        panes: Option<&super::panes::Panes>,
         (left, width, top): (f64, f64, f64),
         aside: bool,
     ) {
@@ -57,18 +71,17 @@ impl Deck {
         };
         let shown = self.doc_shown().filter(|_| !aside);
         let spot = shown.map(|doc| {
-            (halves.iter().flatten())
-                .find(|half| half.0 == doc)
-                .map_or((left, width), |half| (half.1, half.2))
+            (panes.and_then(|panes| panes.rect(&doc)))
+                .map_or((left, width, top), |rect| (rect.x, rect.width, rect.y))
         });
-        let (x, wide) = spot.unwrap_or((-(left + width + 100.0), width));
-        platform::bound(docs, LogicalSize::new(wide, DOCS), x, top);
+        let (x, wide, y) = spot.unwrap_or((-(left + width + 100.0), width, top));
+        platform::bound(docs, LogicalSize::new(wide, DOCS), x, y);
     }
 
     /// Where the row lies in the window, over the pane of the document in sight: what its page
     /// says of a point is from there.
     pub(in super::super) fn docs_at(&self) -> (f64, f64) {
-        self.pane_at(self.doc_shown())
+        self.pane_origin(self.doc_shown())
     }
     /// The documents of the row tab `key` is in, in their order, if it is a document.
     pub(in super::super) fn stack_of(&self, key: Key) -> Option<Vec<Key>> {
@@ -81,8 +94,9 @@ impl Deck {
         let Some(docs) = &self.docs else {
             return;
         };
+        let sight = self.sight();
         let stacks = crate::lock(&self.stacks);
-        let row = session::row(&stacks, self.shown_key(), self.pair());
+        let row = session::row(&stacks, self.shown_key(), &sight);
         let script = strip::docs(row.map(|(on, keys)| (on, keys.as_slice())));
         self.say((Part::Docs, docs), "pictures", file_icons::script());
         self.say((Part::Docs, docs), "docs", &script);

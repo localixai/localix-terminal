@@ -7,7 +7,33 @@ use std::sync::Arc;
 use super::super::pty;
 use super::{Session, wait};
 
+/// Whether `text`, typed by the person in the window, may put something on a shell's line: a
+/// key of theirs, or an arrow that brings a line back from the history; not what the window
+/// answers a program for them (its attributes, the pointer, where the cursor is).
+pub(super) fn edits_the_line(text: &str) -> bool {
+    let arrow = ["\x1b[A", "\x1b[B", "\x1bOA", "\x1bOB"].contains(&text);
+    arrow || !(text.len() > 1 && text.starts_with('\x1b'))
+}
+
 impl Session {
+    /// Whether a line typed now goes to the person's shell at its prompt and to nothing else:
+    /// the shell in front (its own process group, not a program it runs), no command at work by
+    /// its marks, and nothing typed since it last said its prompt is ready. `marked`: that mark
+    /// is needed; else a shell that never marks one (fish, `exec tmux`) takes the line as well.
+    pub fn at_prompt(&self, marked: bool) -> bool {
+        use std::os::fd::AsRawFd;
+        let group = super::super::foreground::group(self.control.as_raw_fd());
+        let shell = group.is_some() && group == libc::pid_t::try_from(self.pid()).ok();
+        let state = self.shared.lock();
+        let marks = state.screen.marks();
+        let prompted = marks.prompts() > 0;
+        shell
+            && !state.ended
+            && marks.running().is_none()
+            && (prompted || !marked)
+            && !(prompted && marks.typed_since_prompt())
+    }
+
     /// What the program asked to tell the person, with its number, until they type in the
     /// terminal: plain words of the program's, for the person and no agent.
     pub fn note(&self) -> Option<(u32, String)> {
@@ -21,23 +47,26 @@ impl Session {
         self.shared.lock().on_note = Some(Arc::new(heard));
     }
 
-    /// The person typed `text` in the window: a note that waited for them is read. What the
-    /// window types for them (a reply to the program's question, the mouse, an arrow) starts
-    /// with an escape, and reads nothing.
+    /// The person typed `text` in the window: a note that waited for them is read, and what the
+    /// program said it finished or failed is seen. What the window types for them (a reply to
+    /// the program's question, the mouse, an arrow) starts with an escape, and reads nothing.
     pub(super) fn attended(&self, text: &str) {
         if text.len() > 1 && text.starts_with('\x1b') {
             return;
         }
         let heard = {
             let mut state = self.shared.lock();
-            if !state.screen.notes().heard() {
-                return;
+            state.screen.status_mut().seen();
+            if state.screen.notes().heard() {
+                state.on_note.clone()
+            } else {
+                None
             }
-            state.on_note.clone()
         };
         if let Some(heard) = heard {
             heard();
         }
+        super::status::statused(&self.shared);
     }
 
     /// What the screen shows, as text: kept when the terminal closes, shown again when it is
@@ -75,6 +104,15 @@ impl Session {
             }
         }
         out
+    }
+
+    /// The command line of the program in front now (past a shell that only runs it, from a
+    /// script's own name where a runtime runs it), if it can be read: its arguments are the
+    /// program's, untrusted as its output is.
+    pub fn front_command(&self) -> Option<Vec<String>> {
+        use std::os::fd::AsRawFd;
+        let group = super::super::foreground::group(self.control.as_raw_fd())?;
+        super::super::foreground::command(group)
     }
 
     /// The folder the program in front is in now (the shell's after a `cd`), if it is known.

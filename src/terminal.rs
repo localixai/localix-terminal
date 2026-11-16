@@ -13,12 +13,14 @@ mod notes;
 mod pty;
 mod screen;
 mod session;
+mod status;
 
 pub use environment::Own;
 pub use hooks::keep_in as keep_shell_files_in;
 pub use marks::Ended;
 pub use pty::look_for_commands_on;
 pub use session::{DEFAULT_WAIT, Painter, Session, Until};
+pub use status::{Asks, Doing, Status};
 
 /// The grid a terminal panel shows: a terminal session is this size.
 pub const COLUMNS: u16 = 120;
@@ -34,16 +36,18 @@ const XTERM_CSS: &str = include_str!("terminal/vendor/xterm.css");
 const SEARCH: &str = include_str!("terminal/vendor/addon-search.js");
 const SEARCH_SHA384: &str = "dj0JnorfKQCQPwELv9I4mHsG6e1V3oaf+DLu0hmYSx6DJ+meQBPtk42UbmpNKOAg";
 
-/// The emulator page's own script after the pages' kit (the terminal, the person's keys, find),
+/// The emulator page's own script after the pages' kit (the terminal, the person's keys, the find
+/// row's words and keys, find in the output),
 /// and their SHA-384: the page's policy runs it by that hash.
 pub(crate) const GLUE: &str = concat!(
     include_str!("page/kit.js"),
     include_str!("terminal/emulator.js"),
     include_str!("terminal/keyboard.js"),
+    include_str!("page/find.js"),
     include_str!("terminal/find.js")
 );
 pub(crate) const GLUE_SHA384: &str =
-    "WNsE0KeiGwNqPCHsJ3i9kC/HE5BJeVbDIQVa6Z2RQWiLgYzlxv/ph7+LxoAL87bx";
+    "r5ddrI0GOVpKwsJZ+hm2uwaEPjRBnN4vRVnTu0iAstgF8fB7XRjwZ5x4twoGyt1E";
 
 /// The page that shows a session in xterm.js, titled `title`, in the window's light or dark.
 /// Its policy runs its own scripts only, by their hashes.
@@ -60,6 +64,7 @@ pub fn page(title: &str) -> String {
             ("xterm", XTERM),
             ("search", SEARCH),
             ("glue", GLUE),
+            ("find", crate::page::FIND_ROW),
         ],
     )
 }

@@ -31,7 +31,13 @@ fn a_chord_reads_from_words_and_back_and_shows_as_the_system_draws_it() {
 fn every_default_is_a_chord_and_no_two_share_one() {
     let resolved = resolved(&BTreeMap::new());
     for (shortcut, chord) in &resolved {
-        assert!(chord.is_some(), "{}", shortcut.id);
+        // A row with no keys of its own is a menu item alone, until the person gives it some.
+        assert_eq!(
+            chord.is_some(),
+            !shortcut.keys.is_empty(),
+            "{}",
+            shortcut.id
+        );
         assert!(
             shortcut
                 .does
@@ -143,4 +149,46 @@ fn one_rule_says_what_a_shortcuts_keys_are_for_the_buttons_and_the_menus() {
     assert_eq!(text(&off), None);
     // A keys the person's file holds for a shortcut the catalog lacks is nobody's.
     assert_eq!(keys_of("gone-for-good"), None);
+}
+
+#[test]
+fn the_panes_are_a_group_of_their_own_on_the_keys_the_mac_terminals_use() {
+    let row = |id: &str| every().into_iter().find(|s| s.id == id).unwrap();
+    for (id, keys, does) in [
+        ("split-right", "cmd+d", "key split right"),
+        ("split-down", "cmd+shift+d", "key split down"),
+        ("pane-left", "alt+cmd+left", "key pane left"),
+        ("pane-right", "alt+cmd+right", "key pane right"),
+        ("pane-up", "alt+cmd+up", "key pane up"),
+        ("pane-down", "alt+cmd+down", "key pane down"),
+        ("pane-next", "alt+cmd+]", "key pane next"),
+        ("pane-previous", "alt+cmd+[", "key pane previous"),
+        ("zoom", "cmd+shift+enter", "key zoom"),
+        ("resize-right", "ctrl+cmd+right", "key resize right"),
+        (
+            "resize-far-down",
+            "ctrl+shift+cmd+down",
+            "key resize far down",
+        ),
+        ("equalize", "ctrl+cmd+=", "key equalize"),
+        ("pane-out", "", "key pane out"),
+    ] {
+        let shortcut = row(id);
+        assert_eq!(
+            (shortcut.group, shortcut.keys, shortcut.does),
+            ("Pane", keys, does)
+        );
+        // What the menu fires is what the strip's words read.
+        let words = does.strip_prefix("key ").unwrap();
+        assert!(
+            crate::browser::strip::Keyed::parse(words).is_some(),
+            "{does}"
+        );
+    }
+    // A menu of the bar after the tabs', and Split View stays the tabs'.
+    let groups = groups();
+    let at = |group: &str| groups.iter().position(|it| *it == group).unwrap();
+    assert_eq!(at("Pane"), at("Tabs") + 1);
+    assert_eq!(row("split").group, "Tabs");
+    assert_eq!(row("close-tab").keys, "cmd+w");
 }

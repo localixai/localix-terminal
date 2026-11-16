@@ -1,5 +1,6 @@
 //! UI message parsing and coordinate translation regressions.
 
+use super::super::input::Seeking;
 use super::*;
 
 #[test]
@@ -205,10 +206,16 @@ fn a_dragged_tab_says_where_it_goes() {
         click("drop w1 400 120"),
         Some(Click::Drop(Key::Web(1), 400, 120))
     );
-    assert_eq!(
-        click("split-move -40 done"),
-        Some(Click::SplitMove(-40, true))
-    );
+    // A divider says which of the tree's it is.
+    for (said, heard) in [
+        ("split-move 1 9 done", Some(Click::SplitMove(1, 9, true))),
+        ("split-move 0 -12", Some(Click::SplitMove(0, -12, false))),
+        ("split-even 2", Some(Click::SplitEven(2))),
+        ("split-move -40 done", None),
+        ("split-even", None),
+    ] {
+        assert_eq!(click(said), heard, "{said}");
+    }
     assert_eq!(click("move w2"), None);
     // A document carried along its row is placed in it: before another, or last.
     assert_eq!(
@@ -272,4 +279,52 @@ fn an_agents_mark_where_no_tab_is_left_asks_for_that_agent() {
     // Only an agent the app knows: the page's word is never a command.
     assert_eq!(click("agent rm"), None);
     assert_eq!(click("agent"), None);
+}
+
+#[test]
+fn the_toolbars_find_row_says_its_step_its_accent_and_its_query() {
+    let step = |step, query: &str| {
+        Some(Seek::Step {
+            step,
+            accent: "#0a84ff".into(),
+            query: query.into(),
+        })
+    };
+    assert_eq!(
+        Seek::parse("find type #0a84ff needle"),
+        step(Seeking::Type, "needle")
+    );
+    // The query is the rest, spaces and all; an empty one is a query too (it lights nothing).
+    assert_eq!(
+        Seek::parse("find next #0a84ff a needle "),
+        step(Seeking::Next, "a needle ")
+    );
+    assert_eq!(
+        Seek::parse("find previous #0a84ff "),
+        step(Seeking::Previous, "")
+    );
+    assert_eq!(Seek::parse("find type #0a84ff"), step(Seeking::Type, ""));
+    assert_eq!(Seek::parse("find close"), Some(Seek::Close));
+}
+
+#[test]
+fn anything_else_is_no_step_of_find() {
+    let long = format!("find type #0a84ff {}", "n".repeat(1001));
+    for junk in [
+        "",
+        "find",
+        "find open #0a84ff x",
+        "find type red x",
+        "find type #0a84f x",
+        "find type #0a84ffff x",
+        "find type #0a84fg x",
+        "find close now",
+        "find next",
+        "key find text",
+        long.as_str(),
+    ] {
+        assert_eq!(Seek::parse(junk), None, "{junk:?}");
+    }
+    // A step of find is no click of the strip's.
+    assert_eq!(click("find type #0a84ff needle"), None);
 }

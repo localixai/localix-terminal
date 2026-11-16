@@ -126,3 +126,9 @@ pub(super) fn quit_through(_proxy: &tao::event_loop::EventLoopProxy<super::host:
 
 /// Elsewhere there is no menu bar to grey.
 pub(super) fn showing(_page: bool, _finds: bool) {}
+
+/// Elsewhere there is no menu bar to grey.
+pub(super) fn splitting(_right: bool, _down: bool) {}
+
+/// Elsewhere there is no menu bar to grey.
+pub(super) fn zooming(_zooms: bool) {}

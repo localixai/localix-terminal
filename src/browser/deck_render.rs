@@ -91,6 +91,10 @@ impl Deck {
         let arranged = shared.arranged_here();
         let listed = self.listed(shared, &arranged);
         let shown_key = (listed.iter().find(|tab| tab.shown)).and_then(|tab| Key::parse(&tab.id));
+        // The pane shown is the one used last: a way to a pane ties to it (deck_keys.rs).
+        if let Some(key) = shown_key {
+            self.used(key);
+        }
         let bar = shown_key.and_then(|_| shared.offers.bar());
         crate::lock(&self.offer).clone_from(&bar);
         self.keep_stacks(&arranged);
@@ -103,6 +107,8 @@ impl Deck {
             let script = strip::comment(&shared.key, self.commenting, self.sent);
             self.tell((None, web.active()), "comment", &script, (id, loaded));
         }
+        // And its find, as the toolbar's row holds it (deck_find.rs).
+        self.refind(shared);
         let Some(strip) = &self.strip else {
             return;
         };
@@ -128,17 +134,13 @@ impl Deck {
                 .collect(),
         };
         let drawn = strip::script(&items, shown, side, &projects);
-        // The split's two tabs, left and right: the side lists them as one; another tab shown,
-        // the project's split still listed so.
-        let on = self.pair().map(|(left, right)| [left.name(), right.name()]);
-        let kept = if self.split.told == super::super::split::Told::Whole {
-            None
-        } else {
-            (shared.arranged_of(&project).as_ref())
-                .and_then(super::super::split::kept_of)
-                .as_ref()
-                .map(super::super::split::sides)
-        };
+        // The panes of the split shown, in their order: the side lists them as one row; another
+        // tab shown, the project's split still listed so.
+        let sight = self.sight();
+        let on = (sight.len() >= 2).then(|| sight.iter().map(|key| key.name()).collect::<Vec<_>>());
+        let own = self.split.own.as_ref();
+        let kept = (shared.arranged_of(&project).as_ref())
+            .and_then(|arranged| super::super::split::listed(arranged, own));
         let split = format!("SP({})", serde_json::json!(on.or(kept)));
         let parts = [
             (Part::Strip, Some(strip)),
@@ -182,9 +184,9 @@ impl Deck {
     }
 
     /// The tabs `listed` as the strip's pages list them, tab `shown` the one the window shows:
-    /// each with what waits in it, its agent, and, a document, the tab that stands for its
-    /// session (the lists show the session; the document is a tab of the row over it), from
-    /// the moment it opens.
+    /// each with what waits in it, its tab's zoom, its agent, and, a document, the tab that
+    /// stands for its session (the lists show the session; the document is a tab of the row
+    /// over it), from the moment it opens.
     fn items(
         listed: Vec<WindowTab>,
         arranged: &std::collections::HashMap<String, super::super::Arranged>,
@@ -192,8 +194,12 @@ impl Deck {
         shared: &Shared,
     ) -> Vec<Item> {
         let mut waits = alerts::waits(&alerts::read(&crate::lock(&shared.center)));
+        let working = crate::lock(&shared.working).clone();
         let mut led: std::collections::HashMap<String, String> = (arranged.values())
             .flat_map(|arranged| session::led(arranged, shown))
+            .collect();
+        let zoomed: std::collections::HashMap<String, usize> = (arranged.values())
+            .flat_map(|arranged| session::zoomed(arranged, shown))
             .collect();
         (listed.into_iter())
             .filter_map(|tab| {
@@ -206,7 +212,11 @@ impl Deck {
                     title: tab.title,
                     detail: tab.detail,
                     agent: shared.offers.agent(&tab.id),
-                    waits: waits.remove(&tab.id),
+                    marks: strip::Marks {
+                        waits: waits.remove(&tab.id),
+                        working: working.get(&tab.id).copied(),
+                        zoomed: zoomed.get(&tab.id).copied(),
+                    },
                     of,
                     group: tab.group,
                 })
@@ -289,7 +299,7 @@ impl Deck {
 
     /// `script` run in `view` (a part of the strip, or none: the page shown) unless it is what
     /// that view was last told of `kind` for the same `about` (a page's own load).
-    fn tell(
+    pub(super) fn tell(
         &self,
         (part, view): (Option<Part>, &wry::WebView),
         kind: &'static str,

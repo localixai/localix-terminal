@@ -13,7 +13,7 @@ mod nodes;
 mod tree;
 
 pub use nodes::{set_tree, set_whole, tab, tabs};
-pub use tree::{LEAST, Share, Tree};
+pub use tree::{LEAST, Share, Tree, geometry};
 
 pub type WindowId = i64;
 pub type WorkspaceId = i64;

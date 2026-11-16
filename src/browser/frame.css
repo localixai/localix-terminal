@@ -118,4 +118,14 @@ html[data-reduced] body{background:transparent}
 :where(.btn.go){background:var(--accent);color:var(--on-acc);box-shadow:none}
 :where(.btn.go:hover:not(:disabled)){background:var(--accent);filter:brightness(1.08)}
 :where(.btn.go:active:not(:disabled)){background:var(--accent);filter:brightness(.92)}
+/* The find row (src/page/find.html), one look wherever a tab finds: the window's field, the
+   count in Callout with a width that does not change as it counts, and quiet icon buttons, Close
+   at the end. Each page places it and draws its hairline toward what it finds in. */
+:where(.finds){height:40px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:8px 16px;color:var(--ink-2);font:13px/16px var(--ui-font,var(--ui-sys));user-select:none;-webkit-user-select:none;cursor:default}
+:where(.finds) .field{width:240px;height:24px;border-radius:var(--r-2);color:var(--fg)}
+:where(.finds) [role=status]{min-width:96px;font-size:12px;line-height:15px;font-variant-numeric:tabular-nums;white-space:nowrap}
+:where(.finds) .btn.ico{width:24px;height:24px}
+:where(.finds) .btn.ico:last-child{margin-left:auto}
+:where(.finds) svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+html[data-inactive] :where(.finds) svg{opacity:.6}
 ::selection{background:-apple-system-selected-text-background}

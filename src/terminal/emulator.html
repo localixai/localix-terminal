@@ -23,28 +23,15 @@ body{margin:0;color:var(--fg);cursor:default}
 /* A full-screen program (vim, htop, an agent's screen) draws to the edge itself. */
 html[data-alt] .xterm{padding:0 0 8px}
 .xterm .xterm-viewport{background:transparent!important;overflow:hidden!important}
-/* Find (find.js): a row under the screen, as the editor's find row: the window's field, the count
-   and quiet icon buttons, a hairline above. The screen ends over it, so it covers no line. */
+/* Find (find.js): the find row (page/find.html, its look `.finds` in frame.css) under the screen,
+   a hairline above. The screen ends over it, so it covers no line. */
 html[data-find] #t{bottom:40px}
-#find{position:fixed;left:0;right:0;bottom:0;height:40px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:8px 16px;
-  box-shadow:0 -.5px 0 var(--ov-3);color:var(--ink-2);font:13px/16px var(--ui-font,var(--ui-sys));user-select:none;-webkit-user-select:none;cursor:default}
-#find .field{width:240px;height:24px;border-radius:var(--r-2);color:var(--fg)}
-#find-n{min-width:96px;font-size:12px;line-height:15px;font-variant-numeric:tabular-nums;white-space:nowrap}
-#find .btn.ico{width:24px;height:24px}
-#find-close{margin-left:auto}
-#find svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
-html[data-inactive] #find svg{opacity:.6}
+#find{position:fixed;left:0;right:0;bottom:0;box-shadow:0 -.5px 0 var(--ov-3)}
 </style>
 </head>
 <body>
 <div id="t"></div>
-<div id="find" role="search" hidden>
-<label class="field"><input id="find-q" type="text" placeholder="Find" aria-label="Find" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></label>
-<span id="find-n" role="status" aria-live="polite"></span>
-<button id="find-previous" class="btn plain ico" type="button" title="Show the previous match" aria-label="Show the previous match"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></button>
-<button id="find-next" class="btn plain ico" type="button" title="Show the next match" aria-label="Show the next match"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg></button>
-<button id="find-close" class="btn plain ico" type="button" title="Close the find bar" aria-label="Close the find bar"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></button>
-</div>
+{{find}}
 <script>{{xterm}}</script>
 <script>{{search}}</script>
 <script>{{glue}}</script>

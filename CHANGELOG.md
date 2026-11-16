@@ -4,6 +4,86 @@
 
 ### Added
 
+- **A coding agent goes on in its tab after the app opens again.** A terminal that ran Claude
+  Code, Codex, GitHub Copilot or OpenCode when the app quit (or crashed) opens again as your
+  shell with its last screen, a dimmed line under it ("Resumed Claude Code session"), and the
+  command that resumes that very session typed into the shell once its prompt is ready: the
+  agent waits for you, and when it ends you are in your shell. Only the agent's own words of
+  its command line are carried, through a list per agent: never a prompt, a run that prints
+  and ends, a value that looks like a key, nor Codex's sandbox bypass (the line says it was not
+  carried); the permission skip you chose (`--dangerously-skip-permissions`) is carried, and
+  the line says "permissions skipped". The session is known from the command line, from the
+  Claude Code plugin (which tells its terminal the session's id as it starts and after
+  `/clear` or `/resume`), and from "+", which starts Claude Code and Copilot with a session id
+  of their own. The command is typed only into the shell itself, with nothing running and at a
+  prompt you have not typed at; a folder is carried by its form alone (the disk is never asked
+  as the app starts), and nothing that does not print (a control such as ^U, a mark that turns
+  text around) is carried or typed. A session that ends at once with an error is typed once
+  more, then waits in the Event Center with Retry; one that ends well at once is let go of; an
+  agent whose session is not known (Gemini CLI, Hermes, an agent typed without one), or whose
+  shell was busy, waits there with Continue, which goes on with its folder's last. Your Retry
+  or Continue types once the shell is in front with nothing running, also in a shell that
+  marks no prompt (fish, tmux), and a double click types once; an agent you start in that
+  terminal yourself takes the line away. A session is never resumed in two terminals, a
+  board's worker never, a terminal you closed never. Settings → Terminal → Resume agents turns
+  it off. Zsh and bash now also say when
+  their prompt is ready (OSC 133 A).
+
+- **Zoom a pane.** Zoom Pane (⇧⌘↩, in the Pane menu; greyed over a pane alone in its tab)
+  draws the pane in use alone over its tab's part; the other panes are put by and keep
+  running, as a tab out of sight does. The side lists the tab as one row, and the row and the
+  bar's crumb carry a quiet mark of how many panes are hidden, named for VoiceOver. ⇧⌘↩ again,
+  a new split (⌘D too), a pane closed or taken out, a divider moved, the tab made even or a
+  way to another pane (⌥⌘ and an arrow) draws the tab whole again; ⌥⌘] and ⌥⌘[ take the zoom to
+  the next pane, as showing another pane of the tab does.
+
+- **An agent opens beside a pane.** The window tool's `open` takes `beside` (a tab of the
+  project) and `side` (`right`, the default, or `down`): a terminal goes on that side of it in
+  its tab, a page or a file among that tab's documents, and the person's focus and the tab
+  they look at stay as they are; a side with no room left is refused with what to do instead.
+  `show` takes `zoom` (true or false). `list` says of each pane which tab it is in, the pane a
+  zoomed tab shows, and what lies on each side of it (`t1 (terminal) in tab 1, t2 below it:
+  …`). An agent moves no divider and no keys between panes.
+
+- **New panes beside the one in use, and the keyboard on panes.** Split Right (⌘D) and Split
+  Down (⇧⌘D) open a terminal beside the pane in use, in the folder its shell is in (beside a
+  page or a file, the project's), and it takes the keys; "+" → Split Right with… or Split Down
+  with… starts an agent there. A split that would leave a pane under its least is greyed in the
+  menu. A new Pane menu, and a Pane section in Settings, hold the keys: ⌥⌘ and an arrow moves
+  the keys to the pane that way (a tie goes to the pane used last), ⌥⌘] and ⌥⌘[ to the next and
+  the one before, ⌃⌘ and an arrow moves the nearest divider that way (⇧ for a longer step),
+  ⌃⌘= makes every branch of the tab even by the panes it holds, and Move Pane to New Tab puts
+  the pane in use in a tab of its own. ⌘W in a tab of several panes closes the pane in use, and
+  the pane used last (else the neighbour that takes its room) takes the keys. A tab dragged
+  onto the pages goes beside the pane under it on the side of the edge it is nearest, above and
+  below too. A terminal's folder is kept as it closes and as the app quits, so it opens again
+  where its shell was.
+
+- **A split tab of more than two panes.** The window draws a tab's whole tree of panes as the
+  layout keeps it, side by side and one above the other, each pane in its place, and lists
+  them in the side as one row. Every line between two panes is dragged to resize, across or up
+  and down (the arrows along it, Shift for more; a double-click or Home evens its panes), and
+  each pane keeps at least 190 points while there is room. A click in a pane makes it the one
+  in use, and the layout keeps it as the tab's focus. A tab let go of over the pages goes
+  beside the pane it is over, on that side.
+
+- **What an agent says of its state reaches the window.** A terminal answers a program that
+  asks whether it reads program status (OSC 7501), as it answers a cursor query, with or
+  without its page; Claude Code (2.1.295 and later) and Codex report to it only then. Each
+  terminal keeps what its program reports, up to 256 records, a report of up to 4 KiB read
+  whole: one that waits for you (an approval with its words, "approve Bash: npm test", a
+  question, a sign-in) is a line on its terminal in the Event Center, titled by the terminal
+  with the agent's name beside its words, with the dot on its tab out of sight and a silent
+  notice while you are in another app; one that failed is a line among the programs that ended;
+  a finished turn is a quiet line. Each line stays in place until you type in the terminal and
+  the program goes on: a program flipping between working and waiting keeps its one line and
+  one notice, and tells the window no more often than it reads. While it works, its tab's icon in the side carries a still
+  ring, its share drawn when it says how far. What was at work goes when the program ends or
+  its shell comes back in front. The words are the program's, plain, never acted on. Terminals
+  say `LLXTERM_PROGRAM_STATUS=1`, and the Claude Code plugin then leaves its own "Claude asks"
+  line to the terminal, except inside tmux or screen, whose own terminal hears the report;
+  "Claude finished" stays.
+
 - **Find in a terminal's output.** ⌘F opens a find row under the terminal, as the editor's:
   what you type is searched as you type, case ignored, over the scrollback and the screen (a
   full-screen program's screen alone), every match lit and the one shown more, with "3 of 12"
@@ -11,6 +91,13 @@
   before, and Esc closes the row and gives the keys back to the terminal; nothing typed there
   reaches the program. Find, Find Next and Find Previous are in the Edit menu and Settings, so
   their keys are yours to change.
+- **Find in a web page.** ⌘F over a page opens the same find row under its toolbar: searched as
+  you type, case ignored, in what you can see of the page; every match lit in the accent and the
+  one shown more, scrolled into view, with "3 of 12", "No results" or "1,000+". ⌘G and ⇧⌘G, or
+  Return and ⇧Return, walk the matches; Esc closes the row and gives the keys back to the page.
+  Each tab keeps its row and query, and a new document of the tab is searched again as it loads.
+  The page is never changed: its matches are highlights (WebKit's Custom Highlights), and the
+  find works under any site's Content Security Policy.
 - **The app's terminals connect your agents with nothing installed.** `llxterm` is on their
   `PATH` (the bundle's `Contents/Resources/bin`, one link to the app's program), put first
   again after your profile or `path_helper` sets a `PATH`; `llxterm guide` prints the window
@@ -48,6 +135,14 @@
 
 ### Changed
 
+- **Split View in a tab of several panes puts the pane in use in a tab of its own**, and leaves
+  the rest of the tab as it is; it made the tab whole, every other pane a tab of its own. A
+  pane's menu says Move Pane to New Tab for it, where it said Close Split View. A session of
+  one terminal is still made whole, its documents put by.
+- **A session takes more terminals.** A terminal alone carried onto a session, or opened beside
+  one of its terminals, joins its tab, and the tab keeps one row of documents for all of its
+  terminals: what is opened from any of them joins it. The side lists the session by its
+  terminal in use. Before, a session took no other pane. A board still stays a tab of its own.
 - **The window stays on the project you are in.** Closing a project's last tab left the window
   on a tab of another project; it now stays, with no tab and its start of a new one. Going to a
   project gives the keys to the tab it shows, with no click needed first.
@@ -80,6 +175,11 @@
   are left as they are.
 
 ### Fixed
+
+- **Closing a terminal never hangs.** A terminal closed while its program was writing could
+  leave the program stuck as it exited, and the close waiting on it for good: macOS holds a
+  program's exit until what it wrote into its terminal is read, and nothing read it once the
+  terminal was closing. What it still writes is now read and dropped until it is gone.
 
 - **A page size drawn smaller to fit the window lays out at that size.** A phone's page in a
   window too short for it was a CSS pixel narrower than the phone (392 for 393): its view is

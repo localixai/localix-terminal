@@ -206,3 +206,79 @@ fn a_program_the_shell_started_at_once_keeps_what_it_turned_on() {
     let righted = screen.feed(b"\x1b]133;D;0\x07\x1b]133;C\x07\x1b[?1000h");
     assert!(righted.is_empty());
 }
+
+/// A report of the program status protocol, as a program writes it, ended by `end`.
+fn status(body: &str, end: &str) -> Vec<u8> {
+    format!("\x1b]7501;{body}{end}").into_bytes()
+}
+
+#[test]
+fn a_status_report_is_kept_for_the_terminal_and_never_shows_or_titles() {
+    let mut screen = Screen::new(40, 120);
+    screen.feed(&status("state=working:app=claude-code", "\x07"));
+    screen.feed(b"a");
+    screen.feed(&status("state=working:id=a1", "\x1b\\"));
+    screen.feed(b"b");
+    let rows = screen.status().rows();
+    let ids: Vec<&str> = rows.iter().map(|row| row.id.as_str()).collect();
+    assert_eq!(ids, ["", "a1"]);
+    assert_eq!(screen.text().0, "ab");
+    assert_eq!(screen.title(), None);
+    assert!(screen.notes().waiting().is_none());
+}
+
+#[test]
+fn a_long_report_is_read_whole_however_the_reads_cut_it() {
+    // A message of 2,000 bytes is a report of near 2,700: past what a title is read from.
+    let msg = base64::Engine::encode(
+        &base64::engine::general_purpose::STANDARD,
+        "approve Bash: ".to_string() + &"x".repeat(2000),
+    );
+    let bytes = status(
+        &format!("state=blocked:kind=permission:msg={msg}"),
+        "\x1b\\",
+    );
+    assert!(bytes.len() > 2500);
+    let mut screen = Screen::new(40, 120);
+    let (first, rest) = bytes.split_at(1000);
+    screen.feed(first);
+    assert!(screen.status().rows().is_empty(), "not before its end");
+    screen.feed(rest);
+    let rows = screen.status().rows();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].msg.as_ref().map(String::len), Some(2014));
+}
+
+#[test]
+fn a_report_past_the_most_is_dropped_never_read_cut_short() {
+    let mut screen = Screen::new(40, 120);
+    let long = format!("state=working:app=claude-code:{}", "z=1:".repeat(1100));
+    screen.feed(&status(&long, "\x07"));
+    assert!(screen.status().rows().is_empty());
+    // What follows is read as it would be.
+    screen.feed(&status("state=done", "\x07"));
+    assert_eq!(screen.status().rows().len(), 1);
+}
+
+#[test]
+fn each_query_is_owed_an_answer_once() {
+    let mut screen = Screen::new(40, 120);
+    screen.feed(b"\x1b]7501;?\x1b\\\x1b]75");
+    screen.feed(b"01;?\x07");
+    assert_eq!(screen.status_asked(), 2);
+    assert_eq!(screen.status_asked(), 0, "answered, it is owed no more");
+}
+
+#[test]
+fn a_reset_takes_every_record() {
+    let mut screen = Screen::new(40, 120);
+    screen.feed(&status("state=done", "\x07"));
+    screen.feed(b"\x1b[?1049h");
+    assert_eq!(
+        screen.status().rows().len(),
+        1,
+        "the alternate screen keeps them"
+    );
+    screen.feed(b"\x1bc");
+    assert!(screen.status().rows().is_empty());
+}

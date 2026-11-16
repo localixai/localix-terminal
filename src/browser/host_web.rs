@@ -176,6 +176,8 @@ pub(super) fn on_browser(
         | Cmd::SideClicked(_)
         | Cmd::NavClicked(_)
         | Cmd::DocsClicked(_)
+        | Cmd::Seek(_)
+        | Cmd::Found(_)
         | Cmd::Restyle
         | Cmd::Strip
         | Cmd::Go(_)
@@ -183,6 +185,7 @@ pub(super) fn on_browser(
         | Cmd::Tree(..)
         | Cmd::NewWindow(_)
         | Cmd::Dressed(_)
+        | Cmd::Keys(_)
         | Cmd::Listing(_)
         | Cmd::Act(..)
         | Cmd::Presence(_)
@@ -244,8 +247,7 @@ fn new_tab(
         None => {}
     }
     if shown {
-        // Whole, as a terminal that opens (`Deck::add_term`).
-        open.split.beside = None;
+        // A tab of its own, shown whole, as a terminal that opens (`Deck::add_term`).
         open.show(Shown::Web);
     }
 }

@@ -6,6 +6,11 @@
 
 use serde_json::Value;
 
+/// The find row's markup, one for every page that finds (the terminal's, the browser toolbar's):
+/// its look is `.finds` in frame.css, its words and keys `page/find.js`, which such a page joins
+/// to its script.
+pub const FIND_ROW: &str = include_str!("page/find.html");
+
 /// `text` with what would be markup spelled out: a title, a name, a line of a page.
 pub fn escaped(text: &str) -> String {
     text.replace('&', "&amp;")

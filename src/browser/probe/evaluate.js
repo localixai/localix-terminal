@@ -50,7 +50,7 @@
   }
 
   const ready = () => document.readyState
-  const CALLS = { __proto__: null, snapshot, epoch, act, settle, read, settled, ready, keys, locate, comment, answer }
+  const CALLS = { __proto__: null, snapshot, epoch, act, settle, read, settled, ready, keys, locate, comment, answer, find }
   // The one way in from the native side: a call carries the run's call key (a page's own call to
   // this function, without it, does nothing), its id, and the word its reply must carry back,
   // which only the native side and the page it was sent to ever see: a page in another tab never
@@ -59,7 +59,11 @@
     value(key, id, word, name, args) {
       if (key !== KEY || typeof id !== 'string' || typeof word !== 'string') return false
       const call = CALLS[name]
-      const reply = (body) => send({ ...body, id, word, ...(told.length ? { told: told.splice(0) } : {}) })
+      // A call nobody waits for (id 0: commenting turned on, a step of find) is not answered,
+      // so what the page told stays for the next reply that is read.
+      const reply = id === '0'
+        ? () => {}
+        : (body) => send({ ...body, id, word, ...(told.length ? { told: told.splice(0) } : {}) })
       const started = apply(then, resolved(), [() => call(args)])
       apply(then, started, [(ok) => reply({ ok: ok ?? null }), (error) => reply({ err: String(error?.message || error) })])
       return true

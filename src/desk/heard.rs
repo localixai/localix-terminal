@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use serde_json::json;
 
-use crate::browser::{Asked, HOME, Heard, Went};
+use crate::browser::{Asked, HOME, Heard, Side, Went};
 
 use super::{Call, Desk};
 
@@ -65,27 +65,17 @@ impl Desk {
                 let (desk, group, window) = (Arc::clone(self), key.to_string(), self.in_use());
                 self.write_later(move || desk.showing(&group, window));
             }
-            Heard::Split(halves) => {
-                if let Some(split) = self.split_of(halves, false) {
-                    let desk = Arc::clone(self);
-                    self.write_later(move || desk.split_kept(split));
-                }
-            }
-            Heard::Whole(halves) => {
-                if let Some(split) = self.split_of(halves, true) {
-                    let desk = Arc::clone(self);
-                    self.write_later(move || desk.split_kept(split));
-                }
-            }
-            Heard::SplitResized(portion) => {
-                let key = key.to_string();
-                let desk = Arc::clone(self);
-                self.write_later(move || {
-                    if let Err(why) = desk.split_resized(&key, portion) {
-                        log::warn!("the split size was not kept: {why}");
-                    }
-                });
-            }
+            Heard::SplitNew {
+                beside,
+                side,
+                asked,
+            } => self.person_asked_beside(key, asked, Some((beside.to_string(), side))),
+            Heard::Split { beside, side } => self.split_later(key, beside, side),
+            Heard::Whole => self.whole_later(key),
+            Heard::Equalized => self.equalized_later(key),
+            Heard::Resized { path, at, share } => self.resized_later(key, path, at, share),
+            Heard::Focused => self.focused_later(key),
+            Heard::Zoomed(on) => self.zoomed_later(key, on),
             // The panes are found by their rows as the window tells it; the layout is written
             // after what the window told before.
             Heard::Moved { before, window } => {
@@ -123,9 +113,20 @@ impl Desk {
     /// they closed a moment ago is closed in the ledger before they open it again.
     const ASKED_AFTER: std::time::Duration = std::time::Duration::from_secs(5);
 
-    /// The person asked for a tab of theirs with "+", in the project of group `group`: opened on
-    /// a thread of its own, since the window's loop calls this and must never wait on the work.
+    /// The person asked for a tab of theirs with "+", in the project of group `group`.
     pub(super) fn person_asked(self: &Arc<Self>, group: &str, asked: Asked) {
+        self.person_asked_beside(group, asked, None);
+    }
+
+    /// What the person asked for, in the project of group `group` (`beside`: a new pane on that
+    /// side of that pane, in its tab): opened on a thread of its own, since the window's loop
+    /// calls this and must never wait on the work.
+    pub(super) fn person_asked_beside(
+        self: &Arc<Self>,
+        group: &str,
+        asked: Asked,
+        beside: Option<(String, Side)>,
+    ) {
         let Some(person) = self.person(group) else {
             return;
         };
@@ -157,61 +158,11 @@ impl Desk {
                 // The person is known as their project's own, as an agent is once it calls: what
                 // they open is of that project wherever it is listed (an ended terminal's event).
                 crate::lock(&desk.registry).known(&call);
-                let done = match &asked {
-                    Asked::Page(url) => {
-                        let url = url.as_deref().unwrap_or(HOME);
-                        (desk.open(&call, &json!({"kind": "browser", "url": url})))
-                            .map(|_| ())
-                            .map_err(|failure| failure.message().to_string())
+                let done = match &beside {
+                    Some((key, side)) => {
+                        (desk.person_beside(&call, &group, (key, *side), &asked)).map(drop)
                     }
-                    Asked::Terminal(folder) => {
-                        // Only a folder of the project (a crumb's), as it really is: no `..`
-                        // or link leads out of it.
-                        let inside = (folder.as_deref())
-                            .and_then(|folder| folder.canonicalize().ok())
-                            .filter(|folder| folder.starts_with(&person.project.path));
-                        let cwd = inside.as_deref().unwrap_or(&person.cwd);
-                        desk.person_terminal(&Call { cwd, ..call }, &group, "")
-                    }
-                    Asked::Agent(command) => desk.person_terminal(&call, &group, command),
-                    Asked::Worker {
-                        command,
-                        title,
-                        who,
-                    } => (desk.worker_terminal(&call, &group, command, title, who)).map(drop),
-                    Asked::Session {
-                        command,
-                        title,
-                        folder,
-                        waits,
-                    } => {
-                        // Its own folder, where its agent keeps it: never another, whose last
-                        // session would be continued in its place.
-                        let inside = (folder.canonicalize().ok())
-                            .filter(|folder| folder.starts_with(&person.project.path));
-                        match inside {
-                            Some(cwd) => {
-                                let call = Call { cwd: &cwd, ..call };
-                                (desk.person_terminal_titled(&call, &group, command, title))
-                                    .inspect(|()| desk.continued_here(waits))
-                            }
-                            None => Err(format!("{} is no folder of it", folder.display())),
-                        }
-                    }
-                    Asked::File(path) => desk.person_file(&call, path),
-                    Asked::Text(path) => desk.person_text(&call, path),
-                    Asked::Board => (desk.board(&call, &json!({"op": "show"})))
-                        .map(|_| ())
-                        .map_err(|failure| failure.message().to_string()),
-                    Asked::Kind(kind) => match desk.kind_named(kind) {
-                        Some(about) => (desk.made(&call, about, &json!({})))
-                            .map(|_| ())
-                            .map_err(|failure| failure.message().to_string()),
-                        None => Err(format!("there is no kind of tab `{kind}`")),
-                    },
-                    Asked::Again(row) => desk.again(&call, &group, *row),
-                    Asked::Project => desk.reopen_project(&call, &group),
-                    Asked::Window => desk.new_window(&call, &group),
+                    None => desk.person_does(&call, &group, &asked),
                 };
                 if let Err(why) = done {
                     log::warn!("a {asked:?} the person asked for did not open: {why}");
@@ -219,6 +170,72 @@ impl Desk {
             });
         if let Err(why) = started {
             log::warn!("a tab the person asked for had no thread: {why}");
+        }
+    }
+
+    /// What the person asked for done, as `call` in the project of group `group`.
+    pub(super) fn person_does(
+        &self,
+        call: &Call<'_>,
+        group: &str,
+        asked: &Asked,
+    ) -> Result<(), String> {
+        let call = *call;
+        match asked {
+            Asked::Page(url) => {
+                let url = url.as_deref().unwrap_or(HOME);
+                (self.open(&call, &json!({"kind": "browser", "url": url})))
+                    .map(|_| ())
+                    .map_err(|failure| failure.message().to_string())
+            }
+            Asked::Terminal(folder) => {
+                // Only a folder of the project (a crumb's), as it really is: no `..` or link
+                // leads out of it.
+                let inside = (folder.as_deref())
+                    .and_then(|folder| folder.canonicalize().ok())
+                    .filter(|folder| folder.starts_with(&call.project.path));
+                let cwd = inside.as_deref().unwrap_or(call.cwd);
+                self.person_terminal(&Call { cwd, ..call }, group, "")
+            }
+            Asked::Agent(command) => self.person_terminal(&call, group, command),
+            Asked::Worker {
+                command,
+                title,
+                who,
+            } => (self.worker_terminal(&call, group, command, title, who)).map(drop),
+            Asked::Session {
+                command,
+                title,
+                folder,
+                waits,
+            } => {
+                // Its own folder, where its agent keeps it: never another, whose last session
+                // would be continued in its place.
+                let inside = (folder.canonicalize().ok())
+                    .filter(|folder| folder.starts_with(&call.project.path));
+                match inside {
+                    Some(cwd) => {
+                        let call = Call { cwd: &cwd, ..call };
+                        (self.person_terminal_titled(&call, group, command, title))
+                            .inspect(|()| self.continued_here(waits))
+                    }
+                    None => Err(format!("{} is no folder of it", folder.display())),
+                }
+            }
+            Asked::File(path) => self.person_file(&call, path),
+            Asked::Text(path) => self.person_text(&call, path),
+            Asked::Board => (self.board(&call, &json!({"op": "show"})))
+                .map(|_| ())
+                .map_err(|failure| failure.message().to_string()),
+            Asked::Kind(kind) => match self.kind_named(kind) {
+                Some(about) => (self.made(&call, about, &json!({})))
+                    .map(|_| ())
+                    .map_err(|failure| failure.message().to_string()),
+                None => Err(format!("there is no kind of tab `{kind}`")),
+            },
+            Asked::Again(row) => self.again(&call, group, *row),
+            Asked::Project => self.reopen_project(&call, group),
+            Asked::Window => self.new_window(&call, group),
         }
     }
 }

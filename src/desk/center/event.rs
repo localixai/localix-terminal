@@ -16,6 +16,8 @@ pub(in crate::desk::center) enum Kind {
     Said,
     Failed,
     Finished,
+    /// An agent of the run before that did not go on in its terminal.
+    Resume,
 }
 
 /// The colour an event is drawn in: the window's own, named.
@@ -58,6 +60,7 @@ impl Kind {
             Kind::Said => ("Programs Say", Tone::Purple, true),
             Kind::Failed => ("Programs Ended", Tone::Red, true),
             Kind::Finished => ("Programs Finished", Tone::Green, false),
+            Kind::Resume => ("Agents Not Resumed", Tone::Blue, false),
         };
         Look {
             section,
@@ -87,6 +90,8 @@ pub(in crate::desk::center) enum Do {
     Close { key: String },
     /// What the agent asked on a tab is done: it hears so, and the ask goes.
     Answer { tab: String },
+    /// The command that resumes, or continues, terminal `key`'s agent typed into it again.
+    Resume { key: String },
     /// Gone from the center until it changes.
     Dismiss,
 }
@@ -104,9 +109,11 @@ impl Do {
     pub(in crate::desk::center) fn role(&self) -> Role {
         match self {
             Do::Open(_) => Role::Open,
-            Do::Accept { .. } | Do::Unblock { .. } | Do::Close { .. } | Do::Answer { .. } => {
-                Role::Act
-            }
+            Do::Accept { .. }
+            | Do::Unblock { .. }
+            | Do::Close { .. }
+            | Do::Answer { .. }
+            | Do::Resume { .. } => Role::Act,
             Do::Dismiss => Role::Dismiss,
         }
     }

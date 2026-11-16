@@ -82,6 +82,12 @@ function settle() {
   wasDirty = now;
 }
 
+// The keys the window's Pane menu has in every pane (docs/windows.md): ⌘D splits, ⌥⌘ and an
+// arrow moves the keys to another pane. The editor's own bindings of them are left out, so the
+// menu's item is the same over a file as over a terminal.
+const TAKEN = new Set(["Mod-d", "Mod-Alt-ArrowLeft", "Mod-Alt-ArrowRight", "Mod-Alt-ArrowUp", "Mod-Alt-ArrowDown"]);
+const ours = (bindings) => bindings.filter((binding) => !TAKEN.has(binding.key) && !TAKEN.has(binding.mac));
+
 // A fresh state for a file: its text, its language's words, its own indent, and nothing to undo.
 function started(text, told) {
   const lang = CM.langs[told.lang], unit = indentOf(text, told.lang);
@@ -96,7 +102,7 @@ function started(text, told) {
       scheme.of(EditorView.darkTheme.of(dark.matches)),
       EditorView.contentAttributes.of({ "aria-label": told.name || "File" }),
       Prec.highest(keymap.of([{ key: "Mod-s", run: save }])),
-      keymap.of([...CM.close.closeBracketsKeymap, ...CM.commands.defaultKeymap, ...CM.search.searchKeymap, ...CM.commands.historyKeymap, CM.commands.indentWithTab]),
+      keymap.of(ours([...CM.close.closeBracketsKeymap, ...CM.commands.defaultKeymap, ...CM.search.searchKeymap, ...CM.commands.historyKeymap, CM.commands.indentWithTab])),
       EditorView.updateListener.of((update) => { if (update.docChanged) { settle(); draw(); } }),
     ],
   });

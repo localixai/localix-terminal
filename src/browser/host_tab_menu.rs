@@ -63,13 +63,13 @@ impl Item {
         match self {
             Self::Reload => Some("reload"),
             Self::Close => Some("close-tab"),
+            Self::Unsplit => Some("pane-out"),
             Self::Duplicate
             | Self::Outside
             | Self::CopyAddress
             | Self::NewTerminal
             | Self::Reveal
             | Self::Split
-            | Self::Unsplit
             | Self::CloseOthers
             | Self::CloseRight => None,
         }
@@ -84,7 +84,7 @@ impl Item {
             Self::NewTerminal => "New Terminal Here",
             Self::Reveal => platform::REVEAL,
             Self::Split => "Open in Split View",
-            Self::Unsplit => "Close Split View",
+            Self::Unsplit => "Move Pane to New Tab",
             Self::Close => "Close Tab",
             Self::CloseOthers => "Close Other Tabs",
             Self::CloseRight => "Close Tabs to the Right",
@@ -191,19 +191,19 @@ impl On<'_> {
             .as_deref()
             .and_then(Path::parent)
             .map(Path::to_path_buf);
-        // A tab of the shown one's project (or the window's own) can go beside it; one of the
-        // halves can make the window whole. A document is in its session's half already.
+        // A tab of the shown one's project (or the window's own) can go beside it; a pane of a
+        // split that is no document goes out to a tab of its own. A document, or the one
+        // terminal of a session, is in its tab already.
         let shown = open.shown_key();
-        let halves = open
-            .pair()
-            .is_some_and(|(left, right)| key == left || key == right);
+        let sight = open.sight();
+        let halves = open.goes_out(key);
         let alike = (listed.iter().find(|tab| tab.shown))
             .is_some_and(|tab| tab.group == group || group.is_empty() || tab.group.is_empty());
         // Any tab can be split: another goes beside the shown one, the shown one beside the next.
-        let split = if stack.is_some() {
-            None
-        } else if halves {
+        let split = if halves {
             Some(true)
+        } else if stack.is_some() || (sight.len() >= 2 && sight.contains(&key)) {
+            None
         } else if (Some(key) != shown && shown.is_some() && alike)
             || (Some(key) == shown && !others.is_empty())
         {
@@ -250,8 +250,8 @@ impl On<'_> {
                 }
             }
             Item::Split if Some(key) == shown => self.split_view(),
-            Item::Split => self.split_beside(Some(key)),
-            Item::Unsplit => self.split_beside(None),
+            Item::Split => self.split_beside(Some(key), key),
+            Item::Unsplit => self.split_beside(None, key),
             Item::Close => self.close(key),
             Item::CloseOthers => self.close_all(others, true),
             Item::CloseRight => self.close_all(right, true),

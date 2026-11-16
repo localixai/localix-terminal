@@ -32,12 +32,12 @@ fn the_next_document_joins_the_stack_and_is_the_one_in_sight() {
 #[test]
 fn a_document_shown_is_the_one_in_sight_and_the_rest_keep_their_order() {
     let mut tree = session();
-    assert!(tree.show(2));
+    assert!(tree.show(&2));
     assert_eq!(tree.visible(), [1, 2]);
     assert_eq!(tree.stacked(), [2, 3]);
     // A pane that is no document of it, or the terminal itself, changes nothing.
-    assert!(!tree.show(9));
-    assert!(!tree.show(1));
+    assert!(!tree.show(&9));
+    assert!(!tree.show(&1));
     assert_eq!(tree.visible(), [1, 2]);
 }
 
@@ -45,20 +45,20 @@ fn a_document_shown_is_the_one_in_sight_and_the_rest_keep_their_order() {
 fn a_document_carried_along_its_row_goes_before_another_or_to_the_end() {
     let mut tree = session();
     assert!(tree.stack(4));
-    assert!(tree.show(2));
+    assert!(tree.show(&2));
     // Before another document, and to the end with none: the one in sight stays in sight.
-    assert!(tree.place(4, Some(2)));
+    assert!(tree.place(&4, Some(&2)));
     assert_eq!(tree.stacked(), [4, 2, 3]);
-    assert!(tree.place(4, None));
+    assert!(tree.place(&4, None));
     assert_eq!(tree.stacked(), [2, 3, 4]);
     assert_eq!(tree.visible(), [1, 2]);
     // Where it is already, before itself, before what is no document of the stack, or a pane
     // that is no document: nothing moves.
-    assert!(!tree.place(2, Some(3)));
-    assert!(!tree.place(4, None));
-    assert!(!tree.place(3, Some(3)));
-    assert!(!tree.place(3, Some(1)));
-    assert!(!tree.place(1, Some(2)));
+    assert!(!tree.place(&2, Some(&3)));
+    assert!(!tree.place(&4, None));
+    assert!(!tree.place(&3, Some(&3)));
+    assert!(!tree.place(&3, Some(&1)));
+    assert!(!tree.place(&1, Some(&2)));
     assert_eq!(tree.stacked(), [2, 3, 4]);
 }
 
@@ -66,18 +66,18 @@ fn a_document_carried_along_its_row_goes_before_another_or_to_the_end() {
 fn the_document_in_sight_taken_out_shows_its_neighbour_and_the_last_ends_the_stack() {
     let mut tree = session();
     assert!(tree.stack(4));
-    assert!(tree.show(3));
-    let tree = tree.without(3).unwrap();
+    assert!(tree.show(&3));
+    let tree = tree.without(&3).unwrap();
     assert_eq!(tree.visible(), [1, 4]);
-    let tree = tree.without(4).unwrap();
+    let tree = tree.without(&4).unwrap();
     assert_eq!(tree.visible(), [1, 2]);
-    let tree = tree.without(2).unwrap();
+    let tree = tree.without(&2).unwrap();
     assert_eq!(tree, Tree::leaf(1));
 }
 
 #[test]
 fn a_session_closed_leaves_its_documents_a_stack_alone() {
-    let tree = session().without(1).unwrap();
+    let tree = session().without(&1).unwrap();
     assert_eq!(tree.stacked(), [2, 3]);
     assert_eq!(tree.visible(), [3]);
 }
@@ -85,24 +85,40 @@ fn a_session_closed_leaves_its_documents_a_stack_alone() {
 #[test]
 fn a_document_replaced_keeps_its_place_and_whether_it_is_in_sight() {
     let mut tree = session();
-    assert!(tree.replace(3, 7));
+    assert!(tree.replace(&3, 7));
     assert_eq!(tree.stacked(), [2, 7]);
     assert_eq!(tree.visible(), [1, 7]);
 }
 
 #[test]
-fn two_panes_side_by_side_have_no_room_for_a_stack() {
+fn panes_side_by_side_take_the_tabs_one_stack_on_the_right_of_them_all() {
+    // Side by side, the stack is one more child, as wide as each of them.
     let mut tree = Tree::leaf(1);
-    assert!(tree.split(1, 5, true, true));
-    assert!(!tree.stack(2));
-    assert_eq!(tree.panes(), [1, 5]);
+    assert!(tree.split(&1, 5, true, true));
+    assert!(tree.stack(2));
+    assert_eq!(tree.panes(), [1, 5, 2]);
+    let Tree::Branch { children, .. } = &tree else {
+        panic!("not a branch")
+    };
+    let shares: Vec<f64> = children.iter().map(|child| child.share).collect();
+    assert!((shares.iter().sum::<f64>() - 1.0).abs() < 1e-9);
+    assert!(shares.iter().all(|share| (share - 1.0 / 3.0).abs() < 1e-9));
+    // The next document joins that stack: a tab has one.
+    assert!(tree.stack(3));
+    assert_eq!(tree.stacked(), [2, 3]);
+    // One above the other, the stack is on the right of the two, half the tab.
+    let mut tree = Tree::leaf(1);
+    assert!(tree.split(&1, 5, false, true));
+    assert!(tree.stack(2));
+    assert_eq!(tree.visible(), [1, 5, 2]);
+    assert_eq!(tree.path_of(&2), Some(vec![1]));
 }
 
 #[test]
 fn a_pane_split_beside_a_document_is_beside_its_whole_stack() {
     let mut tree = Tree::stack_of(2);
     assert!(tree.stack(3));
-    assert!(tree.split(2, 1, true, true));
+    assert!(tree.split(&2, 1, true, true));
     assert_eq!(tree.panes(), [2, 3, 1]);
     assert_eq!(tree.visible(), [3, 1]);
 }
@@ -148,7 +164,7 @@ fn a_stack_is_kept_with_its_order_and_the_document_in_sight() {
     let mut tree = Tree::leaf(term);
     assert!(tree.stack(one));
     assert!(tree.stack(two));
-    assert!(tree.show(one));
+    assert!(tree.show(&one));
     let id = store
         .write(|tx| open_tab(tx, space, &tree, Some(term), None, 0))
         .unwrap();
@@ -200,9 +216,9 @@ fn the_document_in_sight_is_named_and_the_halves_change_sides() {
     assert_eq!(tree.doc(), Some(3));
     assert_eq!(Tree::leaf(1).doc(), None);
     // The documents on the left: the two change sides, and keep their shares.
-    assert!(tree.order(2));
+    assert!(tree.order(&2));
     assert_eq!(tree.visible(), [3, 1]);
-    assert!(!tree.order(2));
-    assert!(tree.order(1));
+    assert!(!tree.order(&2));
+    assert!(tree.order(&1));
     assert_eq!(tree.visible(), [1, 3]);
 }

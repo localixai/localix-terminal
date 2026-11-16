@@ -65,3 +65,51 @@ fn a_row_that_scrolls_sideways_is_written_once() {
     assert!(store.contains("across(row, "));
     assert!(!store.contains("\"More\""));
 }
+
+#[test]
+fn every_page_that_finds_takes_the_one_find_row() {
+    // The terminal's page and the browser's toolbar draw the shared markup, and run its words
+    // and keys before their own steps; neither keeps a copy of either.
+    let pages = [
+        (
+            "terminal",
+            include_str!("terminal/emulator.html"),
+            "{{find}}",
+        ),
+        (
+            "toolbar",
+            include_str!("browser/strip.html"),
+            "<!--FIND_ROW-->",
+        ),
+    ];
+    for (page, markup, place) in pages {
+        assert!(markup.contains(place), "{page} takes the find row");
+        assert!(
+            !markup.contains("id=\"find-q\""),
+            "{page} draws a find row of its own"
+        );
+    }
+    assert!(FIND_ROW.contains("id=\"find-q\"") && FIND_ROW.contains("class=\"finds\""));
+    let joined = [
+        ("terminal", include_str!("terminal.rs")),
+        ("toolbar", include_str!("browser/strip.rs")),
+    ];
+    for (page, module) in joined {
+        assert!(
+            module.contains("page/find.js\")"),
+            "{page} runs the row's script"
+        );
+    }
+    for script in [
+        include_str!("terminal/find.js"),
+        include_str!("browser/page_find.js"),
+    ] {
+        for given in [
+            "function counted(",
+            "function findText(",
+            "addEventListener(\"keydown\"",
+        ] {
+            assert!(!script.contains(given), "a page defines {given} again");
+        }
+    }
+}

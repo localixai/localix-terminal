@@ -141,7 +141,7 @@ fn a_files_tab_and_what_is_unsaved_in_it_follow_the_file_renamed_or_its_folder_m
         .unwrap();
     assert_eq!(draft.unwrap().text, "mine");
     let listed = desk.act(&me.call(), &json!({"action": "list"})).unwrap();
-    assert_eq!(listed.report, "f1 (file): docs/src/app.rs");
+    assert_eq!(listed.report, "f1 (file) in tab 1: docs/src/app.rs");
 }
 
 #[test]

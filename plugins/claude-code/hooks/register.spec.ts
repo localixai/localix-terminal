@@ -38,6 +38,7 @@ async function session(
   vars: Record<string, string> = {},
   watched: unknown[] = RUNNING,
   sleeps = 0,
+  sessionId: () => string = () => 'sess-1',
 ) {
   const calls: { argv: string[]; timeoutMs: number }[] = []
   const spawned: string[][] = []
@@ -56,6 +57,7 @@ async function session(
   const api = {
     env: { get: async (name: string) => vars[name] ?? (name === 'HOME' ? '/home/test' : undefined) },
     session: {
+      id: async () => sessionId(),
       cwd: async () => '/work/project/nested',
       append: async (row: (typeof appended)[number]) => { appended.push(row) },
     },
@@ -138,6 +140,28 @@ test('a question the agent asks waits for the person until they answer it', asyn
   expect(asked(calls, before)).toEqual(['Claude asks: Which database should the cart use?', ''])
 })
 
+test('in a terminal that reads program status, the question is the terminal\'s line, not the plugin\'s', async () => {
+  // Claude Code says it waits (OSC 7501) to a terminal that reads it: one line, never two.
+  const { calls, hook } = await session(async argv => answer(argv), { LLXTERM_PROGRAM_STATUS: '1' })
+  const before = calls.length
+  await hook('tool.call', { tool: 'AskUserQuestion', questions: [{ question: 'Which database should the cart use?' }] })
+  expect(asked(calls, before)).toEqual([])
+  // A long turn's last line is the plugin's still: the program's report of it carries no words.
+  await hook('turn.complete', { durationMs: 90_000, answer: 'The cart is fixed.', reason: 'end_turn' })
+  expect(asked(calls, before)).toEqual(['Claude finished: The cart is fixed.'])
+})
+
+test('inside tmux or screen the terminal never hears the report, so the question is the plugin\'s line', async () => {
+  // The variable came from the terminal tmux or screen was started in; their own terminal
+  // answers Claude Code's query, not the app's.
+  for (const inside of [{ TMUX: '/tmp/tmux-501/default,7,0' }, { STY: '42.ttys001.host' }]) {
+    const { calls, hook } = await session(async argv => answer(argv), { LLXTERM_PROGRAM_STATUS: '1', ...inside })
+    const before = calls.length
+    await hook('tool.call', { tool: 'AskUserQuestion', questions: [{ question: 'Which database?' }] })
+    expect(asked(calls, before)).toEqual(['Claude asks: Which database?', ''])
+  }
+})
+
 test('a turn that an error ended is said however short, and one the person stopped is not', async () => {
   const { calls, hook } = await session(async argv => answer(argv))
   const before = calls.length
@@ -215,4 +239,36 @@ test('in a terminal of the desk, a page the person asks for opens in its window,
   expect(text).toContain('Claude in Chrome')
   // Elsewhere (another terminal) nothing is said: the person may mean their own browser.
   expect(await told({ TERM_PROGRAM: 'WarpTerminal' })).toEqual([])
+})
+
+/** The session ids the desk was told since `from`. */
+const toldSessions = (calls: { argv: string[] }[], from = 0) =>
+  calls
+    .slice(from)
+    .map(call => call.argv.at(-1)!)
+    .filter(last => last.startsWith('{'))
+    .map(last => JSON.parse(last) as { session?: string })
+    .flatMap(said => (said.session === undefined ? [] : [said.session]))
+
+test('the terminal is told its session once, and again only when the session changes', async () => {
+  let id = 'sess-1'
+  const { calls, hook } = await session(async argv => answer(argv), { LLXTERM_PANE: 't3' }, RUNNING, 0, () => id)
+  expect(toldSessions(calls)).toEqual(['sess-1'])
+  const call = calls.find(call => call.argv.at(-1)!.includes('"session"'))!
+  expect(call.argv.slice(1, 4)).toEqual(['window', '--project', '/work/project/nested'])
+  expect(JSON.parse(call.argv.at(-1)!)).toEqual({ action: 'interact', session: 'sess-1' })
+  await hook('turn.start', {})
+  expect(toldSessions(calls)).toEqual(['sess-1'])
+  // `/clear` or `/resume` gave it another: said at the next turn, once.
+  id = 'sess-2'
+  await hook('turn.start', { agentId: 'a1' })
+  await hook('turn.start', {})
+  await hook('turn.start', {})
+  expect(toldSessions(calls)).toEqual(['sess-1', 'sess-2'])
+})
+
+test('outside a terminal of the app the session is told to nobody', async () => {
+  const { calls, hook } = await session(async argv => answer(argv))
+  await hook('turn.start', {})
+  expect(toldSessions(calls)).toEqual([])
 })

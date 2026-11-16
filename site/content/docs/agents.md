@@ -20,6 +20,6 @@ Gemini CLI starts no MCP server in a folder you have not trusted in it: trust th
 
 ## What an agent tells you
 
-An Event Center (⇧⌘E) tells you what waits for you. With its plugin, Claude Code says there when it asks you a question, stops on an error or finishes a long turn: one line on its terminal, with the agent's mark, gone as soon as it goes on.
+An Event Center (⇧⌘E) tells you what waits for you. An agent that reports its state to its terminal (Claude Code 2.1.295 and later and Codex do, through OSC 7501, once the terminal answers that it reads it, which every terminal of the app's does) says there when it waits for you: an approval it needs ("approve Bash: npm test"), a question, a sign-in. That is one line on its terminal, named by the agent, gone as soon as it goes on; one that stopped on an error is a line among the programs that ended, and one that finished a turn is listed quietly, until you type in its terminal. While it is at work, its tab's icon carries a still ring in the side, with how far it has come when it says. With its plugin, Claude Code also says when a long turn finished, with its last line.
 
 What waits also marks its tab with a dot and its words, counts on the Dock's icon, and, while you are in another app, comes as a silent macOS notice whose click shows the tab. A session that runs outside the window has no tab yet: its line's **Continue Here** continues it in a terminal of its project.

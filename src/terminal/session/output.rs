@@ -1,6 +1,6 @@
 //! The reader's side of a terminal session: the program's output taken into the screen and sent
-//! on to the window's tab at a pace, a program's cursor query answered, and how it ended once it
-//! has.
+//! on to the window's tab at a pace, a program's cursor and status queries answered, and how it
+//! ended once it has.
 
 use std::io::{self, Read};
 use std::os::fd::AsRawFd;
@@ -51,27 +51,48 @@ pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: 
         }
         // The one that floods is the one in front.
         if front.due(FRONT_EVERY) {
-            fronted(shared, reader.as_raw_fd());
+            fronted(shared, reader.as_raw_fd(), pid);
         }
         if shared.lock().closed {
+            drain_closed(&mut reader, &mut buffer, shared);
             return;
         }
         retitled(shared);
         noted(shared);
+        super::status::statused(shared);
         paint(shared, Pace::Throttled);
         if gone {
             let status = exit_status(pid);
             let mut state = shared.lock();
             state.ended = true;
             state.status = status;
+            // What the program left at work goes with it.
+            state.screen.status_mut().drop_transient();
             let heard = state.on_end.take();
             drop(state);
+            super::status::statused(shared);
             paint(shared, Pace::Now);
             paint_ended(shared, status);
             shared.wake.notify_all();
             if let Some(heard) = heard {
                 heard();
             }
+            return;
+        }
+    }
+}
+
+/// After the close, what the program still has in its terminal is read and dropped until the
+/// close has reaped it (`ended`) or its end of the terminal is closed. The last close of a
+/// terminal's program end waits, even in a killed program's exit, until all that was written
+/// into it is read (macOS): with nobody reading, the program would never finish exiting, and
+/// the close that waits for it would never return.
+fn drain_closed(reader: &mut &std::fs::File, buffer: &mut [u8], shared: &Shared) {
+    loop {
+        if pty::readable(reader.as_raw_fd(), PAINT_POLL_MS) && fill(reader, buffer).1 {
+            return;
+        }
+        if shared.lock().ended {
             return;
         }
     }
@@ -138,7 +159,9 @@ fn take_in(shared: &Shared, input: &Input, chunk: &[u8], asked: usize) {
         }
     }
     let (row, column) = state.screen.cursor();
+    let status_asked = state.screen.status_asked();
     drop(state);
+    super::status::answer(input, status_asked);
     // The page leaves this query to the session (it answers whether or not a page is there).
     for _ in 0..asked.min(MOST_CURSOR_REPLIES) {
         input.queue(format!("\x1b[{row};{column}R").as_bytes());
@@ -213,7 +236,7 @@ const RENAMED: Duration = Duration::from_millis(500);
 /// Whoever listens told when another program came in front: a program started, or ended, in
 /// the terminal, or the one in front became another. The group is read with the output (`FRONT_EVERY`); the
 /// name when it changed, or now and then while it stays.
-fn fronted(shared: &Shared, master: std::os::fd::RawFd) {
+fn fronted(shared: &Shared, master: std::os::fd::RawFd, pid: u32) {
     let group = super::super::foreground::group(master);
     {
         let state = shared.lock();
@@ -223,6 +246,7 @@ fn fronted(shared: &Shared, master: std::os::fd::RawFd) {
         }
     }
     let name = group.and_then(super::super::foreground::name);
+    super::status::fronted(shared, group, pid);
     let heard = {
         let mut state = shared.lock();
         let same = state.front.group == group && state.front.name == name;

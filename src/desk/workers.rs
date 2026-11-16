@@ -34,6 +34,9 @@ impl Desk {
         // A terminal that is over runs no worker: its name is free for the card's next run.
         workers.retain(|key, _| self.runs(key));
         workers.insert(key.clone(), worker);
+        drop(workers);
+        // A worker would wake with no task: its agent is never resumed.
+        self.agent_let_go(&key);
         Ok(key)
     }
 

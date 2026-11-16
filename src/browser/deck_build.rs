@@ -131,10 +131,16 @@ impl Deck {
             Some(_) => Some(strip_page(&frame.native, look, proxy.clone(), Part::Nav)?),
             None => None,
         };
-        // Split only where the pages lie side by side with the side (not in GTK's column).
-        let line = match &side {
-            Some(_) => Some(strip_page(&frame.native, look, proxy.clone(), Part::Line)?),
-            None => None,
+        // Split only where the pages lie side by side with the side (not in GTK's column): one
+        // divider's view made at once, the rest as a tree needs them (deck_panes.rs).
+        let lines = match &side {
+            Some(_) => vec![strip_page(
+                &frame.native,
+                look,
+                proxy.clone(),
+                Part::Line(0),
+            )?],
+            None => vec![],
         };
         let docs = match &strip {
             Some(_) => Some(strip_page(&frame.native, look, proxy.clone(), Part::Docs)?),
@@ -154,11 +160,13 @@ impl Deck {
             strip,
             side,
             nav,
-            line,
+            lines,
             docs,
             stacks: std::sync::Mutex::default(),
+            tabs: std::sync::Mutex::default(),
             split: super::super::split::Split::default(),
             drop: None,
+            recent: std::sync::Mutex::default(),
             landing: None,
             side_open,
             side_width,
@@ -174,12 +182,13 @@ impl Deck {
             offer: std::sync::Mutex::default(),
             commenting: false,
             sent: 0,
+            finds: super::finding::Finds::new(),
             proxy: proxy.clone(),
         })
     }
 }
 
-fn strip_page(
+pub(super) fn strip_page(
     native: &tao::window::Window,
     look: Look,
     proxy: EventLoopProxy<Cmd>,
@@ -192,7 +201,11 @@ fn strip_page(
         Part::Strip => page,
         Part::Side => page.replacen("<html", "<html data-part=\"side\"", 1),
         Part::Nav => page.replacen("<html", "<html data-part=\"nav\"", 1),
-        Part::Line => page.replacen("<html", "<html data-part=\"line\"", 1),
+        Part::Line(at) => page.replacen(
+            "<html",
+            &format!("<html data-part=\"line\" data-line=\"{at}\""),
+            1,
+        ),
         Part::Docs => page.replacen("<html", "<html data-part=\"docs\"", 1),
     };
     let loaded = proxy.clone();
@@ -219,13 +232,17 @@ fn strip_page(
 
 /// What a page of `part` posted (`said`), as the window hears it. A point it says is of its own
 /// view, so each part that lies elsewhere than the strip says whose points they are, and the
-/// window moves them to where that part lies (host_dispatch.rs). The line between the halves
-/// says no point of its own.
+/// window moves them to where that part lies (host_dispatch.rs). A divider says no point of its
+/// own: it says which divider it is.
 fn posted(part: Part, said: String) -> Cmd {
     match part {
-        Part::Strip | Part::Line => Cmd::Clicked(said),
+        Part::Strip | Part::Line(_) => Cmd::Clicked(said),
         Part::Side => Cmd::SideClicked(said),
-        Part::Nav => Cmd::NavClicked(said),
+        // A step of the toolbar's find row is no click: it changes no tab, and draws itself.
+        Part::Nav => match strip::Seek::parse(&said) {
+            Some(seek) => Cmd::Seek(seek),
+            None => Cmd::NavClicked(said),
+        },
         Part::Docs => Cmd::DocsClicked(said),
     }
 }

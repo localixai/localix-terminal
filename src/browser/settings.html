@@ -128,6 +128,9 @@ running 230 tests  <span class="p">ok</span>  0O 1lI {}[]=&gt; -&gt;</div>
     <div class="row"><div class="l"><b>Option key as Meta</b><small>Option and a key send Escape and the key, as shells and editors expect; an Option that is not Meta types its characters.</small></div>
       <button class="ic gone" data-reset="option_meta" aria-label="Reset Option key as Meta"></button>
       <select id="option_meta" aria-label="Option key as Meta"></select></div>
+    <div class="row"><div class="l"><b>Resume agents</b><small>A coding agent left running in a terminal goes on in its session there when the app opens again.</small></div>
+      <button class="ic gone" data-reset="resume_agents" aria-label="Reset Resume agents"></button>
+      <select id="resume_agents" aria-label="Resume agents"></select></div>
   </div>
 
   <h2>Updates</h2>
@@ -157,6 +160,7 @@ const THEMES = [["system", "System"], ["light", "Light"], ["dark", "Dark"]];
 const LEVELS = [["off", "Off"], ["low", "Low"], ["standard", "Standard"], ["high", "High"]];
 const UPDATES = [["auto", "Download Automatically"], ["manual", "Only When I Check"]];
 const OPTIONS = [["left", "Left Option"], ["right", "Right Option"], ["both", "Both"], ["off", "Off"]];
+const RESUMES = [["on", "When the App Opens"], ["off", "Never"]];
 const GLASSY = "How much of the desktop shows through the glass.";
 const REDUCED = "Reduced by Accessibility settings (Display > Reduce transparency).";
 const RESET = ["M3.5 8a4.5 4.5 0 1 0 1.4-3.3", "M3.5 3v2.2h2.2"];
@@ -203,7 +207,7 @@ function choices(id, list, value) {
   select.value = value;
 }
 const fontList = (fonts) => fonts.map((font) => [font.id, font.name]);
-for (const id of ["theme", "transparency", "ui_font", "code_font", "updates", "option_meta"]) {
+for (const id of ["theme", "transparency", "ui_font", "code_font", "updates", "option_meta", "resume_agents"]) {
   document.getElementById(id).addEventListener("change", (event) => change(id, event.target.value));
 }
 const step = (by) => cur && data && change("font_size", Math.min(data.sizes[1], Math.max(data.sizes[0], cur.font_size + by)));
@@ -216,11 +220,11 @@ addEventListener("desk-look", () => cur && show());
 // The setting a reset button is for: its name in the settings, and in the defaults the page is
 // told (settings.rs `page`); the words for the default it goes back to.
 const RESETS = { theme: "theme", transparency: "transparency", ui_font: "ui_font", code_font: "code_font", font_size: "size", updates: "updates",
-  option_meta: "option_meta" };
+  option_meta: "option_meta", resume_agents: "resume_agents" };
 function defaultLabel(name) {
   const value = data.defaults[RESETS[name]];
   if (name === "font_size") return value + " pt";
-  const list = { theme: THEMES, transparency: LEVELS, updates: UPDATES, option_meta: OPTIONS }[name];
+  const list = { theme: THEMES, transparency: LEVELS, updates: UPDATES, option_meta: OPTIONS, resume_agents: RESUMES }[name];
   if (list) return list.find(([key]) => key === value)?.[1];
   return data[name === "ui_font" ? "ui_fonts" : "code_fonts"].find((font) => font.id === value)?.name;
 }
@@ -241,6 +245,7 @@ function show() {
   document.getElementById("tnote").textContent = reduced ? REDUCED : GLASSY;
   choices("updates", UPDATES, cur.updates);
   choices("option_meta", OPTIONS, cur.option_meta);
+  choices("resume_agents", RESUMES, cur.resume_agents);
   choices("ui_font", fontList(data.ui_fonts), cur.ui_font);
   choices("code_font", fontList(data.code_fonts), cur.code_font);
   document.getElementById("size").textContent = cur.font_size + " pt";

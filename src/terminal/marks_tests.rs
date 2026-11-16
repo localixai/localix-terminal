@@ -74,3 +74,13 @@ fn a_start_said_with_the_command_line_is_a_start() {
     marks.read("133;D;0");
     assert_eq!(marks.ended().0, 1);
 }
+
+#[test]
+fn each_prompt_the_shell_shows_is_counted_so_its_first_says_it_is_ready() {
+    let mut marks = Marks::default();
+    assert_eq!(marks.prompts(), 0);
+    for said in ["133;A", "133;C", "133;D;0", "133;A", "133;B"] {
+        marks.read(said);
+    }
+    assert_eq!(marks.prompts(), 2);
+}

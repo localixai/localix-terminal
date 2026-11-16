@@ -11,8 +11,8 @@ use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy, EventLoopWi
 use super::super::comments::Comments;
 use super::super::deck::Deck;
 use super::super::guard::token;
-use super::super::platform;
 use super::super::windows::{Route, Windows};
+use super::super::{Side, platform};
 use super::presence::{Presenter, Stage};
 use super::window::on_window;
 use super::{Browser, Cmd, Heard, Shared};
@@ -138,6 +138,8 @@ impl Looping {
         // last.
         if let Some(deck) = self.windows.current().as_ref() {
             platform::showing(deck.page_shown(), deck.finds());
+            platform::splitting(deck.fits(Side::Right), deck.fits(Side::Down));
+            platform::zooming(deck.zoomed().is_some());
         }
         let shown = self.windows.all().any(Deck::is_shown);
         if shown != self.docked {
@@ -309,6 +311,7 @@ pub(super) fn fresh() -> Arc<Shared> {
         kept: Mutex::new(crate::browser::placement::recalled()),
         offers: crate::browser::offer::Offers::default(),
         folders: Mutex::default(),
+        working: Mutex::default(),
         trees: Mutex::default(),
     })
 }

@@ -7,15 +7,15 @@ use super::super::super::tests::{caller, desk};
 use crate::testing::Scratch;
 
 #[test]
-fn a_terminal_says_which_terminal_and_project_it_is() {
+fn a_terminal_says_which_terminal_and_project_it_is_and_that_it_reads_program_status() {
     let (desk, scratch) = (desk(), Scratch::new());
     let mine = caller(&desk, scratch.path(), None);
     let open = json!({"action": "open", "kind": "terminal",
-        "command": r#"printf 'is=%s:%s.' "$LLXTERM_PANE" "$LLXTERM_PANE_PROJECT"; sleep 20"#,
+        "command": r#"printf 'is=%s:%s:%s.' "$LLXTERM_PANE" "$LLXTERM_PANE_PROJECT" "$LLXTERM_PROGRAM_STATUS"; sleep 20"#,
         "wait_for": "."});
     let text = desk.window(&mine.call(), &open).unwrap();
     let folder = mine.project.path.display();
-    assert!(text.contains(&format!("is=t1:{folder}.")), "{text}");
+    assert!(text.contains(&format!("is=t1:{folder}:1.")), "{text}");
     desk.shutdown();
 }
 

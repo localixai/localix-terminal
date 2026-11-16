@@ -160,6 +160,9 @@ pub(in super::super) enum Follow {
     Centre,
     /// The side: its width kept, as tall as the window under the strip, held to its left.
     Side,
+    /// A view the next layout places (a divider between panes one above the other): nothing
+    /// kept as the window resizes.
+    Still,
 }
 
 /// `native` clear, or seen again: the window a carried tab is in, over another window's list.
@@ -230,6 +233,7 @@ pub(in super::super) fn follow(webview: &wry::WebView, follow: Follow) {
         Follow::Top => WIDTH_SIZABLE | MIN_Y_MARGIN,
         Follow::Centre => MIN_X_MARGIN | MAX_X_MARGIN | MIN_Y_MARGIN | MAX_Y_MARGIN,
         Follow::Side => HEIGHT_SIZABLE,
+        Follow::Still => 0,
     };
     let view = webview.webview();
     // SAFETY: an NSView answers its NSAutoresizingMaskOptions (an NSUInteger).

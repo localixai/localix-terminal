@@ -74,6 +74,17 @@ impl Browser {
             .ok()?
     }
 
+    /// For checks: which of the window's views holds its keys: `nav` (the browser's toolbar),
+    /// `strip`, `side`, or the tab shown's key (`w1`). `None` for none of them.
+    #[doc(hidden)]
+    pub fn keys(&self) -> Option<String> {
+        let (reply, answer) = mpsc::sync_channel(1);
+        self.proxy.send_event(Cmd::Keys(reply)).ok()?;
+        answer
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .ok()?
+    }
+
     /// Hear what the person does in the window: a tab or the window closed, by key (`window` for
     /// the whole of it) and in words. It runs on the window's thread: it must not wait.
     pub fn listen(&self, listener: impl Fn(&str, Heard<'_>) + Send + Sync + 'static) {
@@ -172,6 +183,19 @@ impl Browser {
     /// shown as such, by its mark.
     pub fn runs(&self, key: &str, program: Option<&str>) {
         if self.shared.offers.runs(key, program) {
+            let _ = self.proxy.send_event(Cmd::Strip);
+        }
+    }
+
+    /// Terminal `key`'s program says it is at work (none: it is not): its tab is marked so.
+    pub fn working(&self, key: &str, working: Option<crate::browser::Working>) {
+        let mut marked = crate::lock(&self.shared.working);
+        let changed = match working {
+            Some(working) => marked.insert(key.to_string(), working) != Some(working),
+            None => marked.remove(key).is_some(),
+        };
+        drop(marked);
+        if changed {
             let _ = self.proxy.send_event(Cmd::Strip);
         }
     }

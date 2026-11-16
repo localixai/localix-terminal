@@ -209,4 +209,17 @@ pub(super) const STEPS: &[&str] = &[
     // A node's `across` may be 2 from here on: a stack, its children one over the other, the
     // one in sight with the share 1 and the rest 0.
     "ALTER TABLE tabs ADD COLUMN whole INTEGER NOT NULL DEFAULT 0;",
+    // 7: the coding agent a terminal runs, kept as it is seen so that a crash keeps it: its
+    // session's id where it is known, the words of its line that are carried, the folder it
+    // works in, whether a sandbox bypass was dropped, and how many times it did not resume.
+    "CREATE TABLE agent_sessions (
+        pane INTEGER PRIMARY KEY REFERENCES panes ON DELETE CASCADE,
+        agent TEXT NOT NULL,
+        session TEXT,
+        argv TEXT NOT NULL,
+        folder TEXT,
+        bypass INTEGER NOT NULL DEFAULT 0,
+        tries INTEGER NOT NULL DEFAULT 0,
+        at INTEGER NOT NULL
+    );",
 ];

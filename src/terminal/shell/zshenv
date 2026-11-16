@@ -1,6 +1,6 @@
 # Localix Terminal: a zsh started in a terminal tab reads this file in place of the person's .zshenv.
 # It puts ZDOTDIR back as it was, reads their .zshenv, and has the shell say when a command
-# starts and how it ended, so a wait on the terminal knows. Nothing of the person's is changed.
+# starts and how it ended, and that its prompt is ready, so a wait on the terminal knows. Nothing of the person's is changed.
 # The app's command stays first on PATH: the files read after this one (macOS's /etc/zprofile,
 # which runs path_helper, and the person's) may set a PATH of their own, so it is put first
 # again at the first prompt.
@@ -22,6 +22,7 @@ if [[ -o interactive ]]; then
     builtin local code=$?
     [[ -n $_llxterm_ran ]] && builtin print -n "\e]133;D;$code\a"
     _llxterm_ran=
+    builtin print -n '\e]133;A\a'
   }
   _llxterm_path() {
     precmd_functions=(${precmd_functions:#_llxterm_path})

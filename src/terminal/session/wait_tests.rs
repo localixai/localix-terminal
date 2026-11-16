@@ -158,3 +158,57 @@ fn the_end_waited_for_is_of_the_command_typed_not_of_the_one_before_it() {
     };
     assert_eq!(ended.code, Some(0));
 }
+
+/// As a shell says its prompt is ready.
+const PROMPT: &str = "printf \"\\033]133;A\\007\"";
+
+#[test]
+fn a_line_is_typed_only_into_the_shell_in_front_at_a_prompt_nothing_was_typed_at() {
+    let session = start(&format!(
+        "sh -c '{PROMPT}; printf ready; read line; {START}; printf busy; sleep 1; {}; {PROMPT}; printf again; sleep 20'",
+        end(0)
+    ));
+    assert_eq!(session.wait(Some("ready"), 0, DEFAULT_WAIT), Until::Matched);
+    assert!(session.at_prompt(true), "{}", session.snapshot());
+    // The person typed at it: what is on the line now is theirs.
+    session.typed("a");
+    assert!(!session.at_prompt(true) && !session.at_prompt(false));
+    // A reply of the terminal's own (its attributes, a report of the pointer) is no typing.
+    let fresh = start(&format!("sh -c '{PROMPT}; printf ready; sleep 20'"));
+    assert_eq!(fresh.wait(Some("ready"), 0, DEFAULT_WAIT), Until::Matched);
+    fresh.typed("\x1b[?1;2c");
+    assert!(fresh.at_prompt(true));
+    // An arrow brings a line back from the history: typing.
+    fresh.typed("\x1b[A");
+    assert!(!fresh.at_prompt(true));
+    // A command at work is never typed into.
+    session.typed("\r");
+    assert_eq!(session.wait(Some("busy"), 0, DEFAULT_WAIT), Until::Matched);
+    assert!(!session.at_prompt(false), "{}", session.snapshot());
+    // Its end and a new prompt: clean again.
+    assert_eq!(session.wait(Some("again"), 0, DEFAULT_WAIT), Until::Matched);
+    assert!(session.at_prompt(true), "{}", session.snapshot());
+}
+
+#[test]
+fn a_shell_that_never_marks_a_prompt_takes_a_line_only_when_one_is_asked_for() {
+    let session = start("sh -c 'printf ready; sleep 20'");
+    assert_eq!(session.wait(Some("ready"), 0, DEFAULT_WAIT), Until::Matched);
+    assert!(!session.at_prompt(true));
+    assert!(session.at_prompt(false));
+}
+
+#[test]
+fn a_program_in_front_of_the_shell_takes_no_line_of_the_apps() {
+    // With job control the shell puts its command in a group of its own, in front.
+    let session = start(&format!(
+        "sh -c 'set -m; {PROMPT}; printf ready; sleep 30; sleep 20'"
+    ));
+    assert_eq!(session.wait(Some("ready"), 0, DEFAULT_WAIT), Until::Matched);
+    let front = std::time::Instant::now() + Duration::from_secs(5);
+    while session.foreground().as_deref() != Some("sleep") && std::time::Instant::now() < front {
+        crate::backoff(Duration::from_millis(50));
+    }
+    assert_eq!(session.foreground().as_deref(), Some("sleep"));
+    assert!(!session.at_prompt(false) && !session.at_prompt(true));
+}

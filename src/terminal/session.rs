@@ -13,6 +13,7 @@ use super::pty::{self, Pty};
 mod input;
 mod output;
 mod read;
+mod status;
 mod wait;
 use self::input::Input;
 use super::screen::Screen;
@@ -63,6 +64,10 @@ struct State {
     /// one it was called for.
     on_note: Option<Arc<dyn Fn() + Send + Sync>>,
     noted: u32,
+    /// Called when what the program says of its state changes, and the count of changes
+    /// (`Records::changes`) it was last called for.
+    on_status: Option<Arc<dyn Fn() + Send + Sync>>,
+    statused: u64,
 }
 
 /// Hears the program in front of a terminal, by the name it was started as.
@@ -161,7 +166,9 @@ impl Session {
         let (reader, control) = match ends {
             Ok(ends) => ends,
             Err(why) => {
-                // Started, with no end left to keep it by: not left running with no tab.
+                // Started, with no end left to keep it by: not left running with no tab, and its
+                // terminal let go first, as `pty::spawn` does.
+                drop(master);
                 pty::kill(&mut child);
                 return Err(why);
             }
@@ -188,6 +195,8 @@ impl Session {
                 on_front: None,
                 on_note: None,
                 noted: 0,
+                on_status: None,
+                statused: 0,
             }),
             wake: Condvar::new(),
         });
@@ -222,6 +231,7 @@ impl Session {
         let (cursor, pastes) = {
             let mut state = self.shared.lock();
             state.typed_at = Some(state.screen.marks().ended().0);
+            state.screen.marks_mut().typed_in();
             (
                 state.screen.application_cursor(),
                 state.screen.bracketed_paste(),
@@ -273,7 +283,13 @@ impl Session {
     /// What the person typed in the window, as the terminal sends it: queued, the window never
     /// waits for the program to read it.
     pub fn typed(&self, text: &str) {
-        let cursor = self.shared.lock().screen.application_cursor();
+        let cursor = {
+            let mut state = self.shared.lock();
+            if read::edits_the_line(text) {
+                state.screen.marks_mut().typed_in();
+            }
+            state.screen.application_cursor()
+        };
         self.input.queue(&keys::from_window(text, cursor));
         self.attended(text);
     }
@@ -358,7 +374,10 @@ impl Session {
         };
         drop(painter);
         self.input.close();
+        // The reader drains the terminal meanwhile, which a killed program's exit waits for,
+        // and lets go of it once the program is reaped (`ended`).
         pty::kill(&mut crate::lock(&self.child));
+        self.shared.lock().ended = true;
         self.shared.wake.notify_all();
     }
 }

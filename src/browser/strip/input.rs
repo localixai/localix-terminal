@@ -5,7 +5,13 @@ use crate::browser::agents::AGENTS;
 
 #[path = "keyed.rs"]
 mod keyed;
+#[path = "seek.rs"]
+mod seek;
 pub(in super::super) use keyed::{Finding, Keyed};
+pub(in super::super) use seek::Seek;
+/// The steps of the row, named by the tests of what it says.
+#[cfg(test)]
+pub(in super::super) use seek::Seeking;
 
 /// A toolbar button the strip had no room for: it waits in the "»" menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,11 +92,11 @@ pub(in super::super) enum Click {
     Side,
     /// The person drags the side's edge: its width now, in points, and whether they let go.
     SideWidth(u32, bool),
-    /// The person drags the line between a split window's halves: by how many points since
-    /// they took hold of it, and whether they let go.
-    SplitMove(i32, bool),
-    /// The line between the halves, double-clicked: the halves even again.
-    SplitEven,
+    /// The person drags a divider of the split tab shown (its place among the tree's
+    /// dividers): by how many points since they took hold of it, and whether they let go.
+    SplitMove(usize, i32, bool),
+    /// A divider double-clicked, or Home on it: its branch even again.
+    SplitEven(usize),
     /// The person dragged a tab along the list: it goes before the other (none: to the end).
     Move(Key, Option<Key>),
     /// The person carried a document along its row: it goes before the other (none: last).
@@ -169,10 +175,11 @@ pub(in super::super) fn click(body: &str) -> Option<Click> {
         ("reload", None) => Some(Click::Reload),
         ("outside", None) => Some(Click::Outside),
         ("side", None) => Some(Click::Side),
-        ("split-even", None) => Some(Click::SplitEven),
+        ("split-even", Some(at)) => at.parse().ok().map(Click::SplitEven),
         ("split-move", Some(rest)) => {
+            let (at, rest) = rest.split_once(' ')?;
             let (by, done) = dragged(rest)?;
-            by.parse().ok().map(|by| Click::SplitMove(by, done))
+            Some(Click::SplitMove(at.parse().ok()?, by.parse().ok()?, done))
         }
         ("key", Some(words)) => Keyed::parse(words).map(Click::Key),
         ("agent", Some(id)) => agent(id),

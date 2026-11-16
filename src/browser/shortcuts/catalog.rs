@@ -14,7 +14,7 @@ pub(in super::super) struct Shortcut {
     pub does: &'static str,
 }
 
-const fn at(
+pub(super) const fn at(
     id: &'static str,
     title: &'static str,
     group: &'static str,
@@ -159,8 +159,9 @@ const SHORTCUTS: [Shortcut; 32] = [
     ),
 ];
 
-/// Every shortcut there is: the catalog's, and after the board's the command of each kind that
-/// draws itself (`crate::kind`), which opens its tab. A kind's is made once and kept.
+/// Every shortcut there is: the catalog's, after the board's the command of each kind that draws
+/// itself (`crate::kind`), which opens its tab (a kind's is made once and kept), and after the
+/// tabs' the panes' (panes.rs).
 pub(in super::super) fn every() -> Vec<&'static Shortcut> {
     static MADE: std::sync::Mutex<Vec<&'static Shortcut>> = std::sync::Mutex::new(Vec::new());
     let mut made = crate::lock(&MADE);
@@ -181,10 +182,17 @@ pub(in super::super) fn every() -> Vec<&'static Shortcut> {
             shortcut
         })
         .collect();
-    let after = SHORTCUTS.iter().position(|shortcut| shortcut.id == "board");
-    let after = after.map_or(SHORTCUTS.len(), |at| at + 1);
-    let (before, rest) = SHORTCUTS.split_at(after);
-    before.iter().chain(kinds).chain(rest).collect()
+    let after = |id: &str| {
+        let at = SHORTCUTS.iter().position(|shortcut| shortcut.id == id);
+        at.map_or(SHORTCUTS.len(), |at| at + 1)
+    };
+    // The panes' group follows the tabs', whose last is Split View.
+    let (tabs, rest) = SHORTCUTS.split_at(after("split"));
+    let (before, between) = tabs.split_at(after("board"));
+    (before.iter().chain(kinds).chain(between))
+        .chain(&super::panes::PANES)
+        .chain(rest)
+        .collect()
 }
 
 /// What only a web page shown can do: walk its history, load it again, size it, comment on it.
@@ -209,6 +217,24 @@ pub(super) const OF_FIND: [&str; 3] = ["key find text", "key find next", "key fi
 #[cfg(any(target_os = "macos", test))]
 pub(in super::super) fn of_find(does: &str) -> bool {
     OF_FIND.contains(&does)
+}
+
+/// The way a new pane goes from the one in use for what a shortcut `does` (`true`: side by
+/// side), when it splits: Split Right and Split Down are greyed where it would not fit.
+#[cfg(any(target_os = "macos", test))]
+pub(in super::super) fn of_split(does: &str) -> Option<bool> {
+    match does {
+        "key split right" => Some(true),
+        "key split down" => Some(false),
+        _ => None,
+    }
+}
+
+/// Whether what a shortcut `does` zooms the pane in use: Zoom Pane is greyed over a pane alone
+/// in its tab, which has nothing to put by.
+#[cfg(any(target_os = "macos", test))]
+pub(in super::super) fn of_zoom(does: &str) -> bool {
+    does == "key zoom"
 }
 
 /// The groups of the catalog, in its order: Settings lists them so, and each is a menu of the

@@ -267,3 +267,22 @@ fn the_apps_command_stays_on_path_after_a_profile_sets_its_own() {
         assert_eq!(until, Until::Matched, "{shell}: {}", session.snapshot());
     }
 }
+
+#[test]
+fn the_persons_shell_says_when_its_prompt_is_ready_for_a_line() {
+    let home = Home::new("ready");
+    let shells = [zsh(&home.0, None, &[]), bash(&home.0)];
+    for session in shells.into_iter().flatten() {
+        assert!(session.wait_prompt(DEFAULT_WAIT), "{}", session.snapshot());
+        // A command typed ends at the next prompt, which is said again.
+        let ended = session.commands_ended();
+        session.type_in("sh -c 'exit 3'\n", &[]).unwrap();
+        let end = session.wait_command_end(ended, DEFAULT_WAIT);
+        assert_eq!(
+            end.and_then(|end| end.code),
+            Some(3),
+            "{}",
+            session.snapshot()
+        );
+    }
+}

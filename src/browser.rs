@@ -75,26 +75,34 @@ use crate::view::{Action, Element, ViewResult};
 use serde::{Deserialize, Serialize};
 
 pub use agents::{
-    commands_path, continued as agent_continued, known as installed_agents, runs as agent_runs,
+    Launch as AgentLaunch, Resumed as AgentResumed, commands_path, continued as agent_continued,
+    known as installed_agents, launch as agent_launch, names_session as agent_names_session,
+    pinned as agent_pinned, resumed as agent_resumed, runs as agent_runs,
     started_on as agent_started_on,
 };
 pub use capture::{Clip, Shot};
 pub use guard::{drawn, loadable};
 pub use host::{
-    Answers, Arranged, Arranging, Asked, Browser, CenterDid, Confirm, Dressing, Halves, Heard,
-    Ledger, Past, Place, Tab, TabKind, Visited, Went, Window, host,
+    Answers, Arranged, Arranging, Asked, Browser, CenterDid, Confirm, Drawn, Dressing, Heard,
+    Ledger, Past, Place, Side, Tab, TabKind, Visited, Went, Window, host,
 };
 pub use notices::{Armed, Notice};
 pub use page::Page;
 pub use panel::{Fitted, Pane, Panel};
 pub use platform::trash;
 pub use strip::HOME;
-pub use strip::{BOARD, FILE, made};
+pub use strip::{BOARD, FILE, Working, made};
 pub use tabs::MAX_TABS;
 pub use told::{Branch, EntryDid, Leaf, Tree, TreeDid};
 pub(crate) use toolbar::owns;
 pub use viewport::Viewport;
 pub use webview::WebviewDriver;
+
+/// Whether a coding agent left running in a terminal goes on in its session there as the app
+/// opens again: the person's setting (Settings, Terminal).
+pub fn resumes_agents() -> bool {
+    settings::now().resume_agents == agents::Resuming::On
+}
 
 /// Why there is no window where `has_display` is false, as the person and the model read it.
 pub const NO_WINDOW: &str = "no display";

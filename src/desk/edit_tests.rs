@@ -47,7 +47,7 @@ fn a_file_opens_in_a_tab_of_its_own_and_is_listed_read_and_closed() {
     assert!(again.report.starts_with("f1 (file): "), "{}", again.report);
 
     let listed = desk.act(&me.call(), &json!({"action": "list"})).unwrap();
-    assert_eq!(listed.report, "f1 (file): src/main.rs");
+    assert_eq!(listed.report, "f1 (file) in tab 1: src/main.rs");
     let read = desk
         .act(&me.call(), &json!({"action": "interact", "tab": "f1"}))
         .unwrap();
@@ -235,7 +235,10 @@ fn what_is_left_unsaved_outlives_its_tab_and_knows_the_disk_moved() {
     let key = open();
     desk.file_work(&key, posted(&json!({"t": "draft", "text": "one\nmine\n"})));
     let listed = desk.act(&me.call(), &json!({"action": "list"})).unwrap();
-    assert_eq!(listed.report, format!("{key} (file): a.txt (unsaved)"));
+    assert_eq!(
+        listed.report,
+        format!("{key} (file) in tab 1: a.txt (unsaved)")
+    );
     assert_eq!(desk.file_text(&key).unwrap(), "one\nmine\n");
     assert_eq!(
         desk.close_file(&key).unwrap(),

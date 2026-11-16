@@ -12,7 +12,7 @@ A file or a page asked from no terminal joins the session you look at, else the 
 
 "+" in the tab row opens a terminal, or one of the agents installed on your `PATH`; ⌥⌘T opens a shell. The program is looked for where your login shell looks, not on the app's own `PATH`.
 
-A project you come back to has a shell in each of its terminals' folders, with the last screen above.
+A project you come back to has a shell in each of its terminals' folders, with the last screen above. A coding agent that was running there goes on in the same session: the app types the command that resumes it into the shell once the shell is ready, under a dimmed line that says so ("Resumed Claude Code session", and "permissions skipped" when you had skipped them). Only the agent's own options are carried: never a prompt, a one-shot run, a value that looks like a key or Codex's sandbox bypass. Claude Code, Codex, GitHub Copilot and OpenCode resume by their session's id; for Gemini CLI, Hermes, or an agent whose session is not known, the Event Center offers **Continue**, which goes on with the folder's last session. A session that does not resume is tried once more, then waits there with **Retry**. Settings → Terminal → Resume agents turns it off.
 
 ## Colours
 

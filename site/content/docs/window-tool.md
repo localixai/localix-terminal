@@ -18,6 +18,10 @@ What the page told besides its content comes back with it: a dialog and how it w
 
 An agent opens a terminal of the project for a program it must drive: a REPL, an installer's questions, another agent. It types into it and waits for the answer. In your shell the wait ends with the command and says its exit code; lines go as one paste to a program that takes pastes. A wait on a password prompt ends at once and says so.
 
+## Beside a pane
+
+An agent can open a terminal on the right of or under a pane of the project, in that pane's tab, or a page or a file among that tab's documents: the split is drawn, and your focus and the tab you look at stay as they are. It can zoom a tab on one of its panes and back, and it is told which tab each of its panes is in and what lies beside it. Dividers and the keys between panes stay yours.
+
 ## The board
 
 An agent plans on the project's [board](board.md): it adds cards, takes one into Doing, hands it in to Review with a note of what it did and how it checked it, or blocks it with what it needs. Subagents each take a card of their own, so two never do the same thing, and only you accept.

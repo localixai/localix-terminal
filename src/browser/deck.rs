@@ -39,13 +39,18 @@ mod showing;
 mod acts;
 #[path = "deck_history.rs"]
 mod history;
+#[path = "deck_keys.rs"]
+mod keys;
 #[path = "deck_layout.rs"]
 mod layout;
+#[path = "deck_panes.rs"]
+mod panes;
 #[path = "deck_tear.rs"]
 mod tear;
 #[path = "deck_tree.rs"]
 mod tree;
 use super::tabs::{self, Tabs};
+pub(super) use dropping::Landed;
 pub(super) use history::Revisit;
 
 /// How many ended terminals keep their last screen.
@@ -89,22 +94,28 @@ pub(super) struct Deck {
     /// The browser's toolbar over the pages (the strip's page again): back, forward, reload, the
     /// address field, the page's size and comments. It shows over a page only.
     nav: Option<WebView>,
-    /// The line between a split window's halves, which the person drags (the strip's page
-    /// again): out of sight while the window is whole.
-    line: Option<WebView>,
+    /// The dividers between a split tab's panes, which the person drags (the strip's page
+    /// again, one view each, made as a tree needs them): out of sight while the window is whole.
+    lines: Vec<WebView>,
     /// The documents' row over the documents of the session shown (the strip's page again):
     /// out of sight while no document is in sight.
     docs: Option<WebView>,
     /// Each tab's documents, as the layout was last drawn (session.rs): what the row lists and
     /// lies over.
     stacks: std::sync::Mutex<Vec<Vec<Key>>>,
-    /// The window split in two, or whole (split.rs).
+    /// Each tab of the window's projects, as the layout was last drawn: the shown pane's tab is
+    /// drawn from it (deck_panes.rs).
+    tabs: std::sync::Mutex<Vec<super::Arranging>>,
+    /// What of the shown tab's tree waits for the layout (split.rs).
     pub(super) split: super::split::Split,
-    /// A tab dragged over the pages: the half it lands in now (whether the right one), none off
+    /// A tab dragged over the pages: the pane it lands beside now and on which side, none off
     /// them.
-    drop: Option<bool>,
-    /// While a tab carried over the pages is laid out where it lands: what was beside the shown
-    /// tab before, to go back to when it is carried off them.
+    drop: Option<(Key, super::Side)>,
+    /// The panes the person used, the latest first: a way to a pane ties to the one used last,
+    /// and a pane closed leaves the keys to it (deck_keys.rs). Never kept.
+    recent: std::sync::Mutex<Vec<Key>>,
+    /// While a tab carried over the pages is laid out where it lands: what the person had made
+    /// of the tab shown before, to go back to when it is carried off them.
     landing: Option<Landing>,
     /// The side is open, or slid shut.
     side_open: bool,
@@ -132,6 +143,8 @@ pub(super) struct Deck {
     commenting: bool,
     /// How many batches of comments were sent: a page drops the marks of earlier ones.
     sent: u32,
+    /// Each page tab's find while its row is open (deck_find.rs).
+    finds: finding::Finds,
     /// The loop's own handle: a tab's picture, drawn later, comes back through it.
     proxy: EventLoopProxy<Cmd>,
 }
@@ -178,9 +191,8 @@ impl Deck {
         // A session's id used again: the screen kept of the one before is not this one's.
         self.terms.retain(|kept| kept.id != open.id);
         if shown {
-            // A tab that opens takes the window whole, as another tab picked does: the split
-            // stays its project's, and is back with either of its two tabs.
-            self.split.beside = None;
+            // A tab that opens is a tab of its own: the window shows it whole, and a split
+            // stays its tab's, back with any of its panes.
             self.shown = Shown::Term(open.id);
         }
         self.terms.push(open);
@@ -344,8 +356,8 @@ enum Part {
     Strip,
     Side,
     Nav,
-    /// The line between a split window's halves.
-    Line,
+    /// A divider between a split tab's panes: its place among the tree's dividers.
+    Line(usize),
     /// The row of a session's documents, over their pane.
     Docs,
 }
@@ -354,11 +366,11 @@ enum Part {
 /// told, so the next refresh tells it all again (`Deck::say`).
 pub(super) static LOADS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
-/// What was beside the shown tab before a tab carried over the pages was laid out where it
-/// lands.
-#[derive(Debug, Clone, Copy)]
+/// What the person had made of the tab shown before a tab carried over the pages was laid out
+/// where it lands.
+#[derive(Debug, Clone)]
 pub(super) struct Landing {
-    pub(super) was: Option<super::split::Beside>,
+    pub(super) was: Option<super::split::Own>,
 }
 
 /// Where a point of the window is for a tab carried there.
@@ -368,6 +380,6 @@ pub(super) enum Over {
     Off,
     /// The middle of a whole window's pages: where the tab lands stays as it is.
     Middle,
-    /// A half of the pages, the right one or the left.
-    Half(bool),
+    /// Near an edge of a pane: the tab lands beside that pane, on that side.
+    Pane(Key, super::Side),
 }

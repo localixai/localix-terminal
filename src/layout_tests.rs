@@ -7,7 +7,7 @@ use crate::store::Store;
 #[test]
 fn a_non_finite_resize_is_refused_without_changing_the_tree() {
     let mut tree = Tree::Leaf { pane: 1 };
-    tree.split(1, 2, true, true);
+    tree.split(&1, 2, true, true);
     let before = tree.clone();
     for share in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         assert!(!tree.resize(&[], 1, share));
@@ -25,38 +25,38 @@ fn shares(tree: &Tree) -> Vec<f64> {
 #[test]
 fn a_pane_split_beside_another_halves_it() {
     let mut tree = Tree::leaf(1);
-    assert!(tree.split(1, 2, true, true));
+    assert!(tree.split(&1, 2, true, true));
     assert_eq!(tree.panes(), [1, 2]);
     assert_eq!(shares(&tree), [0.5, 0.5]);
     // The same way again: one more child, sharing the one it was put beside.
-    assert!(tree.split(2, 3, true, false));
+    assert!(tree.split(&2, 3, true, false));
     assert_eq!(tree.panes(), [1, 3, 2]);
     assert_eq!(shares(&tree), [0.5, 0.25, 0.25]);
     // The other way: that pane becomes a branch of its own.
-    assert!(tree.split(1, 4, false, true));
+    assert!(tree.split(&1, 4, false, true));
     assert_eq!(tree.panes(), [1, 4, 3, 2]);
-    assert!(!tree.split(9, 5, true, true));
+    assert!(!tree.split(&9, 5, true, true));
 }
 
 #[test]
 fn a_pane_taken_out_gives_its_share_to_the_rest() {
     let mut tree = Tree::leaf(1);
-    tree.split(1, 2, true, true);
-    tree.split(2, 3, true, true);
-    let tree = tree.without(2).unwrap();
+    tree.split(&1, 2, true, true);
+    tree.split(&2, 3, true, true);
+    let tree = tree.without(&2).unwrap();
     assert_eq!(tree.panes(), [1, 3]);
     let total: f64 = shares(&tree).iter().sum();
     assert!((total - 1.0).abs() < 1e-9);
     // A branch left with one pane is that pane.
-    let alone = tree.without(3).unwrap();
+    let alone = tree.without(&3).unwrap();
     assert_eq!(alone, Tree::leaf(1));
-    assert_eq!(alone.without(1), None);
+    assert_eq!(alone.without(&1), None);
 }
 
 #[test]
 fn a_branch_resized_keeps_each_side_above_the_least() {
     let mut tree = Tree::leaf(1);
-    tree.split(1, 2, true, true);
+    tree.split(&1, 2, true, true);
     assert!(tree.resize(&[], 1, 0.3));
     assert_eq!(shares(&tree), [0.3, 0.7]);
     assert!(tree.resize(&[], 1, 0.0));
@@ -110,7 +110,7 @@ fn tabs_are_kept_in_their_places_with_their_trees() {
             assert_eq!(workspace_of(tx, window, 1, 0)?, workspace);
             let first = open_tab(tx, workspace, &Tree::leaf(one), None, None, 0)?;
             let mut split = Tree::leaf(two);
-            split.split(two, three, true, true);
+            split.split(&two, three, true, true);
             let second = open_tab(tx, workspace, &split, Some(three), Some(0), 0)?;
             show_tab(tx, workspace, Some(second))?;
             show_workspace(tx, window, workspace)?;

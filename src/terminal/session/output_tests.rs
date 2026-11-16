@@ -96,3 +96,25 @@ fn what_follows_output_is_done_at_once_then_at_its_pace() {
     assert!(paced.owed, "and stays owed until then");
     assert!(paced.due(Duration::ZERO));
 }
+
+#[test]
+fn a_session_closed_while_its_program_floods_the_terminal_ends_at_once() {
+    // A program that exits with output in its terminal that nobody reads is held in its exit
+    // until that output is read: the reader goes on reading after the close, so it never is.
+    for _ in 0..20 {
+        let session = super::super::Session::start("yes", &std::env::temp_dir(), None, None);
+        let session = session.unwrap();
+        session.wait(Some("y"), 0, Duration::from_secs(5));
+        let (closed, heard) = std::sync::mpsc::sync_channel(1);
+        let pid = session.pid();
+        std::thread::Builder::new()
+            .name("test-close".into())
+            .spawn(move || {
+                drop(session);
+                let _ = closed.send(());
+            })
+            .unwrap();
+        let ended = heard.recv_timeout(Duration::from_secs(10));
+        assert!(ended.is_ok(), "closing the session of `yes` ({pid}) hung");
+    }
+}

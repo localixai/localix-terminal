@@ -15,7 +15,9 @@
 mod event;
 mod journal;
 mod leads;
+mod resumes;
 mod sources;
+mod terminals;
 
 use event::{Do, Event, Kind};
 use leads::Leads;
@@ -369,6 +371,7 @@ impl Desk {
                     self.hear(&tab, &words, true);
                 }
             }
+            Do::Resume { key } => self.resume_again(&key),
             Do::Dismiss => self.mark(&[id], journal::Mark::Dismissed),
         }
         self.paint_center();

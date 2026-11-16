@@ -3,11 +3,13 @@
 //! whole screen again. The bytes are untrusted, so only text, line moves (`\n`, `\r`, `\t`,
 //! `\b`) and CSI sequences reach this emulator: no title, no clipboard write, no string sequence.
 //! The title a program sets (OSC 0 or 2) is kept aside as plain text, for the tab's subtitle,
-//! a shell's marks of its commands (OSC 133) are counted, and a note for the person (OSC 9,
-//! OSC 777) is kept as plain text.
+//! a shell's marks of its commands (OSC 133) are counted, a note for the person (OSC 9,
+//! OSC 777) is kept as plain text, and what the program says of its state (OSC 7501) is kept
+//! in its records, its queries counted for the session to answer.
 
 use super::marks::Marks;
 use super::notes::Notes;
+use super::status::{self, Records, Said};
 
 /// What puts right a terminal a command left wrong: no mouse reports of any kind, in any
 /// encoding, and the cursor shown.
@@ -65,9 +67,28 @@ impl Screen {
         &self.safe.marks
     }
 
+    pub(super) fn marks_mut(&mut self) -> &mut Marks {
+        &mut self.safe.marks
+    }
+
     /// What the program asked to tell the person.
     pub(super) fn notes(&mut self) -> &mut Notes {
         &mut self.safe.notes
+    }
+
+    /// What the program said of its state.
+    pub(super) fn status(&self) -> &Records {
+        &self.safe.status
+    }
+
+    pub(super) fn status_mut(&mut self) -> &mut Records {
+        &mut self.safe.status
+    }
+
+    /// How many times the program asked which states the terminal reads since this was last
+    /// asked: the session owes each an answer.
+    pub(super) fn status_asked(&mut self) -> usize {
+        std::mem::take(&mut self.safe.asked)
     }
 
     /// Whether the program asked to be told where a paste starts and ends.
@@ -156,6 +177,9 @@ enum State {
 
 /// The longest OSC kept to read a title from; the rest of a longer one is dropped.
 const OSC_MAX: usize = 512;
+/// The longest status report (`7501;` and its body): one longer is dropped whole, since a report
+/// cut short is a broken one.
+const STATUS_MAX: usize = "7501;".len() + status::BODY_MOST;
 /// The most characters of a title kept.
 const TITLE_MAX: usize = 80;
 
@@ -163,13 +187,18 @@ const TITLE_MAX: usize = 80;
 #[derive(Debug, Default)]
 struct Safe {
     state: State,
-    /// The OSC being read, when the string is one (`ESC ]`), up to `OSC_MAX` bytes.
+    /// The OSC being read, when the string is one (`ESC ]`), up to `OSC_MAX` bytes (a status
+    /// report's `STATUS_MAX`), and whether more came than was kept.
     osc: Option<Vec<u8>>,
+    cut: bool,
     title: Option<String>,
     /// Counts the times the title changed, so a reader knows when to pass it on.
     retitled: u32,
     marks: Marks,
     notes: Notes,
+    status: Records,
+    /// The status queries not answered yet.
+    asked: usize,
 }
 
 impl Safe {
@@ -200,7 +229,13 @@ impl Safe {
             }
             (State::Escape, b']') => {
                 self.osc = Some(Vec::new());
+                self.cut = false;
                 State::Text
+            }
+            // A full reset (RIS) takes what the program said of its state.
+            (State::Escape, b'c') => {
+                self.status.reset();
+                State::Ground
             }
             (State::Escape, b'P' | b'X' | b'^' | b'_') => State::Text,
             (State::Escape, 0x20..=0x2f) => State::Charset,
@@ -240,8 +275,17 @@ impl Safe {
             }
             (State::Text, 0x1b) => State::TextEscape,
             (State::Text, _) => {
-                if let Some(osc) = self.osc.as_mut().filter(|osc| osc.len() < OSC_MAX) {
-                    osc.push(byte);
+                if let Some(osc) = self.osc.as_mut() {
+                    let most = if osc.starts_with(b"7501;") {
+                        STATUS_MAX
+                    } else {
+                        OSC_MAX
+                    };
+                    if osc.len() < most {
+                        osc.push(byte);
+                    } else {
+                        self.cut = true;
+                    }
                 }
                 State::Text
             }
@@ -259,11 +303,19 @@ impl Safe {
         };
     }
 
-    /// A string sequence ended: the title, when it was an OSC that sets one, a shell's mark, or
-    /// a note for the person.
+    /// A string sequence ended: the title, when it was an OSC that sets one, a shell's mark, a
+    /// note for the person, or what the program says of its state.
     fn string_ended(&mut self) {
         let Some(osc) = self.osc.take() else { return };
         let text = String::from_utf8_lossy(&osc);
+        if let Some(body) = text.strip_prefix("7501;") {
+            match status::read(body).filter(|_| !self.cut) {
+                Some(Said::Query) => self.asked += 1,
+                Some(Said::Report(report)) => drop(self.status.apply(report)),
+                None => {}
+            }
+            return;
+        }
         let Some(("0" | "2", title)) = text.split_once(';') else {
             self.marks.read(&text);
             return self.notes.read(&text);

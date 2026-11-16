@@ -4,7 +4,10 @@
 //! shown are what the address field suggests. The desk writes it (desk/ledger.rs); nothing here
 //! knows the window. Where a pane is shown (its tab) is the layout's (layout.rs).
 
+mod agents;
 mod names;
+
+pub use agents::{AgentSession, agent_ended, agent_named, agent_of, agent_tried, keep_agent};
 
 use std::path::{Path, PathBuf};
 
@@ -125,9 +128,9 @@ fn failed(why: &rusqlite::Error) -> String {
 /// # Errors
 /// The store refused it.
 pub fn reopen(tx: &Transaction<'_>, row: Row) -> Result<(), String> {
-    tx.execute("UPDATE panes SET closed = NULL WHERE id = ?1", [row])
-        .map_err(|why| failed(&why))?;
-    Ok(())
+    (tx.execute("UPDATE panes SET closed = NULL WHERE id = ?1", [row]))
+        .map(drop)
+        .map_err(|why| failed(&why))
 }
 
 /// Pane `opened`, `now`: its row, last of its project's.
@@ -175,18 +178,17 @@ pub fn titled(tx: &Transaction<'_>, row: Row, title: &str) -> Result<bool, Strin
     Ok(changed > 0)
 }
 
-/// File `row` is at `path` now, titled `title`: where it opens again from.
+/// Pane `row` is at `path` now (a file moved, a terminal's shell gone to another folder), titled
+/// `title` when one is given: where it opens again from.
 ///
 /// # Errors
 /// The store refused it.
-pub fn moved(tx: &Transaction<'_>, row: Row, title: &str, path: &Path) -> Result<(), String> {
-    let (set, path) = (
-        "UPDATE panes SET title = ?2, cwd = ?3 WHERE id = ?1",
-        path.display(),
-    );
-    (tx.execute(set, params![row, title, path.to_string()])
-        .map(drop))
-    .map_err(|why| failed(&why))
+pub fn moved(tx: &Transaction<'_>, row: Row, title: Option<&str>, at: &Path) -> Result<(), String> {
+    let set = "UPDATE panes SET title = COALESCE(?2, title), cwd = ?3 WHERE id = ?1";
+    let at = at.display().to_string();
+    tx.execute(set, params![row, title, at])
+        .map(drop)
+        .map_err(|why| failed(&why))
 }
 
 /// Page `row` showed `url`, titled `title`, `now`: its address and title, and a visit of its
@@ -275,11 +277,13 @@ fn remember(
     Ok(())
 }
 
-/// Pane `row` closed `now`; its project keeps the newest closed panes only.
+/// Pane `row` closed `now`; its project keeps the newest closed panes only. The agent it ran
+/// is let go of: what the person closed is never resumed.
 ///
 /// # Errors
 /// The store refused it.
 pub fn close(tx: &Transaction<'_>, row: Row, now: u64) -> Result<(), String> {
+    agent_ended(tx, row)?;
     tx.execute(
         "UPDATE panes SET closed = ?2 WHERE id = ?1 AND closed IS NULL",
         params![row, now],
@@ -303,9 +307,9 @@ pub fn close(tx: &Transaction<'_>, row: Row, now: u64) -> Result<(), String> {
 /// # Errors
 /// The store refused it.
 pub fn forget(tx: &Transaction<'_>, row: Row) -> Result<(), String> {
-    tx.execute("DELETE FROM panes WHERE id = ?1", [row])
-        .map_err(|why| failed(&why))?;
-    Ok(())
+    (tx.execute("DELETE FROM panes WHERE id = ?1", [row]))
+        .map(drop)
+        .map_err(|why| failed(&why))
 }
 
 /// Terminal `row`'s screen, `text`, kept `now`: shown again when it is restored.

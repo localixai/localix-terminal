@@ -132,9 +132,19 @@ impl Desk {
         })
     }
 
-    /// One tab of an `open`, owned from the moment it exists.
+    /// One tab of an `open`, owned from the moment it exists. Asked `beside` a pane, it is
+    /// asked from that pane (layout_agent.rs): a document joins its session, and a terminal
+    /// opens out of sight and goes on its side.
     fn open_one(&self, call: &Call, spec: &Value) -> Result<(String, Output), Failure> {
         let kind = kind_of(spec, &self.made.kinds)?;
+        let placed = self.beside_of(call, spec, kind)?;
+        let call = &Call {
+            from: placed
+                .as_ref()
+                .map(|placed| placed.key.as_str())
+                .or(call.from),
+            ..*call
+        };
         let (id, out) = match kind {
             Kind::Web => return self.open_page(call, spec),
             Kind::Term => self.open_term(call, spec)?,
@@ -169,6 +179,7 @@ impl Desk {
             title: text(spec, "command").unwrap_or_default(),
             cwd: Some(&dir),
             command: text(spec, "command"),
+            split: placed.as_ref().map(|placed| (placed.row, placed.side)),
             ..Facts::default()
         };
         self.own(&key, call, crate::ledger::Kind::Terminal, facts);

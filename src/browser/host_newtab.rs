@@ -3,12 +3,12 @@
 use super::On;
 use crate::browser::agents::AGENTS;
 use crate::browser::choice::Entry;
-use crate::browser::{Asked, Heard, icons};
+use crate::browser::{Asked, Heard, Side, icons};
 
 impl On<'_> {
     /// "+": the system's menu under it, then a page, a terminal or the board of the project
     /// shown, opened by the app as it opens the agent's (so a page opens even when the window
-    /// holds no page yet).
+    /// holds no page yet); or a terminal or an agent split beside the pane in use.
     pub(super) fn plus(&mut self, x: u32, y: u32) {
         let Some(open) = self.deck.as_ref() else {
             return;
@@ -63,7 +63,26 @@ impl On<'_> {
             label: "Agents".into(),
             items: agents,
         });
+        // A terminal or an agent beside the pane in use, each way it splits: greyed where the
+        // new pane would not keep its least.
+        let sides = [
+            (Side::Right, "Split Right with\u{2026}"),
+            (Side::Down, "Split Down with\u{2026}"),
+        ];
+        for (side, label) in sides {
+            let fits = open.fits(side);
+            let beside = (AGENTS.iter().zip(&found)).map(|(agent, command)| {
+                let off = !fits || command.is_none();
+                item(agent.name.to_string(), off, Some(agent.mark))
+            });
+            let terminal = item("Terminal".into(), !fits, Some(icons::of_kind("term")));
+            entries.push(Entry::Sub {
+                label: label.into(),
+                items: std::iter::once(terminal).chain(beside).collect(),
+            });
+        }
         let own = 3 + kinds.len();
+        let (agents, split) = (own + AGENTS.len(), 1 + AGENTS.len());
         let asked = match open.pick(at, &entries) {
             Some(0) => Asked::Page(None),
             Some(1) => Asked::Terminal(None),
@@ -72,10 +91,25 @@ impl On<'_> {
                 Some(about) => Asked::Kind(about.id),
                 None => return,
             },
-            Some(at) => match found.get(at - own).copied().flatten() {
+            Some(at) if at < agents => match found.get(at - own).copied().flatten() {
                 Some(command) => Asked::Agent(command),
                 None => return,
             },
+            Some(at) => {
+                let side = if at - agents < split {
+                    Side::Right
+                } else {
+                    Side::Down
+                };
+                let asked = match (at - agents) % split {
+                    0 => Asked::Terminal(None),
+                    agent => match found.get(agent - 1).copied().flatten() {
+                        Some(command) => Asked::Agent(command),
+                        None => return,
+                    },
+                };
+                return self.split_new(side, asked);
+            }
             None => return,
         };
         self.ask(asked);

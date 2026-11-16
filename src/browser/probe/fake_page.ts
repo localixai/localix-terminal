@@ -33,6 +33,7 @@ class Node extends EventTarget {
     return child
   }
   get parentNode() { return this._parent }
+  get parentElement() { return this.parentNode instanceof Element ? this.parentNode : null }
   contains(node) {
     if (!(node instanceof Node)) throw new TypeError('not a node')
     for (let n = node; n; n = n.parentNode) if (n === this) return true
@@ -45,14 +46,14 @@ class Node extends EventTarget {
 class NodeList { get length() { return this._n } }
 const listOf = (items) => { const list = new NodeList(); items.forEach((e, i) => { list[i] = e }); list._n = items.length; return list }
 class Element extends Node {
-  constructor(name) { super(); this.localName = name; this.tagName = name.toUpperCase(); this._attrs = new Map(); this._rect = { left: 0, top: 0, width: 0, height: 0 }; this.style = {} }
+  constructor(name) { super(); this._name = name; this.tagName = name.toUpperCase(); this._attrs = new Map(); this._rect = { left: 0, top: 0, width: 0, height: 0 }; this.style = {} }
+  get localName() { return this._name }
   setAttribute(name, value) { this._attrs.set(name, String(value)) }
   getAttribute(name) { return this._attrs.has(name) ? this._attrs.get(name) : null }
   hasAttribute(name) { return this._attrs.has(name) }
   get attributes() { return [...this._attrs].map(([name, value]) => ({ name, value })) }
   get id() { return this.getAttribute('id') || '' }
   get className() { return this.getAttribute('class') || '' }
-  get parentElement() { return this.parentNode instanceof Element ? this.parentNode : null }
   get children() { return this.childNodes.filter((c) => c instanceof Element) }
   get innerText() { return this.textContent }
   attachShadow(init) {
@@ -67,7 +68,48 @@ class Element extends Node {
   querySelector() { return null }
   querySelectorAll() { return listOf([]) }
   getBoundingClientRect() { const r = this._rect; return { ...r, right: r.left + r.width, bottom: r.top + r.height } }
+  getClientRects() { return this._hidden ? [] : [this.getBoundingClientRect()] }
+  scrollIntoView(how) { push(scrolled, [this, how]) }
 }
+// Text, and what find (find.js) reads it with: a walker over the text under a root, ranges
+// in document order, the highlights it paints and the sheet it adopts.
+class CharacterData extends Node {
+  constructor(data) { super(); this._data = String(data) }
+  get data() { return this._data }
+  get nodeValue() { return this._data }
+  get textContent() { return this._data }
+}
+class Text extends CharacterData { constructor(data) { super(data); this.nodeType = 3 } }
+const inOrder = (root) => { const all = []; const walk = (n) => { push(all, n); n.childNodes.forEach(walk) }; walk(root); return all }
+class TreeWalker {
+  constructor(root, what) { this._list = inOrder(root).filter((n) => (what & 4) && n.nodeType === 3); this._at = 0 }
+  nextNode() { return this._list[this._at++] || null }
+}
+// As WebKit has it: where a range starts is AbstractRange's, how it is set and measured Range's.
+class AbstractRange {
+  get startContainer() { return this._start[0] }
+  get startOffset() { return this._start[1] }
+}
+class Range extends AbstractRange {
+  setStart(node, offset) { this._start = [node, offset] }
+  setEnd(node, offset) { this._end = [node, offset] }
+  getBoundingClientRect() { const e = this.startContainer.parentElement; return e ? e.getBoundingClientRect() : { top: 0, bottom: 0, left: 0, right: 0 } }
+  compareBoundaryPoints(how, other) {
+    const all = inOrder(document)
+    const a = place(all, this.startContainer), b = place(all, other.startContainer)
+    return a === b ? Math.sign(this.startOffset - other.startOffset) : Math.sign(a - b)
+  }
+}
+Range.START_TO_START = 0
+class Highlight { constructor(...ranges) { this.ranges = ranges; this.priority = 0 } }
+class HighlightRegistry {
+  constructor() { this._m = new Map() }
+  set(name, lit) { this._m.set(name, lit); return this }
+  get(name) { return this._m.get(name) }
+  delete(name) { return this._m.delete(name) }
+}
+class CSSStyleSheet { replaceSync(text) { this.text = String(text) } }
+const scrolled = []
 class HTMLElement extends Element {
   focus() { focused = this }
   showPopover() {}
@@ -82,6 +124,11 @@ class ShadowRoot extends DocumentFragment { constructor(host) { super(); this._h
 class Document extends Node {
   constructor() { super(); this.readyState = 'complete' }
   createElement(name) { return name === 'textarea' ? new HTMLTextAreaElement(name) : new HTMLElement(name) }
+  createTextNode(data) { return new Text(data) }
+  createTreeWalker(root, what) { return new TreeWalker(root, what) }
+  createRange() { return new Range() }
+  get adoptedStyleSheets() { return this._adopted || [] }
+  set adoptedStyleSheets(sheets) { this._adopted = [...sheets] }
   elementFromPoint() { return pointed }
   querySelectorAll() { return listOf([]) }
   querySelector() { return null }
@@ -112,7 +159,7 @@ var performance = { timeOrigin: 1, now: () => 0 }
 var location = { href: 'https://shop.test/', hostname: 'shop.test', protocol: 'https:' }
 var history = { pushState() {}, replaceState() {} }
 var innerWidth = 1000, innerHeight = 800
-var CSS = { escape: (s) => s }
+var CSS = { escape: (s) => s, highlights: new HighlightRegistry() }
 var getComputedStyle = () => ({ getPropertyValue: () => '', visibility: 'visible', display: 'block' })
 var requestAnimationFrame = (f) => setTimeout(f, 0)
 var fetch = () => Promise.resolve({})

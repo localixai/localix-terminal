@@ -55,7 +55,7 @@ impl Desk {
             return;
         };
         let placed = self.feed.write(|write| {
-            ledger::moved(write.tx(), row, title, path)?;
+            ledger::moved(write.tx(), row, Some(title), path)?;
             write.record(&Entity::Ledger { project }, Op::Upserted)
         });
         if let Err(why) = placed {

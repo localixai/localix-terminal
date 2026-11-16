@@ -32,10 +32,10 @@ Public paths stay stable through re-exports; implementation modules stay private
 | Tool calls and events | `desk/call.rs` renders and masks answers; `tab.rs` validates tab keys and kind-specific fields; `actions.rs` dispatches; `heard.rs` adapts window events; `writes.rs` writes what they change on one writer thread, in order. |
 | Application flows | `desk/board_ops.rs` applies worker operations; `restore.rs` reopens ledger rows; `layout_moves.rs` mutates tab placement; `layout_drawn.rs` projects the kept layout into browser keys. |
 | Page reads and actions | `desk/web_read.rs` labels untrusted snapshots and slices UTF-16 text; `web_controls.rs` resolves and acts on refs; `web.rs` orchestrates a call. |
-| Native UI | `browser/host_commands.rs` is the event-loop protocol; `host_events.rs` handles native events; `host_dispatch.rs` carries out commands; `host_keys.rs` and `host_newtab.rs` adapt user actions. |
-| Deck and tabs | `deck_build.rs` constructs views; `deck_layout.rs` places them; `deck_drop.rs` previews drops; `deck_render.rs` sends state as data. `tabs_transfer.rs` moves existing views and `tabs_layout.rs` sizes them. |
+| Native UI | `browser/host_commands.rs` is the event-loop protocol; `host_events.rs` handles native events; `host_dispatch.rs` carries out commands; `host_keys.rs`, `host_newtab.rs` and `host_panes.rs` (the Pane menu) adapt user actions. |
+| Deck and tabs | `deck_build.rs` constructs views; `deck_layout.rs` places them; `deck_panes.rs` lays a split tab's tree out and holds its dividers' views; `deck_drop.rs` previews drops and drags dividers; `deck_keys.rs` is the keyboard on the panes (a way to a pane, a divider's step, even, whether the pane in use is zoomed, which pane takes the keys); `deck_render.rs` sends state as data. `tabs_transfer.rs` moves existing views and `tabs_layout.rs` sizes them. |
 | Platform and scripts | `browser/platform.rs` is the platform facade; `platform_views.rs` handles native view behavior; `webview_scripts.rs` waits for scripts across navigation. |
-| Terminal and storage | `terminal/session.rs` owns lifecycle; `session/input.rs`, `output.rs`, `read.rs` and `wait.rs` own input, output, what is read of the screen, and waits. `terminal/marks.rs` counts the commands a shell says it started and ended, `terminal/hooks.rs` has the person's zsh or bash say so, and `terminal/notes.rs` keeps what a program asks to tell the person, for the Event Center. `store.rs` manages connections; `store/schema.rs` contains unchanged, append-only SQL steps. |
+| Terminal and storage | `terminal/session.rs` owns lifecycle; `session/input.rs`, `output.rs`, `read.rs` and `wait.rs` own input, output, what is read of the screen, and waits. `terminal/marks.rs` counts the prompts a shell says it shows and the commands it says it started and ended, `terminal/hooks.rs` has the person's zsh or bash say so, `terminal/notes.rs` keeps what a program asks to tell the person, for the Event Center, and `terminal/status.rs` what a program says of its state (OSC 7501: its grammar in `status/parse.rs`, its records, and in `status/lines.rs` the line each has for the person, kept in place until they type in the terminal), whose query `session/status.rs` answers through the terminal. `store.rs` manages connections; `store/schema.rs` contains unchanged, append-only SQL steps. |
 
 ### Rules the tests check
 
@@ -67,15 +67,22 @@ normal tests in CI.
   someone's) to `gone` (the one place it ends); a closed one is the project's history (the newest
   200 kept), one still open when the app quit is what it opens again (`reopen_project`: the same
   rows, pages at their address, the person's shell in each terminal's folder with its last screen
-  above, dimmed, from `screens`; a program is never run again). The pages each tab showed are `visits`, which the
+  above, dimmed, from `screens`; a program is never run again, but a coding agent it ran goes on:
+  `desk/agent_resume.rs` keeps it as it is seen in front, in `agent_sessions`, and
+  `desk/agent_relaunch.rs` types the command that resumes its session once the shell says its
+  prompt is ready, and only into the shell at a prompt nothing was typed at, built again from
+  the agents' lists, `browser/agents_resume.rs`, `agents_policies.rs` and `agents_words.rs`). The pages each tab showed are `visits`, which the
   address field suggests. The window is told each project's past as it changes
   (`Browser::ledger`), and tells the desk what a page showed (`Heard::Went`): the window keeps none
   of it.
 - **`layout.rs`, `desk/layout.rs`** are the layout (`docs/windows.md`): the windows, each window's
   workspace of a project, each workspace's tabs in their places and each tab's tree of panes (a
-  split is one tab of two panes). `desk/layout.rs` is its one owner: a pane placed in a tab of its
+  split is one tab of several panes; `layout/geometry.rs` is where a tree's panes lie, plain
+  maths both the window and the desk ask). `desk/layout.rs` is its one owner: a pane placed in a tab of its
   own as it opens (in the same transaction as its ledger row), taken out as it closes, put beside
-  another, a project or a tab shown; each change with its notices (`Window`, `Workspace`, `Tab`).
+  another, a tab zoomed on one pane (`layout_zoom.rs`), a project or a tab shown; each change
+  with its notices (`Window`, `Workspace`, `Tab`). `desk/layout_agent.rs` is the layout as the
+  window tool reaches it: `open` beside a pane, and where `list` says each pane is.
   `desk/beside.rs` is the place beside a terminal (and `desk/sessions.rs` the session of what
   is asked from none): what an agent opens from a terminal of the
   window lands on that terminal's right, the call known by the terminal its program descends
@@ -86,7 +93,11 @@ normal tests in CI.
   probe script injected in each page for observing and acting (`probe/`: its start, which keeps the
   builtins it uses as they were at install and answers only the app's calls, the snapshot, the page's own
   requests, what the page tells, frames, the outline, refs found again, actions, typing, keys, comments,
-  evaluate), the strip, comments, screenshots. What a page tells besides its content
+  find, evaluate), the strip, comments, screenshots. Find in a page (`probe/find.js`, `deck_find.rs`)
+  is the browser toolbar's row: the toolbar says each step (`Seek`), the probe lights the matches as
+  highlights over ranges, never changing the page's DOM, and says back, sealed, what it found for the
+  tab the window named (`Found`); the window keeps each page tab's query and count while its row is
+  open. What a page tells besides its content
   (its dialogs, answered Cancel unless a call armed OK, live-region announcements, a field that refused
   a value) comes with the probe's replies and is kept per tab across its documents (`notices.rs`).
   A call names a random id and word (`secret.rs`), and its reply counts only with both and only
@@ -103,7 +114,8 @@ normal tests in CI.
   switcher until the person goes to it: the window never jumps from what the person looks at.
   The side lists the project's tabs; a terminal that runs a coding agent (`agents.rs`, by its
   command) shows the agent's mark, and under its name the title its program sets (OSC 0/2, kept
-  aside by `terminal/screen.rs`). The person's settings (`settings.rs`: theme, transparency,
+  aside by `terminal/screen.rs`); a terminal whose program says it is at work (OSC 7501) carries
+  a still ring on its icon (`Browser::working`, `strip/marks.rs`). The person's settings (`settings.rs`: theme, transparency,
   fonts, which Option key is Meta in a terminal, the shortcuts they changed) are kept in `settings.json` under the config directory and
   shown in a tab of the window's own (`host_settings.rs`, `settings.html`). Every shortcut
   (`shortcuts.rs`) is a click the strip already knows, fired by the app's hidden menu
@@ -120,15 +132,22 @@ normal tests in CI.
   still drawing, until the person opens the app again (`nspanel.rs`; another window's is the
   system's), and the green button uses the system's zoom on
   the current desktop rather than a separate full-screen Space. `appkit.rs` holds AppKit's common messages
-  once. A split (one tab of two panes, `split.rs`: which tab is beside the shown one, on which
-  side, and the halves' share) lays two panes out side by side, the one shown with the toolbar; a
-  fourth view, the line between them, is dragged to resize. A page or a terminal takes its own clicks, so the window
-  hears of presses through the system (`presses.rs`, a local event monitor) and a press in the
-  other half shows its tab (`host_split.rs`). Another tab shown makes the window whole, and its project
-  keeps the split in the layout: one of its two tabs shown again, it splits as it was. Each split the
-  person makes or undoes, and each tab they drag, is told to the layout (`Heard::Split`,
-  `Heard::Moved`); the layout tells every window its tabs back (`Cmd::Arranged`), and the window draws
-  them so, keeping no order or split of its own. A split is listed in the side as a pair.
+  once. A split (one tab of several panes) is drawn from the tab's tree as the
+  layout tells it (`Arranging::tree`), laid out by the layout's geometry (`deck_panes.rs`): every
+  pane in its rectangle, the one in use with the toolbar, and a view of the strip's page over each
+  divider (a pool, made as a tree needs them), dragged to resize on either axis. A page or a terminal takes its own clicks, so the window
+  hears of presses through the system (`presses.rs`, a local event monitor) and a press on another
+  pane of the tab makes it the one in use (`host_split.rs`). Another tab shown shows alone, and its
+  project keeps the split in the layout: any of its panes shown again draws it as it was. Each split
+  the person makes or undoes, each new pane they ask beside one (⌘D, in the folder of the
+  terminal beside), each divider let go of or moved by a key, the tab made even, the pane they
+  focus, the pane they zoom and each tab they drag is told to the layout (`Heard::Split`,
+  `Heard::SplitNew`, `Heard::Whole`, `Heard::Resized`, `Heard::Equalized`, `Heard::Focused`,
+  `Heard::Zoomed`, `Heard::Moved`); the
+  Pane menu's keys work from the pane in use by the layout's geometry (`deck_keys.rs`,
+  `host_panes.rs`); the
+  layout tells every window its tabs back (`Cmd::Arranged`), and the window draws them so, keeping
+  only what waits to be heard (`split.rs`). A split is listed in the side as one row of its panes.
   The app has several windows (`windows.rs`, docs/windows.md): each a deck with its own panes, the
   first the main one. One is the window in use, as the system's key window is:
   the loop picks the window an event is for before it acts (a pane's command goes to the window the
@@ -207,7 +226,7 @@ normal tests in CI.
   `open` gives it, `interact` acts on it with an `op`, so the tools stay one surface.
 - **`store.rs`, `store/schema.rs`** are what outlives the app: one SQLite database (`paths::database`), one writer,
   its schema the list of steps it applies in order: `projects`, and under each its `panes` (with
-  their `visits` and terminals' `screens`), its board (`boards`) and its Event Center events
+  their `visits`, terminals' `screens` and the coding agent each ran, `agent_sessions`), its board (`boards`) and its Event Center events
   (`center_events`); the layout (`windows`, `workspaces`, `tabs`, `pane_nodes`); the person's
   `answers` to offers; the change feed. Everything of a project
   goes with it (`ON DELETE CASCADE`).
@@ -224,7 +243,8 @@ normal tests in CI.
   through the server's hub; `desk/center.rs` is the Event Center; `desk/board_file.rs` writes boards out.
 - **`desk/center.rs`, `desk/center/`** are the Event Center: what waits for the person, gathered from
   its sources (`event.rs`: what an event is and how it is shown; `sources.rs`: the agent's asks, a
-  card in Review or blocked, a program that ended) whenever the feed says something changed, kept in its journal (`journal.rs`:
+  card in Review or blocked; `terminals.rs`: a program that ended, its notes, and what it says of
+  its state) whenever the feed says something changed, kept in its journal (`journal.rs`:
   `center_events`, open and settled, with the person's marks), and shown under the strip's bell with
   buttons that take the person's own paths. An event says how it is shown (its section, tone, and
   each button's role), so the window holds no table of kinds. Where an event leads is said by the
@@ -308,6 +328,8 @@ normal tests in CI.
   is read as markup or script. The board, the Store and the terminal use the kit; a test
   fails when one of them defines again what it gives. `page/across.js` is the one row that
   scrolls sideways (the window's row of documents, the Store's tabs, categories and facts).
+  `page/find.html` and `page/find.js` are the one find row, its markup and its words and keys,
+  which the terminal's page and the browser's toolbar both take.
 - **`fetch.rs`, `fetch/`** fetch over the network with the system's `curl` (HTTPS only, a size
   cap, a deadline, an ETag for what has not changed) and unpack archives; the updater and the
   Store both use it.

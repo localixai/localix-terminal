@@ -34,6 +34,7 @@ llxterm window '{"action": "interact", "tab": "w1", "size": "iPhone 15 Pro"}'
 llxterm window '{"action": "screenshot", "tab": "w1"}'     # prints the path of a JPEG: Read that file
 llxterm window '{"action": "open", "kind": "terminal", "command": "python3 -q", "wait_for": ">>>"}'
 llxterm window '{"action": "interact", "tab": "t1", "input": "sum(range(101))\n", "wait_for": "5050"}'
+llxterm window '{"action": "open", "kind": "terminal", "command": "npm run dev", "beside": "t1", "side": "down"}'
 llxterm window '{"action": "list"}'
 llxterm window '{"action": "close", "tab": "w1"}'
 llxterm window --end                                       # close every tab of this project

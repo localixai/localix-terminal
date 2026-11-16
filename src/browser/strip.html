@@ -95,6 +95,10 @@ html[data-part=line] #line{display:block;position:fixed;inset:0;cursor:col-resiz
 html[data-part=line] #line::after{content:"";position:absolute;top:0;bottom:0;left:calc(50% - .5px);width:1px;background:var(--ov-3);transition:background-color var(--t-out) var(--ease)}
 html[data-part=line] #line:hover::after,html[data-part=line] #line.held::after,html[data-part=line] #line:focus-visible::after{background:var(--accent);transition:none}
 html[data-part=line].held,html[data-part=line].held *{cursor:col-resize!important;user-select:none}
+/* A divider between panes one above the other: the same point of fill, lying across. */
+html[data-part=line][data-way=down] #line{cursor:row-resize}
+html[data-part=line][data-way=down] #line::after{top:calc(50% - .5px);bottom:auto;left:0;right:0;width:auto;height:1px}
+html[data-part=line][data-way=down].held,html[data-part=line][data-way=down].held *{cursor:row-resize!important}
 /* The documents' row (data-part=docs): the same page in a view of its own over the documents of
    the session shown. It is the row of tabs alone, each as wide as its name needs and no wider
    than a tab of the side; the one in sight is lit. More than fit never narrow: the row scrolls
@@ -116,6 +120,13 @@ html[data-part=nav] #bar,html[data-part=nav] #tabs,html[data-part=nav] #offer,ht
 html[data-part=nav] #browse{display:grid;grid-template-columns:1fr minmax(120px,720px) 1fr;align-items:center;gap:8px;height:{{nav}}px;padding:0 8px;box-sizing:border-box;box-shadow:inset 0 -.5px 0 var(--ov-3)}
 @media (prefers-contrast:more){html[data-part=nav] #browse{box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--fg) 45%,transparent)}}
 html[data-part=nav]:not([data-glass]) #browse{background:var(--ground)}
+/* Find over a web page (page_find.js): the find row (frame.css `.finds`) under the address, as a
+   browser's find bar sits under its toolbar. The page is someone else's, so nothing of ours is
+   drawn in it: the toolbar grows by the row and the page starts under it (`Deck::toolbar`). */
+html:not([data-part=nav]) #find,html[data-part=nav][data-blank] #find{display:none!important}
+html[data-part=nav] #find{box-shadow:inset 0 -.5px 0 var(--ov-3)}
+html[data-part=nav]:not([data-glass]) #find{background:var(--ground)}
+@media (prefers-contrast:more){html[data-part=nav] #find{box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--fg) 45%,transparent)}}
 #browse #addr{width:100%}
 #browse #nav{justify-self:start}
 #browse #tools{justify-self:end}
@@ -221,6 +232,12 @@ html[data-inactive] .i.pic{opacity:.6}
 #ev:has(.d:not([hidden])) svg{-webkit-mask-image:radial-gradient(circle at 12px 4px,transparent 4.2px,#000 4.7px);mask-image:radial-gradient(circle at 12px 4px,transparent 4.2px,#000 4.7px)}
 /* A tab that waits for the person, out of sight: the same dot, on its icon's corner. */
 :is(#sl,#gh) .ic .d{top:-1px;right:-1px}
+/* A terminal whose program says it is at work (OSC 7501): a still ring in the dot's place, in the
+   quiet ink, its share done firmer than the rest when it says how far. It never turns. */
+:is(#sl,#gh) .ic .ring,#tabs .t .ring{position:absolute;top:-2px;right:-2px;width:8px;height:8px;color:var(--ink-2)}
+#tabs .t .ring{position:static;flex:none}
+:is(#sl,#gh) .ic .ring svg,#tabs .t .ring svg{display:block;width:8px;height:8px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round}
+.ring .rest{stroke:var(--ink-3)}
 .ev{display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:center;column-gap:9px;padding:5px 8px;border-radius:var(--r-2);transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 .ev.go:hover{background:var(--acc-2);transition:none}
 .ev.go:active{background:var(--acc-3);transition:none}
@@ -324,6 +341,11 @@ html[data-inactive] #sk:focus-within{box-shadow:none}
 :is(#sl,#gh) .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 :is(#sl,#gh) .n{font-size:13px;font-weight:500;line-height:16px}
 :is(#sl,#gh) .u{font-size:11px;line-height:14px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* A tab zoomed on one pane: a quiet mark after its name, the fill glyph and how many of its panes
+   are put by; in the bar's crumb too. Its words are its tooltip and its name for VoiceOver. */
+:is(#sl,#gh) .zm,#cr .c .zm{flex:none;display:flex;align-items:center;gap:2px;font-size:11px;line-height:14px;font-weight:400;color:var(--ink-2)}
+:is(#sl,#gh) .zm svg,#cr .c .zm svg{display:block;width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+html[data-inactive] .zm svg{opacity:.6}
 /* The close button takes its place on every row and shows only while the row is under the pointer
    (the one shown, too), and not while a tab is carried; the text never moves for it. */
 :is(#sl,#gh) .x{width:20px;height:20px;border-radius:var(--r-1);opacity:0;transition:opacity var(--t-out) var(--ease),background-color var(--t-out) var(--ease)}
@@ -337,7 +359,7 @@ html.dragging #sl .x{opacity:0!important}
    accent with white words, never the pointer's look; grey in an inactive window (frame.css). */
 #sl:focus{outline:0}
 #sl:focus-visible [data-pick]{background:var(--acc-sel);color:var(--on-sel);box-shadow:none}
-#sl:focus-visible [data-pick] .u{color:inherit;opacity:.85}
+#sl:focus-visible [data-pick] :is(.u,.zm){color:inherit;opacity:.85}
 /* The window inactive: the side's glyphs fade with the bar's. */
 html[data-inactive] :is(#sl,#gh) .ic svg,html[data-inactive] #si{opacity:.6}
 /* A split window's two tabs: one group, each its own row as any tab's (stacked, a hairline
@@ -416,6 +438,7 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
       <span class="b" id="cm" title="Comment on the page: click what to change"><svg viewBox="0 0 16 16"><path d="M3.5 4.2c0-.7.5-1.2 1.2-1.2h6.6c.7 0 1.2.5 1.2 1.2v5.1c0 .7-.5 1.2-1.2 1.2H7.6L5 12.8v-2.3h-.3c-.7 0-1.2-.5-1.2-1.2z"/></svg></span>
     </div>
   </div>
+  <!--FIND_ROW-->
   <div id="blank"></div>
   <div id="offer"><div class="card"><span class="says"></span><button class="take"></button><button class="later"><svg viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"/></svg></button></div></div>
   <div id="tabs"></div>
@@ -432,7 +455,7 @@ html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
 <svg id="fp" aria-hidden="true"></svg>
 <div id="grip" role="separator" aria-orientation="vertical" aria-label="Sidebar width" tabindex="0" title="Drag or use arrow keys to resize; Home resets"></div>
 <div id="gh"></div>
-<div id="line" role="separator" aria-orientation="vertical" aria-label="Split width" tabindex="0" title="Drag or use arrow keys to resize; Home evens the halves"></div>
+<div id="line" role="separator" aria-orientation="vertical" aria-label="Split width" tabindex="0" title="Drag or use arrow keys to resize; Home evens the panes"></div>
 <script type="application/json" id="marks">{}</script>
 <script type="application/json" id="kinds">[]</script>
 <script>
@@ -460,6 +483,53 @@ const GLYPHS = {
   laptop: [["rect", { x: 3.5, y: 4, width: 9, height: 6.5, rx: 1 }], ["path", { d: "M2 12.5h12" }]],
   desktop: [["path", { d: "M3.5 3h9a1 1 0 0 1 1 1v5.5a1 1 0 0 1 -1 1h-9a1 1 0 0 1 -1 -1v-5.5a1 1 0 0 1 1 -1zM8 10.5V13M5.5 13h5" }]],
 };
+// A terminal's program at work: a still ring of 8 pt, the share it says it has done in the quiet
+// ink and the rest fainter, as two arcs that meet and never overlap; with no share told, the
+// whole ring. Nothing of it moves.
+function ring(working) {
+  const NS = "http://www.w3.org/2000/svg";
+  const holder = document.createElement("span");
+  holder.className = "ring";
+  holder.dataset.at = String(working.progress ?? "");
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 8 8");
+  const share = working.progress ?? 100;
+  const arc = (from, to, rest) => {
+    const at = (part) => [4 + 3 * Math.sin(part * 2 * Math.PI), 4 - 3 * Math.cos(part * 2 * Math.PI)].map((n) => n.toFixed(3));
+    const shape = document.createElementNS(NS, to - from >= 1 ? "circle" : "path");
+    if (to - from >= 1) for (const [key, value] of [["cx", 4], ["cy", 4], ["r", 3]]) shape.setAttribute(key, value);
+    else shape.setAttribute("d", "M" + at(from).join(" ") + "A3 3 0 " + (to - from > 0.5 ? 1 : 0) + " 1 " + at(to).join(" "));
+    if (rest) shape.setAttribute("class", "rest");
+    svg.append(shape);
+  };
+  if (share > 0) arc(0, share / 100, false);
+  if (share < 100) arc(share / 100, 1, true);
+  holder.append(svg);
+  return holder;
+}
+// What a tab's tooltip adds of its marks: what waits for the person, else its program at work;
+// and its tab's zoom.
+function marked(tab) {
+  const zoomed = tab.zoomed ? " — " + zoomedWords(tab.zoomed).toLowerCase() : "";
+  if (tab.waits) return " — waits for you" + zoomed;
+  if (!tab.working) return zoomed;
+  return (tab.working.progress === null ? " — working" : " — working, " + tab.working.progress + "%") + zoomed;
+}
+// A tab zoomed on one pane, in words: how many of its panes are put by.
+const zoomedWords = (hidden) => "Zoomed, " + hidden + (hidden === 1 ? " pane" : " panes") + " hidden";
+// A tab zoomed on one pane, as a mark: the fill glyph and the count, named for VoiceOver.
+function zoomMark(hidden) {
+  const mark = document.createElement("span");
+  mark.className = "zm";
+  mark.dataset.n = String(hidden);
+  mark.setAttribute("role", "img");
+  mark.setAttribute("aria-label", zoomedWords(hidden));
+  mark.title = zoomedWords(hidden);
+  const count = document.createElement("span");
+  count.textContent = String(hidden);
+  mark.append(glyph("fill"), count);
+  return mark;
+}
 function glyph(name) {
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
@@ -493,8 +563,8 @@ function S(data) {
   const lit = shown && shown.of || data.shown;
   // The same again draws nothing, as the side does not: a press that began on a crumb or a tab is
   // not lost to a title another tab changed.
-  const now = JSON.stringify([sided, project, data.shown, lit, shown && [shown.key, shown.kind, shown.agent, shown.name, shown.title],
-    places.map((one) => [one.key, one.name, one.folder, one.marked]), tabs.map((tab) => [tab.key, tab.title, tab.kind, tab.waits])]);
+  const now = JSON.stringify([sided, project, data.shown, lit, shown && [shown.key, shown.kind, shown.agent, shown.name, shown.title, shown.zoomed],
+    places.map((one) => [one.key, one.name, one.folder, one.marked]), tabs.map((tab) => [tab.key, tab.title, tab.kind, tab.waits, tab.working])]);
   if (now === barSig) return;
   barSig = now;
   crumbs(shown, places, project);
@@ -524,7 +594,10 @@ function tabItem(tab, on) {
   item.append(icon, name, close);
   if (tab.waits && tab.key !== on) {
     name.after(Object.assign(document.createElement("span"), { className: "d" }));
-    item.title += " — waits for you";
+    item.title += marked(tab);
+  } else if (tab.working && !tab.waits) {
+    name.after(ring(tab.working));
+    item.title += marked(tab);
   }
   return item;
 }
@@ -732,7 +805,7 @@ function crumbs(shown, places, project) {
     const name = document.createElement("span");
     name.className = "n";
     name.textContent = parts.name;
-    button.append(...[parts.icon, name, parts.dot].filter(Boolean));
+    button.append(...[parts.icon, name, parts.dot, parts.mark].filter(Boolean));
     const down = glyph("down");
     down.classList.add("dn");
     button.append(down);
@@ -751,8 +824,9 @@ function crumbs(shown, places, project) {
     sep.className = "sep";
     sep.textContent = "/";
     const icon = shown.agent ? agentMark(shown.agent) : glyph(GLYPHS[shown.kind] ? shown.kind : "web");
-    const title = shown.agent ? shown.name + " \u2014 " + shown.title : shown.title;
-    parts.push(sep, crumb("tabs", { icon, name: shown.name || shown.title }, title, true));
+    const title = (shown.agent ? shown.name + " — " + shown.title : shown.title) + (shown.zoomed ? " — " + zoomedWords(shown.zoomed).toLowerCase() : "");
+    const mark = shown.zoomed ? zoomMark(shown.zoomed) : null;
+    parts.push(sep, crumb("tabs", { icon, name: shown.name || shown.title, mark }, title, true));
   }
   // "+" ends the crumbs: a new tab of the project, its menu the system's (menu.rs) under it.
   const add = document.createElement("span");
@@ -844,7 +918,7 @@ function K(what) {
 // The side: the shown project's tabs, each its kind's picture, its title and what it holds (a
 // page's address, a terminal's command), filtered by what is typed in its search.
 let listed = [], listedShown = "";
-// The split's two tabs, left and right (none while the window is whole); a tab being dragged in the
+// The split tab's panes, in the order they lie (none while the window is whole); a tab being dragged in the
 // side, a press on a row that may become a drag, and whether the list waits to be drawn again until
 // the tab is let go of.
 let splitPair = null, lifting = false, pressed = false, redraw = false;
@@ -962,8 +1036,8 @@ function paintSide() {
   lastTyped = typed;
   const rows = listed.filter((tab) => !typed || (tab.title + " " + (tab.name || "") + " " + holds(tab)).toLowerCase().includes(typed));
   const list = document.getElementById("sl");
-  const pair = splitPair && rows.filter((tab) => splitPair.includes(tab.key)).length === 2 ? splitPair : null;
-  const now = JSON.stringify([typed, rows.map((tab) => [tab.key, tab.title, tab.name, tab.agent, tab.kind, tab.picture, holds(tab), placeKey(listed.indexOf(tab))]), listedShown, pair]);
+  const pair = splitPair && rows.filter((tab) => splitPair.includes(tab.key)).length === splitPair.length ? splitPair : null;
+  const now = JSON.stringify([typed, rows.map((tab) => [tab.key, tab.title, tab.name, tab.agent, tab.kind, tab.picture, holds(tab), placeKey(listed.indexOf(tab)), tab.waits, tab.working, tab.zoomed]), listedShown, pair]);
   if (now === sig) return;
   sig = now;
   if (!rows.length) {
@@ -976,8 +1050,8 @@ function paintSide() {
   for (const tab of rows) {
     if (!pair || !pair.includes(tab.key)) drawn.push(kept(tab.key, () => sideRow(tab), (row) => patchRow(row, tab)));
     else if (!drawn.some((row) => row.classList.contains("pair"))) {
-      const [left, right] = pair.map((key) => rows.find((tab) => tab.key === key));
-      drawn.push(kept("pair " + pair.join(" "), () => pairRow(left, right), (row) => patchPair(row, left, right)));
+      const tabs = pair.map((key) => rows.find((tab) => tab.key === key));
+      drawn.push(kept("pair " + pair.join(" "), () => pairRow(tabs), (row) => patchPair(row, tabs)));
     }
   }
   // Forget the rows no longer drawn, then put the rows in their places, in the one way rows move.
@@ -1014,7 +1088,7 @@ function patchRow(item, tab, half) {
   // What waits for the person in it (alerts.rs): its words take the second line, and out of
   // sight its icon carries the dot the Event Center's button does.
   const waits = tab.waits || "";
-  const title = (tab.agent ? tab.name + " — " + tab.title : tab.title) + (waits ? " — waits for you" : "") + placeKey(listed.indexOf(tab));
+  const title = (tab.agent ? tab.name + " — " + tab.title : tab.title) + marked(tab) + placeKey(listed.indexOf(tab));
   if (item.title !== title) item.title = title;
   const icon = item.querySelector(".ic");
   const look = tab.agent ? "agent " + tab.agent : tab.picture ? "file " + tab.picture : GLYPHS[tab.kind] ? tab.kind : "web";
@@ -1026,8 +1100,18 @@ function patchRow(item, tab, half) {
   const dot = icon.querySelector(":scope > .d");
   if (waits && !on && !dot) icon.append(Object.assign(document.createElement("span"), { className: "d" }));
   if (dot && (!waits || on)) dot.remove();
+  // Its program at work: the ring in the dot's place, while nothing waits there.
+  const had = icon.querySelector(":scope > .ring");
+  const working = tab.working && !waits ? String(tab.working.progress ?? "") : null;
+  if (had && had.dataset.at !== working) had.remove();
+  if (working !== null && (!had || had.dataset.at !== working)) icon.append(ring(tab.working));
   set(item.querySelector(".n"), tab.name || tab.title);
   set(item.querySelector(".u"), waits && tab.kind !== "board" ? waits : holds(tab));
+  // Its tab zoomed on it: the mark before its close button, of the panes put by.
+  const zoom = item.querySelector(":scope > .zm");
+  const hidden = tab.zoomed ? String(tab.zoomed) : null;
+  if (zoom && zoom.dataset.n !== hidden) zoom.remove();
+  if (hidden !== null && (!zoom || zoom.dataset.n !== hidden)) item.querySelector(":scope > .x").before(zoomMark(tab.zoomed));
 }
 // One tab's row in the side.
 function sideRow(tab, half) {
@@ -1050,21 +1134,25 @@ function sideRow(tab, half) {
   patchRow(item, tab, half);
   return item;
 }
-// A split window's two tabs as one row, left and right as they lie: each half its own tab (a click
-// shows it, its menu is its own), the one in use lit.
-function pairRow(left, right) {
+// A split tab's panes as one row, in the order they lie: each its own tab (a click shows it, its
+// menu is its own), a hairline between two, the one in use lit.
+function pairRow(tabs) {
   const item = document.createElement("div");
-  const cut = document.createElement("span");
-  cut.className = "cut";
-  const [first, second] = [left, right].map((tab) => sideRow(tab, true));
-  item.append(first, cut, second);
-  patchPair(item, left, right);
+  tabs.forEach((tab, at) => {
+    if (at > 0) {
+      const cut = document.createElement("span");
+      cut.className = "cut";
+      item.append(cut);
+    }
+    item.append(sideRow(tab, true));
+  });
+  patchPair(item, tabs);
   return item;
 }
-function patchPair(item, left, right) {
-  const classes = [left, right].some((tab) => tab.key === listedShown) ? "t pair on" : "t pair";
+function patchPair(item, tabs) {
+  const classes = tabs.some((tab) => tab.key === listedShown) ? "t pair on" : "t pair";
   if (item.className !== classes) item.className = classes;
-  for (const tab of [left, right]) patchRow(item.querySelector(`[data-key="${tab.key}"]`), tab, true);
+  for (const tab of tabs) patchRow(item.querySelector(`[data-key="${tab.key}"]`), tab, true);
 }
 if (document.documentElement.dataset.part === "side") {
   const search = document.getElementById("sq");
@@ -1430,40 +1518,46 @@ if (document.documentElement.dataset.part === "side") {
     event.preventDefault();
   }, true);
 }
-// The line between a split window's halves: dragged, the window lays the halves out again as
-// it moves (by how far since it was taken hold of); double-clicked, they are even again.
+// A divider between a split tab's panes (`data-line`: which of the tree's it is; `data-way`:
+// across, between panes side by side, or down, between panes one above the other): dragged,
+// the window lays the panes out again as it moves (by how far since it was taken hold of);
+// double-clicked, or Home on it, its branch is even again.
 if (document.documentElement.dataset.part === "line") {
   const line = document.getElementById("line");
+  const which = document.documentElement.dataset.line;
+  const down = () => document.documentElement.dataset.way === "down";
+  const at = (event) => down() ? event.screenY : event.screenX;
   let from = 0, moved = 0;
   resizeHandle(line, {
     start(event) {
       if (event.detail === 2) {
-        window.ipc.postMessage("split-even");
+        window.ipc.postMessage("split-even " + which);
         return false;
       }
-      from = event.screenX;
+      from = at(event);
       moved = 0;
       line.classList.add("held");
       document.documentElement.classList.add("held");
     },
     move(event) {
-      const next = Math.round(event.screenX - from);
+      const next = Math.round(at(event) - from);
       if (next === moved) return;
       moved = next;
-      window.ipc.postMessage("split-move " + moved);
+      window.ipc.postMessage("split-move " + which + " " + moved);
     },
     end(event, cancelled) {
       line.classList.remove("held");
       document.documentElement.classList.remove("held");
-      window.ipc.postMessage("split-move " + (cancelled ? 0 : Math.round(event.screenX - from)) + " done");
+      window.ipc.postMessage("split-move " + which + " " + (cancelled ? 0 : Math.round(at(event) - from)) + " done");
     },
   });
   line.addEventListener("keydown", (event) => {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
-    const step = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+    const back = down() ? "ArrowUp" : "ArrowLeft", on = down() ? "ArrowDown" : "ArrowRight";
+    const step = event.key === back ? -1 : event.key === on ? 1 : 0;
     if (!step && event.key !== "Home") return;
     event.preventDefault();
-    window.ipc.postMessage(event.key === "Home" ? "split-even" : "split-move " + step * (event.shiftKey ? 64 : 16) + " done");
+    window.ipc.postMessage(event.key === "Home" ? "split-even " + which : "split-move " + which + " " + step * (event.shiftKey ? 64 : 16) + " done");
   });
 }
 /*TREE_JS*/
@@ -1898,8 +1992,7 @@ function row(event, several) {
   item.append(dot, text, side);
   return item;
 }
-// The window's split (its two tabs, left and right), or whole (null): the side lists the two as
-// one row.
+// The split tab's panes, in the order they lie, or none (null): the side lists them as one row.
 function SP(pair) {
   if (JSON.stringify(pair) === JSON.stringify(splitPair)) return;
   splitPair = pair;
@@ -2023,6 +2116,8 @@ function AG(agents) {
   STARTED = agents;
   blank();
 }
+/*FIND_ROW_JS*/
+/*PAGE_FIND_JS*/
 </script>
 </body>
 </html>

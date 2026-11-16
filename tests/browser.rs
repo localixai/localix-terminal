@@ -31,6 +31,9 @@ use llxterm::view::{Action, ViewError};
 mod board;
 #[path = "support/find.rs"]
 mod find;
+#[cfg(target_os = "macos")]
+#[path = "support/page_find.rs"]
+mod page_find;
 #[path = "support/panel.rs"]
 mod panel;
 #[cfg(target_os = "macos")]
@@ -41,6 +44,12 @@ mod pasteboard;
 mod presence;
 #[path = "support/refs.rs"]
 mod refs;
+#[cfg(target_os = "macos")]
+#[path = "support/resume.rs"]
+mod resume;
+#[cfg(target_os = "macos")]
+#[path = "support/status.rs"]
+mod status;
 #[path = "support/terminal_colors.rs"]
 mod terminal_colors;
 #[path = "support/terminal_keys.rs"]
@@ -50,6 +59,9 @@ mod told;
 #[cfg(target_os = "macos")]
 #[path = "support/ui.rs"]
 mod ui;
+#[cfg(target_os = "macos")]
+#[path = "support/zoom.rs"]
+mod zoom;
 
 /// Serves `tests/fixtures` on an ephemeral port; returns its origin. Each connection has its own
 /// thread: a browser opens connections ahead of need, and one that never sends a request must not
@@ -1317,6 +1329,18 @@ fn main() {
         if paneling && !run("UI motion and split", &|| ui::scenario(&browser)) {
             return 1;
         }
+        #[cfg(target_os = "macos")]
+        if paneling && !run("UI split of three", &|| ui::three(&browser)) {
+            return 1;
+        }
+        #[cfg(target_os = "macos")]
+        if paneling && !run("UI pane keys", &|| ui::keys(&browser)) {
+            return 1;
+        }
+        #[cfg(target_os = "macos")]
+        if paneling && !run("UI zoom", &|| zoom::scenario(&browser)) {
+            return 1;
+        }
         if paneling && !run("board (reopened)", &|| board::reopened(&browser)) {
             return 1;
         }
@@ -1328,11 +1352,30 @@ fn main() {
         if paneling && !run("event center", &|| board::center(&browser)) {
             return 1;
         }
+        // What a terminal's program says of its state shows in the side and the Event Center.
+        #[cfg(target_os = "macos")]
+        if paneling && !run("program status", &|| status::scenario(&browser)) {
+            return 1;
+        }
+        // A coding agent left running goes on in its terminal after the app opens again.
+        #[cfg(target_os = "macos")]
+        if paneling && !run("agent resumed", &|| resume::scenario(&browser)) {
+            return 1;
+        }
         // Putting the window away is macOS's: elsewhere the button minimizes as the system does.
         #[cfg(target_os = "macos")]
         if paneling
             && !run("presence", &|| {
                 presence::never_active(|| presence::scenario(&browser, &window, &origin));
+            })
+        {
+            return 1;
+        }
+        // Find over a page is the browser toolbar's: a shown window's, where the strip is.
+        #[cfg(target_os = "macos")]
+        if paneling
+            && !run("find in a page", &|| {
+                page_find::scenario(&browser, &window, &origin);
             })
         {
             return 1;

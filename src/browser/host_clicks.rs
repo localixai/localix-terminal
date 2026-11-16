@@ -88,14 +88,9 @@ impl On<'_> {
                 }
                 return;
             }
-            Some(Click::SplitMove(moved, done)) => {
-                if let Some(open) = self.deck.as_mut() {
-                    open.drag_split(moved, done);
-                }
-                if done {
-                    self.split_sized();
-                }
-                return;
+            Some(Click::SplitMove(at, moved, done)) => {
+                let held = (self.deck.as_mut()).and_then(|open| open.drag_split(at, moved, done));
+                return self.split_sized(held);
             }
             // The list shows the move already: the layout keeps it, and tells the window back.
             Some(Click::Move(key, before)) => {
@@ -128,14 +123,9 @@ impl On<'_> {
                 return;
             }
             Some(Click::Drop(key, x, y)) => return self.dropped(key, f64::from(x), f64::from(y)),
-            Some(Click::SplitEven) => {
-                if let Some(open) = self.deck.as_mut() {
-                    open.split.share = 0.5;
-                    open.split.grabbed = None;
-                    open.layout();
-                }
-                self.split_sized();
-                return;
+            Some(Click::SplitEven(at)) => {
+                let held = (self.deck.as_mut()).and_then(|open| open.split_even(at));
+                return self.split_sized(held);
             }
             Some(Click::Frame(x, y)) => return self.size_menu(x, y),
             Some(Click::More(x, y, held)) => return self.more_menu(x, y, held),

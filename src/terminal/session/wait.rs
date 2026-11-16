@@ -1,4 +1,5 @@
-//! Wait for screen text, quiet output or process exit using the session's condition variable.
+//! Wait for screen text, quiet output, process exit or a shell's mark using the session's
+//! condition variable.
 
 use super::super::pty;
 use super::{Session, Until};
@@ -121,6 +122,67 @@ impl Session {
         }
     }
 }
+
+impl Session {
+    /// Wait for the shell to say its prompt is ready for a line (OSC 133 A), at most `most`:
+    /// whether it did. A shell that marks nothing never does.
+    pub fn wait_prompt(&self, most: Duration) -> bool {
+        self.wait_prompt_after(0, most)
+    }
+
+    /// How many prompts the shell said it shows.
+    pub fn prompts(&self) -> u64 {
+        self.shared.lock().screen.marks().prompts()
+    }
+
+    /// Wait for the shell to say a prompt is ready once more than `after` were, at most `most`:
+    /// whether it did.
+    pub fn wait_prompt_after(&self, after: u64, most: Duration) -> bool {
+        let deadline = Instant::now() + most;
+        let mut state = self.shared.lock();
+        loop {
+            if state.screen.marks().prompts() > after {
+                return true;
+            }
+            let left = deadline.saturating_duration_since(Instant::now());
+            if state.ended || left.is_zero() {
+                return false;
+            }
+            state = crate::wait_timeout(&self.shared.wake, state, left.min(WAKE_SLICE));
+        }
+    }
+
+    /// How many commands the shell said ended.
+    pub fn commands_ended(&self) -> u64 {
+        self.shared.lock().screen.marks().ended().0
+    }
+
+    /// Wait for a command to end once more than `after` have (the shell's mark), at most
+    /// `most`: how it ended; none when no command ended in time, or the shell itself did.
+    pub fn wait_command_end(
+        &self,
+        after: u64,
+        most: Duration,
+    ) -> Option<super::super::marks::Ended> {
+        let deadline = Instant::now() + most;
+        let mut state = self.shared.lock();
+        loop {
+            if let (count, Some(ended)) = state.screen.marks().ended()
+                && count > after
+            {
+                return Some(ended);
+            }
+            let left = deadline.saturating_duration_since(Instant::now());
+            if state.ended || left.is_zero() {
+                return None;
+            }
+            state = crate::wait_timeout(&self.shared.wake, state, left.min(WAKE_SLICE));
+        }
+    }
+}
+
+/// The longest a wait on a mark sleeps before it looks again: it is woken with output too.
+const WAKE_SLICE: Duration = Duration::from_millis(250);
 
 impl Until {
     /// How the wait ended, in words: for `wanted`, the text waited for, within `most`.

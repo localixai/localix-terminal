@@ -52,7 +52,7 @@ impl Desk {
                 return Ok(());
             };
             let mut tree = tab.tree.clone();
-            if !tree.place(pane, before) {
+            if !tree.place(&pane, before.as_ref()) {
                 return Ok(());
             }
             layout::set_tree(write.tx(), id, &tree, tab.focused)?;

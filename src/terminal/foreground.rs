@@ -27,6 +27,12 @@ pub(super) fn group(master: RawFd) -> Option<libc::pid_t> {
 /// runs a command (`sh -c …`, as a terminal opened with one starts) and waits for it, that
 /// command's. macOS's `sh` becomes the command itself; Linux's `dash` stays and waits.
 pub(super) fn name(group: libc::pid_t) -> Option<String> {
+    named(&command(group)?)
+}
+
+/// The command line of the program in front of group `group`, found as [`name`] finds it, from
+/// its script on where a runtime runs one (`claude --model opus`, not `node …`).
+pub(super) fn command(group: libc::pid_t) -> Option<Vec<String>> {
     let mut args = arguments(group)?;
     let mut pid = group;
     // A few levels at most: a shell that runs a shell that runs the program.
@@ -42,7 +48,20 @@ pub(super) fn name(group: libc::pid_t) -> Option<String> {
         };
         (pid, args) = (child, next);
     }
-    named(&args)
+    Some(from_script(args))
+}
+
+/// `args` from the script on, where their program is a runtime that runs one; else as they are.
+pub(super) fn from_script(args: Vec<String>) -> Vec<String> {
+    let runtime = (args.first()).is_some_and(|first| {
+        let file = first.rsplit('/').next().unwrap_or(first);
+        RUNTIMES.contains(&file)
+    });
+    let script = (args.iter().skip(1)).position(|arg| !arg.starts_with('-'));
+    match (runtime, script) {
+        (true, Some(at)) => args.into_iter().skip(at + 1).collect(),
+        _ => args,
+    }
 }
 
 /// Whether `args` are a shell's that runs one command string (`sh -c …`) rather than a person's.

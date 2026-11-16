@@ -29,7 +29,7 @@ fn a_kind_the_desk_never_named_is_opened_told_read_listed_and_closed() {
         .unwrap();
     assert!(read.contains("echo: call hi"), "{read}");
     let listed = desk.window(&me, &json!({"action": "list"})).unwrap();
-    assert!(listed.contains("x1 (echo): 1 heard"), "{listed}");
+    assert!(listed.contains("x1 (echo) in tab 1: 1 heard"), "{listed}");
     let closed = desk
         .window(&me, &json!({"action": "close", "tab": "x1"}))
         .unwrap();

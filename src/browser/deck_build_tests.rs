@@ -13,3 +13,15 @@ fn each_part_that_lies_elsewhere_says_whose_points_its_are() {
     assert!(matches!(posted(Part::Nav, said()), Cmd::NavClicked(_)));
     assert!(matches!(posted(Part::Strip, said()), Cmd::Clicked(_)));
 }
+
+#[test]
+fn a_step_of_the_toolbars_find_row_is_a_seek_never_a_click() {
+    let said = "find type #0a84ff needle".to_string();
+    assert!(matches!(posted(Part::Nav, said.clone()), Cmd::Seek(_)));
+    // Only the toolbar has the row: from another part it is a click (which reads as nothing).
+    assert!(matches!(posted(Part::Strip, said), Cmd::Clicked(_)));
+    assert!(matches!(
+        posted(Part::Nav, "find open".into()),
+        Cmd::NavClicked(_)
+    ));
+}

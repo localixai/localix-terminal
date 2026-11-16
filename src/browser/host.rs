@@ -18,10 +18,11 @@ use wry::PageLoadEvent;
 use super::capture::{Clip, Shot};
 use super::comments::Comments;
 use super::panel;
+use super::secret::unsealed;
 use super::strip::Key;
 pub use super::told::{
-    Answers, Arranged, Arranging, Asked, CenterDid, Confirm, Halves, Heard, Ledger, Past, Place,
-    Tab, TabKind, Visited, Went,
+    Answers, Arranged, Arranging, Asked, CenterDid, Confirm, Drawn, Heard, Ledger, Past, Place,
+    Side, Tab, TabKind, Visited, Went,
 };
 use super::viewport::Viewport;
 
@@ -41,10 +42,10 @@ mod web;
 mod window;
 pub use events::host;
 
-/// One script from twelve files: its start (the secrets, the builtins it keeps, its messages),
+/// One script from thirteen files: its start (the secrets, the builtins it keeps, its messages),
 /// snapshot, the page's requests, what the page tells (dialogs, announcements, refused fields),
 /// same-origin frames, the outline, refs found again after a render, actions, typing, keys, the
-/// person's comments, then evaluate and the IPC entry point.
+/// person's comments, find in the page, then evaluate and the IPC entry point.
 pub(super) const PROBE: &str = concat!(
     include_str!("probe/start.js"),
     include_str!("probe/snapshot.js"),
@@ -57,6 +58,7 @@ pub(super) const PROBE: &str = concat!(
     include_str!("probe/typing.js"),
     include_str!("probe/keys.js"),
     include_str!("probe/feedback.js"),
+    include_str!("probe/find.js"),
     include_str!("probe/evaluate.js"),
 );
 
@@ -137,6 +139,8 @@ pub(super) struct Shared {
     pub(super) offers: super::offer::Offers,
     /// Where each terminal is now (its program's folder), by tab key: its menu works there.
     pub(super) folders: Mutex<HashMap<String, std::path::PathBuf>>,
+    /// The terminals whose program says it is at work, by tab key: their tabs are marked so.
+    pub(super) working: Mutex<HashMap<String, super::Working>>,
     /// The trees of files the windows show (tree.rs).
     pub(super) trees: Mutex<super::tree::Trees>,
 }
@@ -159,6 +163,8 @@ pub(super) enum Said {
     Noted(Noted),
     /// A popup closed itself: its tab's id.
     Close(u32),
+    /// What a page found for its tab's find row (deck_find.rs).
+    Found(super::strip::Found),
 }
 
 /// The most characters of a page's title kept: what a page sets is the strip's, the side's and the
@@ -361,6 +367,9 @@ impl Shared {
             let tab = tabs.iter().rev().find(|tab| tab.id != 1 && tab.url == url);
             return tab.map(|tab| Said::Close(tab.id));
         }
+        if let Some(found) = message.get("found") {
+            return super::strip::found(found).map(Said::Found);
+        }
         if let Some(fb) = message.get("fb") {
             if !self.turn.is_commenting() {
                 super::debug(|| "a comment came while nobody was commenting: dropped".into());
@@ -396,18 +405,6 @@ impl Shared {
         }
         None
     }
-}
-
-/// What the probe sent: the run's token, a line break, then the message as JSON. The token is
-/// plain text in front of the JSON, never a member of it, so no `toJSON` of the page's can read
-/// it from the object that is stringified. None for anything else, or for JSON that does not parse.
-fn unsealed(token: &str, body: &str) -> Option<Value> {
-    let rest = body.strip_prefix(token)?.strip_prefix('\n')?;
-    let parsed = serde_json::from_str(rest);
-    if let Err(error) = &parsed {
-        super::debug(|| format!("a page message did not parse: {error}"));
-    }
-    parsed.ok()
 }
 
 /// The browser host as the work thread holds it: it opens the one window on demand.

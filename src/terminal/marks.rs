@@ -1,5 +1,5 @@
-//! What a shell says of itself between its output: when a command starts and how it ended
-//! (OSC 133). The words are a program's, untrusted as its output is: they are counted and told
+//! What a shell says of itself between its output: that its prompt is ready, when a command
+//! starts and how it ended (OSC 133). The words are a program's, untrusted as its output is: they are counted and told
 //! on, never acted on.
 
 use std::time::{Duration, Instant};
@@ -13,9 +13,13 @@ pub struct Ended {
 
 #[derive(Debug, Default)]
 pub(super) struct Marks {
+    /// How many prompts it said it shows (`A`): its first, that it is ready for a line.
+    prompts: u64,
     running: Option<Instant>,
     ended: u64,
     last: Option<(Ended, Instant)>,
+    /// Something was typed since the shell last said its prompt is ready: its line may hold it.
+    typed: bool,
 }
 
 impl Marks {
@@ -25,6 +29,10 @@ impl Marks {
     pub(super) fn read(&mut self, said: &str) {
         let mut words = said.split(';');
         match (words.next(), words.next()) {
+            (Some("133"), Some("A")) => {
+                self.prompts += 1;
+                self.typed = false;
+            }
             (Some("133"), Some("C")) => {
                 self.running.get_or_insert_with(Instant::now);
             }
@@ -38,6 +46,21 @@ impl Marks {
             }
             _ => {}
         }
+    }
+
+    /// How many prompts the shell said it shows.
+    pub(super) fn prompts(&self) -> u64 {
+        self.prompts
+    }
+
+    /// Something was typed into the terminal.
+    pub(super) fn typed_in(&mut self) {
+        self.typed = true;
+    }
+
+    /// Whether something was typed since the shell last said its prompt is ready.
+    pub(super) fn typed_since_prompt(&self) -> bool {
+        self.typed
     }
 
     /// Since when a command runs, while one does.

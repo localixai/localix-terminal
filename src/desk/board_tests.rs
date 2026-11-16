@@ -63,7 +63,7 @@ fn a_worker_plans_takes_and_hands_in_cards_and_the_board_is_kept_in_the_project(
     let listed = desk.window(&me, &json!({"action": "list"})).unwrap();
     assert_eq!(
         listed,
-        "b1 (board): 2 card(s) · 0 in Doing · 1 waiting for the person"
+        "b1 (board) in tab 1: 2 card(s) · 0 in Doing · 1 waiting for the person"
     );
 }
 

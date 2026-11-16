@@ -1,6 +1,8 @@
 //! What a shortcut does that no button of the strip does (`key …` of shortcuts.rs), read from
 //! its words.
 
+use crate::layout::geometry::Side;
+
 /// What a shortcut does that has no button of its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::browser) enum Keyed {
@@ -14,6 +16,20 @@ pub(in crate::browser) enum Keyed {
     CloseProject,
     /// The window splits, its tab shown beside another of its project's, or joins again.
     Split,
+    /// A new terminal on this side of the pane in use, in its folder.
+    SplitNew(Side),
+    /// The keys go to the pane on this side of the one in use.
+    Toward(Side),
+    /// The keys go to the next pane of the tab shown (`true`), or the one before.
+    Pane(bool),
+    /// The divider beside the pane in use moves towards this side, a long way when `true`.
+    Resize(Side, bool),
+    /// The pane in use alone over its tab's part, or its tab drawn whole again.
+    Zoom,
+    /// The tab shown made even.
+    Equalize,
+    /// The pane in use goes out of its tab into one of its own.
+    PaneOut,
     LastTab,
     Next,
     Previous,
@@ -40,7 +56,7 @@ pub(in crate::browser) enum Keyed {
 }
 
 impl Keyed {
-    pub(super) fn parse(words: &str) -> Option<Self> {
+    pub(in crate::browser) fn parse(words: &str) -> Option<Self> {
         Some(match words {
             "tab last" => Self::LastTab,
             "split" => Self::Split,
@@ -62,15 +78,45 @@ impl Keyed {
             "projects" => Self::Projects,
             "open folder" => Self::OpenFolder,
             "close project" => Self::CloseProject,
-            words => match words.strip_prefix("new ") {
-                Some(kind) => Self::NewKind(crate::kind::named(kind)?.about().id),
-                None => {
+            "equalize" => Self::Equalize,
+            "zoom" => Self::Zoom,
+            "pane out" => Self::PaneOut,
+            "pane next" => Self::Pane(true),
+            "pane previous" => Self::Pane(false),
+            words => match (Self::sided(words), words.strip_prefix("new ")) {
+                (Some(sided), _) => sided,
+                (None, Some(kind)) => Self::NewKind(crate::kind::named(kind)?.about().id),
+                (None, None) => {
                     let at = words.strip_prefix("tab ")?.parse().ok();
                     Self::Tab(at.filter(|at| (1..=8).contains(at))?)
                 }
             },
         })
     }
+
+    /// What a shortcut that names a side does: `split right`, `pane up`, `resize far left`.
+    fn sided(words: &str) -> Option<Self> {
+        let (verb, way) = words.rsplit_once(' ')?;
+        let side = side(way)?;
+        Some(match verb {
+            "split" => Self::SplitNew(side),
+            "pane" => Self::Toward(side),
+            "resize" => Self::Resize(side, false),
+            "resize far" => Self::Resize(side, true),
+            _ => return None,
+        })
+    }
+}
+
+/// The side a shortcut's words name: `left`, `right`, `up` or `down`.
+fn side(word: &str) -> Option<Side> {
+    Some(match word {
+        "left" => Side::Left,
+        "right" => Side::Right,
+        "up" => Side::Up,
+        "down" => Side::Down,
+        _ => return None,
+    })
 }
 
 /// A step of Find in what is shown: the find row opens (Find…), or goes to the next match or

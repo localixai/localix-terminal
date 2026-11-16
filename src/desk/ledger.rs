@@ -7,21 +7,15 @@ use std::path::Path;
 
 use super::beside::Beside;
 use super::{Call, Desk};
+use crate::layout::geometry::Side;
+
+#[path = "titles.rs"]
+mod titles;
 use crate::browser::Went;
 use crate::feed::{Entity, Op};
 use crate::ledger::{self, Kind, Opened, Row};
 use crate::projects::{self, ProjectId};
-
-/// How often a terminal's title is written to the ledger at most: a program that animates its
-/// title says it many times a second.
-const TITLE_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
-
-/// What a terminal's title writes have come to: when the last was done, and the latest title
-/// since, kept for the next write or for when the row closes.
-pub(super) struct Titled {
-    at: std::time::Instant,
-    pending: Option<String>,
-}
+pub(super) use titles::Titled;
 
 /// What a closing pane's row is closed with, taken from memory as it closes.
 pub(super) struct Closing {
@@ -40,6 +34,8 @@ pub(super) struct Facts<'a> {
     pub(super) url: Option<&'a str>,
     pub(super) cwd: Option<&'a Path>,
     pub(super) command: Option<&'a str>,
+    /// A terminal the person asked for beside a pane: that pane's row, and the side it is on.
+    pub(super) split: Option<(Row, Side)>,
 }
 
 impl Desk {
@@ -88,9 +84,21 @@ impl Desk {
             command: facts.command,
         };
         let window = call.window.or_else(|| self.in_use());
-        let placed = self.keep(key, &opened, (call.again, window), (anchor, call.person));
-        if placed.is_some() {
-            self.bring(key, placed.as_deref(), call.person);
+        let placed = self.keep(
+            key,
+            &opened,
+            (call.again, window),
+            (anchor, call.person),
+            facts.split,
+        );
+        // A terminal an agent put beside a pane is drawn where it went: the window is not taken.
+        let quiet = facts.split.is_some() && !call.person && !doc;
+        match placed {
+            Some(_) if quiet => self.tell_arranged(),
+            Some(placed) => {
+                self.bring(key, Some(&placed), call.person);
+            }
+            None => {}
         }
     }
 
@@ -99,13 +107,14 @@ impl Desk {
     /// agent's: in the session of `anchor`, else in one of its project all the same (the panes
     /// that tab had, then), and in a tab of documents only where the project has no terminal.
     /// A terminal or the board: a tab of its own, a terminal taking the documents its project
-    /// kept without a session.
+    /// kept without a session; a terminal asked beside a pane (`split`), in that pane's tab.
     fn keep(
         &self,
         key: &str,
         opened: &Opened<'_>,
         (again, window): (Option<Row>, Option<crate::layout::WindowId>),
         (anchor, person): (Option<Beside>, bool),
+        split: Option<(Row, Side)>,
     ) -> Option<Vec<Row>> {
         if again.is_none() {
             self.begin(opened.project);
@@ -128,11 +137,15 @@ impl Desk {
                 (Some(joined), _) => Some(joined),
                 (None, true) => Self::place_loose(write, row, place, person, now)?,
                 (None, false) => {
-                    Self::place_pane(write, row, place, now)?;
-                    if opened.kind == Kind::Terminal {
-                        Self::takes_loose(write, row, now)?;
+                    let split = split.map(|split| Self::split_in(write, row, split, person));
+                    let beside = split.transpose()?.flatten();
+                    if beside.is_none() {
+                        Self::place_pane(write, row, place, now)?;
+                        if opened.kind == Kind::Terminal {
+                            Self::takes_loose(write, row, now)?;
+                        }
                     }
-                    None
+                    beside
                 }
             };
             Ok((row, beside))
@@ -251,7 +264,7 @@ impl Desk {
                 // A page the window opened itself (a popup) is of the window the person works in,
                 // and of the session they look at, where its link was.
                 let session = self.seen_in(project, None);
-                self.keep(key, &opened, (None, self.in_use()), (session, true));
+                self.keep(key, &opened, (None, self.in_use()), (session, true), None);
                 let kept = crate::lock(&self.ledger).get(key).copied();
                 match kept {
                     Some(known) => known,
@@ -278,18 +291,24 @@ impl Desk {
     }
 
     /// The session of terminal `key`, while it has one.
-    fn session_of(&self, key: &str) -> Option<std::sync::Arc<crate::terminal::Session>> {
+    pub(super) fn session_of(&self, key: &str) -> Option<std::sync::Arc<crate::terminal::Session>> {
         let id = key
             .strip_prefix('t')
             .and_then(|id| id.parse::<u32>().ok())?;
         crate::lock(&self.sessions).get(&id).cloned()
     }
 
-    /// Terminal `key`'s screen, as `session` shows it now, kept in row `row`.
+    /// Terminal `key`'s screen, as `session` shows it now, kept in row `row`, and the folder its
+    /// shell is in now: where it opens again.
     fn keep_screen_of(&self, key: &str, row: Row, session: &crate::terminal::Session) {
         // Masked: a secret a call typed in is on the screen as typed, and no value outlives the run.
         let (text, now) = (self.vault.mask(&session.text()), crate::board::now());
-        if let Err(why) = (self.feed.store()).write(|tx| ledger::keep_screen(tx, row, &text, now)) {
+        let folder = session.folder();
+        let kept = (self.feed.store()).write(|tx| {
+            ledger::keep_screen(tx, row, &text, now)?;
+            folder.map_or(Ok(()), |folder| ledger::moved(tx, row, None, &folder))
+        });
+        if let Err(why) = kept {
             log::warn!("terminal {key}'s screen was not kept: {why}");
         }
     }
@@ -300,52 +319,6 @@ impl Desk {
         for key in keys {
             self.flush_title(&key);
             self.keep_screen(&key);
-        }
-    }
-
-    /// Terminal `key` is titled `title` (its program says what it does): kept in the ledger, at
-    /// most once a [`TITLE_EVERY`]; the latest title waits for the next write, or for its row to
-    /// close. The window is told the past again when a write is news: its history menu lists the
-    /// title of an open terminal from there.
-    pub(super) fn retitled(&self, key: &str, title: &str) {
-        let now = std::time::Instant::now();
-        {
-            let mut titled = crate::lock(&self.titled);
-            if let Some(last) = titled.get_mut(key)
-                && now.duration_since(last.at) < TITLE_EVERY
-            {
-                last.pending = Some(title.to_string());
-                return;
-            }
-            titled.insert(
-                key.to_string(),
-                Titled {
-                    at: now,
-                    pending: None,
-                },
-            );
-        }
-        self.write_title(key, title);
-    }
-
-    /// The latest title of terminal `key` still waiting is written.
-    fn flush_title(&self, key: &str) {
-        let pending = (crate::lock(&self.titled).remove(key)).and_then(|titled| titled.pending);
-        if let Some(title) = pending {
-            self.write_title(key, &title);
-        }
-    }
-
-    fn write_title(&self, key: &str, title: &str) {
-        let Some((row, project)) = crate::lock(&self.ledger).get(key).copied() else {
-            return;
-        };
-        let titled = self.feed.write(|write| {
-            ledger::titled(write.tx(), row, title)
-                .and_then(|news| Self::news_of(write, project, news))
-        });
-        if let Err(why) = titled {
-            log::warn!("tab {key}'s title is not in the ledger: {why}");
         }
     }
 

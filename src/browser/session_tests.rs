@@ -1,8 +1,9 @@
-//! Tests of a session as the window reads it from the layout: the row that stands for it, the
-//! split a tab picked is laid out in, and what may be put beside what.
+//! Tests of a session as the window reads it from the layout: the row that stands for it, and
+//! what may be put beside what.
 
 use super::*;
 use crate::browser::{Arranged, Arranging};
+use crate::layout::{Share, Tree};
 
 fn keys(names: &[&str]) -> Vec<String> {
     names.iter().map(ToString::to_string).collect()
@@ -11,14 +12,34 @@ fn keys(names: &[&str]) -> Vec<String> {
 /// A session of terminal `t1` with files `f1` and `f2` (`f2` in sight, on the right), a lone
 /// terminal `t2`, the loose documents `w3` and `f4` (`f4` in sight), and a board.
 fn arranged() -> Arranged {
-    let tab = |panes: &[&str], docs: &[&str], all: &[&str]| Arranging {
-        panes: keys(panes),
-        across: true,
-        shares: vec![0.5; panes.len()],
-        focused: panes.last().map(ToString::to_string),
-        docs: keys(docs),
-        all: keys(all),
-        whole: false,
+    // The panes in sight side by side, the documents a stack showing the one in sight.
+    let tab = |panes: &[&str], docs: &[&str], all: &[&str]| {
+        let pane = |key: &str| match docs.contains(&key) {
+            true => Tree::Stack {
+                panes: keys(docs),
+                shown: key.to_string(),
+            },
+            false => Tree::leaf(key.to_string()),
+        };
+        let tree = match panes {
+            [one] => pane(one),
+            many => Tree::Branch {
+                across: true,
+                children: (many.iter())
+                    .map(|key| Share {
+                        share: 1.0 / many.len() as f64,
+                        tree: pane(key),
+                    })
+                    .collect(),
+            },
+        };
+        Arranging {
+            tree,
+            focused: panes.last().map(ToString::to_string),
+            docs: keys(docs),
+            all: keys(all),
+            whole: false,
+        }
     };
     Arranged {
         window: 1,
@@ -75,37 +96,11 @@ fn a_document_the_layout_has_not_told_of_is_no_row_of_the_side() {
 }
 
 #[test]
-fn a_tab_picked_is_split_as_its_session_is_at_once() {
-    let arranged = arranged();
-    let kept = |shown: &str, beside: &str, right: bool| {
-        Some(Kept {
-            shown: shown.into(),
-            beside: beside.into(),
-            right,
-        })
-    };
-    assert_eq!(split_of(&arranged, "t1"), kept("t1", "f2", true));
-    assert_eq!(split_of(&arranged, "f2"), kept("f2", "t1", false));
-    // A document put by takes the place of the one in sight.
-    assert_eq!(split_of(&arranged, "f1"), kept("f1", "t1", false));
-    // A lone terminal, the loose documents and a tab the layout does not hold are whole.
-    for whole in ["t2", "f4", "w3", "b1", "t9"] {
-        assert_eq!(split_of(&arranged, whole), None, "{whole}");
-    }
-    // Kept whole by the person, a session shows its pane alone.
-    let mut put_by = arranged.clone();
-    put_by.tabs[0].whole = true;
-    assert_eq!(split_of(&put_by, "t1"), None);
-    assert_eq!(beside_whole(&put_by, "t1"), kept("t1", "f2", true));
-    assert_eq!(beside_whole(&arranged, "t1"), None);
-}
-
-#[test]
 fn a_session_takes_its_own_documents_and_loose_ones_and_no_other_pane() {
     let arranged = arranged();
     let takes = |shown: &str, beside: &str| {
         takes(
-            &arranged,
+            &arranged.tabs,
             Key::parse(shown).unwrap(),
             Key::parse(beside).unwrap(),
         )
@@ -118,8 +113,10 @@ fn a_session_takes_its_own_documents_and_loose_ones_and_no_other_pane() {
     // A loose document joins a session, or a terminal alone.
     assert!(takes("t1", "f4"));
     assert!(takes("w3", "t2"));
-    // A session takes no other terminal and no board; terminals alone pair as before.
-    assert!(!takes("t1", "t2"));
+    // A session takes a terminal alone (one stack for the tab's terminals), and no board;
+    // terminals alone pair as before.
+    assert!(takes("t1", "t2"));
+    assert!(!takes("t1", "b1"));
     assert!(!takes("b1", "f1"));
     assert!(!takes("b1", "f4"));
     assert!(takes("t2", "b1"));
@@ -131,18 +128,88 @@ fn the_documents_row_lies_over_the_one_in_sight() {
     assert_eq!(stacks, [vec![file(1), file(2)], vec![Key::Web(3), file(4)]]);
     let term = Key::Term(1);
     // A split session: over its document's half, whichever is in use.
-    let row = row(&stacks, Some(term), Some((file(2), term)));
+    let row = row(&stacks, Some(term), &[term, file(2)]);
     assert_eq!(row, Some((file(2), &stacks[0])));
-    let row = super::row(&stacks, Some(file(1)), Some((file(1), term)));
+    let row = super::row(&stacks, Some(file(1)), &[term, file(1)]);
     assert_eq!(row.map(|row| row.0), Some(file(1)));
     // Whole: over the document shown; a terminal alone has none.
     assert_eq!(
-        super::row(&stacks, Some(Key::Web(3)), None).map(|row| row.0),
+        super::row(&stacks, Some(Key::Web(3)), &[Key::Web(3)]).map(|row| row.0),
         Some(Key::Web(3))
     );
-    assert_eq!(super::row(&stacks, Some(term), None), None);
+    assert_eq!(super::row(&stacks, Some(term), &[term]), None);
     // The one next to a document closed: the one after it, else the one before.
     assert_eq!(next(&stacks, file(1)), Some(file(2)));
     assert_eq!(next(&stacks, file(4)), Some(Key::Web(3)));
     assert_eq!(next(&stacks, term), None);
+}
+
+#[test]
+fn a_session_of_two_terminals_is_one_row_by_the_terminal_in_focus() {
+    let tree = Tree::Branch {
+        across: true,
+        children: ["t1", "t5", "f1"]
+            .iter()
+            .map(|key| Share {
+                share: 1.0 / 3.0,
+                tree: match *key {
+                    "f1" => Tree::stack_of(key.to_string()),
+                    key => Tree::leaf(key.to_string()),
+                },
+            })
+            .collect(),
+    };
+    let tab = |focused: &str| Arranged {
+        tabs: vec![Arranging {
+            all: tree.panes(),
+            tree: tree.clone(),
+            focused: Some(focused.into()),
+            docs: keys(&["f1"]),
+            whole: false,
+        }],
+        ..Arranged::default()
+    };
+    // The terminal in focus stands for the tab: the other and the document are its.
+    let led = led(&tab("t5"), None);
+    assert_eq!(led.get("t1").map(String::as_str), Some("t5"));
+    assert_eq!(led.get("f1").map(String::as_str), Some("t5"));
+    assert!(!led.contains_key("t5"));
+    // A document in focus: the first terminal does.
+    let led = super::led(&tab("f1"), None);
+    assert_eq!(led.get("t5").map(String::as_str), Some("t1"));
+}
+
+#[test]
+fn a_tab_zoomed_is_one_row_by_its_pane_in_sight_marked_with_how_many_are_put_by() {
+    let mut arranged = arranged();
+    // t5 beside t6, zoomed on t6; and the session of t1 zoomed on its terminal.
+    let pair = Tree::Branch {
+        across: true,
+        children: (["t5", "t6"].iter())
+            .map(|key| Share {
+                share: 0.5,
+                tree: Tree::leaf((*key).to_string()),
+            })
+            .collect(),
+    };
+    arranged.tabs.push(Arranging {
+        tree: pair,
+        focused: Some("t6".into()),
+        docs: vec![],
+        all: keys(&["t5", "t6"]),
+        whole: true,
+    });
+    arranged.tabs[0].whole = true;
+    arranged.tabs[0].focused = Some("t1".into());
+    let led = led(&arranged, None);
+    assert_eq!(led.get("t5").map(String::as_str), Some("t6"));
+    assert!(!led.contains_key("t6"));
+    let zoomed = zoomed(&arranged, None);
+    assert_eq!(zoomed.get("t6"), Some(&1));
+    assert_eq!(zoomed.get("t1"), Some(&1), "{zoomed:?}");
+    assert!(!zoomed.contains_key("t2"), "a pane alone is no zoom");
+    // Drawn whole again, it is two rows of the side's split once more, and unmarked.
+    arranged.tabs[4].whole = false;
+    assert!(!super::led(&arranged, None).contains_key("t5"));
+    assert!(!super::zoomed(&arranged, None).contains_key("t6"));
 }

@@ -1,6 +1,12 @@
-//! Reopen a project's panes from the ledger, preserving their rows and layout.
+//! Reopen a project's panes from the ledger, preserving their rows and layout; a terminal's
+//! coding agent goes on in it (agent_resume.rs keeps it, agent_relaunch.rs resumes it).
 
-use std::collections::HashSet;
+#[path = "agent_relaunch.rs"]
+mod agent_relaunch;
+#[path = "agent_resume.rs"]
+pub(super) mod agent_resume;
+
+use std::collections::{HashMap, HashSet};
 
 use super::{Call, Desk};
 use crate::ledger::{self, Kind, Row};
@@ -13,6 +19,40 @@ pub(super) struct Past {
     pub(super) begun: HashSet<ProjectId>,
     /// The projects whose tabs are being opened again right now.
     pub(super) restoring: HashSet<ProjectId>,
+    /// The coding agent each terminal of this run runs, by its key: its id and its session's,
+    /// where known. A session live in one is never resumed in another.
+    pub(super) agents: HashMap<String, (String, Option<String>)>,
+    /// The agents of the run before going on in this run's terminals, or waiting for the
+    /// person's word, by the terminal's key.
+    pub(super) resumes: HashMap<String, Resume>,
+}
+
+/// A coding agent of the run before, going on in its terminal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Resume {
+    pub(super) row: Row,
+    /// The agent's name (`Claude Code`).
+    pub(super) name: &'static str,
+    /// What is typed into the terminal's shell: the command that resumes its session, or the
+    /// one that continues its folder's last.
+    pub(super) line: String,
+    pub(super) session: Option<String>,
+    pub(super) stage: Stage,
+    /// How many times in a row it did not resume.
+    pub(super) tries: u32,
+}
+
+/// How far a resume is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Stage {
+    /// Its command waits for the shell's prompt.
+    Waiting,
+    /// Its command was typed, and is watched for an early end.
+    Typed,
+    /// It did not resume twice: the person's Retry.
+    Failed,
+    /// No session to resume: the person may continue the folder's last.
+    Continue,
 }
 
 impl Desk {
@@ -21,7 +61,7 @@ impl Desk {
     pub(super) fn again(&self, call: &Call, group: &str, row: Row) -> Result<(), String> {
         let tab = (self.feed.store().read(|db| ledger::get(db, row)))?
             .ok_or("that tab is no longer in the history")?;
-        self.again_tab(call, group, &tab)
+        self.again_tab(call, group, &tab, false)
     }
 
     /// The person went to `call`'s project, which has no tab open: what it had open when the
@@ -36,6 +76,16 @@ impl Desk {
         let done = self.reopen_left(call, group);
         crate::lock(&self.past).restoring.remove(&call.project.id);
         done
+    }
+
+    /// `call`'s project opened again as the window does when the person goes to it: for tests,
+    /// which have no person to go there.
+    ///
+    /// # Errors
+    /// As the window's own reopening.
+    #[cfg(feature = "test-server")]
+    pub fn reopen_for(&self, call: &Call) -> Result<(), String> {
+        self.reopen_project(call, &crate::projects::key(call.project.id))
     }
 
     fn reopen_left(&self, call: &Call, group: &str) -> Result<(), String> {
@@ -62,7 +112,7 @@ impl Desk {
             let twice = tab.kind == Kind::File && !files.insert(tab.cwd.clone());
             let opened = match twice {
                 true => Err("its file has a tab already".to_string()),
-                false => self.again_tab(call, group, tab),
+                false => self.again_tab(call, group, tab, true),
             };
             if let Err(why) = opened {
                 log::warn!("a tab of {} did not open again: {why}", call.project.name);
@@ -82,9 +132,16 @@ impl Desk {
     }
 
     /// The pane `tab` opened again for the person: a page at its address, their shell in a terminal's
-    /// folder (its program is not run again), the board, a file in its editor. It is the same pane as before: its row,
+    /// folder (its program is not run again, but the coding agent it ran goes on, `resume`
+    /// as the app opens), the board, a file in its editor. It is the same pane as before: its row,
     /// its history, its place in its tab.
-    fn again_tab(&self, call: &Call, group: &str, tab: &ledger::Pane) -> Result<(), String> {
+    fn again_tab(
+        &self,
+        call: &Call,
+        group: &str,
+        tab: &ledger::Pane,
+        resume: bool,
+    ) -> Result<(), String> {
         let call = &Call {
             again: Some(tab.row),
             ..*call
@@ -99,14 +156,27 @@ impl Desk {
                     .map_err(|failure| failure.message().to_string())
             }
             Kind::Terminal => {
-                let cwd = (tab.cwd.clone())
-                    .filter(|cwd| cwd.is_dir())
+                let plan = resume.then(|| self.resume_plan(call, tab.row)).flatten();
+                let folder = plan.as_ref().and_then(|plan| plan.folder.clone());
+                let cwd = (folder.into_iter().chain(tab.cwd.clone()))
+                    .find(|cwd| cwd.is_dir())
                     .unwrap_or_else(|| call.cwd.to_path_buf());
-                let before = (self.feed.store().read(|db| ledger::screen(db, tab.row)))
+                let mut before = (self.feed.store().read(|db| ledger::screen(db, tab.row)))
                     .ok()
                     .flatten()
                     .unwrap_or_default();
-                self.person_terminal_after(&Call { cwd: &cwd, ..*call }, group, "", &before)
+                if let Some(said) = plan.as_ref().and_then(|plan| plan.said.as_deref()) {
+                    before = match before.trim_end() {
+                        "" => format!("── {said}"),
+                        kept => format!("{kept}\n── {said}"),
+                    };
+                }
+                let call = &Call { cwd: &cwd, ..*call };
+                let key = self.terminal_of_person(call, group, "", "", &before)?;
+                if let Some(plan) = plan {
+                    self.resume_in(&key, tab.row, plan);
+                }
+                Ok(())
             }
             Kind::Board => (self.board(call, &serde_json::json!({"op": "show"})))
                 .map(|_| ())

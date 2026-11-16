@@ -22,8 +22,9 @@ app
 ```
 
 In short: project → session → its files and pages. A **session** is a terminal's tab: the
-terminal, and on its right the documents (files and pages) opened in it. Each session keeps its
-own, and another session never shows them.
+terminal (or several, split in the tab), and on their right the documents (files and pages)
+opened in them, one stack for the tab. Each session keeps its own, and another session never
+shows them.
 
 - A **window** shows one workspace at a time: the project shown. Switching the project shows
   another workspace of the same window; the others keep their tabs out of sight.
@@ -72,10 +73,19 @@ Every change is one operation of the layout, in one transaction with its notices
 | show tab           | the workspace's shown tab                       | `Workspace` upserted            |
 | move tab           | the tab's workspace and place; places around it | `Workspace` upserted, each side |
 | close tab          | the tab closed; its panes' leaves gone          | `Workspace` upserted            |
-| split              | the tab's tree: a branch over two leaves        | `Tab` upserted                  |
-| unsplit            | the tree back to one leaf; the other pane a tab | `Tab`, `Workspace` upserted     |
-| resize             | a branch's shares                               | `Tab` upserted                  |
-| focus              | the tab's focused leaf                          | `Tab` upserted                  |
+| split              | the tab's tree: a pane on a side of another     | `Tab`, `Workspace` upserted     |
+| split new          | a new pane's row and its leaf beside another    | `Tab`, `Workspace` upserted     |
+| pane out           | the pane out of the tree, a tab of its own      | `Tab`, `Workspace` upserted     |
+| resize             | a branch's shares, at one divider               | `Tab` upserted                  |
+| equalize           | every branch's shares, by what each child holds | `Tab` upserted                  |
+| focus              | the tab's focused leaf, a stack's pane in sight | `Tab` upserted                  |
+| zoom               | the tab's `whole` and focused leaf; shown tab   | `Tab` (`Workspace`) upserted    |
+
+A tab's **zoom** is its `whole` (`desk/layout_zoom.rs`): the pane in focus drawn alone over the
+tab's part, the rest of its tree kept as it is, out of sight and running, as a tab out of sight
+is. Focus moved to another pane of the tab takes the zoom to it. A split, a split new, a pane
+closed or taken out, a resize and an equalize write the tab whole again in the same
+transaction: no operation leaves a tab zoomed on a tree it changed.
 
 An operation that needs the answer (a new tab's id, where it went) is a call that returns it, as
 the architecture says of commands; what follows it in other parts (the window drawing it, the
@@ -152,22 +162,139 @@ Consumers read the owner for what changed:
 ## The window
 
 The window draws a layout it is given and sends what the person did as an operation: a click on a
-row shows a tab, a drag between rows moves it, ⇧⌘\ or a tab dragged onto the pages splits, a drag of the line resizes.
+row shows a tab, a drag between rows moves it, ⇧⌘\ or a tab dragged onto the pages splits
+(`Heard::Split`), ⌘D asks for a new pane (`Heard::SplitNew`), Move Pane to New Tab takes one out
+(`Heard::Whole`), a drag of a divider or a key resizes (`Heard::Resized`), ⌃⌘= makes the tab
+even (`Heard::Equalized`), a click in a pane of a split tab or a key focuses it
+(`Heard::Focused`), ⇧⌘↩ zooms the pane in use or draws its tab whole again (`Heard::Zoomed`).
 The operation's notice brings the new layout back. While a drag is under way the window moves its
-own views (the line under the pointer, the dragged row, a window following the pointer); only the
+own views (the divider under the pointer, the dragged row, a window following the pointer); only the
 drop is an operation.
 
-The sidebar edge and split divider own one primary pointer while held. Updates are coalesced
+### A tab's tree in the window
+
+The window draws the tree of the tab its shown pane is in, the layout's own tree with its panes
+named by their keys (`Arranging::tree`, `Drawn`; a pane with no key this run is left out, its
+share to the rest of its branch). It lays it out by the layout's geometry (`layout/geometry.rs`,
+the one the desk asks too): each pane its rectangle, a point of glass between two, each pane at
+least 190 points where there is room and a tenth of its branch at the least; a branch's
+children share its room by their shares, side by side (`across`) or one above the other, and a
+pane beside a split of the same way is one more child of that branch, not a branch of its own.
+Every pane of the tree is placed where its rectangle is; the browser's toolbar lies over the
+page in use and a session's documents' row over its stack, wherever they stand.
+
+Between two children of a branch is a divider: a view of the strip's page each (a pool, one
+made at once and the rest as a tree needs them, on the window's loop, never in a drag's frame),
+told which way it moves. What the person does to the tree is drawn at once and waits in the
+window only until the layout has heard it (`browser/split.rs`):
+
+- a split made or undone (`Own`): the tree they made, kept while the layout still draws the tab
+  as it did when they made it, and let go once it draws it so or otherwise;
+- a divider held or let go of (`Held`): its share, kept until the layout keeps it, so an older
+  snapshot cannot make it jump back; each divider let go of is held on its own;
+- the pane they put the keys in: told once, until the layout keeps it as the tab's focus.
+
+The sidebar edge and each divider own one primary pointer while held. Updates are coalesced
 to one per animation frame; release uses its own final coordinates. Escape, pointer cancellation,
 lost capture or a lost window focus cancels cleanly and restores the starting size. Focus a
-separator and use Left/Right to resize (Shift moves farther); Home restores the default width
-or equal halves.
+separator and use the arrows along it to resize (Left/Right, or Up/Down for a divider between
+panes one above the other; Shift moves farther); Home restores the default width, or makes the
+divider's branch even by what its children hold.
 
-Only the final divider size is written, on the desk's writer queue. Its left share is kept in
-the existing pane tree, then restored when the project or app opens again. A pending local size
-is kept until the matching projection acknowledges it: an older snapshot cannot make the
-divider jump back. Each half keeps at least a tenth of the space and, where there is room,
-190 points.
+Only the final divider size is written, on the desk's writer queue: `Heard::Resized { path, at,
+share }`, the branch at `path` giving its children before `at` that share. The desk resizes a
+tree only when every pane of it has a key, so a path the window read names the same branch in
+the store. It is restored when the project or app opens again.
+
+### A new pane
+
+Split Right (⌘D) and Split Down (⇧⌘D) ask the desk for a terminal on that side of the pane in
+use, in its tab (`Heard::SplitNew { beside, side, asked }`; "+" → Split Right with… and Split
+Down with… ask for an agent's program in it). The desk opens it in the folder of the terminal
+beside: where its shell is now (`foreground::cwd` of the program in front), else the folder it
+opened in; beside a page or a file, the project's. The terminal opens out of sight and is placed
+in the tab in the same change as its ledger row (`desk/layout_split.rs` `split_in`), the pane in
+focus; then the window shows it and gives it the keys, as the person's click would. The window
+asks only for a split that fits: the pane in use is at least two panes' least and the line
+between them (`geometry::fits`). Where it is not, Split Right and Split Down are greyed in the
+menu bar and the "+" menu, and the key does nothing: no error, since it is no failure.
+
+A terminal's folder is kept in the ledger as it closes and as the app quits (its shell's folder
+then), so a restore opens it where it was.
+
+### An agent goes on
+
+A terminal opened again after a quit or a crash is the person's shell in its folder, its last
+screen above, dimmed; its program is not run again, but the coding agent it ran goes on in its
+session there:
+
+- **Kept as it is seen.** Each time another program comes in front of a terminal, its command
+  line is read through its agent's list (`browser/agents_resume.rs`, the options each agent's
+  `--help` names: `agents_policies.rs`) and kept for the pane at once (`agent_sessions`, by
+  `desk/agent_resume.rs`), written then and not left to the writer thread, so a crash keeps it
+  as a quit does. The session's id comes from
+  that line (`--resume`, `--session-id`, `codex resume <id>`, `opencode -s`), from the agent's
+  own hooks (the Claude Code plugin calls `interact` with `session`, from its terminal, as the
+  session starts and when it changes), or from "+", which starts Claude Code and Copilot with
+  `--session-id` of the app's own. A run that prints and ends, a command of the agent's own
+  (`mcp`, `exec`, after options too: `codex -m o3 exec`) and a board's worker are not kept; an
+  agent that ends of itself, or a terminal the person closes, is let go of. The app quitting
+  ends its agents and keeps them. Another agent or session in the terminal counts its tries
+  afresh.
+- **What is carried.** Only the options its list allows, each value held to its form (a name,
+  a choice, a folder by its absolute path, read by its form alone: the disk is never asked,
+  and nothing that does not print, a control or a mark that turns text around, is carried or
+  typed), never a prompt, a value that looks like a key or names a
+  saved secret, an inline setting, or a sandbox bypass. The permission skip the person chose
+  is carried, and said. The command is built again from the agents' table and those words,
+  read through the list again: a row of the store never becomes a command.
+- **Typed when the shell is ready.** The terminal's line above the shell says "Resumed Claude
+  Code session" (and "· permissions skipped", "· sandbox bypass not carried"); once the shell
+  says its prompt is ready (OSC 133 A), the command is typed into it and runs, as the person
+  would type it (`desk/agent_relaunch.rs`). It is typed only into the shell itself (the
+  terminal's foreground group is the shell's), with no command at work, and at a prompt
+  nothing was typed at since the shell said it; else nothing is typed and the line waits with
+  Continue. A shell that says nothing is typed nothing unasked. The person's Retry or Continue
+  is taken once, however many clicks, and types once the shell is in front with nothing at
+  work, without waiting for a mark (fish, `exec tmux`).
+- **When it does not.** A command that ends with an error within ten seconds is typed once
+  more, then its terminal has a quiet line in the Event Center, "Did not resume", with Retry;
+  the next launch types nothing for it. One that ends well at once ended: it is let go of, not
+  a failed try. An agent the person starts in front of that terminal takes the line's place. An agent with no session known, or not installed,
+  has "Was open here" with Continue, which types its folder's last session's command.
+- **Never twice, never off.** A session live in one terminal is not resumed in another, and
+  nothing is resumed while the person turned Resume agents off (Settings, Terminal); what is
+  skipped so is let go of from the store.
+
+### The keyboard on panes
+
+The Pane menu (a group of the shortcut table: the menu bar's and a section of Settings) acts on
+the tab shown, from its pane in use (`browser/deck_keys.rs`, `host_panes.rs`):
+
+- ⌥⌘ and an arrow: the keys to the pane that way, by the geometry (`geometry::neighbour`): of the
+  panes whose edge meets the one in use on that side, the one used last, then the one alongside
+  most. Nothing wraps round the tab's edge. ⌥⌘] and ⌥⌘[: the next pane in the order they lie, and
+  the one before, round. The panes used are the window's, latest first, never kept.
+- ⌃⌘ and an arrow: the divider on that side of the pane in use moves a step that way (5 % of its
+  branch, ⇧ 20 %); at the tab's edge on that side, the divider on its other side does, so the
+  arrow's way is the way a divider goes. It is drawn at once and told as a divider let go of is.
+- ⌃⌘=: every branch even by what its children hold (`Tree::equalize`), drawn at once.
+- ⇧⌘↩ (Zoom Pane): the pane in use alone over the tab's part, at once, and back; greyed over a
+  pane alone in its tab. The side lists a zoomed tab as one row, by the pane drawn, and the row
+  and the bar's crumb carry how many panes are put by. ⌥⌘ and an arrow, ⌃⌘ and an arrow and ⌃⌘=
+  draw the tab whole first and then act on it; ⌥⌘] and ⌥⌘[ go round all the tab's panes and take
+  the zoom along; ⌘D splits it whole; ⌘W gives the keys to the pane its rule picks among all.
+- ⌘W: in a tab of several panes, the pane in use closes; the one used last of the rest takes the
+  keys, else its neighbour in its branch, which takes its share. The last pane closes the tab.
+- Move Pane to New Tab (no key; a pane's menu too; ⇧⌘\ in a tab of several panes): the pane in
+  use out of the tree, into a tab of its own right after it. A document goes nowhere, and a
+  session of one terminal is made whole instead, its documents put by.
+
+⌘D and ⌥⌘ with an arrow are the menu's over a file too: the editor's own bindings of them are
+left out, so a pane's keys are the same whatever it shows.
+
+⌃⌘ and an arrow is free on macOS 26: the system keeps ⌃ and an arrow for Spaces and Mission
+Control, and Fn ⌃ and an arrow for its tiling, never ⌃⌘.
 
 Title-only sidebar updates patch existing nodes without measuring or animating their positions.
 FLIP is reserved for a structural change. The board coalesces snapshots, ignores clock-only
@@ -225,9 +352,21 @@ app gives the window it was carried out into.
 ## Agents
 
 The `window` tool keeps its calls. A pane's key names it in every window; `list` prints one line
-for each pane the agent owns: its key, its kind in parentheses, `[shown]` when it is shown, then its
-title and detail (`w1 (browser) [shown]: Title detail`); it says nothing of windows or tabs. `show`
-of a pane shows its tab in its window and focuses it.
+for each pane the agent owns: its key, its kind in parentheses, `[shown]` when it is shown, where
+it is (its tab's place among its window's tabs of the project, as ⌘1…9 count them; the pane a
+zoomed tab shows; the panes on each side of it, by the layout's geometry, or the document a stack
+shows over it), then its title and detail (`t2 (terminal) [shown] in tab 1, t1 above it: Title
+detail`); it says nothing of windows. `show` of a pane shows its tab in its window and focuses it;
+with `zoom`, it zooms the tab on it (`true`) or draws it whole again.
+
+`open` with `beside` (a pane of the caller's project) and `side` (`right`, else `down`) puts what
+it opens in that pane's tab (`desk/layout_agent.rs`): a terminal on that side of it, opened out of
+sight and split in as its ledger row is written (`split_in`); a page or a file asked from that
+pane, so it joins the tab's documents. The person's focus and the tab the workspace shows stay as
+they were. Refused, with nothing opened: a pane of another project or in no tab, a document under
+a pane or beside a tab that holds no document, the board (a tab of its own), and a terminal that
+would leave a child of a branch under a tenth of it. An agent gets no resize, no equalize and no
+way between panes: those are the person's.
 
 ### A session and its documents
 
@@ -238,7 +377,9 @@ carries nothing new; a call from another terminal app has no terminal here.
 
 A file or a page is a **document**. It joins the session it was asked from, in the same change
 as the pane's ledger row (`desk/beside.rs`): the terminal's tab holds its documents as a stack
-(`layout/stack.rs`) on the terminal's right, one of them in sight, the terminal on the left.
+(`layout/stack.rs`) on the terminal's right, one of them in sight, the terminal on the left. A
+tab of several terminals has one stack for all of them, on the right of them all: a document
+opened from any of its terminals joins it.
 
 | who asks                                    | the session the document joins                   |
 | ------------------------------------------- | ------------------------------------------------ |
@@ -246,7 +387,8 @@ as the pane's ledger row (`desk/beside.rs`): the terminal's tab holds its docume
 | the person (the tree, ⌘T, a link's new tab) | the one they look at                             |
 | anyone, from no session                     | the one the project shows, else its last         |
 
-- The side lists **sessions**, not their documents: a session is one row, by its terminal. Its
+- The side lists **sessions**, not their documents: a session is one row, by its terminal (of
+  several, the one in focus, else its first). Its
   documents are a row of tabs over their pane (`browser/deck_docs.rs`): a press shows one, its
   close button closes it, and the row is there only while the session shown has documents.
   A tab of the row is as wide as its name, up to a tab of the side's, and never narrows: more
@@ -278,8 +420,10 @@ as the pane's ledger row (`desk/beside.rs`): the terminal's tab holds its docume
 - **A session closing closes its documents** (`desk/sessions.rs`): each as its own close would,
   so a file's unsaved text stays its draft. A document closing shows the next of its session,
   and the last one leaves the terminal whole.
-- A session made whole (⇧⌘\) keeps its documents out of sight, and the next split brings them
-  back. A session takes no other pane: a tab dragged onto it stays a tab.
+- A session made whole (⇧⌘\) is zoomed on its terminal: it keeps its documents out of sight,
+  and ⇧⌘↩, ⇧⌘\ again or the next split brings them back. A session takes more terminals (a new one split beside one of its, or a terminal alone
+  in its tab dragged onto it), and its documents stay the tab's one stack; it takes no other
+  pane: a board, or a terminal with documents of its own, dragged onto it stays a tab.
 - A document asked from no session (another terminal app's agent, the person with the board
   or nothing in sight, a call whose terminal has closed) joins a session all the same: the one
   its project shows, else its last (`desk/sessions.rs`). Only **a project with no terminal**

@@ -26,6 +26,16 @@ fn a_script_is_known_by_the_script_not_its_runtime() {
 }
 
 #[test]
+fn a_scripts_command_line_starts_at_the_script() {
+    let line = args("node --no-warnings /opt/homebrew/bin/claude --model opus");
+    assert_eq!(
+        from_script(line),
+        args("/opt/homebrew/bin/claude --model opus")
+    );
+    assert_eq!(from_script(args("codex resume x")), args("codex resume x"));
+}
+
+#[test]
 fn this_process_has_arguments() {
     let pid = libc::pid_t::try_from(std::process::id()).unwrap();
     let read = arguments(pid).expect("this process's arguments");

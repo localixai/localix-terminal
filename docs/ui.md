@@ -276,15 +276,44 @@ define colours of its own beyond its `--ground`.
 - **Unavailable items** are dimmed in menu bar menus and hidden in context menus.
 - **Every action has a home in the menu bar.** A context menu or a toolbar button is a shortcut
   to it, never its only place.
+- **The Pane menu** is the menu bar's home of what the keyboard does to the panes of the tab
+  shown: Split Right and Split Down, the keys to the pane left, right, above or below, the next
+  and the one before, Zoom Pane (⇧⌘↩; greyed over a pane alone in its tab), a divider moved a
+  step or a longer one, Equalize Panes, and Move Pane to New Tab (no key until the person gives
+  it one). Split Right and Split Down are greyed while the
+  pane in use would split under its least, and so are "+"'s Split Right with… and Split Down
+  with… items: a split that cannot be made is a greyed item, never an error. Its keys are the
+  same over every pane: over a file, ⌘D and ⌥⌘ with an arrow are the menu's, not the editor's.
+- **A tab zoomed** on one pane is one row of the side, by the pane drawn, and that row and the
+  bar's tab crumb carry a quiet mark after the name: the fill glyph (the four corners the page
+  size menu uses), 12 pt, and how many panes are put by, in Subhead and `--ink-2`, fading as the
+  other glyphs do in an inactive window. It is no button: ⇧⌘↩ and the menu undo it. Its words
+  ("Zoomed, 2 panes hidden") are its name for VoiceOver and its tooltip, and the row's and the
+  crumb's tooltips add them. The shut side's rail shows the tile alone.
 - **An event's row leads to what it is about.** Its click, and its system notice's, bring that
   in front: a tab that is open is shown; what has no tab is opened as one (an agent's session
   that runs in another app is continued in a terminal here, **Continue Here**), and its line
   is then done with. A row that leads nowhere has no click.
+- **An agent resumed** in a terminal opened again says so in one line under its last screen,
+  dimmed as that screen is: "── Resumed Claude Code session", with "· permissions skipped"
+  when the person had skipped them. It is the terminal's text, drawn by no control. One that
+  did not go on is a quiet line of the Event Center ("Agents Not Resumed", not urgent) with
+  Retry or Continue, Show, and Dismiss.
 - **What waits for the person** has one list, the Event Center, and three quiet signs read from
   it, never a source of their own: the 6 pt accent dot (on the center's button, and on a tab's
   icon while the tab is out of sight), the Dock's count of what is new, and, only while the
   person is in another app, a notice of the system's with no sound. A sign goes when the thing
   no longer waits; none of them animates or takes the focus.
+- **A program at work**, by its own report (OSC 7501), is a still ring of 8 pt on its tab's
+  icon, in the dot's corner: the share it says it has done in `--ink-2`, the rest in `--ink-3`,
+  as two arcs that meet and never overlap; with no share told, the whole ring in `--ink-2`. It
+  never turns, it says nothing wants the person, and the dot takes its place while something
+  waits there. The tab's tooltip adds "— working" or "— working, 40%". What a program waits for
+  or failed at is the Event Center's, with its dot; what it finished is a quiet line there.
+  Such a line is titled by its terminal (its command, or "shell"), never by the program's
+  words, with the name the program gives itself beside its words in the detail; it stays in
+  place while the program flips between work and waiting, and goes once the person typed in
+  the terminal and the program went on, so a program cannot flood the list or the notices.
 - **A question is a dialog**, the window's own (`dialog.rs`), one look for everything the app
   asks or announces: a mark that draws itself, a title, a sentence, and two buttons. With the
   window away (put away, in the Dock) a question is the system's alert in front instead.
@@ -403,11 +432,21 @@ The tokens (`frame.css`) set the timings; a component never picks its own durati
   here, as the editor's), the count in Callout and `--ink-2` with a width that does not change
   as it counts, and quiet icon buttons (`.btn.plain.ico`, 24 pt): the previous match, the next,
   and Close at the end. The screen ends over the row, so it covers no line.
+- **A web page's find is the same row under the browser's toolbar**, as a browser's find bar
+  sits under its toolbar: the page is someone else's, so nothing of the window's is drawn in it.
+  The toolbar grows by the row's 40 pt with its hairline under it, and the page starts below.
+  The row is one markup (`page/find.html`), one look (`.finds` in `frame.css`) and one script of
+  words and keys (`page/find.js`) for both, so they never differ. Each tab keeps its row and
+  query; a new document of the tab is searched again as it finishes loading, nothing scrolled.
 - **Every match is lit** in the accent over the terminal's ground at 25% (as `--acc-2`), the one
   shown at 60% (as `--acc-4`) with the accent as its edge; in an inactive window the accent's
-  grey. The count says "3 of 12", "No results", or "1,000+" past the most it lights.
+  grey. A page's matches are the same two steps of the accent over its own colours, drawn as
+  highlights (the CSS Custom Highlight API): the page's DOM is never changed, and the one shown
+  is brought into view only when it is out of it. The count says "3 of 12", "No results", or
+  "1,000+" past the most it lights.
 - **The keys stay in the row** while it is open: Return and ⇧Return walk the matches, Esc closes
-  it and gives the keys back to the terminal, and nothing typed there reaches the program.
+  it and gives the keys back to the terminal or the page, and nothing typed there reaches the
+  program or the page.
 
 ## A file drawn to read
 
@@ -452,8 +491,13 @@ when its gap is closed.
   its text) are keys of its page alone: none has a home in the menu bar yet, and none is in
   the shortcut table, so Settings cannot change them.
 - A document drawn from a Markdown file has no Find: ⌘F answers only over the text.
-- A web page has no Find yet: the Edit menu's Find is greyed over one. It goes in as a branch of
-  `Deck::find_text`, the menu and the keys staying as they are.
+- A web page's find reads the top document's text only: what is in a frame or a shadow root is
+  not searched, and a match that runs across two elements ("need<b>le</b>") is not found.
+- Over a file, the editor's own ⌘D (the next match added to the selection) and ⌥⌘↑ ⌥⌘↓ (a
+  cursor added above or below) are given up to the Pane menu, and have no key of their own yet.
+- No pane of a split says it is the one in use but by its caret (a terminal's is hollow out of
+  focus) and the browser's toolbar over a page in use; with three panes or more this is to be
+  looked at again on screen.
 - The editor's Find is CodeMirror's own row and keys, not the Edit menu's: over an editor the
   menu's Find is greyed, while ⌘F in its text still opens its row.
 - Elsewhere than macOS no shortcut has a key, Find among them: only macOS's menu bar sends

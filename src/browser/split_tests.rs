@@ -1,287 +1,309 @@
-//! Tests of `split`.
+//! Tests of a tab's tree in the window: what is drawn of the tab shown, and what the person did
+//! to it that waits for the layout (a split made or undone, a divider held, the focus).
 
 use super::*;
+use crate::browser::{Arranged, Arranging};
+use crate::layout::{Share, Tree};
 
-fn w(id: u32) -> Key {
-    Key::Web(id)
+fn branch(across: bool, children: Vec<(f64, Drawn)>) -> Drawn {
+    let children = (children.into_iter())
+        .map(|(share, tree)| Share { share, tree })
+        .collect();
+    Tree::Branch { across, children }
 }
-fn t(id: u32) -> Key {
-    Key::Term(id)
+
+fn leaf(key: &str) -> Drawn {
+    Tree::leaf(key.to_string())
 }
 
-const A: Key = Key::Web(1);
-const B: Key = Key::Term(2);
-const C: Key = Key::Web(3);
+fn keys(names: &[&str]) -> Vec<String> {
+    names.iter().map(ToString::to_string).collect()
+}
 
-const fn beside(key: Key, right: bool) -> Beside {
-    Beside { key, right }
+/// A tab of `tree`, `focused` in focus, with no documents.
+fn tab(tree: Drawn, focused: &str) -> Arranging {
+    Arranging {
+        all: tree.panes(),
+        tree,
+        focused: Some(focused.to_string()),
+        docs: vec![],
+        whole: false,
+    }
+}
+
+/// `t1` beside `t2`, shares `first` and the rest.
+fn pair(first: f64) -> Arranging {
+    tab(
+        branch(true, vec![(first, leaf("t1")), (1.0 - first, leaf("t2"))]),
+        "t1",
+    )
+}
+
+/// `t1` on the left; `t2` over `t3` on the right.
+fn tee() -> Arranging {
+    let right = branch(false, vec![(0.5, leaf("t2")), (0.5, leaf("t3"))]);
+    tab(branch(true, vec![(0.5, leaf("t1")), (0.5, right)]), "t1")
+}
+
+fn first_share(tree: Option<Drawn>) -> Option<f64> {
+    share_at(&tree?, &[], 1)
 }
 
 #[test]
-fn the_shown_tab_is_one_half_and_the_one_beside_the_other() {
-    assert_eq!(pair(Some(A), Some(beside(B, true)), |_| true), Some((A, B)));
+fn the_tab_of_the_pane_shown_is_drawn_whole_tree_and_one_pane_alone_is_not_split() {
+    let split = Split::default();
+    let tee = tee();
+    for shown in ["t1", "t2", "t3"] {
+        assert_eq!(
+            split.tree(Some(&tee), shown),
+            Some(tee.tree.clone()),
+            "{shown}"
+        );
+    }
+    assert_eq!(split.tree(Some(&tab(leaf("t4"), "t4")), "t4"), None);
     assert_eq!(
-        pair(Some(A), Some(beside(B, false)), |_| true),
-        Some((B, A))
+        split.tree(None, "t4"),
+        None,
+        "a pane the layout holds in no tab yet"
     );
+    // Kept whole, the tab draws its pane in focus alone.
+    let mut whole = tee;
+    whole.whole = true;
+    assert_eq!(split.tree(Some(&whole), "t1"), None);
+    assert_eq!(drawn(&whole), keys(&["t1"]));
 }
 
 #[test]
-fn no_split_without_a_tab_beside_still_there_and_other_than_the_shown() {
-    assert_eq!(pair(Some(A), None, |_| true), None);
-    assert_eq!(pair(None, Some(beside(B, true)), |_| true), None);
-    assert_eq!(pair(Some(A), Some(beside(A, true)), |_| true), None);
-    assert_eq!(pair(Some(A), Some(beside(B, true)), |key| key != B), None);
+fn a_document_shown_takes_the_place_of_the_one_its_stack_has_in_sight() {
+    let mut tree = leaf("t1");
+    tree.stack("f1".to_string());
+    tree.stack("f2".to_string());
+    let session = Arranging {
+        docs: keys(&["f1", "f2"]),
+        ..tab(tree, "t1")
+    };
+    let sight = |shown| {
+        Split::default()
+            .tree(Some(&session), shown)
+            .map(|tree| tree.visible())
+    };
+    assert_eq!(sight("t1"), Some(keys(&["t1", "f2"])));
+    assert_eq!(sight("f1"), Some(keys(&["t1", "f1"])));
 }
 
 #[test]
-fn picking_the_tab_beside_swaps_their_roles_in_place() {
-    // B on the right, A shown on the left: B picked, A is beside, on the left.
+fn a_split_the_person_made_is_drawn_until_the_layout_draws_it_or_moves_on() {
+    // Split from t1 with no layout of it yet: drawn at once.
+    let made = branch(true, vec![(0.5, leaf("t1")), (0.5, leaf("t2"))]);
+    let mut split = Split {
+        own: Some(Own {
+            tree: made.clone(),
+            base: keys(&["t1"]),
+        }),
+        ..Split::default()
+    };
+    let alone = tab(leaf("t1"), "t1");
+    assert_eq!(split.tree(Some(&alone), "t1"), Some(made.clone()));
+    assert_eq!(split.tree(None, "t1"), Some(made.clone()));
+    // A tell as old as when they made it keeps it.
+    split.follow(Some(&alone), "t1");
+    assert!(split.own.is_some());
+    // The layout draws it so: it is the layout's again, its own shares.
+    split.follow(Some(&pair(0.35)), "t1");
+    assert_eq!(split.own, None);
+    assert_eq!(first_share(split.tree(Some(&pair(0.35)), "t1")), Some(0.35));
+    // The layout drew another change of the tab first: the person's goes, the layout's shows.
+    let mut split = Split {
+        own: Some(Own {
+            tree: made,
+            base: keys(&["t1"]),
+        }),
+        ..Split::default()
+    };
+    split.follow(Some(&tee()), "t1");
+    assert_eq!(split.own, None);
+}
+
+#[test]
+fn a_tab_made_whole_draws_the_pane_in_use_alone_and_puts_the_others_out_of_it() {
+    let tee = tee();
+    let mut split = Split {
+        own: Some(Own {
+            tree: leaf("t2"),
+            base: keys(&["t1", "t2", "t3"]),
+        }),
+        ..Split::default()
+    };
+    assert_eq!(split.tree(Some(&tee), "t2"), None);
     assert_eq!(
-        after_show(Some(beside(B, true)), Some(A), B),
-        Some(beside(A, false))
+        split.tree(Some(&tee), "t3"),
+        None,
+        "an older tab drawn alone, as it will be"
     );
-    // The layout stays: A left, B right.
-    assert_eq!(
-        pair(Some(B), Some(beside(A, false)), |_| true),
-        Some((A, B))
-    );
+    // The side lists no split for it meanwhile.
+    let arranged = Arranged {
+        window: 0,
+        group: "a".into(),
+        tabs: vec![tee],
+        shown: Some("t2".into()),
+    };
+    assert_eq!(listed(&arranged, split.own.as_ref()), None);
+    assert_eq!(listed(&arranged, None), Some(keys(&["t1", "t2", "t3"])));
+    split.follow(Some(&tab(leaf("t2"), "t2")), "t2");
+    assert_eq!(split.own, None);
 }
 
 #[test]
-fn another_tab_picked_shows_whole() {
-    // The project keeps the split (host_split.rs): the window shows the tab picked alone.
-    assert_eq!(after_show(Some(beside(B, true)), Some(A), C), None);
-    assert_eq!(after_show(None, Some(A), C), None);
+fn a_divider_held_keeps_its_share_over_an_older_tell_until_the_layout_keeps_it() {
+    let held = |share, grabbed| Held {
+        panes: keys(&["t1", "t2"]),
+        path: vec![],
+        at: 1,
+        share,
+        grabbed,
+    };
+    let mut split = Split {
+        held: vec![held(0.6, Some(0.5))],
+        ..Split::default()
+    };
+    assert_eq!(first_share(split.tree(Some(&pair(0.5)), "t1")), Some(0.6));
+    // Still held: no tell moves it.
+    split.follow(Some(&pair(0.6)), "t1");
+    assert!(!split.held.is_empty());
+    // Let go: an older share is not drawn; the share the layout kept ends the hold.
+    split.held = vec![held(0.6, None)];
+    split.follow(Some(&pair(0.35)), "t1");
+    assert_eq!(first_share(split.tree(Some(&pair(0.35)), "t1")), Some(0.6));
+    split.follow(Some(&pair(0.6)), "t1");
+    assert!(split.held.is_empty());
+    // Another tab is not held to it.
+    split.held = vec![held(0.6, None)];
+    assert_eq!(first_share(split.tree(Some(&tee()), "t1")), Some(0.5));
+    split.follow(Some(&tee()), "t1");
+    assert!(split.held.is_empty());
+}
+
+#[test]
+fn two_dividers_let_go_of_are_each_held_until_the_layout_keeps_each() {
+    let tee = tee();
+    let column = Held {
+        panes: keys(&["t1", "t2", "t3"]),
+        path: vec![1],
+        at: 1,
+        share: 0.7,
+        grabbed: None,
+    };
+    let root = Held {
+        path: vec![],
+        share: 0.4,
+        ..column.clone()
+    };
+    let mut split = Split {
+        held: vec![column, root],
+        ..Split::default()
+    };
+    let drawn = split.tree(Some(&tee), "t1").unwrap();
+    assert_eq!(share_at(&drawn, &[], 1), Some(0.4));
+    assert_eq!(share_at(&drawn, &[1], 1), Some(0.7));
+    // The layout keeps the root's: the column's is still held.
+    let mut kept = tee;
+    kept.tree.resize(&[], 1, 0.4);
+    split.follow(Some(&kept), "t1");
+    assert_eq!(split.held.len(), 1);
+    assert_eq!(split.held[0].path, [1]);
+}
+
+#[test]
+fn the_focus_told_waits_until_the_layout_keeps_it() {
+    let mut split = Split {
+        focus: Some("t2".into()),
+        ..Split::default()
+    };
+    split.follow(Some(&pair(0.5)), "t2");
+    assert!(split.focus.is_some());
+    split.follow(Some(&tab(pair(0.5).tree, "t2")), "t2");
+    assert_eq!(split.focus, None);
+}
+
+#[test]
+fn the_side_lists_the_shown_split_else_the_first_and_never_a_session() {
+    let mut session_tree = leaf("t9");
+    session_tree.stack("f9".to_string());
+    let session = Arranging {
+        docs: keys(&["f9"]),
+        ..tab(session_tree, "t9")
+    };
+    let arranged = Arranged {
+        window: 0,
+        group: "a".into(),
+        tabs: vec![session, pair(0.5), tee()],
+        shown: Some("t3".into()),
+    };
+    assert_eq!(listed(&arranged, None), Some(keys(&["t1", "t2", "t3"])));
+    let elsewhere = Arranged {
+        shown: Some("t9".into()),
+        ..arranged
+    };
+    assert_eq!(listed(&elsewhere, None), Some(keys(&["t1", "t2"])));
 }
 
 #[test]
 fn the_partner_is_the_next_tab_else_the_one_before() {
-    assert_eq!(partner(&[A, B, C], A), Some(B));
-    assert_eq!(partner(&[A, B, C], C), Some(B));
-    assert_eq!(partner(&[A], A), None);
-    assert_eq!(partner(&[B, C], A), None);
+    assert_eq!(partner(&[1, 2, 3], 2), Some(3));
+    assert_eq!(partner(&[1, 2, 3], 3), Some(2));
+    assert_eq!(partner(&[1], 1), None);
+    assert_eq!(partner(&[1, 2], 9), None);
 }
 
 #[test]
-fn the_halves_share_the_width_with_a_line_between() {
-    let ((left, first), (right, second)) = halves(801.0, 52.0, 0.5);
-    assert!((left - 52.0).abs() < f64::EPSILON);
-    assert!((first - 400.0).abs() < f64::EPSILON);
-    assert!((right - 453.0).abs() < f64::EPSILON);
-    assert!((first + GAP + second - 801.0).abs() < f64::EPSILON);
-    // Dragged: a quarter, and at the ends one half has it all.
-    assert!((halves(801.0, 0.0, 0.25).0.1 - 200.0).abs() < f64::EPSILON);
-    assert!((halves(801.0, 0.0, 1.0).1.1).abs() < f64::EPSILON);
-}
-
-#[test]
-fn a_dragged_line_leaves_each_half_some_of_the_width() {
-    // Each half keeps its least, in points, on any room.
-    assert!((held(0.05, 1000.0) - 0.19).abs() < 1e-9);
-    assert!((held(0.97, 1000.0) - 0.81).abs() < 1e-9);
-    assert!((held(0.4, 1000.0) - 0.4).abs() < f64::EPSILON);
-    assert!((held(0.05, 2000.0) - crate::layout::LEAST).abs() < 1e-9);
-    // Too narrow for both: half each.
-    assert!((held(0.1, 300.0) - 0.5).abs() < f64::EPSILON);
-}
-
-#[test]
-fn a_saved_ratio_is_restored_without_an_old_projection_undoing_a_drag() {
-    let mut split = Split::default();
-    split.follow_share(Some((w(1), t(2))), Some(0.65));
-    assert_eq!(split.share, 0.65);
-    split.share = 0.7;
-    split.sizing = Some(([w(1), t(2)], 0.7));
-    split.follow_share(Some((w(1), t(2))), Some(0.65));
-    assert_eq!(split.share, 0.7);
-    assert!(split.sizing.is_some());
-    split.follow_share(Some((w(1), t(2))), Some(0.7));
-    assert!(split.sizing.is_none());
-    split.follow_share(Some((w(1), t(2))), Some(0.6));
-    assert_eq!(split.share, 0.6);
-}
-
-#[test]
-fn changing_the_pair_forgets_a_pending_size_and_bad_saved_shares_are_ignored() {
-    let mut split = Split {
-        sizing: Some(([w(1), t(2)], 0.7)),
-        ..Split::default()
+fn a_divider_keeps_each_side_its_least_points() {
+    let Tree::Branch { children, .. } = pair(0.5).tree else {
+        panic!("not a branch")
     };
-    split.follow_share(Some((w(3), t(4))), Some(0.4));
-    assert_eq!(split.share, 0.4);
-    assert!(split.sizing.is_none());
-    for shares in [
-        vec![f64::NAN, 0.5],
-        vec![f64::INFINITY, 0.5],
-        vec![f64::MAX, f64::MAX],
-        vec![0.0, 1.0],
-    ] {
-        let arranged = crate::browser::Arranged {
-            window: 1,
-            group: "a".into(),
-            shown: Some("w1".into()),
-            tabs: vec![crate::browser::Arranging {
-                panes: vec!["w1".into(), "t2".into()],
-                across: true,
-                shares,
-                focused: Some("w1".into()),
-                ..Default::default()
-            }],
-        };
-        assert_eq!(share_of(&arranged, (w(1), t(2))), None);
-    }
-}
-
-#[test]
-fn a_kept_split_comes_back_around_either_of_its_tabs() {
-    let kept = Kept {
-        shown: "w1".to_string(),
-        beside: "t2".to_string(),
-        right: true,
+    let (low, high) = bounds(&children, true, 1, 1000.0);
+    assert!((low - 0.19).abs() < 1e-9 && (high - 0.81).abs() < 1e-9);
+    // A tenth at the least however wide; too narrow for both, half each.
+    assert_eq!(bounds(&children, true, 1, 10_000.0), (0.1, 0.9));
+    assert_eq!(bounds(&children, true, 1, 300.0), (0.5, 0.5));
+    // Beside a column of two one above the other, the column keeps one pane's least across.
+    let Tree::Branch { children, .. } = tee().tree else {
+        panic!("not a branch")
     };
-    // Back on the tab that was in use, the other is beside it as it was.
-    assert_eq!(
-        again(&kept, "w1"),
-        Some(Beside {
-            key: Key::Term(2),
-            right: true
-        })
-    );
-    // Back on the one that was beside, the one in use is on the other side of it.
-    assert_eq!(
-        again(&kept, "t2"),
-        Some(Beside {
-            key: Key::Web(1),
-            right: false
-        })
-    );
-    assert_eq!(again(&kept, "w3"), None);
-}
-
-#[test]
-fn a_carried_tab_lands_beside_a_whole_window_or_in_the_half_not_in_use() {
-    use super::{Beside, landed};
-    let (shown, other, third) = (Key::Term(1), Key::Web(2), Key::Term(3));
-    // Whole: beside the shown tab, on the side it is carried to; the shown tab itself lands nowhere.
-    assert_eq!(
-        landed(None, Some(shown), None, other, true),
-        Some(Beside {
-            key: other,
-            right: true
-        })
-    );
-    assert_eq!(landed(None, Some(shown), None, shown, false), None);
-    // Split, the shown tab on the left: another tab takes the right half, the one not in use.
-    let beside = Some(Beside {
-        key: other,
-        right: true,
-    });
-    let pair = Some((shown, other));
-    assert_eq!(
-        landed(beside, Some(shown), pair, third, true),
-        Some(Beside {
-            key: third,
-            right: true
-        })
-    );
-    // Over the half in use: nothing laid out before it is let go of.
-    assert_eq!(landed(beside, Some(shown), pair, third, false), None);
-    // The shown tab carried over the other half: the two change sides.
-    assert_eq!(
-        landed(beside, Some(shown), pair, shown, true),
-        Some(Beside {
-            key: other,
-            right: false
-        })
-    );
-}
-
-fn kept(shown: &str, beside: &str, right: bool) -> Kept {
-    Kept {
-        shown: shown.into(),
-        beside: beside.into(),
-        right,
-    }
-}
-
-#[test]
-fn a_window_drawn_as_the_layout_kept_it_follows_what_the_layout_keeps_now() {
-    let drawn = kept("t1", "w1", true);
-    // The app put another pane beside the terminal: the window shows that one there.
-    let now = kept("t1", "w2", true);
-    assert_eq!(
-        followed(Some(&drawn), Some(&drawn), Some(&now), "t1"),
-        Follow::Beside(beside(w(2), true))
-    );
-    // Seen from the other half it is the same window: the pane in use stays in use.
-    let other = kept("w1", "t1", false);
-    assert_eq!(
-        followed(Some(&other), Some(&drawn), Some(&now), "w1"),
-        Follow::Whole
-    );
-    // The layout keeps the tab whole now, or split elsewhere: the window is whole.
-    assert_eq!(
-        followed(Some(&drawn), Some(&drawn), None, "t1"),
-        Follow::Whole
-    );
-    let elsewhere = kept("t5", "w1", true);
-    assert_eq!(
-        followed(Some(&drawn), Some(&drawn), Some(&elsewhere), "t1"),
-        Follow::Whole
-    );
-}
-
-#[test]
-fn a_split_the_person_just_made_is_not_undone_by_what_the_layout_kept_before() {
-    let drawn = kept("t1", "w1", true);
-    let theirs = kept("t1", "t3", true);
-    // The layout has not heard of it yet: it still keeps the one before.
-    assert_eq!(
-        followed(Some(&theirs), Some(&drawn), Some(&drawn), "t1"),
-        Follow::Stay
-    );
-    // And one that says something else again is no reason to drop the person's.
-    let late = kept("t1", "w2", true);
-    assert_eq!(
-        followed(Some(&theirs), Some(&drawn), Some(&late), "t1"),
-        Follow::Stay
-    );
-    assert_eq!(
-        followed(Some(&theirs), None, Some(&late), "t1"),
-        Follow::Stay
-    );
-    // Nothing changed in the layout: nothing to follow. A whole window is the layout's to
-    // split as it keeps (`again`), not this.
-    assert_eq!(
-        followed(Some(&drawn), Some(&drawn), Some(&drawn), "t1"),
-        Follow::Stay
-    );
-    assert_eq!(followed(None, None, Some(&late), "t1"), Follow::Stay);
+    let (low, high) = bounds(&children, true, 1, 1000.0);
+    assert!((low - 0.19).abs() < 1e-9 && (high - 0.81).abs() < 1e-9);
 }
 
 #[test]
 fn a_split_stays_under_a_list_open_over_it_and_stands_aside_where_nothing_lies_over_pages() {
-    let halves = Some(["t1", "f2"]);
-    // Nothing is open: the window is as it is.
-    assert_eq!(under(halves, false, true), halves);
-    assert_eq!(under(halves, false, false), halves);
-    // A menu, a dialog or an address's suggestions over the pages: both halves stay under it.
-    assert_eq!(under(halves, true, true), halves);
-    // Where the strip cannot lie over the pages, they stand aside for the list.
-    assert_eq!(under(halves, true, false), None);
-    // A whole window has no halves either way.
-    assert_eq!(under(None::<[&str; 2]>, true, true), None);
+    assert_eq!(under(Some(1), true, true), Some(1));
+    assert_eq!(under(Some(1), true, false), None);
+    assert_eq!(under(Some(1), false, false), Some(1));
 }
 
 #[test]
-fn the_toolbar_spans_the_half_in_use_and_the_whole_part_of_a_window_not_split() {
-    let halves = Some([("t1", 280.0, 509.0), ("w1", 790.0, 510.0)]);
-    // Over the page in the right half: its left and width, where its menus and lists open.
-    assert_eq!(span(halves, Some("w1"), (280.0, 1020.0)), (790.0, 510.0));
-    assert_eq!(span(halves, Some("t1"), (280.0, 1020.0)), (280.0, 509.0));
-    // Whole, or showing a tab in neither half: the pages' whole part.
-    assert_eq!(span(None, Some("w1"), (280.0, 1020.0)), (280.0, 1020.0));
-    assert_eq!(span(halves, Some("w9"), (280.0, 1020.0)), (280.0, 1020.0));
-    assert_eq!(span(halves, None, (280.0, 1020.0)), (280.0, 1020.0));
+fn the_next_pane_goes_round_and_a_pane_alone_has_none() {
+    let sight = keys(&["t1", "t2", "t3"]);
+    let at = |shown: &str, forward| round(&sight, &shown.to_string(), forward);
+    assert_eq!(at("t1", true).as_deref(), Some("t2"));
+    assert_eq!(at("t3", true).as_deref(), Some("t1"));
+    assert_eq!(at("t1", false).as_deref(), Some("t3"));
+    assert_eq!(round(&keys(&["t1"]), &"t1".to_string(), true), None);
+    assert_eq!(round(&sight, &"t9".to_string(), true), None);
+}
+
+#[test]
+fn a_pane_closed_leaves_the_keys_to_the_one_used_last_else_its_neighbour() {
+    let tree = tee().tree;
+    let sight = keys(&["t1", "t2", "t3"]);
+    // The one used last of the rest, whatever lies nearer.
+    let taken = taker(&tree, &keys(&["t3", "t1", "t2"]), "t3", &sight);
+    assert_eq!(taken.as_deref(), Some("t1"));
+    // None used: the neighbour in its branch that takes its share, after it else before.
+    assert_eq!(taker(&tree, &[], "t2", &sight).as_deref(), Some("t3"));
+    assert_eq!(taker(&tree, &[], "t3", &sight).as_deref(), Some("t2"));
+    // The left pane's neighbour is the column: its first pane.
+    assert_eq!(taker(&tree, &[], "t1", &sight).as_deref(), Some("t2"));
+    // One used that is no longer in sight is passed over.
+    let gone = taker(&tree, &keys(&["t9"]), "t1", &sight);
+    assert_eq!(gone.as_deref(), Some("t2"));
 }

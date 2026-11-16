@@ -13,7 +13,7 @@ fn plugin(path: &str) -> String {
 
 #[test]
 fn status_and_a_list_read_as_the_plugin_parses_them() {
-    let hooks = plugin("hooks/register.tsx");
+    let hooks = plugin("hooks/register.tsx") + &plugin("hooks/watch.ts");
     // The plugin reads the watcher's lines: the app and the tabs, the board, a comment.
     for read in ["'--watch'", "'app' in line", "'board' in line", "line.said"] {
         assert!(hooks.contains(read), "the plugin no longer reads {read}");

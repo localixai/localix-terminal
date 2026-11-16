@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::mpsc::sync_channel;
 
 use super::super::super::presence::Event;
-use super::super::super::strip::{Click, Key};
+use super::super::super::strip::{Click, Found, Key, Seek};
 use super::super::super::windows::Route;
 use super::super::{Confirm, Noted, Window};
 use super::{Cmd, Drawn};
@@ -79,6 +79,7 @@ fn unnamed() -> Vec<(Cmd, Route, Drawn)> {
 /// The rest of them.
 fn unnamed_too() -> Vec<(Cmd, Route, Drawn)> {
     let (dressed, _) = sync_channel(1);
+    let (held, _) = sync_channel(1);
     let (listed, _) = sync_channel(1);
     let (acted, _) = sync_channel(1);
     let (presented, _) = sync_channel(1);
@@ -113,6 +114,9 @@ fn unnamed_too() -> Vec<(Cmd, Route, Drawn)> {
         (Cmd::NewWindow(2), Route::Current, Drawn::Itself),
         (Cmd::Adopt, Route::Current, Drawn::Settles),
         (Cmd::Dressed(dressed), Route::Current, Drawn::Itself),
+        (Cmd::Keys(held), Route::Current, Drawn::Itself),
+        // A step of find over a page draws itself: it changes no tab.
+        (Cmd::Seek(Seek::Close), Route::Current, Drawn::Itself),
         (Cmd::Listing(listed), Route::Current, Drawn::Itself),
         (Cmd::Act(Click::Back, acted), Route::Current, Drawn::Settles),
         (Cmd::Presence(Event::Acting), Route::Current, Drawn::Itself),
@@ -162,6 +166,17 @@ fn named() -> Vec<(Cmd, Route, Drawn)> {
             Drawn::Itself,
         ),
         (Cmd::Reveal(1), pane("w1"), Drawn::Itself),
+        // What a page found goes to the window that tab is in.
+        (
+            Cmd::Found(Found {
+                tab: 4,
+                query: "needle".into(),
+                at: 0,
+                of: 1,
+            }),
+            pane("w4"),
+            Drawn::Itself,
+        ),
         (
             Cmd::SwitchTab {
                 id: 5,

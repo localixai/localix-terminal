@@ -5,14 +5,18 @@
 
 use std::collections::HashMap;
 
-use super::split::Kept;
 use super::strip::Key;
 use super::{Arranged, Arranging};
 
+/// The tab of `tabs` that holds pane `key`, in sight or put by.
+pub(super) fn holding<'a>(tabs: &'a [Arranging], key: &str) -> Option<&'a Arranging> {
+    let holds = |tab: &&Arranging| tab.all.iter().any(|pane| pane == key);
+    tabs.iter().find(holds)
+}
+
 /// The tab of `arranged` that holds pane `key`, in sight or put by.
 pub(super) fn tab_of<'a>(arranged: &'a Arranged, key: &str) -> Option<&'a Arranging> {
-    let holds = |tab: &&Arranging| tab.all.iter().chain(&tab.panes).any(|pane| pane == key);
-    arranged.tabs.iter().find(holds)
+    holding(&arranged.tabs, key)
 }
 
 /// Whether `key` is a document of `tab`.
@@ -20,27 +24,59 @@ fn doc(tab: &Arranging, key: &str) -> bool {
     tab.docs.iter().any(|doc| doc == key)
 }
 
-/// The documents of `arranged` that are not listed themselves, each with the pane that stands
-/// for its tab in the side: a session's terminal; of documents with no session, the one in
-/// sight (`shown`, the tab the window shows, when it is one of them: the layout hears of it
-/// after).
+/// The panes of `arranged` that are not listed themselves, each with the pane that stands for
+/// its tab in the side: a session's terminal in focus, else its first (the other terminals and
+/// the documents are its); of documents with no session, the one in sight (`shown`, the tab
+/// the window shows, when it is one of them: the layout hears of it after); of a tab zoomed,
+/// the pane drawn.
 pub(super) fn led(arranged: &Arranged, shown: Option<&str>) -> HashMap<String, String> {
     let mut led = HashMap::new();
     for tab in arranged.tabs.iter().filter(|tab| !tab.docs.is_empty()) {
-        let session = tab.all.iter().find(|pane| !doc(tab, pane));
+        let focused =
+            (tab.focused.as_ref()).filter(|pane| tab.all.contains(pane) && !doc(tab, pane));
+        let session = focused.or_else(|| tab.all.iter().find(|pane| !doc(tab, pane)));
         let seen = shown.filter(|shown| doc(tab, shown));
-        let sight = tab.panes.iter().find(|pane| doc(tab, pane));
-        let Some(lead) = (session.map(String::as_str))
-            .or(seen)
-            .or_else(|| sight.map(String::as_str))
-        else {
+        let sight = tab.tree.visible().into_iter().find(|pane| doc(tab, pane));
+        let Some(lead) = (session.map(String::as_str)).or(seen).or(sight.as_deref()) else {
             continue;
         };
-        for doc in tab.docs.iter().filter(|doc| *doc != lead) {
-            led.insert(doc.clone(), lead.to_string());
+        let others = match session.is_some() {
+            true => &tab.all,
+            false => &tab.docs,
+        };
+        for pane in others.iter().filter(|pane| *pane != lead) {
+            led.insert(pane.clone(), lead.to_string());
+        }
+    }
+    // A tab zoomed is one row too, by the pane drawn over it.
+    for tab in arranged.tabs.iter().filter(|tab| tab.docs.is_empty()) {
+        let drawn = super::split::drawn(tab);
+        let [lead] = drawn.as_slice() else {
+            continue;
+        };
+        for pane in tab.all.iter().filter(|pane| *pane != lead) {
+            led.insert(pane.clone(), lead.clone());
         }
     }
     led
+}
+
+/// The panes of `arranged` whose tab is zoomed (one pane drawn over a tab of several), each
+/// with how many panes in sight the zoom puts by: the pane drawn, and the one that stands for
+/// the tab in the side.
+pub(super) fn zoomed(arranged: &Arranged, shown: Option<&str>) -> HashMap<String, usize> {
+    let led = led(arranged, shown);
+    let mut zoomed = HashMap::new();
+    for tab in arranged.tabs.iter().filter(|tab| tab.whole) {
+        let Some(hidden) = tab.tree.visible().len().checked_sub(1).filter(|n| *n > 0) else {
+            continue;
+        };
+        let lead = tab.all.iter().find(|pane| !led.contains_key(*pane));
+        for pane in lead.into_iter().chain(&super::split::drawn(tab)) {
+            zoomed.insert(pane.clone(), hidden);
+        }
+    }
+    zoomed
 }
 
 /// Whether tab `key` is a document: a file or a page, which a session holds.
@@ -70,54 +106,29 @@ pub(super) fn stands_for(
     Some(session.map_or_else(|| key.to_string(), Clone::clone))
 }
 
-/// The split the window lays tab `shown` out in, as the layout keeps its tab: the pane beside
-/// it; a document put by takes the place of the one in sight. None for a tab of one pane, one
-/// the person keeps whole, or one the layout does not hold.
-pub(super) fn split_of(arranged: &Arranged, shown: &str) -> Option<Kept> {
-    let tab = tab_of(arranged, shown).filter(|tab| !tab.whole)?;
-    pair_of(tab, shown)
-}
-
-/// The split tab `shown` comes back to when the person splits a session they kept whole.
-pub(super) fn beside_whole(arranged: &Arranged, shown: &str) -> Option<Kept> {
-    let tab = tab_of(arranged, shown).filter(|tab| tab.whole)?;
-    pair_of(tab, shown)
-}
-
-fn pair_of(tab: &Arranging, shown: &str) -> Option<Kept> {
-    let [left, right] = tab.panes.as_slice() else {
-        return None;
-    };
-    let at = match tab.panes.iter().position(|pane| pane == shown) {
-        Some(at) => at,
-        None if doc(tab, shown) => tab.panes.iter().position(|pane| doc(tab, pane))?,
-        None => return None,
-    };
-    Some(Kept {
-        shown: shown.to_string(),
-        beside: [right, left][at].clone(),
-        right: at == 0,
-    })
+/// Whether `tab` holds terminals and documents alone: a session, of one terminal or several.
+fn sessions(tab: &Arranging) -> bool {
+    let terminal = |pane: &String| Key::parse(pane).is_some_and(|key| key.kind() == "term");
+    tab.all.iter().all(|pane| doc(tab, pane) || terminal(pane))
 }
 
 /// Whether the layout takes tab `beside` put beside tab `shown`: two panes of one tab unless
-/// both are its documents (a stack shows one); a document joining a terminal; and any two
-/// tabs that hold no documents. A session takes no other pane.
-pub(super) fn takes(arranged: &Arranged, shown: Key, beside: Key) -> bool {
+/// both are its documents (a stack shows one); a document joining a session; a terminal alone
+/// joining a session (docs/windows.md: a tab of terminals has one stack); and any two tabs
+/// that hold no documents. A session takes no other pane.
+pub(super) fn takes(tabs: &[Arranging], shown: Key, beside: Key) -> bool {
     let (shown_name, beside_name) = (shown.name(), beside.name());
-    let (mine, other) = (
-        tab_of(arranged, &shown_name),
-        tab_of(arranged, &beside_name),
-    );
+    let (mine, other) = (holding(tabs, &shown_name), holding(tabs, &beside_name));
     let (Some(mine), Some(other)) = (mine, other) else {
         return true;
     };
     if std::ptr::eq(mine, other) {
         return !(doc(mine, &shown_name) && doc(mine, &beside_name));
     }
-    let terminal = |key: Key, tab: &Arranging| {
-        key.kind() == "term" && (!tab.docs.is_empty() || tab.all.len() <= 1)
-    };
+    if beside.kind() == "term" && other.all.len() <= 1 && sessions(mine) {
+        return true;
+    }
+    let terminal = |key: Key, tab: &Arranging| key.kind() == "term" && sessions(tab);
     if (document(beside) && terminal(shown, mine)) || (document(shown) && terminal(beside, other)) {
         return true;
     }
@@ -133,16 +144,15 @@ pub(super) fn stacks<'a>(arranged: impl IntoIterator<Item = &'a Arranged>) -> Ve
         .collect()
 }
 
-/// The document the window has in sight, and the stack it is of: the tab shown, else the one
-/// beside it in a split window. The documents' row lies over its pane.
-pub(super) fn row(
-    stacks: &[Vec<Key>],
+/// The document the window has in sight, and the stack it is of: the tab shown, else one of
+/// the panes in `sight` of a split window. The documents' row lies over its pane.
+pub(super) fn row<'a>(
+    stacks: &'a [Vec<Key>],
     shown: Option<Key>,
-    pair: Option<(Key, Key)>,
-) -> Option<(Key, &Vec<Key>)> {
-    let halves = pair.map(|(left, right)| [left, right]);
+    sight: &[Key],
+) -> Option<(Key, &'a Vec<Key>)> {
     (shown.into_iter())
-        .chain(halves.into_iter().flatten())
+        .chain(sight.iter().copied())
         .find_map(|key| Some((key, stacks.iter().find(|stack| stack.contains(&key))?)))
 }
 

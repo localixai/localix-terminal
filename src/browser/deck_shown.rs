@@ -47,6 +47,31 @@ impl Deck {
         }
     }
 
+    /// Which of the window's views holds its keys (`platform::has_keys`): the strip's parts by
+    /// name, a page or a panel by its tab's key.
+    pub(in super::super) fn keys_held(&self) -> Option<String> {
+        let parts = [
+            ("nav", &self.nav),
+            ("strip", &self.strip),
+            ("side", &self.side),
+        ];
+        let part = parts.into_iter().find_map(|(name, view)| {
+            (view.as_ref()).and_then(|view| super::super::platform::has_keys(view).then_some(name))
+        });
+        if let Some(part) = part {
+            return Some(part.into());
+        }
+        let page = (self.web.as_ref())
+            .filter(|web| super::super::platform::has_keys(web.active()))
+            .map(|web| Key::Web(web.active_id()));
+        let panel = || {
+            (self.terms.iter())
+                .find(|open| super::super::platform::has_keys(&open.webview))
+                .map(|open| Key::Term(open.id))
+        };
+        page.or_else(panel).map(|key| key.name())
+    }
+
     /// Whether tab `key` is open in the window.
     pub(super) fn there(&self, key: Key) -> bool {
         match key {

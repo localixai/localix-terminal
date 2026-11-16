@@ -66,6 +66,21 @@ impl On<'_> {
             Keyed::Address => return open.keyed_in_strip("address"),
             Keyed::Size => return open.keyed_in_strip("size"),
             Keyed::Split => return self.split_view(),
+            Keyed::SplitNew(side) => return self.split_new(side, Asked::Terminal(None)),
+            Keyed::Toward(side) => return self.pane_to(Some(side), true),
+            Keyed::Pane(forward) => return self.pane_to(None, forward),
+            Keyed::Resize(side, far) => return self.resize_pane(side, far),
+            Keyed::Equalize => return self.equalize(),
+            Keyed::Zoom => return self.zoom(),
+            Keyed::PaneOut => {
+                if let Some(key) = open.shown_key().filter(|key| open.goes_out(*key)) {
+                    self.pane_out(key);
+                    if let Some(open) = self.deck.as_ref() {
+                        open.refresh(self.shared);
+                    }
+                }
+                return;
+            }
             Keyed::Settings => return self.settings(),
             Keyed::Projects => return open.keyed_in_strip("projects"),
             Keyed::OpenFolder => return self.open_folder(),

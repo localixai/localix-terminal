@@ -1,6 +1,7 @@
 //! A terminal's tab: starting a program in a session, typing into it, reading its screen.
 
 mod env;
+mod listen;
 
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, OnceLock, Weak};
@@ -90,62 +91,7 @@ impl Desk {
             .map_err(|e| format!("could not start it: {e}"))?;
         let session = Arc::new(session);
         let _ = typed.set(Arc::downgrade(&session));
-        // Its program's end is news for the Event Center, and closes its row of the ledger (its
-        // last screen kept), on a thread of its own: the session's reader calls this.
-        let (feed, me) = (self.feed.clone(), Weak::clone(&self.me));
-        session.on_end(move || {
-            feed.record(
-                &crate::feed::Entity::Terminal { id },
-                crate::feed::Op::Upserted,
-            );
-            let me = Weak::clone(&me);
-            let closed = std::thread::Builder::new()
-                .name("desk-terminal-ended".into())
-                .spawn(move || {
-                    if let Some(desk) = me.upgrade() {
-                        desk.unkeep(&format!("t{id}"));
-                    }
-                });
-            if let Err(why) = closed {
-                log::warn!("terminal t{id} ended, still open in the ledger (no thread: {why})");
-            }
-        });
-        // What its program asks to tell the person is news for the Event Center too.
-        let feed = self.feed.clone();
-        session.on_note(move || {
-            feed.record(
-                &crate::feed::Entity::Terminal { id },
-                crate::feed::Op::Upserted,
-            );
-        });
-        // What its program says it is doing (the title it sets) shows under the tab's name, and
-        // which program is in front (a coding agent typed in its shell among them) is the window's
-        // to know: its mark on the tab.
-        // Where it is (the bar's crumbs) is asked again as its shell prompts (it sets the title)
-        // and as another program comes in front.
-        if let Some(browser) = self.browser.clone() {
-            let (told, me) = (browser.clone(), Weak::clone(&self.me));
-            let (here, there) = (Arc::downgrade(&session), Arc::downgrade(&session));
-            browser.folder(
-                &format!("t{id}"),
-                session.folder().or_else(|| Some(dir.into())),
-            );
-            session.on_title(move |title| {
-                told.detail(&format!("t{id}"), Some(title));
-                if let Some(session) = here.upgrade() {
-                    told.folder(&format!("t{id}"), session.folder());
-                }
-                if let Some(desk) = me.upgrade() {
-                    desk.retitled(&format!("t{id}"), title);
-                }
-            });
-            session.on_front(move |program| {
-                browser.runs(&format!("t{id}"), program);
-                if let Some(session) = there.upgrade() {
-                    browser.folder(&format!("t{id}"), session.folder());
-                }
-            });
-        }
+        self.hear_session(id, &session, dir);
         crate::lock(&self.session_groups).insert(id, group.to_string());
         crate::lock(&self.sessions).insert(id, Arc::clone(&session));
         Ok((id, session))
@@ -232,6 +178,7 @@ impl Desk {
         }
         if let Some(browser) = &self.browser {
             browser.detail(&format!("t{id}"), None);
+            browser.working(&format!("t{id}"), None);
         }
     }
 
@@ -331,15 +278,40 @@ impl Desk {
         title: &str,
         before: &str,
     ) -> Result<String, String> {
-        let (id, _) = self.start_session(command, call.cwd, call.vars, (group, false), before)?;
+        self.terminal_placed(call, group, (command, title, before), None)
+    }
+
+    /// `terminal_of_person`, put on a side of a pane (`split`: its row and the side) in that
+    /// pane's tab rather than a tab of its own: opened aside, and shown once it is there.
+    pub(super) fn terminal_placed(
+        &self,
+        call: &Call,
+        group: &str,
+        (command, title, before): (&str, &str, &str),
+        split: Option<(crate::ledger::Row, crate::layout::geometry::Side)>,
+    ) -> Result<String, String> {
+        let aside = split.is_some();
+        // An agent's own command, as "+" starts it, names the new session itself: its terminal
+        // knows which one it runs from the start.
+        let pinned = crate::browser::agent_pinned(command);
+        let command = pinned.as_deref().unwrap_or(command);
+        let (id, _) = self.start_session(command, call.cwd, call.vars, (group, aside), before)?;
         let facts = Facts {
             title,
             cwd: Some(call.cwd),
             command: Some(command).filter(|command| !command.is_empty()),
+            split,
             ..Facts::default()
         };
         let key = format!("t{id}");
         self.own(&key, call, crate::ledger::Kind::Terminal, facts);
+        // Its agent, if one is in front already, is kept now that its pane has a row.
+        self.agent_fronted(id);
+        // Put beside a pane, it is in sight once its tab holds it: the person asked for it, so
+        // it takes the keys as their own click on it would.
+        if let (Some(_), Some(browser)) = (split, &self.browser) {
+            browser.click(&format!("show {key}"));
+        }
         Ok(key)
     }
 }

@@ -42,7 +42,8 @@ pub(super) fn is(
 }
 
 /// Whether a document may join the tab of `tree` by its pane `anchor`: it holds documents
-/// already, or is a terminal alone. A board, or panes the person put side by side, hold none.
+/// already, or it is terminals alone, `anchor` one of them (a session of several: the tab has
+/// one stack for all). A board, or a page beside a pane, holds none.
 pub(super) fn takes(
     db: &crate::store::Connection,
     tree: &Tree,
@@ -51,7 +52,12 @@ pub(super) fn takes(
     if !tree.stacked().is_empty() {
         return Ok(true);
     }
-    Ok(*tree == Tree::leaf(anchor) && is(db, anchor, |kind| kind == Kind::Terminal)?)
+    for pane in tree.panes() {
+        if !is(db, pane, |kind| kind == Kind::Terminal)? {
+            return Ok(false);
+        }
+    }
+    Ok(tree.holds(&anchor))
 }
 
 impl Desk {
@@ -68,7 +74,7 @@ impl Desk {
     }
 
     /// The session a document `call` opens was asked from, by one of its panes. An agent's: the
-    /// terminal its call came from, when that is a terminal of its project. The person's: the
+    /// terminal its call came from, or the pane it named `beside`, when that is of its project. The person's: the
     /// pane their call names, else the one they look at (`seen_in`). What the app opens again
     /// in the tab it had stays there.
     pub(super) fn anchor_of(&self, call: &Call) -> Option<Beside> {
@@ -93,7 +99,7 @@ impl Desk {
                 person: true,
             });
         }
-        let anchor = call.from.filter(|key| key.starts_with('t')).and_then(own)?;
+        let anchor = call.from.and_then(own)?;
         Some(Beside {
             anchor,
             person: false,
@@ -225,15 +231,15 @@ impl Desk {
         }
         let focused = match (person, reading) {
             (true, _) => {
-                tree.show(pane);
+                tree.show(&pane);
                 Some(pane)
             }
             (false, Some(reading)) => {
-                tree.show(reading);
+                tree.show(&reading);
                 Some(reading)
             }
             (false, None) => {
-                tree.show(pane);
+                tree.show(&pane);
                 tab.focused.or(Some(anchor))
             }
         };

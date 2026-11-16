@@ -119,9 +119,15 @@ impl On<'_> {
                 self.clicked(&strip::moved(&said, at));
             }
             Cmd::Restyle => self.restyled(),
+            // Find over a page draws itself: the toolbar's row, the page under it.
+            Cmd::Seek(seek) => self.on_deck(|open| open.seek(seek, &shared.key)),
+            Cmd::Found(found) => self.on_deck(|open| open.found(&found)),
             Cmd::Act(said, reply) => self.agent_act(said, &reply),
             Cmd::Listing(reply) => {
                 let _ = reply.send(self.deck.as_ref().map(|open| open.listing(shared)));
+            }
+            Cmd::Keys(reply) => {
+                let _ = reply.send(self.deck.as_ref().and_then(Deck::keys_held));
             }
             Cmd::Dressed(reply) => {
                 let _ = reply.send(self.deck.as_ref().map(|open| {
@@ -153,6 +159,13 @@ impl On<'_> {
             | Cmd::Capture { .. }
             | Cmd::Noted(_)
             | Cmd::Exit(_)) => on_browser(command, self.deck, shared, proxy),
+        }
+    }
+
+    /// `act` on the window in use, if there is one.
+    fn on_deck(&mut self, act: impl FnOnce(&mut Deck)) {
+        if let Some(open) = self.deck.as_mut() {
+            act(open);
         }
     }
 
@@ -272,8 +285,7 @@ impl On<'_> {
 impl panel::Keys for Deck {
     fn in_sight(&self, id: u32) -> bool {
         let key = Key::Term(id);
-        self.shown_key() == Some(key)
-            || (self.pair()).is_some_and(|(left, right)| left == key || right == key)
+        self.shown_key() == Some(key) || self.sight().contains(&key)
     }
 
     fn key_window(&self) -> bool {

@@ -116,8 +116,28 @@ pub(super) fn showing(page: bool, finds: bool) {
     FINDS.store(finds, Ordering::Relaxed);
 }
 
+/// Whether the pane in use splits right and down (geometry's `fits`): Split Right and Split
+/// Down are greyed where the new pane would not keep its least, the one quiet look of what
+/// cannot be done now.
+static SPLITS: [AtomicBool; 2] = [AtomicBool::new(true), AtomicBool::new(true)];
+
+/// Whether the pane in use zooms: it shares its tab with another (Zoom Pane is greyed else).
+static ZOOMS: AtomicBool = AtomicBool::new(false);
+
+/// What the pane in use of the window in use splits now: right (`right`), and down.
+pub(super) fn splitting(right: bool, down: bool) {
+    SPLITS[0].store(right, Ordering::Relaxed);
+    SPLITS[1].store(down, Ordering::Relaxed);
+}
+
+/// Whether the pane in use of the window in use zooms now.
+pub(super) fn zooming(zooms: bool) {
+    ZOOMS.store(zooms, Ordering::Relaxed);
+}
+
 /// Whether an item may be picked now: what needs a page, only while one is shown; Find, only
-/// over a tab that finds.
+/// over a tab that finds; a split, only where the new pane fits; a zoom, only over a pane that
+/// shares its tab.
 extern "C" fn validate(_this: &AnyObject, _sel: Sel, item: *mut AnyObject) -> Bool {
     // SAFETY: AppKit hands the NSMenuItem it asks about, alive for the call.
     let Some(item) = (unsafe { item.as_ref() }) else {
@@ -131,8 +151,14 @@ extern "C" fn validate(_this: &AnyObject, _sel: Sel, item: *mut AnyObject) -> Bo
         .and_then(|(_, does)| does.get(usize::try_from(tag).ok()?));
     let page_only = does.is_some_and(|does| shortcuts::of_page(does));
     let finding = does.is_some_and(|does| shortcuts::of_find(does));
+    let splits = (does.and_then(|does| shortcuts::of_split(does)))
+        .is_none_or(|across| SPLITS[usize::from(!across)].load(Ordering::Relaxed));
+    let zooming = does.is_some_and(|does| shortcuts::of_zoom(does));
     Bool::new(
-        (!page_only || PAGE.load(Ordering::Relaxed)) && (!finding || FINDS.load(Ordering::Relaxed)),
+        (!page_only || PAGE.load(Ordering::Relaxed))
+            && (!finding || FINDS.load(Ordering::Relaxed))
+            && splits
+            && (!zooming || ZOOMS.load(Ordering::Relaxed)),
     )
 }
 

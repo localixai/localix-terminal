@@ -101,7 +101,9 @@ pub(super) fn spawn(
     drop(program);
     let mut child = child?;
     if let Err(why) = set_nonblocking(master.as_raw_fd()) {
-        // Started, but unusable: not left running with no tab.
+        // Started, but unusable: not left running with no tab. The terminal is let go first:
+        // a killed program's exit waits for its output to be read while anyone holds it.
+        drop(master);
         kill(&mut child);
         return Err(why);
     }

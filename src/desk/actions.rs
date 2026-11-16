@@ -55,9 +55,14 @@ impl Desk {
                     return self.made(call, about, &json!({}));
                 }
                 self.reveal(call, &tab.key)?;
+                // Its tab zoomed on it, or drawn whole again (layout_zoom.rs).
+                let zoomed = match args.get("zoom").and_then(Value::as_bool) {
+                    Some(on) => format!(" {}", self.zoom_shown(&tab.key, on)?),
+                    None => String::new(),
+                };
                 let read = self.read(&tab)?;
                 Ok(Output {
-                    report: format!("Showing {}.", tab.key),
+                    report: format!("Showing {}.{zoomed}", tab.key),
                     ..read
                 })
             }
@@ -140,6 +145,12 @@ impl Desk {
         // An ask with no tab: the session waits for the person.
         if text(args, "tab").is_none() && args.get("ask").is_some() {
             return Ok(self.waits(call, text(args, "ask")).into());
+        }
+        // A coding agent's own hooks name the session its terminal runs.
+        if let (None, Some(session)) = (text(args, "tab"), args.get("session")) {
+            return Ok(self
+                .agent_said(call, session.as_str().unwrap_or_default())?
+                .into());
         }
         let tab = self.tab(call, text(args, "tab"))?;
         unread(tab.kind, args)?;
@@ -288,7 +299,8 @@ impl Desk {
             } else {
                 ""
             };
-            let _ = writeln!(out, "{key} ({}){shown}: {detail}", tab.kind.name());
+            let placed = (self.placed_words(&key)).map_or_else(String::new, |at| format!(" {at}"));
+            let _ = writeln!(out, "{key} ({}){shown}{placed}: {detail}", tab.kind.name());
         }
         out.trim_end().to_string()
     }

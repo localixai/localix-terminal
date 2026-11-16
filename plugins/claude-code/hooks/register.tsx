@@ -1,11 +1,15 @@
 //! The plugin's hooks: the line above the prompt and `/tabs`, the person's comments as turns,
 //! the board's workers held to their cards, and, in a terminal of the desk, its window as the
-//! browser the person means (a row the session starts with).
+//! browser the person means (a row the session starts with) and the session's id, so the
+//! terminal resumes this session after the app opens again. The board's reading is `board.ts`,
+//! the watcher of the app `watch.ts`.
 
 import { atom, read, update } from 'claude-code'
-import type { Events, Register } from 'claude-code'
+import type { Register } from 'claude-code'
 
-import type { BoardCard, BoardSummary, Desk } from '../types'
+import type { BoardSummary, Desk } from '../types'
+import { type Api, cards, finish, leftOver, NAMED, NOTE, ON_BOARD, slug, summary, WHO, WORKER } from './board'
+import { follow, type Watched } from './watch'
 
 /** What a session in a terminal of the desk is told: the window the person watches is their
  * browser, ahead of any other browser's tools the session has. */
@@ -22,9 +26,6 @@ const EMPTY: Desk = { app: 'not running', window: '-', terminals: '0', tabs: [],
 const desk = atom({ plugin: 'llxterm', key: 'desk' } as const, EMPTY, { shape: 'desk-2' })
 const board = atom({ plugin: 'llxterm', key: 'board' } as const, null as BoardSummary | null, { shape: 'board-1' })
 
-/** What every hook is handed as `$`. */
-type Api = Parameters<Events['session.start']>[0]
-
 const time = () => new Date().toTimeString().slice(0, 5)
 
 /** The first line of a comment block: `The person commented (#1) on URL: words`. */
@@ -32,61 +33,12 @@ const words = (text: string) =>
   (text.split('\n').find(line => line.startsWith('The person commented')) ?? text.split('\n')[0] ?? '')
     .replace(/^The person commented \(#\d+\) on /, '')
 
-/** A worker's name as the board takes it: letters, digits and `-`, a few words at most. */
-const slug = (text: string) =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .split('-')
-    .slice(0, 3)
-    .join('-')
-    .slice(0, 24)
-
-/** The worker a board note from the person is about: `returned c4 "Cart" (tests) to Todo: …`. */
-const NOTE = /^The person on the board \S+ (?:returned|commented on|edited|moved|blocked|unblocked) c\d+ "(?:[^"\\]|\\.)*" \(([\w.:-]+)\)(?: |:|\n|$)/
-
 // Which subagent is which worker on the board: its loop's id → the name the board shows.
 const workers = new Map<string, string>()
 // Where this project's board is kept, once known: `<project>/.localix/board.json`.
 let boardFile: string | undefined
 // `--project <the session's folder>`, once known: every call names the session's project.
 let project: string[] = []
-
-/** The board's cards, or none when it has no file yet. */
-async function cards($: Api): Promise<BoardCard[] | undefined> {
-  if (!boardFile) return undefined
-  try {
-    const kept = JSON.parse(await $.fs.read(boardFile)) as { cards?: BoardCard[] }
-    return Array.isArray(kept.cards) ? kept.cards : undefined
-  } catch {
-    return undefined
-  }
-}
-
-/** A card's id as the board makes it: the file may carry anything, and ids go into what the agent is told. */
-const CARD_ID = /^c\d+$/
-
-function summary(list: BoardCard[]): BoardSummary {
-  const count = (column: BoardCard['column']) => list.filter(card => card.column === column).length
-  return {
-    backlog: count('backlog'),
-    todo: count('todo'),
-    doing: count('doing'),
-    review: count('review'),
-    done: count('done'),
-    blocked: list.filter(card => card.blocked && card.column !== 'done').length,
-    working: list.filter(card => card.column === 'doing' && CARD_ID.test(card.id)).map(card => (card.who ? `${card.id} ${card.who}` : card.id)),
-  }
-}
-
-/** The cards `worker` (none: the main agent) left in Doing, named by id: `c3, c4`. A blocked card was put down on purpose, so it is not left half done. A title is data a file may carry, so none is put into what the agent is told. */
-async function leftOver($: Api, worker: string | undefined): Promise<string> {
-  const left = ((await cards($)) ?? []).filter(
-    card => card.column === 'doing' && !card.blocked && CARD_ID.test(card.id) && (card.who ?? undefined) === worker,
-  )
-  return left.map(card => card.id).join(', ')
-}
 
 /** How the session reaches the desk, once it has started: a `llxterm` call. */
 let deskRun: ((argv: string[], timeoutMs?: number) => Promise<{ exitCode: number; stdout: string } | undefined>) | undefined
@@ -98,43 +50,42 @@ const END_MS = 1500
 let deskUp = false
 /** The session told the Event Center it waits for the person. */
 let waiting = false
+/** The terminal reads what Claude Code says of its state (OSC 7501, `LLXTERM_PROGRAM_STATUS`):
+ * that it waits for the person is the terminal's line there, so the plugin says only what the
+ * report carries no words for (a long turn's last line, an error). */
+let statusRead = false
 /** A turn of the main agent at least this long is worth telling the person it ended. */
 const LONG_TURN_MS = 30_000
 
 /** The longest line of the agent's question that the person is shown. */
 const SHOWN_MOST = 120
 
-/** The plugin's worker, as a spawn names it. */
-const WORKER = 'llxterm:worker'
-/** A worker's name on the board as its task gives it: `your name on the board: cart-button`. */
-const NAMED = /your name on the board:\s*`?([A-Za-z0-9._-]+)/i
-/** How long a watcher that ended waits before it is started again, the first time; each time
- * after, twice as long, up to `WATCH_MOST_MS`. */
-const WATCH_RETRY_MS = 5000
-const WATCH_MOST_MS = 60_000
 /** The session ended: the watcher is not started again. */
 let ended = false
+/** The session's id its terminal was last told, and whether it runs in a terminal of the app. */
+let toldSession: string | undefined
+let inTerminal = false
 
-/** A line of `llxterm window --watch`: the app and this project's tabs, the board, or a comment. */
-type Watched =
-  | { app: string; window?: string; terminals?: string; tabs?: string[] }
-  | { board: { cards?: BoardCard[] } | null }
-  | { said: string }
+/** The terminal is told the session's id when it is not the one it was told last (the session
+ * started, or `/clear` and `/resume` gave it another): once each, not each turn. Only from a
+ * terminal of the app, which runs: the call never starts it. */
+async function tellSession($: Api) {
+  if (!inTerminal || !deskRun) return
+  const id = await $.session.id().catch(() => undefined)
+  if (typeof id !== 'string' || !id || id === toldSession) return
+  toldSession = id
+  void deskRun(['window', ...project, JSON.stringify({ action: 'interact', session: id })])
+}
+
 /** The workers sent word once to finish their card. */
 const nudged = new Set<string>()
 /** The main agent's cards it was last asked to finish, named. */
 let heldMain = ''
-/** A call of the desk on the board's tab, in a shell command: `llxterm window '{… "tab": "b1" …}'`. */
-const ON_BOARD = /\bllxterm\s+window\b[\s\S]*"tab"\s*:\s*"b\d+"/
-const WHO = /"who"\s*:\s*"([^"]*)"/
-
-/** What a worker that stops with `named` in Doing is asked to do first. */
-const finish = (named: string) =>
-  `Your card ${named} is still in Doing on the board. Hand it in with \`review\` and a note of what was done and how it was checked, give it back to Todo with \`release\` and where it stands, or \`block\` it with what it waits for; then end.`
 
 export const register: Register = (on, options) => {
-  // A session begun waits for nobody yet.
+  // A session begun waits for nobody yet, and its terminal knows none of its ids.
   waiting = false
+  toldSession = undefined
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     // In a terminal of the desk the person watches its window: a page they ask for opens there,
@@ -146,6 +97,10 @@ export const register: Register = (on, options) => {
     }
     // The program: the app's own, which its terminals put first on the PATH (`LLXTERM_BIN` names
     // its folder): the plugin is loaded only in them. Never installed from here.
+    // Inside tmux or screen, started in a terminal of the app, the variable is the app's but the
+    // terminal Claude Code reports to is theirs, which tells the app nothing.
+    const muxed = Boolean((await $.env.get('TMUX')) || (await $.env.get('STY')))
+    statusRead = (await $.env.get('LLXTERM_PROGRAM_STATUS')) === '1' && !muxed
     const bin = await $.env.get('LLXTERM_BIN')
     const program = bin ? `${bin}/llxterm` : 'llxterm'
     const run = (argv: string[], timeoutMs = CALL_MS) =>
@@ -157,6 +112,8 @@ export const register: Register = (on, options) => {
     // its board, when it has one, is in `.localix/board.json` there.
     const cwd = await $.session.cwd()
     project = ['--project', cwd]
+    inTerminal = Boolean(await $.env.get('LLXTERM_PANE'))
+    await tellSession($)
     const top = await $.process.run(['git', '-C', cwd, 'rev-parse', '--show-toplevel'], { timeoutMs: 3000 }).catch(() => undefined)
     const root = top && top.exitCode === 0 && top.stdout.trim() ? top.stdout.trim() : cwd
     boardFile = `${root}/.localix/board.json`
@@ -169,7 +126,7 @@ export const register: Register = (on, options) => {
       const brief = list && list.length ? summary(list) : null
       await update($, board, () => brief)
     }
-    await showBoard(await cards($))
+    await showBoard(await cards($, boardFile))
 
     // A note the person left for a subagent's card goes to that subagent while it runs; the main
     // agent hears it too, and that it went there.
@@ -210,43 +167,9 @@ export const register: Register = (on, options) => {
       }
     }
 
-    // One watcher for the session (`llxterm window --watch`): it waits for the app when none
-    // runs and ends with the session, so nothing here looks again and again. Each line is one
-    // JSON object; what the pipe hands over comes in pieces of any size, so the lines are put
-    // together again before one is read. It ends by itself only when it cannot run: started
-    // again later, each wait twice the last.
+    // One watcher for the session (watch.ts), until the session ends.
     ended = false
-    void (async () => {
-      let pause = WATCH_RETRY_MS
-      while (!ended) {
-        try {
-          const watch = $.process.spawn({ argv: [program, 'window', ...project, '--watch'] })
-          let held = ''
-          for await (const piece of watch) {
-            if (piece.stream !== 'stdout') continue
-            held += piece.text
-            const lines = held.split('\n')
-            held = lines.pop() ?? ''
-            for (const line of lines) {
-              let said: Watched
-              try {
-                said = JSON.parse(line) as Watched
-              } catch {
-                continue
-              }
-              pause = WATCH_RETRY_MS
-              await heard(said)
-            }
-          }
-        } catch {
-          // The watcher could not start or broke: it is started again after the pause.
-        }
-        if (ended) break
-        // A wait that is refused means the module is gone: the loop ends with it.
-        if (!(await $.clock.sleep(pause).then(() => true, () => false))) break
-        pause = Math.min(pause * 2, WATCH_MOST_MS)
-      }
-    })()
+    void follow($, program, project, heard, () => ended)
 
     return started
   })
@@ -275,7 +198,7 @@ export const register: Register = (on, options) => {
     if (e.isAborted || 'refusal' in e) return done
     if (e.agentId) {
       const worker = workers.get(e.agentId)
-      const named = worker ? await leftOver($, worker) : ''
+      const named = worker ? await leftOver($, boardFile, worker) : ''
       if (!worker || !named) return done
       if (!nudged.has(e.agentId)) {
         nudged.add(e.agentId)
@@ -288,7 +211,7 @@ export const register: Register = (on, options) => {
       return done
     }
     if (options.finish_cards === true) {
-      const named = await leftOver($, undefined)
+      const named = await leftOver($, boardFile, undefined)
       // Asked once for the same cards: a second turn that leaves them is the agent's answer.
       if (named && named !== heldMain) {
         heldMain = named
@@ -313,7 +236,10 @@ export const register: Register = (on, options) => {
   })
 
   on('turn.start', async ($, e, next) => {
-    if (!e.agentId) goesOn()
+    if (!e.agentId) {
+      goesOn()
+      await tellSession($)
+    }
     return next(e)
   })
 
@@ -358,8 +284,10 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   // A question the agent asks the person waits for them in the Event Center till it is answered:
-  // one line on the terminal the session runs in, gone as soon as the session goes on.
+  // one line on the terminal the session runs in, gone as soon as the session goes on. Where the
+  // terminal reads Claude Code's own report that it waits, that line is the terminal's.
   on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
+    if (statusRead) return next(e)
     const first = e.questions[0]?.question.replace(/\s+/g, ' ').trim().slice(0, SHOWN_MOST)
     waits(first ? `Claude asks: ${first}` : 'Claude asks you a question')
     try {

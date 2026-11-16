@@ -169,10 +169,10 @@ fn a_card_dropped_where_it_was_is_no_news_to_the_agent() {
 fn the_notes_about_a_workers_card_are_what_the_plugin_routes_on() {
     use crate::board::{Board, Worker};
 
-    let plugin = include_str!("../../plugins/claude-code/hooks/register.tsx");
+    let plugin = include_str!("../../plugins/claude-code/hooks/board.ts");
     let pattern = plugin
         .lines()
-        .find_map(|line| line.strip_prefix("const NOTE = /"))
+        .find_map(|line| line.strip_prefix("export const NOTE = /"))
         .and_then(|line| line.strip_suffix('/'))
         .unwrap();
     assert!(
