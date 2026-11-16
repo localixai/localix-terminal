@@ -12,6 +12,7 @@ mod marks;
 mod modes;
 mod notes;
 mod pty;
+mod room;
 mod screen;
 mod session;
 mod status;
@@ -20,6 +21,7 @@ pub use environment::Own;
 pub use hooks::keep_in as keep_shell_files_in;
 pub use marks::Ended;
 pub use pty::look_for_commands_on;
+pub use room::most as room;
 pub use session::{DEFAULT_WAIT, Painter, Session, Until};
 pub use status::{Asks, Doing, Status};
 

@@ -53,6 +53,8 @@ pub enum Entity {
     Terminal { id: u32 },
     /// What an owner's agent asked the person.
     Ask { owner: String },
+    /// The room for terminals: one could not open for want of it, or one opened after that.
+    Room,
     /// A project's ledger: its panes' history and the pages they showed (the history menu, the
     /// address field's suggestions).
     Ledger { project: crate::projects::ProjectId },
@@ -79,7 +81,8 @@ impl Entity {
             Entity::Said { .. }
             | Entity::Pane { .. }
             | Entity::Terminal { .. }
-            | Entity::Ask { .. } => false,
+            | Entity::Ask { .. }
+            | Entity::Room => false,
         }
     }
 }

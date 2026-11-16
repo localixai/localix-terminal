@@ -209,32 +209,6 @@ fn a_field_a_tab_does_not_take_is_refused_with_what_it_takes_and_nothing_is_done
 }
 
 #[test]
-fn terminals_whose_program_ended_make_room_for_the_next_one() {
-    let (desk, scratch) = (desk(), Scratch::new());
-    let mine = caller(&desk, scratch.path(), None);
-    let call = Call {
-        person: true,
-        ..mine.call()
-    };
-    let group = crate::projects::key(mine.project.id);
-    for _ in 0..term::MAX_SESSIONS {
-        desk.person_terminal(&call, &group, "sh -c 'exit 0'")
-            .unwrap();
-    }
-    // Each program ends; waiting for text that never shows returns when it does.
-    let sessions: Vec<_> = crate::lock(&desk.sessions).values().cloned().collect();
-    for session in sessions {
-        let until = session.wait(Some("never shown"), 0, std::time::Duration::from_secs(10));
-        assert_eq!(until, crate::terminal::Until::Exited);
-    }
-    // Their rows closed as they ended: the cap still frees the oldest for a new one.
-    desk.person_terminal(&call, &group, "sh -c 'exit 0'")
-        .unwrap();
-    assert!(crate::lock(&desk.sessions).len() <= term::MAX_SESSIONS);
-    desk.shutdown();
-}
-
-#[test]
 fn ending_an_agents_session_leaves_the_tabs_the_person_opened() {
     let (desk, scratch) = (desk(), Scratch::new());
     let mine = caller(&desk, scratch.path(), None);

@@ -2,6 +2,9 @@
 
 mod env;
 mod listen;
+mod room;
+
+pub(super) use room::{Room, are_open};
 
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, OnceLock, Weak};
@@ -9,14 +12,13 @@ use std::sync::{Arc, OnceLock, Weak};
 use serde_json::Value;
 
 use crate::browser::Pane;
+use crate::feed::{Entity, Op};
 use crate::terminal::{self, DEFAULT_WAIT, Painter, Session, Until};
 
 use super::args::{strings, text, waits};
 use super::ledger::Facts;
 use super::{Call, Desk, Output};
 
-/// Terminal sessions at once, in all.
-pub(super) const MAX_SESSIONS: usize = 16;
 /// The most text one `input` types, and the most keys one call presses.
 const MAX_INPUT: usize = 4096;
 const MAX_KEYS: usize = 64;
@@ -70,16 +72,18 @@ impl Desk {
         before: &str,
     ) -> Result<(u32, Arc<Session>), String> {
         let _starting = crate::lock(&self.starting);
-        if crate::lock(&self.sessions).len() >= MAX_SESSIONS {
-            let spare = self.spare_session(group).ok_or_else(|| {
-                format!(
-                    "{MAX_SESSIONS} terminals are open, counting every project's: close one \
-                         of yours with `close`, or ask the person to close one"
-                )
-            })?;
+        let open = crate::lock(&self.sessions).len();
+        if open >= self.room.most() {
+            // Room is made only of a terminal whose program ended: a program that runs is never
+            // ended for another, whatever became of its tab.
+            let Some(ended) = self.ended_session(group) else {
+                let refused = self.room.refuse(group, command, open);
+                self.feed.record(&Entity::Room, Op::Upserted);
+                return Err(refused);
+            };
             // Its tab goes as any closed one: no longer anyone's, closed in the ledger.
-            self.let_go(&format!("t{spare}"));
-            self.drop_session(spare);
+            self.let_go(&format!("t{ended}"));
+            self.drop_session(ended);
         }
         let id = self.next_terminal.fetch_add(1, Ordering::SeqCst);
         let typed: Arc<OnceLock<Weak<Session>>> = Arc::default();
@@ -95,6 +99,9 @@ impl Desk {
         self.hear_session(id, &session, dir);
         crate::lock(&self.session_groups).insert(id, group.to_string());
         crate::lock(&self.sessions).insert(id, Arc::clone(&session));
+        if self.room.opened(group) {
+            self.feed.record(&Entity::Room, Op::Upserted);
+        }
         Ok((id, session))
     }
 
@@ -149,26 +156,18 @@ impl Desk {
         }))
     }
 
-    /// The session of project `group` to end for a new one of it when all places are taken: the
-    /// oldest whose program ended, else the oldest whose tab the person closed (its program
-    /// running out of sight). None while every one is live in the window: another project's
-    /// terminals are never ended for this one's.
-    fn spare_session(&self, group: &str) -> Option<u32> {
+    /// The session of project `group` to let go of for a new one of it when the room is full:
+    /// the oldest whose program ended. None while every one runs; another project's terminals
+    /// are never let go of for this one's.
+    fn ended_session(&self, group: &str) -> Option<u32> {
         let groups = crate::lock(&self.session_groups).clone();
-        let of_group = |id: u32| groups.get(&id).is_some_and(|started| started == group);
-        let mut ids: Vec<(u32, bool)> = crate::lock(&self.sessions)
-            .iter()
-            .map(|(id, session)| (*id, session.ended()))
-            .collect();
-        ids.retain(|(id, _)| of_group(*id));
-        ids.sort_unstable();
-        if let Some((id, _)) = ids.iter().find(|(_, ended)| *ended) {
-            return Some(*id);
-        }
-        let shown = self.browser.as_ref()?.listing()?;
-        ids.iter()
+        let sessions = crate::lock(&self.sessions);
+        (sessions.iter())
+            .filter(|(id, session)| {
+                session.ended() && groups.get(id).is_some_and(|started| started == group)
+            })
             .map(|(id, _)| *id)
-            .find(|id| !shown.iter().any(|tab| tab.id == format!("t{id}")))
+            .min()
     }
 
     fn drop_session(&self, id: u32) {
@@ -328,3 +327,7 @@ pub(super) fn term_dir(call: &Call, args: &Value) -> std::path::PathBuf {
         None => call.cwd.to_path_buf(),
     }
 }
+
+#[cfg(test)]
+#[path = "term_tests.rs"]
+mod tests;

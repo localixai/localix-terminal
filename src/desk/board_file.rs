@@ -48,6 +48,7 @@ impl Consumer for BoardFile {
             | Entity::Tab { .. }
             | Entity::Terminal { .. }
             | Entity::Ask { .. }
+            | Entity::Room
             | Entity::Ledger { .. }
             | Entity::Projects
             | Entity::Files { .. } => Ok(()),

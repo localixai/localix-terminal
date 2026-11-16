@@ -19,6 +19,7 @@ pub(super) const SOURCES: &[&dyn Source] = &[
     &Boards,
     &super::terminals::Terminals,
     &super::resumes::Resumes,
+    &super::refused::Refusals,
 ];
 
 /// What the agent asked the person: something to do on a tab, or that its session waits.

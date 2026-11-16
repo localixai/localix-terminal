@@ -82,6 +82,8 @@ pub struct Desk {
     session_groups: Mutex<HashMap<u32, String>>,
     /// Held while a session starts, so two starts never both take the last place.
     starting: Mutex<()>,
+    /// How many sessions the desk holds, and the ones it had no room for (term/room.rs).
+    room: term::Room,
     next_terminal: AtomicU32,
     registry: Mutex<Registry>,
     served: Served,
@@ -164,6 +166,7 @@ impl Desk {
                 workers: Mutex::default(),
                 session_groups: Mutex::default(),
                 starting: Mutex::default(),
+                room: term::Room::default(),
                 next_terminal: AtomicU32::new(1),
                 registry: Mutex::default(),
                 served: Served::default(),

@@ -167,6 +167,14 @@
 
 ### Changed
 
+- **No longer 16 terminals at most.** The app holds as many terminals as this machine's memory
+  and open-file limit allow, every project's counted: a terminal's page takes about 47 MiB (a
+  WebKit process of its own) and its program three descriptors and two threads in the app, so
+  a quarter of the memory and half the open-file limit bound the count, never under 16 (128 on
+  a Mac with 24 GB). One more is not opened: an agent's `open` says so in its answer, and the
+  Event Center has one quiet line in its project, "Terminals Not Opened", until a terminal
+  opens there again.
+
 - A terminal's `wait_for` with nothing typed in the call waits for the answer to what was typed
   last, and finds one that came before the call (it waited for another).
 - A call's answer says when what it was to check did not hold (`missed`): a short command exits
@@ -221,6 +229,11 @@
   are left as they are.
 
 ### Fixed
+
+- **No running program is ended to make room for a terminal.** At the limit, a new terminal
+  took the place of the oldest one of its project whose tab you had closed, ending a program
+  that still ran out of sight (a build, an agent). Now only a terminal whose program ended
+  makes room; otherwise the new one is not opened.
 
 - **A control not found stops its `interact`.** A call that fills, selects or clicks a control
   by a ref or a name the page does not have now stops there, with the closest names, and does

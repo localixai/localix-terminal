@@ -15,6 +15,7 @@
 mod event;
 mod journal;
 mod leads;
+mod refused;
 mod resumes;
 mod sources;
 mod terminals;
@@ -126,6 +127,7 @@ impl Consumer for Projector {
             Entity::Board { .. }
             | Entity::Terminal { .. }
             | Entity::Ask { .. }
+            | Entity::Room
             | Entity::Pane { .. } => desk.paint_center(),
             // Where a pane is shown is not the person's to act on.
             Entity::Window { .. } | Entity::Workspace { .. } | Entity::Tab { .. } => {}

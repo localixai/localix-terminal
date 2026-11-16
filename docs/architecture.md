@@ -69,7 +69,8 @@ idempotent consumers that reconcile from the owner, and clients that are poked a
   given again since, and is passed over. A notice of a board, a project's ledger, the projects or
   the layout (a window, a workspace, a tab) is read.
 - **The entities.** `Said` (a note on its way to an agent), `Pane` (a pane's key this run),
-  `Window`, `Workspace` and `Tab` (the layout), `Board`, `Terminal`, `Ask`, `Ledger` (a project's
+  `Window`, `Workspace` and `Tab` (the layout), `Board`, `Terminal`, `Ask`, `Room` (a terminal
+  not opened for want of room, or one opened after that), `Ledger` (a project's
   past: its panes' history and the pages they showed) and `Projects` (which projects the desk
   knows, and which was used last).
 - **The window.** One consumer, `window` (`desk/layout_drawn.rs`), tells the window what it draws

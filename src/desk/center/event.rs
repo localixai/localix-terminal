@@ -20,6 +20,8 @@ pub(in crate::desk::center) enum Kind {
     Finished,
     /// An agent of the run before that did not go on in its terminal.
     Resume,
+    /// A terminal the app had no room for.
+    Refused,
 }
 
 /// The colour an event is drawn in: the window's own, named.
@@ -64,6 +66,7 @@ impl Kind {
             Kind::Command => ("Commands Finished", Tone::Blue, true),
             Kind::Finished => ("Programs Finished", Tone::Green, false),
             Kind::Resume => ("Agents Not Resumed", Tone::Blue, false),
+            Kind::Refused => ("Terminals Not Opened", Tone::Orange, false),
         };
         Look {
             section,

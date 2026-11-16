@@ -222,6 +222,26 @@ menu bar and the "+" menu, and the key does nothing: no error, since it is no fa
 A terminal's folder is kept in the ledger as it closes and as the app quits (its shell's folder
 then), so a restore opens it where it was.
 
+### How many terminals
+
+The app holds as many terminals at once as the machine has room for (`terminal/room.rs`), every
+project's and every window's counted, with those whose tab the person closed while their program
+runs on out of sight. What one costs was measured: its page, where a window shows it, is a WebKit
+process of its own, about 47 MiB drawn; in the app it holds three descriptors (its PTY's end and
+a copy for its reader and its writer), two threads and about 1.6 MiB. So a quarter of the
+machine's memory and half the open-file limit each bound the count, the tighter holds, and never
+under 16 (on a Mac with 24 GB and the raised limit of 10,240: 128).
+
+- **Room is made only of a program that ended.** A new terminal over the bound takes the place of
+  the oldest of its project whose program ended (its tab goes, as one closed). A program that
+  runs is never ended for another, whatever became of its tab, and another project's terminals
+  are never let go of for this one's.
+- **Otherwise it is not opened** (`desk/term/room.rs`): nothing is touched, an agent's `open`
+  says "not opened" with how many are open and what frees one, and the Event Center has one
+  quiet line in its project, titled by the terminal's command ("Terminals Not Opened", not
+  urgent, with Dismiss), kept for the last refusal there until a terminal opens in it again
+  (`center/refused.rs`, told through the feed as `Room`).
+
 ### An agent goes on
 
 A terminal opened again after a quit or a crash is the person's shell in its folder, its last

@@ -39,6 +39,19 @@ pub(crate) fn raise() {
     }
 }
 
+/// The app's soft limit on open descriptors now; none where the system does not say.
+pub(crate) fn limit() -> Option<u64> {
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: getrlimit writes into `limit`, which outlives the call.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &raw mut limit) } != 0 {
+        return None;
+    }
+    Some(limit.rlim_cur)
+}
+
 /// `command` starts with the limit the app had when it was started, not the one it raised.
 pub(crate) fn as_started(command: &mut Command) {
     let Some(&started) = STARTED_WITH.get() else {

@@ -185,7 +185,8 @@ impl crate::feed::Consumer for Drawn {
             Entity::Said { .. }
             | Entity::Board { .. }
             | Entity::Terminal { .. }
-            | Entity::Ask { .. } => {}
+            | Entity::Ask { .. }
+            | Entity::Room => {}
         }
         Ok(())
     }

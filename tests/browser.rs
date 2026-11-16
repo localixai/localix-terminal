@@ -47,6 +47,8 @@ mod refs;
 #[cfg(target_os = "macos")]
 #[path = "support/resume.rs"]
 mod resume;
+#[path = "support/room.rs"]
+mod room;
 #[cfg(target_os = "macos")]
 #[path = "support/status.rs"]
 mod status;
@@ -1362,6 +1364,10 @@ fn main() {
         // What a terminal's program says of its state shows in the side and the Event Center.
         #[cfg(target_os = "macos")]
         if paneling && !run("program status", &|| status::scenario(&browser)) {
+            return 1;
+        }
+        // More terminals than the app once held open in one window, and none is ended for another.
+        if paneling && !run("more terminals than sixteen", &|| room::scenario(&browser)) {
             return 1;
         }
         // A coding agent left running goes on in its terminal after the app opens again.

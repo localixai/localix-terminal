@@ -299,6 +299,11 @@ define colours of its own beyond its `--ground`.
   when the person had skipped them. It is the terminal's text, drawn by no control. One that
   did not go on is a quiet line of the Event Center ("Agents Not Resumed", not urgent) with
   Retry or Continue, Show, and Dismiss.
+- **A terminal the app has no room for** is not opened, and nothing is ended for it: one quiet
+  line of the Event Center in its project ("Terminals Not Opened", not urgent), titled by the
+  terminal's command, "Not opened: 128 terminals are open, the most this machine holds" beside
+  it, and Dismiss alone, since nothing there would make room. It goes when a terminal opens in
+  that project again.
 - **What waits for the person** has one list, the Event Center, and three quiet signs read from
   it, never a source of their own: the 6 pt accent dot (on the center's button, and on a tab's
   icon while the tab is out of sight), the Dock's count of what is new, and, only while the

@@ -63,6 +63,7 @@ impl Consumer for Relay {
             | (
                 Entity::Terminal { .. }
                 | Entity::Ask { .. }
+                | Entity::Room
                 | Entity::Window { .. }
                 | Entity::Workspace { .. }
                 | Entity::Tab { .. }
