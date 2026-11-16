@@ -24,6 +24,27 @@ In the light theme, a colour a program picked for a dark ground is brought up to
 
 What a program asks its terminal to tell you (a notification: OSC 9, OSC 777) waits in the Event Center until you type in that terminal.
 
+A command you typed at a shell that ran 30 seconds or more, and finished while you were not looking (its terminal out of sight, its window not the one in front, or you in another app), says so there too: one line titled by its terminal, "Finished in 4m 12s" or "Failed with 2 after 45s", with the tab's dot and, while you are in another app, a silent macOS notice. A newer one takes its place, and it goes when you type in that terminal. What an agent types is not told, nor a coding agent's own run: its status says it. **Settings → Terminal → Finished commands** sets the time, from 10 seconds to 5 minutes, or turns it off.
+
+## A terminal drawn again
+
+A terminal's page is drawn again whole when it loads again or falls behind a flood of output. The modes its program set come back with the screen: focus reports, the keypad, the cursor's shape and colour, autowrap, the scroll region and origin mode.
+
+## tmux
+
+A terminal says it is `xterm-256color` with true colour, and `llxterm` and its version to a program that asks (XTVERSION). tmux gives a terminal it does not know the features its `TERM` names, so tell it what this one draws, in `~/.tmux.conf`:
+
+```sh
+set -g default-terminal "tmux-256color"  # where `infocmp tmux-256color` finds it; else screen-256color
+set -g mouse on                           # Option-drag still selects text
+set -g focus-events on                    # programs in tmux hear the window come and go
+set -g set-clipboard on                   # copy mode reaches the pasteboard (OSC 52)
+set -g allow-passthrough on               # a program that wraps its sequences for tmux reaches the terminal
+set -as terminal-features 'xterm-256color:RGB:usstyle:overline:strikethrough:hyperlinks:sync'
+```
+
+The last line turns on curly and coloured underlines, overline, strikethrough and links (OSC 8). It is matched by `TERM`, so it applies to every terminal that says `xterm-256color`. Inside tmux the shell's command marks stay in tmux, so no finished command is told from there.
+
 ## Finding in the output
 
 ⌘F opens a find row under the terminal. What you type is searched as you type, with case ignored, over the scrollback and the screen; in a full-screen program (an editor, tmux) over its screen alone, which has no scrollback. Every match is lit, the one shown more, and the row says which it is of how many ("3 of 12"), or "No results".

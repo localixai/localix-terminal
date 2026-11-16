@@ -4,6 +4,25 @@
 
 ### Added
 
+- **Short commands, and several steps in one call.** Each action of the window tool is also a
+  short command: `llxterm open URL`, `term`, `edit`, `goto`, `click`, `fill`, `select`, `press`,
+  `type`, `wait`, `read`, `eval`, `size`, `ask`, `shot`, `show`, `close`, `list` (one table makes
+  their JSON, `--help`, the guide's `commands` topic and every usage error). A lone `+` joins
+  them into one call, and `llxterm do -` reads them a line each from stdin, for text with quotes
+  in it; through MCP the same is `{"action": "steps", "steps": [...]}`, each step an action or a
+  command's string. Every step is checked before the first runs; a step with no tab works in
+  the tab of its kind the step before used; the first that fails or misses (a ref gone, text that
+  never showed, a script that threw) stops the rest, and the command exits 1. The answer is a
+  line a step and the last step's tab once, its changes told against what the agent last read.
+  `llxterm open` with nothing or a folder still opens the app; anything else opens a page. The
+  Claude Code skill may run each command, and nothing else of the app (not `quit`, not
+  `secret`).
+- **A control by its name.** `click`, `fill` and `select` take a control's exact name from the
+  outline as well as its ref (`click "Create account"`), so a page not read yet is worked in one
+  call; a name no control has, or several have, is said with the nearest names or their refs.
+- **The guide through MCP.** The window tool's `guide` action prints a topic, for an agent with
+  no shell.
+
 - **A coding agent goes on in its tab after the app opens again.** A terminal that ran Claude
   Code, Codex, GitHub Copilot or OpenCode when the app quit (or crashed) opens again as your
   shell with its last screen, a dimmed line under it ("Resumed Claude Code session"), and the
@@ -79,7 +98,7 @@
   the program goes on: a program flipping between working and waiting keeps its one line and
   one notice, and tells the window no more often than it reads. While it works, its tab's icon in the side carries a still
   ring, its share drawn when it says how far. What was at work goes when the program ends or
-  its shell comes back in front. The words are the program's, plain, never acted on. Terminals
+  leaves the front (its shell, or the next command, comes in front). The words are the program's, plain, never acted on. Terminals
   say `LLXTERM_PROGRAM_STATUS=1`, and the Claude Code plugin then leaves its own "Claude asks"
   line to the terminal, except inside tmux or screen, whose own terminal hears the report;
   "Claude finished" stays.
@@ -132,9 +151,36 @@
   only from the terminal you are typing in, in the window in front, up to 1 MiB of text. A
   request to read the pasteboard is never answered. Option-drag now selects text even where a
   program took the mouse, and no longer makes a column selection.
+- **A command that finished while you were not looking says so.** A command you typed at a
+  shell that ran 30 seconds or more and ended while its terminal was out of sight, its window
+  not the key one or the app not in use is one line in the Event Center ("Finished in 4m 12s",
+  "Failed with 2 after 45s"), titled by the terminal, with the tab's dot and, while you are in
+  another app, a silent macOS notice. A newer one takes its place; it goes when you type in
+  that terminal. It is decided once, as the shell says the command ended (OSC 133): no timer.
+  What an agent types and a coding agent's own run are not told (its status says it).
+  Settings → Terminal → Finished commands sets the time (10 seconds to 5 minutes) or turns it
+  off. Inside tmux nothing reaches the app: tmux keeps the shell's marks.
+- **A terminal tells a program which terminal it is.** It answers XTVERSION (`CSI > q`) with
+  `llxterm` and its version, as it answers where the cursor is: with or without a page that
+  shows it, and once. `TERM` stays `xterm-256color`; the README has a `~/.tmux.conf` that tells
+  tmux what the terminal draws (curly and coloured underlines, overline, strikethrough, links).
 
 ### Changed
 
+- A terminal's `wait_for` with nothing typed in the call waits for the answer to what was typed
+  last, and finds one that came before the call (it waited for another).
+- A call's answer says when what it was to check did not hold (`missed`): a short command exits
+  1 on it, and `window '<json>'` keeps exit 0. A page's changes after a call now follow what the
+  page told during it.
+
+- **One guide for agents, a topic at a time.** `llxterm guide [topic]` prints how to use the
+  window tool: with no topic the overview and the topics (`pages`, `terminals`, `panes`,
+  `board`, `files`, `person`, and each kind of tab such as `store`), each well under the 4096
+  bytes some hosts keep. The tool's description is built from it (the overview's lead and a
+  line a topic: 1.9 KB, from 4.1 KB), and the Claude Code plugin's `window` and `board` skills
+  are short stubs of its most common calls (1.0 KB and 0.9 KB, from 6.1 KB and 4.7 KB) that
+  send to it for the rest; a test holds every call they show to the guide, and every call the
+  guide shows to the tool's schema. `llxterm window --help` prints what `llxterm window` does.
 - **Split View in a tab of several panes puts the pane in use in a tab of its own**, and leaves
   the rest of the tab as it is; it made the tab whole, every other pane a tab of its own. A
   pane's menu says Move Pane to New Tab for it, where it said Close Split View. A session of
@@ -175,6 +221,25 @@
   are left as they are.
 
 ### Fixed
+
+- **A control not found stops its `interact`.** A call that fills, selects or clicks a control
+  by a ref or a name the page does not have now stops there, with the closest names, and does
+  not go on to its keys, script or wait: a fill that missed followed by Enter no longer sends
+  the form without the field.
+
+- **A coding agent that did not resume is said to have failed only after its last try.** The
+  first of its two tries was briefly shown as failed while the second was still to be typed,
+  which could put a Retry in the Event Center beside that second try.
+
+- **A program that asks again at once after you answered is a new line.** Your keys are taken
+  as seen before they reach the program, so a question it asks the moment it reads your answer
+  is no longer folded into the line you just answered.
+
+- **A terminal drawn again keeps the modes its program set.** A page that loaded again, a
+  panel that dropped output and a flood all send the whole screen again; focus reports, the
+  cursor's shape and colour, autowrap, insert, the scroll region and origin mode are now set
+  again after it, where they were lost. The keypad's mode (`ESC =`) was always drawn again as
+  off, and a full reset (`ESC c`) never reached the screen kept for agents: both reach it now.
 
 - **Closing a terminal never hangs.** A terminal closed while its program was writing could
   leave the program stuck as it exited, and the close waiting on it for good: macOS holds a

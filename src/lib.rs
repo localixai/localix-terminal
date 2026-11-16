@@ -44,6 +44,7 @@ pub mod reach;
 pub mod secrets;
 pub mod served;
 pub mod server;
+pub mod short;
 pub mod shots;
 pub mod store;
 pub mod terminal;

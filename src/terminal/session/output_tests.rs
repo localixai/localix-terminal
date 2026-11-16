@@ -1,24 +1,11 @@
-//! Tests of `output`: a program's cursor queries found in its output, read by read.
+//! Tests of `output`: the program's output read whole, what follows it paced, and the whole
+//! screen sent to a page that fell behind.
 
 use std::io::{self, Read};
 
 use std::time::Duration;
 
-use super::{Paced, Queries, fill};
-
-#[test]
-fn a_cursor_query_split_across_two_reads_is_answered_once() {
-    let mut queries = Queries::default();
-    assert_eq!(queries.asked(b"prompt\x1b["), 0);
-    assert_eq!(queries.asked(b"6n more"), 1);
-    // Byte by byte, then two in one read: each found once.
-    let asked: usize = (b"\x1b[6n".iter())
-        .map(|byte| queries.asked(&[*byte]))
-        .sum();
-    assert_eq!(asked, 1);
-    assert_eq!(queries.asked(b"\x1b[6n\x1b[6n"), 2);
-    assert_eq!(queries.asked(b"6n"), 0, "the end of one is no new one");
-}
+use super::{Paced, fill};
 
 /// A terminal's end as the system hands it over: a kilobyte a read, then nothing waiting, or
 /// closed.
@@ -117,4 +104,42 @@ fn a_session_closed_while_its_program_floods_the_terminal_ends_at_once() {
         let ended = heard.recv_timeout(Duration::from_secs(10));
         assert!(ended.is_ok(), "closing the session of `yes` ({pid}) hung");
     }
+}
+
+#[test]
+fn a_page_that_fell_behind_is_sent_the_modes_the_program_set_with_the_screen() {
+    use base64::Engine;
+    let scripts = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let kept = std::sync::Arc::clone(&scripts);
+    let painter: super::super::Painter = Box::new(move |script| {
+        kept.lock().unwrap().push(script);
+        true
+    });
+    let command = r"printf '\033[?1004h\033[3 qready'; sleep 20";
+    let dir = std::env::temp_dir();
+    let session = super::super::Session::start(command, &dir, None, Some(painter)).unwrap();
+    session.wait(Some("ready"), 0, super::super::DEFAULT_WAIT);
+    session.behind();
+    let deadline = std::time::Instant::now() + super::super::DEFAULT_WAIT;
+    let screen = loop {
+        let sent = scripts.lock().unwrap().clone();
+        let screen = (sent.iter().rev()).find_map(|script| {
+            script
+                .strip_prefix("R(\"")?
+                .strip_suffix("\")")
+                .map(str::to_string)
+        });
+        if let Some(screen) = screen {
+            break base64::engine::general_purpose::STANDARD
+                .decode(screen)
+                .unwrap();
+        }
+        assert!(std::time::Instant::now() < deadline, "{sent:?}");
+        super::super::nap(20);
+    };
+    let screen = String::from_utf8(screen).unwrap();
+    assert!(
+        screen.contains("\x1b[?1004h") && screen.contains("\x1b[3 q"),
+        "{screen:?}"
+    );
 }

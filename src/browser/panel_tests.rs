@@ -234,3 +234,47 @@ fn a_programs_copy_goes_only_from_the_terminal_the_person_types_in() {
     };
     assert!(copied(&hidden, 3).is_empty(), "a terminal out of sight");
 }
+
+#[test]
+fn a_command_that_ended_is_news_only_when_it_ran_long_and_the_person_was_not_looking() {
+    use std::time::Duration;
+    let (minute, after) = (Duration::from_secs(60), Some(Duration::from_secs(30)));
+    let looking = Held {
+        shown: 3,
+        beside: Some(4),
+        key_window: true,
+        typing: Some(3),
+    };
+    let news = |keys: Option<&Held>, id: u32, took: Duration, after, active: bool| {
+        unattended(keys.map(|keys| keys as &dyn Keys), id, took, after, active)
+    };
+    // In sight in the key window of the app in use: seen, whichever half has the keys.
+    assert!(!news(Some(&looking), 3, minute, after, true));
+    assert!(!news(Some(&looking), 4, minute, after, true));
+    // Shorter than the setting, or the setting off: never news.
+    assert!(!news(
+        Some(&looking),
+        5,
+        Duration::from_secs(29),
+        after,
+        true
+    ));
+    assert!(!news(Some(&looking), 5, minute, None, true));
+    // Another tab shown, the window not the key one, the person in another app, no window.
+    assert!(news(Some(&looking), 5, minute, after, true), "out of sight");
+    let behind = Held {
+        key_window: false,
+        ..looking
+    };
+    assert!(
+        news(Some(&behind), 3, minute, after, true),
+        "another window is key"
+    );
+    assert!(
+        news(Some(&looking), 3, minute, after, false),
+        "another app is in use"
+    );
+    assert!(news(None, 3, minute, after, true), "no window shows it");
+    // Exactly the setting is long enough.
+    assert!(news(None, 3, Duration::from_secs(30), after, true));
+}

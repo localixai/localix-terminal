@@ -102,6 +102,7 @@ pub(crate) fn scenario(browser: &Browser, driver: &WebviewDriver) {
     assert_eq!(read["href"], href, "the panel navigated");
 
     super::terminal_colors::check(browser, &panel);
+    super::terminal_modes::check(browser, &panel);
     super::terminal_keys::check(browser, &panel);
     super::find::check(browser, &panel);
 

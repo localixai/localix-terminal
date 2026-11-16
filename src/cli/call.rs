@@ -63,6 +63,8 @@ fn parse(args: &[String]) -> Result<Window, String> {
                 parsed.follow = true;
             }
             "--peek" => parsed.peek = true,
+            // Help is how to call it, whatever else was given: what `window` alone prints.
+            "-h" | "--help" => return Ok(Window::default()),
             "--as" => {
                 let name = value(args.next()).ok_or("--as needs a name")?;
                 parsed.agent = Some(name.clone());
@@ -132,7 +134,7 @@ pub(super) fn window(args: &[String]) -> u8 {
         return printed(ask(Start::Never, method, &caller.with(json!({}))));
     }
     let Some(json) = parsed.json else {
-        say(&crate::desk::description());
+        say(&crate::desk::described(&super::kinds()));
         say(&format!(
             "\nArguments (JSON Schema):\n{}",
             serde_json::to_string_pretty(&crate::desk::schema()).unwrap_or_default()
@@ -164,7 +166,7 @@ fn object(text: &str) -> Result<Value, String> {
 /// The most the call may be, read from stdin.
 const MOST_STDIN: u64 = 1 << 20;
 
-fn read_stdin() -> Result<String, String> {
+pub(super) fn read_stdin() -> Result<String, String> {
     read_up_to(std::io::stdin(), MOST_STDIN)
 }
 
@@ -198,13 +200,31 @@ pub(super) fn admin(method: &str, idle: u8) -> u8 {
 
 /// The answer printed: the text on stdout when it came to what was asked, else on stderr.
 fn printed(answer: Result<Answer, Trouble>) -> u8 {
+    printed_as(answer, Missed::Done)
+}
+
+/// What a call that was done, but where what it was to check did not hold, ends with.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Missed {
+    /// Done, as `window '<json>'` always was.
+    Done,
+    /// Failed, as the short commands do, so `&&` stops there.
+    Failed,
+}
+
+/// `printed`, ending with `missed` when the answer says what it was to check did not hold.
+pub(super) fn printed_as(answer: Result<Answer, Trouble>, missed: Missed) -> u8 {
     match answer {
         Ok(answer) => {
             let words = words(&answer, &crate::paths::shots());
             if !words.is_empty() {
                 say(&words);
             }
-            OK
+            let stopped = answer.value["missed"].as_bool() == Some(true);
+            match (stopped, missed) {
+                (true, Missed::Failed) => FAILED,
+                (true, Missed::Done) | (false, _) => OK,
+            }
         }
         Err(Trouble::None) => OK,
         Err(Trouble::Refused(why)) => {

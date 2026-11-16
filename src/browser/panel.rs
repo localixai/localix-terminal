@@ -80,6 +80,21 @@ pub(super) fn copy_where(keys: &dyn Keys, id: u32, text: &str, write: impl FnOnc
     here
 }
 
+/// Whether a command the person typed in terminal `id`, which ran `took`, ended while they were
+/// not looking, as a finished command's notice asks it: it ran at least `after` (none: they want
+/// no such notice), and the terminal was not in sight in the key window of the app in use
+/// (`active`; `keys` none: no window shows it). Asked once, as the shell says it ended.
+pub(super) fn unattended(
+    keys: Option<&dyn Keys>,
+    id: u32,
+    took: std::time::Duration,
+    after: Option<std::time::Duration>,
+    active: bool,
+) -> bool {
+    let looking = keys.is_some_and(|keys| active && keys.key_window() && keys.in_sight(id));
+    after.is_some_and(|after| took >= after) && !looking
+}
+
 /// What a page's size message says of the page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pane {

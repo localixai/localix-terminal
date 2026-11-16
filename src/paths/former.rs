@@ -71,10 +71,14 @@ pub fn former_server() -> Option<libc::pid_t> {
 /// The pid written in `lock` while a process holds it; none when it is free or not there.
 pub(super) fn held_by(lock: &Path) -> Option<libc::pid_t> {
     let file = std::fs::File::open(lock).ok()?;
-    // A shared hold is refused while another has the lock; taken, it goes with `file`.
+    // A shared hold is refused while another has the lock. Taken, it is let go at once, not as
+    // `file` closes: a program another thread starts meanwhile holds a copy of the descriptor
+    // until it runs, and the hold with it.
     // SAFETY: flock on a descriptor this function owns.
     let free = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_SH | libc::LOCK_NB) } == 0;
     if free {
+        // SAFETY: as above.
+        unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_UN) };
         return None;
     }
     let written = std::fs::read_to_string(lock).ok()?;

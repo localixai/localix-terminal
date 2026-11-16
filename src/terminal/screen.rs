@@ -5,9 +5,11 @@
 //! The title a program sets (OSC 0 or 2) is kept aside as plain text, for the tab's subtitle,
 //! a shell's marks of its commands (OSC 133) are counted, a note for the person (OSC 9,
 //! OSC 777) is kept as plain text, and what the program says of its state (OSC 7501) is kept
-//! in its records, its queries counted for the session to answer.
+//! in its records, its queries counted for the session to answer. The modes the emulator does
+//! not keep (`modes.rs`) are read from the CSIs and OSCs that pass, and set again in a replay.
 
 use super::marks::Marks;
+use super::modes::Modes;
 use super::notes::Notes;
 use super::status::{self, Records, Said};
 
@@ -139,8 +141,10 @@ impl Screen {
     }
 
     /// The screen as a terminal would be told to draw it: a page that reset draws it again, in the
-    /// alternate screen if the program is in it, and with the input modes it asked for (bracketed
-    /// paste, the mouse, application cursor keys), which a reset page has lost.
+    /// alternate screen if the program is in it, with the input modes it asked for (bracketed
+    /// paste, the mouse, the cursor keys and the keypad), and then the modes the emulator does
+    /// not keep (focus reports, the cursor's shape and colour, the scroll region…), which a reset
+    /// page has lost.
     pub(super) fn replay(&self) -> Vec<u8> {
         let screen = self.parser.screen();
         let mut drawn = if screen.alternate_screen() {
@@ -149,6 +153,7 @@ impl Screen {
             Vec::new()
         };
         drawn.extend(screen.state_formatted());
+        drawn.extend(self.safe.modes.replayed(self.cursor()));
         drawn
     }
 
@@ -158,6 +163,9 @@ impl Screen {
     }
 
     pub(super) fn resize(&mut self, rows: u16, columns: u16) {
+        if (rows, columns) != self.size() {
+            self.safe.modes.resized();
+        }
         self.parser.screen_mut().set_size(rows, columns);
     }
 }
@@ -182,6 +190,8 @@ const OSC_MAX: usize = 512;
 const STATUS_MAX: usize = "7501;".len() + status::BODY_MOST;
 /// The most characters of a title kept.
 const TITLE_MAX: usize = 80;
+/// The longest CSI read for a mode: one longer sets none.
+const CSI_MAX: usize = 32;
 
 /// What of the output may reach the emulator; its state carries over between reads.
 #[derive(Debug, Default)]
@@ -199,6 +209,9 @@ struct Safe {
     status: Records,
     /// The status queries not answered yet.
     asked: usize,
+    /// The CSI being read, after its `ESC [`, up to one byte past `CSI_MAX`.
+    csi: Vec<u8>,
+    modes: Modes,
 }
 
 impl Safe {
@@ -225,6 +238,7 @@ impl Safe {
             }
             (State::Escape, b'[') => {
                 kept.extend_from_slice(b"\x1b[");
+                self.csi.clear();
                 State::Csi
             }
             (State::Escape, b']') => {
@@ -232,27 +246,36 @@ impl Safe {
                 self.cut = false;
                 State::Text
             }
-            // A full reset (RIS) takes what the program said of its state.
+            // A full reset (RIS) takes what the program said of its state and the modes it set,
+            // and resets the emulator.
             (State::Escape, b'c') => {
                 self.status.reset();
+                self.modes.reset();
+                kept.extend_from_slice(b"\x1bc");
                 State::Ground
             }
             (State::Escape, b'P' | b'X' | b'^' | b'_') => State::Text,
             (State::Escape, 0x20..=0x2f) => State::Charset,
             (State::Escape, 0x1b) => State::Escape,
-            // Two-byte escapes (save and restore the cursor, a reverse index) are kept;
-            // anything else is dropped.
-            (State::Escape, b'7' | b'8' | b'M' | b'D' | b'E') => {
+            // Two-byte escapes (save and restore the cursor, a reverse index, the keypad's
+            // modes) are kept; anything else is dropped.
+            (State::Escape, b'7' | b'8' | b'M' | b'D' | b'E' | b'=' | b'>') => {
                 kept.extend_from_slice(&[0x1b, byte]);
                 State::Ground
             }
             (State::Escape, _) | (State::Charset, _) => State::Ground,
             (State::Csi, 0x20..=0x3f) => {
                 kept.push(byte);
+                if self.csi.len() <= CSI_MAX {
+                    self.csi.push(byte);
+                }
                 State::Csi
             }
             (State::Csi, 0x40..=0x7e) => {
                 kept.push(byte);
+                if self.csi.len() <= CSI_MAX {
+                    self.modes.csi(&self.csi, byte);
+                }
                 State::Ground
             }
             // A sequence broken off: what was kept of it is ended harmlessly, as `m`.
@@ -303,11 +326,14 @@ impl Safe {
         };
     }
 
-    /// A string sequence ended: the title, when it was an OSC that sets one, a shell's mark, a
-    /// note for the person, or what the program says of its state.
+    /// A string sequence ended: the title, when it was an OSC that sets one, the cursor's
+    /// colour, a shell's mark, a note for the person, or what the program says of its state.
     fn string_ended(&mut self) {
         let Some(osc) = self.osc.take() else { return };
         let text = String::from_utf8_lossy(&osc);
+        if !self.cut && self.modes.osc(&text) {
+            return;
+        }
         if let Some(body) = text.strip_prefix("7501;") {
             match status::read(body).filter(|_| !self.cut) {
                 Some(Said::Query) => self.asked += 1,
@@ -346,3 +372,7 @@ fn clean_title(title: &str) -> Option<String> {
 #[cfg(test)]
 #[path = "screen_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "screen_modes_tests.rs"]
+mod modes_tests;

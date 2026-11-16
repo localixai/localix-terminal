@@ -15,6 +15,8 @@ pub(in crate::desk::center) enum Kind {
     Blocked,
     Said,
     Failed,
+    /// A command the person typed that ended while they were not looking.
+    Command,
     Finished,
     /// An agent of the run before that did not go on in its terminal.
     Resume,
@@ -59,6 +61,7 @@ impl Kind {
             Kind::Blocked => ("Blocked", Tone::Orange, true),
             Kind::Said => ("Programs Say", Tone::Purple, true),
             Kind::Failed => ("Programs Ended", Tone::Red, true),
+            Kind::Command => ("Commands Finished", Tone::Blue, true),
             Kind::Finished => ("Programs Finished", Tone::Green, false),
             Kind::Resume => ("Agents Not Resumed", Tone::Blue, false),
         };

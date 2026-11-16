@@ -106,7 +106,27 @@ impl Desk {
             Heard::Asked(asked) => self.person_asked(key, asked),
             Heard::Center(did) => self.person_on_center(did),
             Heard::Tree(did) => self.person_on_tree(key, did),
+            Heard::Unattended { code, took } => self.unattended(key, code, took),
         }
+    }
+
+    /// A command the person typed in terminal `key` ended while they were not looking: kept in
+    /// its session until they type there, and news for the Event Center.
+    fn unattended(&self, key: &str, code: Option<i32>, took: std::time::Duration) {
+        let Some(id) = key.strip_prefix('t').and_then(|n| n.parse().ok()) else {
+            return;
+        };
+        let Ok(session) = self.session(id) else {
+            return;
+        };
+        session.unseen(crate::terminal::Ended { code, took });
+        let feed = self.feed.clone();
+        self.write_later(move || {
+            feed.record(
+                &crate::feed::Entity::Terminal { id },
+                crate::feed::Op::Upserted,
+            );
+        });
     }
 
     /// How long what the person asks for waits for the writes the window told before it: a tab

@@ -1,11 +1,9 @@
 //! The `window` tool's actions: open, interact, screenshot, close, show and list, over
 //! the owner's tabs.
 
-use std::fmt::Write as _;
-
 use serde_json::{Value, json};
 
-use super::args::{TERM_FIELDS, picked, strings, text};
+use super::args::{TERM_FIELDS, picked, text};
 use super::center::Subject;
 use super::tab::unread;
 pub(super) use super::tab::{Kind, Tab, parse};
@@ -25,21 +23,25 @@ impl Desk {
                         report: "A terminal is read as text: its screen is below.".into(),
                         state: Some(self.session(tab.id)?.snapshot()),
                         shot: None,
+                        missed: false,
                     },
                     Kind::Board => Output {
                         report: "A board is read as text: it is below.".into(),
                         state: Some(self.board_text(&tab.key)?),
                         shot: None,
+                        missed: false,
                     },
                     Kind::File => Output {
                         report: "A file is read as text: it is below.".into(),
                         state: Some(self.file_text(&tab.key)?),
                         shot: None,
+                        missed: false,
                     },
                     Kind::Made(about) => Output {
                         report: "It is read as text, below.".into(),
                         state: Some(self.made_text(about)),
                         shot: None,
+                        missed: false,
                     },
                 })
             }
@@ -67,6 +69,12 @@ impl Desk {
                 })
             }
             Some("list") => Ok(self.list(call.owner).into()),
+            Some("steps") => self.steps(call, args),
+            // The guide, for a caller that has no shell to print it with.
+            Some("guide") => {
+                let kinds: Vec<_> = self.made.kinds.iter().map(|kind| kind.about()).collect();
+                Ok(super::args::guide(text(args, "topic"), &kinds)?.into())
+            }
             // The window is the person's: where it is and how large stay theirs. A page takes a
             // size of its own instead, framed in it.
             Some("resize") => Err(
@@ -77,7 +85,7 @@ impl Desk {
                     .into(),
             ),
             _ => Err(
-                "`action` is one of open, interact, screenshot, close, show, list"
+                "`action` is one of open, interact, screenshot, close, show, list, steps, guide"
                     .to_string()
                     .into(),
             ),
@@ -85,7 +93,7 @@ impl Desk {
     }
 
     /// The owner's tab named `key`.
-    fn tab(&self, call: &Call, key: Option<&str>) -> Result<Tab, String> {
+    pub(super) fn tab(&self, call: &Call, key: Option<&str>) -> Result<Tab, String> {
         let key = key.ok_or("`tab` is needed: an id from `open` or `list`")?;
         let tab = parse(key, &self.made.kinds)
             .ok_or_else(|| format!("`{key}` is not a tab id: they look like w1, t2"))?;
@@ -93,7 +101,7 @@ impl Desk {
             self.prune_pages();
         }
         let owner = crate::lock(&self.registry).owner_named(&tab.key);
-        match owner {
+        let found = match owner {
             Some(owner) if owner == call.owner => Ok(tab),
             // The project's board is one tab for all its agents: whoever opened it first owns it.
             _ if tab.kind == Kind::Board && self.board_of(call.project.id, &tab.key) => Ok(tab),
@@ -109,7 +117,12 @@ impl Desk {
                  LLXTERM_PROJECT, or `--as`): run it from the project's directory",
                 tab.key, call.owner
             )),
+        };
+        // Where a later step that names no tab works.
+        if let Ok(tab) = &found {
+            crate::lock(&self.registry).used(&tab.key);
         }
+        found
     }
 
     /// Tab `tab` as it is now.
@@ -131,6 +144,7 @@ impl Desk {
                 report: self.file_summary(&tab.key),
                 state: Some(self.file_text(&tab.key)?),
                 shot: None,
+                missed: false,
             }),
             Kind::Made(about) => Ok(Output {
                 state: Some(self.made_text(about)),
@@ -196,112 +210,10 @@ impl Desk {
                 done
             }
         };
-        done.report = format!("{}: {}", tab.key, done.report);
-        Ok(done)
-    }
-
-    fn close(&self, call: &Call, args: &Value) -> Result<Output, Failure> {
-        let mut keys = strings(args, "tabs");
-        keys.extend(text(args, "tab").map(String::from));
-        if keys.is_empty() {
-            return Err("`tab` or `tabs` is needed: ids from `open` or `list`"
-                .to_string()
-                .into());
-        }
-        let said: Vec<String> = keys
-            .iter()
-            .map(|key| {
-                let done = self
-                    .tab(call, Some(key))
-                    .and_then(|tab| self.close_tab(&tab.key));
-                done.unwrap_or_else(|why| format!("{key}: {why}"))
-            })
-            .collect();
-        Ok(said.join("\n").into())
-    }
-
-    /// Close tab `key` and forget it. A page is let go once the window has closed it (one the
-    /// window lost is let go by `prune_pages`); a terminal or a board first, since its row of the
-    /// ledger keeps the screen of a session that closing then takes away.
-    pub(super) fn close_tab(&self, key: &str) -> Result<String, String> {
-        let tab = parse(key, &self.made.kinds).ok_or_else(|| format!("`{key}` is not a tab id"))?;
-        match tab.kind {
-            Kind::Web => {
-                let closed = self.close_web(tab.id)?;
-                self.let_go(&tab.key);
-                Ok(closed)
-            }
-            Kind::Term => {
-                self.let_go(&tab.key);
-                self.close_term(tab.id)
-            }
-            Kind::Board => {
-                self.let_go(&tab.key);
-                self.close_board(&tab.key)
-            }
-            Kind::File => {
-                self.let_go(&tab.key);
-                self.close_file(&tab.key)
-            }
-            Kind::Made(_) => {
-                self.let_go(&tab.key);
-                self.close_made(&tab.key)
-            }
-        }
-    }
-
-    /// Tab `key` is no one's any more, and closed in the ledger. Its owner hears `tab/closed`,
-    /// unless the person opened it.
-    pub(super) fn let_go(&self, key: &str) {
-        let (owned, owner) = {
-            let mut registry = crate::lock(&self.registry);
-            let owner = registry.owner_named(key);
-            let told = owner.clone().filter(|_| !registry.persons(key));
-            registry.release(key);
-            (owner.is_some(), told)
+        done.report = match done.report.is_empty() {
+            true => format!("{}:", tab.key),
+            false => format!("{}: {}", tab.key, done.report),
         };
-        if owned {
-            self.gone(owner, key);
-        }
-    }
-
-    /// The owner's tabs, one per line.
-    fn list(&self, owner: &str) -> String {
-        self.prune_pages();
-        let keys = crate::lock(&self.registry).tabs_of(owner);
-        if keys.is_empty() {
-            return "No tabs open.".into();
-        }
-        let window = self
-            .browser
-            .as_ref()
-            .and_then(crate::browser::Browser::listing)
-            .unwrap_or_default();
-        let mut out = String::new();
-        for key in keys {
-            let Some(tab) = parse(&key, &self.made.kinds) else {
-                continue;
-            };
-            let known = window.iter().find(|w| w.id == key);
-            let detail = match (tab.kind, known) {
-                (Kind::Board, _) => self.board_summary(&tab.key),
-                (Kind::File, _) => self.file_summary(&tab.key),
-                (Kind::Made(about), _) => self.made_summary(about),
-                (_, Some(w)) => format!("{} {}", w.title, w.detail).trim().to_string(),
-                (Kind::Term, None) => self
-                    .session(tab.id)
-                    .map(|s| s.command().to_string())
-                    .unwrap_or_default(),
-                (Kind::Web, None) => String::new(),
-            };
-            let shown = if known.is_some_and(|w| w.shown) {
-                " [shown]"
-            } else {
-                ""
-            };
-            let placed = (self.placed_words(&key)).map_or_else(String::new, |at| format!(" {at}"));
-            let _ = writeln!(out, "{key} ({}){shown}{placed}: {detail}", tab.kind.name());
-        }
-        out.trim_end().to_string()
+        Ok(done)
     }
 }

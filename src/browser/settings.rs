@@ -1,6 +1,7 @@
 //! The person's settings for the window: its appearance (theme, how much of the desktop shows
 //! through, the fonts), which Option key a terminal takes for Meta, whether agents go on in their
-//! terminals as the app opens, and the shortcuts they changed. Kept in `settings.json` under the config directory,
+//! terminals as the app opens, when a command that finished out of sight is told
+//! (`settings_notice.rs`), and the shortcuts they changed. Kept in `settings.json` under the config directory,
 //! read once, written whole on each change; a file that does not read is
 //! the defaults (and left as it is until the person changes something, when it is kept beside as
 //! `settings.json.bad`).
@@ -14,6 +15,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use super::shortcuts::{self, Chord};
+
+#[path = "settings_notice.rs"]
+mod notice;
+pub(super) use notice::CommandNotice;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -100,6 +105,7 @@ pub(super) struct Settings {
     pub option_meta: OptionMeta,
     pub updates: super::updates::Updates,
     pub resume_agents: super::agents::Resuming,
+    pub command_notice: CommandNotice,
     /// The shortcuts the person changed, by id: a chord, or none (taken off).
     pub shortcuts: BTreeMap<String, Option<String>>,
 }
@@ -115,6 +121,7 @@ impl Default for Settings {
             option_meta: OptionMeta::Off,
             updates: super::updates::Updates::Auto,
             resume_agents: super::agents::Resuming::On,
+            command_notice: CommandNotice::After30s,
             shortcuts: BTreeMap::new(),
         }
     }
@@ -161,6 +168,7 @@ impl Settings {
         chosen(change, "updates", &mut self.updates)?;
         chosen(change, "option_meta", &mut self.option_meta)?;
         chosen(change, "resume_agents", &mut self.resume_agents)?;
+        chosen(change, "command_notice", &mut self.command_notice)?;
         if let Some(font) = text("ui_font") {
             if !UI_FONTS.iter().any(|(id, _, _)| *id == font) {
                 return Err(format!("no font {font}"));
@@ -248,18 +256,12 @@ impl Settings {
                 .map(|(id, name, _)| json!({"id": id, "name": name}))
                 .collect()
         };
+        // Each setting as it is by default, for its reset; the font size also as `size`.
+        let mut defaults = json!(default);
+        defaults["size"] = default.font_size.into();
         json!({
             "settings": self,
-            "defaults": {
-                "theme": default.theme,
-                "transparency": default.transparency,
-                "ui_font": default.ui_font,
-                "code_font": default.code_font,
-                "size": default.font_size,
-                "option_meta": default.option_meta,
-                "updates": default.updates,
-                "resume_agents": default.resume_agents,
-            },
+            "defaults": defaults,
             "ui_fonts": fonts(&UI_FONTS),
             "code_fonts": fonts(&CODE_FONTS),
             "sizes": [SIZES.start(), SIZES.end()],

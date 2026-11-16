@@ -99,7 +99,7 @@ fn the_tool_says_the_kind_in_its_schema_and_its_guide_and_none_without_it() {
     assert_eq!(schema["properties"]["say"]["type"], "string");
     let guide = super::super::description();
     assert!(
-        guide.contains("- echo (`x` tab): Says back what it is told with `say`."),
+        guide.contains("- echo: Says back what it is told with `say`, in `x` tabs."),
         "{guide}"
     );
 }

@@ -6,9 +6,17 @@ Your agents work in the window through one tool, `window`, which the app hands t
 
 Nothing to set up: an agent started in a terminal of the window [has it already](agents.md), Claude Code through its plugin and the others as an MCP tool or the `llxterm` command. When an agent needs the window and the app is not running, it starts in the background and never takes your keys.
 
+## The guide
+
+How to use the tool is one text, printed by the app's own command a topic at a time: `llxterm guide` gives the overview and the topics, and `llxterm guide commands`, `pages`, `terminals`, `panes`, `board`, `files`, `person` (your comments, its asks, secrets) and `store` each give one. An agent with no shell, only the MCP tool, reads the same topics with the tool's `guide` action. The tool's description is built from it, a short lead and a line a topic, so an agent's context holds little until it needs a topic; Claude Code's skills are short stubs of the most common calls that send it there. The text always matches the app's version.
+
+## Short commands and steps
+
+From a shell each action of the tool is also a short command: `llxterm open localhost:3000`, `llxterm click e12`, `llxterm fill e4 ada@example.com`, `llxterm type t1 'npm test' --enter`, `llxterm wait Saved`. A `+` between them runs several in one call, in order, each in the tab the step before used: `llxterm open localhost:3000 + click "Create account" + wait Welcome` opens a page, clicks a button by its name and checks what it shows, without reading the page first. The first step that fails or misses (a control gone, a name no control has, text that never showed) stops the rest, and the command exits 1, so `&&` stops there too. The answer is a line a step and the last step's tab once, so an agent reads less than it would in separate calls. Steps with quotes in them go one a line on stdin (`llxterm do - <<'EOF'`). Through MCP the same is the `steps` action, each step an action or a short command's string. `llxterm guide commands` lists them all.
+
 ## Pages
 
-An agent opens a page beside its terminal: a dev server, a file of the project served as a site, or any address. It reads the page as an outline in which each control has a ref, and clicks, fills and picks options by those refs, never by where they are on the screen; it waits for the text that says something worked.
+An agent opens a page beside its terminal: a dev server, a file of the project served as a site, or any address. It reads the page as an outline in which each control has a ref, and clicks, fills and picks options by those refs or by a control's exact name, never by where they are on the screen; it waits for the text that says something worked.
 
 A script it runs in the page returns a value, cheaper and surer than a picture; a screenshot is for how it looks. It can frame the page as a phone or a tablet, as [⇧⌘M](browser.md#sizes) does for you.
 

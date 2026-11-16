@@ -130,6 +130,7 @@ impl Desk {
                 report: format!("{}: {}", held.key, said.report),
                 state: said.state,
                 shot: None,
+                missed: false,
             });
         }
         if self.browser.is_some() && self.reveal(call, &held.key).is_err() {
@@ -145,6 +146,7 @@ impl Desk {
             report: format!("{} ({}): {}", held.key, about.id, kind.summary()),
             state: Some(kind.text()),
             shot: None,
+            missed: false,
         })
     }
 

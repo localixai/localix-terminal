@@ -122,13 +122,13 @@ fn a_program_that_waits_again_after_the_person_typed_is_a_new_line() {
     // The person answers in the terminal; the program asks again.
     let session = desk.session(1).unwrap();
     session.typed("y\r");
-    let text = crate::desk::restore::agent_resume::tests::soon(
-        || session.text(),
-        |text| text.contains("two"),
+    // The Event Center hears the program on a thread of its own, after its words show: it is
+    // waited for itself.
+    let again = crate::desk::restore::agent_resume::tests::soon(
+        || shown(&desk),
+        |again| again.len() == 1 && again[0].id != first[0].id,
     );
-    assert!(text.contains("two"), "{text}");
-    let again = shown(&desk);
-    assert_eq!(again.len(), 1);
+    assert_eq!(again.len(), 1, "{again:?}\n{}", session.text());
     assert_ne!(first[0].id, again[0].id, "{:?}", again[0].id);
     desk.shutdown();
 }
@@ -177,5 +177,45 @@ fn what_is_done_is_not_said_twice_where_the_agent_waits_with_words_of_its_own() 
     let events = shown(&desk);
     let titles: Vec<&str> = events.iter().map(|event| event.title.as_str()).collect();
     assert_eq!(titles, ["Claude finished: the cart is fixed"]);
+    desk.shutdown();
+}
+
+#[test]
+fn a_command_that_ended_out_of_sight_is_one_line_with_its_code_and_time_until_the_person_types() {
+    use crate::browser::Heard;
+    use std::time::Duration;
+    let (desk, scratch) = (desk(), Scratch::new());
+    let mine = caller(&desk, scratch.path(), None);
+    let open = json!({"action": "open", "kind": "terminal", "command": "printf ready; sleep 20", "wait_for": "ready"});
+    desk.window(&mine.call(), &open).unwrap();
+    let told = |code: Option<i32>, seconds: u64| {
+        let took = Duration::from_secs(seconds);
+        desk.heard("t1", Heard::Unattended { code, took });
+        assert!(desk.writes_done(Duration::from_secs(5)));
+        shown(&desk)
+    };
+    let events = told(Some(0), 252);
+    assert_eq!(events.len(), 1, "{events:?}");
+    let line = &events[0];
+    assert_eq!(
+        (line.kind, line.id.as_str(), line.tab.as_str()),
+        (Kind::Command, "command:t1:1", "t1")
+    );
+    // Titled by its terminal, as every terminal's line is; it wants the person.
+    assert!(line.title.starts_with("printf "), "{}", line.title);
+    assert_eq!(line.detail, "Finished in 4m 12s");
+    assert!(line.look.urgent);
+    assert_eq!(line.labels(), ["Show", "Dismiss"]);
+    // A newer one takes its place: one line a terminal.
+    let events = told(Some(2), 45);
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        (events[0].id.as_str(), events[0].detail.as_str()),
+        ("command:t1:2", "Failed with 2 after 45s")
+    );
+    assert_eq!(told(None, 3_700)[0].detail, "Ended after 1h 1m");
+    // The person types in that terminal: seen, it goes.
+    desk.session(1).unwrap().typed("x");
+    assert!(shown(&desk).is_empty());
     desk.shutdown();
 }

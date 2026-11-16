@@ -202,7 +202,9 @@ impl Desk {
                 .resumes
                 .get(key)
                 .map_or(1, |r| r.tries + 1);
-            self.resume_staged(key, Stage::Failed, Some(tries));
+            // Counted, and still typed until the last try: a resume seen as failed between two
+            // tries would offer the person a Retry beside the try still to come.
+            self.resume_staged(key, Stage::Typed, Some(tries));
             // The next try is typed at the prompt the shell shows after this one's end.
             if tries >= TRIES || !session.wait_prompt_after(prompts, READY) {
                 break;

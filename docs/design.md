@@ -1,6 +1,7 @@
 # The app, protocol and updates (design)
 
-What llxterm is to an agent: one command, `llxterm window '<json>'`, that reaches the one app
+What llxterm is to an agent: one command, `llxterm window '<json>'` (or the same action as a short
+command, `llxterm click e12`, several joined by `+` into one call), that reaches the one app
 of the user, which holds the window and all its state. The desk calls no model and knows no agent:
 an integration (a plugin of the agent's host, loaded in the app's own terminals) adds what
 that host offers on top of the same command. Each part below is built test first; a live check uses a hidden window only.

@@ -200,6 +200,13 @@ impl Browser {
         }
     }
 
+    /// A command the person typed in terminal `id` ended, after `took`, with `code` when the
+    /// shell said one: the window decides at once whether they saw it end, and tells the app
+    /// when they did not (`Heard::Unattended`).
+    pub fn command_ended(&self, id: u32, code: Option<i32>, took: std::time::Duration) {
+        let _ = self.proxy.send_event(Cmd::CommandEnded(id, code, took));
+    }
+
     /// Terminal `key` is in `folder` now (its shell after a `cd`, or the program in front's).
     pub fn folder(&self, key: &str, folder: Option<std::path::PathBuf>) {
         let mut folders = crate::lock(&self.shared.folders);

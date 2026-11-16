@@ -16,7 +16,7 @@ import { follow, type Watched } from './watch'
 const BROWSER = [
   'This session runs in a terminal of Localix Terminal, the window the person is watching.',
   'When they ask to open, show or look at a web page or a site ("open google"), open it as a tab of',
-  'that window with `llxterm window` (the llxterm window skill), not with another browser\'s tools',
+  'that window with `llxterm open <url>` (the llxterm window skill), not with another browser\'s tools',
   '(Claude in Chrome, a built-in browser pane, `open <url>`). Use another browser only when the',
   'person names it. What you open lands beside this terminal, in their sight: no `show` is needed.',
 ].join(' ')

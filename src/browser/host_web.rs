@@ -169,6 +169,7 @@ pub(super) fn on_browser(
         | Cmd::PanelMenu(..)
         | Cmd::PanelLink(..)
         | Cmd::PanelCopy(..)
+        | Cmd::CommandEnded(..)
         | Cmd::Unanswered(..)
         | Cmd::Reveal(_)
         | Cmd::Titled(..)

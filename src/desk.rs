@@ -18,6 +18,7 @@ mod board_told;
 mod call;
 mod center;
 mod changes;
+mod close;
 mod edit;
 mod edit_disk;
 mod edit_link;
@@ -33,6 +34,7 @@ mod layout_resize;
 mod layout_split;
 mod ledger;
 mod lifecycle;
+mod list;
 mod made;
 mod open;
 mod registry;
@@ -40,6 +42,7 @@ mod relay;
 mod restore;
 mod scope;
 mod sessions;
+mod steps;
 mod tab;
 mod term;
 mod told;
@@ -48,7 +51,6 @@ mod workers;
 mod writes;
 
 use std::collections::HashMap;
-use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
@@ -59,7 +61,7 @@ use crate::projects::{Project, ProjectId};
 use crate::served::Served;
 use crate::terminal::Session;
 
-pub use args::{description, schema};
+pub use args::{described, description, guide, schema};
 #[cfg(test)]
 use call::plain;
 pub use call::{Answered, Call, Failure, Output};
@@ -352,32 +354,6 @@ impl Desk {
         self.feed.stop();
         let sessions = std::mem::take(&mut *crate::lock(&self.sessions));
         sessions.values().for_each(|session| session.close());
-    }
-
-    /// The window and every owner's tabs, for `llxterm status`.
-    pub fn status(&self) -> String {
-        let window = match (&self.page, &self.browser) {
-            (Some(page), _) if page.is_open() || self.panels_open() => "open",
-            // Shown with no tab in it: the window's start of a new tab.
-            (Some(_), Some(browser)) if browser.shown() => "open, no tab",
-            (Some(_), _) => "not open yet",
-            (None, _) => "none (no display, or --no-window)",
-        };
-        let registry = crate::lock(&self.registry);
-        let mut out = format!(
-            "window: {window}\nterminals: {}",
-            crate::lock(&self.sessions).len()
-        );
-        if let Some(why) = self.feed.store().kept_in_memory() {
-            let _ = write!(
-                out,
-                "\nstorage: memory only, nothing is kept (database: {why})"
-            );
-        }
-        for (owner, tabs) in registry.owners() {
-            let _ = write!(out, "\n{owner}: {}", tabs.join(" "));
-        }
-        out
     }
 
     /// The browser tab `id`'s lock.

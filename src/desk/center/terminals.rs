@@ -1,14 +1,16 @@
 //! The terminals' events, while their tab is open: a program that ended, what a program asks to
-//! tell the person (OSC 9, OSC 777), and what it says of its state (OSC 7501). Of that, a program
-//! that waits for the person and one that failed want them; one that is done is listed quietly;
-//! one at work or at rest is no event. Its words are the program's, shown as its title is.
+//! tell the person (OSC 9, OSC 777), what it says of its state (OSC 7501), and a command the
+//! person typed that ended while they were not looking. Of that, a program that waits for the
+//! person, one that failed and such a command want them; one that is done is listed quietly; one
+//! at work or at rest is no event. Its words are the program's, shown as its title is.
 
 use std::collections::HashSet;
+use std::time::Duration;
 
 use super::sources::Source;
 use super::{Do, Event, Kind, Leads, Subject};
 use crate::desk::Desk;
-use crate::terminal::{Asks, Doing, Status};
+use crate::terminal::{Asks, Doing, Ended, Status};
 
 /// The terminals with something for the person.
 pub(super) struct Terminals;
@@ -22,6 +24,8 @@ struct Had {
     status: Option<i32>,
     note: Option<(u32, String)>,
     said: Vec<Status>,
+    /// A command the person typed that ended unseen, by its number.
+    unseen: Option<(u32, Ended)>,
 }
 
 impl Source for Terminals {
@@ -35,8 +39,11 @@ impl Source for Terminals {
                 status: session.status(),
                 note: session.note(),
                 said: session.status_lines(),
+                unseen: session.unseen_command(),
             })
-            .filter(|had| had.ended || had.note.is_some() || !had.said.is_empty())
+            .filter(|had| {
+                had.ended || had.note.is_some() || !had.said.is_empty() || had.unseen.is_some()
+            })
             .collect();
         // Where the agent in a terminal waits with words of its own (a long turn's last line),
         // its program's "done" is not said a second time.
@@ -64,6 +71,14 @@ impl Source for Terminals {
             if let Some((number, words)) = had.note {
                 let event = Event::new(format!("said:{key}:{number}"), Kind::Said, &group, &key)
                     .says(title, words)
+                    .names_its_tab()
+                    .button("Show", show());
+                events.push(event);
+            }
+            if let Some((number, ended)) = had.unseen {
+                let id = format!("command:{key}:{number}");
+                let event = Event::new(id, Kind::Command, &group, &key)
+                    .says(title, finished(ended))
                     .names_its_tab()
                     .button("Show", show());
                 events.push(event);
@@ -138,6 +153,26 @@ impl Tab<'_> {
         // Its tab waits with the program's words alone.
         event.words = words;
         Some(event)
+    }
+}
+
+/// How a command ended, in words: its code, and how long it ran.
+fn finished(ended: Ended) -> String {
+    let took = lasted(ended.took);
+    match ended.code {
+        Some(0) => format!("Finished in {took}"),
+        Some(code) => format!("Failed with {code} after {took}"),
+        None => format!("Ended after {took}"),
+    }
+}
+
+/// A time as a person reads it: `45s`, `4m 12s`, `1h 1m`.
+fn lasted(took: Duration) -> String {
+    let seconds = took.as_secs();
+    match seconds {
+        ..60 => format!("{seconds}s"),
+        60..3600 => format!("{}m {}s", seconds / 60, seconds % 60),
+        3600.. => format!("{}h {}m", seconds / 3600, seconds % 3600 / 60),
     }
 }
 

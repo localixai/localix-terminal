@@ -91,17 +91,24 @@ fn what_only_the_last_run_held_is_settled_at_start_and_a_boards_news_stays() {
         .unwrap();
     let group = crate::projects::key(a.id);
     let ended = || Event::new("ended:t1".into(), Kind::Finished, &group, "t1");
+    let command = || Event::new("command:t1:1".into(), Kind::Command, &group, "t1");
     let review = || Event::new("review:1:c1:5".into(), Kind::Review, &group, "b1");
     let record =
         |events: &[Event], now: u64| store.write(|tx| journal::record(tx, events, now)).unwrap();
-    record(&[ended(), review()], 10);
-    let ids = vec!["ended:t1".to_string(), "review:1:c1:5".to_string()];
+    record(&[ended(), command(), review()], 10);
+    let ids = vec![
+        "ended:t1".to_string(),
+        "command:t1:1".to_string(),
+        "review:1:c1:5".to_string(),
+    ];
     store
         .write(|tx| journal::mark(tx, &ids, journal::Mark::Dismissed))
         .unwrap();
-    // The app starts again: a program that ended before is past, a card waiting is still there.
+    // The app starts again: a program or a command that ended before is past, a card waiting is
+    // still there.
     store.write(|tx| journal::settle_run_local(tx, 20)).unwrap();
-    let kept = record(&[ended(), review()], 21);
+    let kept = record(&[ended(), command(), review()], 21);
     assert!(!kept["ended:t1"].dismissed);
+    assert!(!kept["command:t1:1"].dismissed);
     assert!(kept["review:1:c1:5"].dismissed);
 }

@@ -234,16 +234,6 @@ fn input_and_keys_are_typed_in_order_text_first() {
 }
 
 #[test]
-fn a_program_asking_for_the_cursor_is_answered_by_the_session() {
-    // Raw, so the reply is not echoed: the program reads its six bytes and shows them.
-    let session = start(
-        r#"sh -c 'stty raw -echo; printf "\033[6n"; dd bs=1 count=6 2>/dev/null | od -An -c; sleep 20'"#,
-    );
-    let until = session.wait(Some("1   ;   1   R"), 0, DEFAULT_WAIT);
-    assert_eq!(until, Until::Matched, "{}", session.text());
-}
-
-#[test]
 fn typing_and_resizing_never_wait_for_a_program_that_reads_nothing() {
     let session = start("sh -c 'stty raw -echo; sleep 20'");
     session.wait(None, 0, Duration::from_millis(300));

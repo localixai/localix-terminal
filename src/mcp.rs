@@ -143,11 +143,13 @@ impl Server {
             return;
         }
         let request = window_params(&self.caller, &self.cwd, &args);
+        // Steps that stopped at one that missed are the model's to see as an error.
+        let steps = args["action"].as_str() == Some("steps");
         let followed = running::followed(&self.out, &self.running, id, &params["_meta"]);
         let spawned = std::thread::Builder::new().name("mcp-call".into()).spawn({
             let (out, running, id) = (self.out.clone(), Arc::clone(&self.running), id.clone());
             move || {
-                let answer = result(ask(Start::Spawn, "window/call", &request));
+                let answer = result(ask(Start::Spawn, "window/call", &request), steps);
                 drop(followed);
                 if running.finish(&id) {
                     out.done(&id, &era.complete(answer));
@@ -193,8 +195,9 @@ fn named(window: &Value) -> Value {
 }
 
 /// The server's answer as a tool result: its text, a picture as image content, a failure as a
-/// result the model sees (`isError`), never a protocol error.
-fn result(answer: Result<Answer, Trouble>) -> Value {
+/// result the model sees (`isError`), never a protocol error; so are `steps` that stopped where
+/// one missed.
+fn result(answer: Result<Answer, Trouble>, steps: bool) -> Value {
     match answer {
         Ok(answer) => {
             let text = answer.value["text"].as_str().unwrap_or_default();
@@ -209,7 +212,11 @@ fn result(answer: Result<Answer, Trouble>) -> Value {
             if content.is_empty() {
                 content.push(json!({"type": "text", "text": "Done."}));
             }
-            json!({"content": content})
+            let stopped = steps && answer.value["missed"].as_bool() == Some(true);
+            match stopped {
+                true => json!({"content": content, "isError": true}),
+                false => json!({"content": content}),
+            }
         }
         Err(Trouble::None) => failed("Localix Terminal is not running"),
         Err(Trouble::Refused(why) | Trouble::Lost(why)) => failed(&why),

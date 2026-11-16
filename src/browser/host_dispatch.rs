@@ -64,6 +64,7 @@ impl On<'_> {
             Cmd::PanelMenu(id, at, items) => self.panel_menu(id, at, &items),
             Cmd::PanelLink(id, url) => self.panel_link(id, url),
             Cmd::PanelCopy(id, text) => self.panel_copy(id, &text),
+            Cmd::CommandEnded(id, code, took) => self.command_ended(id, code, took),
             Cmd::Reveal(id) => self.reveal(id),
             Cmd::Unanswered(id, at) => self.unanswered(id, at),
             Cmd::Unpanel(id) => {
@@ -230,6 +231,22 @@ impl On<'_> {
     fn panel_copy(&self, id: u32, text: &str) {
         if let Some(deck) = self.deck.as_ref() {
             panel::copy_where(deck, id, text, platform::copy);
+        }
+    }
+
+    /// A command the person typed in terminal `id` ended: news for them, told to the app, where
+    /// the rule says they did not see it end (`panel::unattended`), read against this window, the
+    /// one the terminal is in if any is, and the setting (Settings, Terminal).
+    fn command_ended(&self, id: u32, code: Option<i32>, took: std::time::Duration) {
+        let after = crate::browser::settings::now().command_notice.after();
+        #[cfg(target_os = "macos")]
+        let active = crate::browser::alerts_macos::active();
+        #[cfg(not(target_os = "macos"))]
+        let active = true;
+        let keys = self.deck.as_ref().map(|deck| deck as &dyn panel::Keys);
+        if panel::unattended(keys, id, took, after, active) {
+            let key = Key::Term(id).name();
+            (self.shared).heard(&key, Heard::Unattended { code, took });
         }
     }
 

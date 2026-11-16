@@ -24,7 +24,8 @@ use super::sources::Sources;
 use super::{Env, Fetch, Index, Listing, Source, What, target::Target};
 use crate::kind::{About, Kind, Said, Tab};
 
-static ABOUT: About = About {
+/// What the Store says of itself, read without opening it (the guide's topic `store`).
+pub static ABOUT: About = About {
     id: "store",
     letter: 'p',
     title: "Store",
@@ -34,7 +35,7 @@ static ABOUT: About = About {
         "store",
         r#"{"type": "object", "description": "store: {\"search\": \"words\", \"what\": \"plugin|skill|server\", \"limit\": 20} lists what matches; {\"show\": \"<id>\"} reads one listing and which agents have it; {\"install\": \"<id>\", \"agent\": \"claude|codex|gemini|copilot|opencode\"} asks the person to install it.", "additionalProperties": true}"#,
     )],
-    guide: "store: the catalogue of plugins, skills and MCP servers for coding agents. Search and \
+    guide: "The catalogue of plugins, skills and MCP servers for coding agents. Search and \
             read it with `store`. An install is the person's to allow: `install` shows them what \
             it would write or run, in the Store's tab, and the tab read again says what they \
             answered. Only the person removes.",

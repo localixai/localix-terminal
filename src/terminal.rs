@@ -9,6 +9,7 @@ mod hooks;
 mod keys;
 pub mod lineage;
 mod marks;
+mod modes;
 mod notes;
 mod pty;
 mod screen;

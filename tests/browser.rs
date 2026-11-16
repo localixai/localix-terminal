@@ -50,10 +50,14 @@ mod resume;
 #[cfg(target_os = "macos")]
 #[path = "support/status.rs"]
 mod status;
+#[path = "support/steps.rs"]
+mod steps;
 #[path = "support/terminal_colors.rs"]
 mod terminal_colors;
 #[path = "support/terminal_keys.rs"]
 mod terminal_keys;
+#[path = "support/terminal_modes.rs"]
+mod terminal_modes;
 #[path = "support/told.rs"]
 mod told;
 #[cfg(target_os = "macos")]
@@ -1345,6 +1349,9 @@ fn main() {
             return 1;
         }
         if driving && !run("refs", &|| refs::scenario(&browser, &origin)) {
+            return 1;
+        }
+        if driving && !run("steps", &|| steps::scenario(&browser, &origin)) {
             return 1;
         }
         // The Event Center lies over the pages: macOS's, where the strip does.

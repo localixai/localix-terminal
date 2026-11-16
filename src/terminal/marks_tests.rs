@@ -84,3 +84,27 @@ fn each_prompt_the_shell_shows_is_counted_so_its_first_says_it_is_ready() {
     }
     assert_eq!(marks.prompts(), 2);
 }
+
+#[test]
+fn a_command_is_the_persons_when_their_own_keys_went_in_since_the_prompt() {
+    let mut marks = Marks::default();
+    for (typed, theirs) in [(Some(true), true), (Some(false), false), (None, false)] {
+        marks.read("133;A");
+        if let Some(person) = typed {
+            marks.typed_in(person);
+        }
+        marks.read("133;C");
+        // What is typed while it runs makes no command the person's.
+        marks.typed_in(true);
+        marks.read("133;D;0");
+        assert_eq!(marks.theirs(), theirs, "typed {typed:?}");
+    }
+    // The person typed at a prompt, then an agent's line ran in the same breath: theirs too,
+    // as both typed it.
+    marks.read("133;A");
+    marks.typed_in(true);
+    marks.typed_in(false);
+    marks.read("133;C");
+    marks.read("133;D;0");
+    assert!(marks.theirs());
+}

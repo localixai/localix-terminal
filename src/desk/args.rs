@@ -3,8 +3,9 @@
 
 mod guide;
 mod kinds;
+mod steps;
 
-pub use guide::description;
+pub use guide::{described, description, guide};
 
 use std::sync::OnceLock;
 
@@ -16,11 +17,6 @@ pub fn schema() -> Value {
     let mut put = |name: &str, value: Value| {
         p.insert(name.to_string(), value);
     };
-    put(
-        "action",
-        json!({"type": "string", "enum":
-        ["open", "interact", "screenshot", "close", "show", "list"]}),
-    );
     put(
         "kind",
         json!({"type": "string", "enum": ["browser", "terminal", "board", "file"], "description": "open: the kind of tab."}),
@@ -110,6 +106,7 @@ pub fn schema() -> Value {
     p.extend(layout_fields());
     p.extend(board_fields());
     p.extend(said_fields());
+    p.extend(steps::fields());
     (crate::kind::abouts().into_iter()).for_each(|about| kinds::fields(&mut p, about));
     json!({"type": "object", "required": ["action"], "properties": p})
 }

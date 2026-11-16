@@ -68,6 +68,9 @@ pub struct Output {
     pub report: String,
     pub state: Option<String>,
     pub shot: Option<Shot>,
+    /// What it was to check did not hold: a ref gone, text that never showed, a script that
+    /// threw. The call was done, so it is no failure, but steps after it stop.
+    pub missed: bool,
 }
 
 impl From<String> for Output {
@@ -86,6 +89,8 @@ pub struct Answered {
     /// What the person sent from the window, as the agent reads it.
     pub said: Option<String>,
     pub shot: Option<Shot>,
+    /// What it was to check did not hold (`Output::missed`).
+    pub missed: bool,
 }
 
 impl Answered {
@@ -133,7 +138,9 @@ impl Desk {
     /// One `window` call, answered with its picture as it is, for whoever carries bytes.
     pub fn call(&self, call: &Call, args: &Value) -> Result<Answered, Failure> {
         crate::lock(&self.registry).known(call);
-        let out = self.act(call, args)?;
+        // A failure is masked as an answer is: one of several steps quotes what was done.
+        let masked = |why: Failure| Failure::Failed(self.vault.mask(why.message()));
+        let out = self.act(call, args).map_err(masked)?;
         let mut text = out.report;
         if let Some(state) = out.state {
             text = format!("{text}\n\n{state}");
@@ -145,6 +152,7 @@ impl Desk {
                 .flatten()
                 .map(|said| self.vault.mask(&plain(&said))),
             shot: out.shot,
+            missed: out.missed,
         })
     }
 }

@@ -42,14 +42,16 @@ impl Session {
         Some((number, words.to_string()))
     }
 
-    /// `heard` each time the note comes or goes.
+    /// `heard` each time the note comes or goes, or a command of the person's that ended unseen
+    /// is seen.
     pub fn on_note(&self, heard: impl Fn() + Send + Sync + 'static) {
-        self.shared.lock().on_note = Some(Arc::new(heard));
+        self.shared.lock().told.on_note = Some(Arc::new(heard));
     }
 
-    /// The person typed `text` in the window: a note that waited for them is read, and what the
-    /// program said it finished or failed is seen. What the window types for them (a reply to
-    /// the program's question, the mouse, an arrow) starts with an escape, and reads nothing.
+    /// The person typed `text` in the window: a note that waited for them is read, what the
+    /// program said it finished or failed is seen, and so is a command of theirs that ended
+    /// unseen. What the window types for them (a reply to the program's question, the mouse, an
+    /// arrow) starts with an escape, and reads nothing.
     pub(super) fn attended(&self, text: &str) {
         if text.len() > 1 && text.starts_with('\x1b') {
             return;
@@ -57,8 +59,9 @@ impl Session {
         let heard = {
             let mut state = self.shared.lock();
             state.screen.status_mut().seen();
-            if state.screen.notes().heard() {
-                state.on_note.clone()
+            let seen = state.told.unseen.take().is_some();
+            if state.screen.notes().heard() || seen {
+                state.told.on_note.clone()
             } else {
                 None
             }

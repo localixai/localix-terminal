@@ -1,6 +1,6 @@
 //! Tests of `web`.
 
-use super::controls::control;
+use super::controls::{control, named};
 use super::reading::{TITLE_LIMIT, clipped, short_refs, text_end};
 use super::*;
 
@@ -69,4 +69,52 @@ fn a_window_of_text_ends_in_the_probes_units() {
         "an emoji is two units, as the page counts"
     );
     assert_eq!(text_end(5, ""), 5);
+}
+
+/// A control as the outline lists it.
+fn element(reference: &str, role: &str, name: &str) -> crate::view::Element {
+    crate::view::Element {
+        reference: reference.into(),
+        role: role.into(),
+        name: name.into(),
+        value: None,
+        states: vec![],
+        editable: false,
+        dialog: false,
+        options: vec![],
+        form: None,
+    }
+}
+
+#[test]
+fn a_control_is_found_by_its_exact_name_or_the_closest_are_said() {
+    let page = [
+        element("e1", "button", "Save"),
+        element("e2", "button", "Save draft"),
+        element("e3", "link", "Billing"),
+        element("e4", "button", "Close"),
+        element("e5", "button", "Close"),
+    ];
+    assert_eq!(named(&page, "Save"), Ok("e1".to_string()));
+    // Case is no matter when nothing has the name exactly.
+    assert_eq!(named(&page, "billing"), Ok("e3".to_string()));
+    let why = named(&page, "Sav").unwrap_err();
+    assert!(
+        why.starts_with("no control is named \"Sav\"")
+            && why.contains("\"Save\" [e1]")
+            && why.contains("\"Save draft\" [e2]"),
+        "{why}"
+    );
+    let why = named(&page, "Close").unwrap_err();
+    assert!(
+        why.contains("2 controls") && why.contains("e4, e5"),
+        "{why}"
+    );
+    // While a dialog covers the page, only its controls are found.
+    let mut covered = page.to_vec();
+    covered.push(crate::view::Element {
+        dialog: true,
+        ..element("e6", "button", "Close")
+    });
+    assert_eq!(named(&covered, "Close"), Ok("e6".to_string()));
 }

@@ -84,7 +84,7 @@ has no model and no account of its own: the agents are the ones you already run.
 <details>
 <summary>Each part in detail</summary>
 
-- **Terminals**: real shells on a PTY, split and dragged like any tab; a coding agent running in one shows its mark and its session's title, and it is a session: the files and pages opened in it are its own, a row of tabs on the terminal's right with one in sight, so the side lists your sessions and each keeps its documents to itself. A file or a page asked from no terminal joins the session you look at, else the project's last; the row scrolls sideways when its tabs do not fit, a tab dragged along it stays where you leave it, and a tab that shows a file has the picture the tree gives that file. What a program asks its terminal to tell you (a notification: OSC 9, OSC 777) waits in the Event Center until you type in that terminal. ⌘F finds in a terminal's output, its scrollback too: every match lit, ⌘G and ⇧⌘G (or Return and ⇧Return) to walk them, Esc to close.
+- **Terminals**: real shells on a PTY, split and dragged like any tab; a coding agent running in one shows its mark and its session's title, and it is a session: the files and pages opened in it are its own, a row of tabs on the terminal's right with one in sight, so the side lists your sessions and each keeps its documents to itself. A file or a page asked from no terminal joins the session you look at, else the project's last; the row scrolls sideways when its tabs do not fit, a tab dragged along it stays where you leave it, and a tab that shows a file has the picture the tree gives that file. What a program asks its terminal to tell you (a notification: OSC 9, OSC 777) waits in the Event Center until you type in that terminal, and so does a command you typed that ran 30 seconds or more and finished while you were not looking ("Failed with 2 after 4m 12s"; Settings → Terminal → Finished commands). A terminal drawn again (a reload, a flood of output) keeps the modes its program set: focus reports, the cursor's shape and colour, the scroll region. ⌘F finds in a terminal's output, its scrollback too: every match lit, ⌘G and ⇧⌘G (or Return and ⇧Return) to walk them, Esc to close.
 - **Agents**: Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode and Hermes reach the window from its own terminals. They open pages and terminals, click by ref, plan on the board, and hear your comments; an Event Center tells you what waits for you. An agent that reports its state to its terminal (OSC 7501: Claude Code 2.1.295 and later, Codex), which every terminal of the app's answers that it reads, says there when it waits for you (an approval, a question, a sign-in) and when it failed: one line on its terminal, titled by the terminal with the agent's name beside its words, which stays in place until you type in that terminal and it goes on, however often it flips between working and waiting; a turn it finished is listed quietly until you type in its terminal, and while it works its tab's icon carries a still ring, with its share when it says how far. With its plugin, Claude Code also says when a long turn finished, with its last line. What waits also marks its tab with a dot and its words, counts on the Dock's icon, and, while you are in another app, comes as a silent macOS notice whose click shows the tab. A session that runs outside the window has no tab yet: its line's **Continue Here** (or its notice's click) continues it in a terminal of its project.
 - **A browser**: real pages on the system WebView, with history, an address bar that knows the project's pages, phone and tablet sizes, comments you pin to an element, and ⌘F, which finds in the page as it finds in a terminal: a row under the toolbar, "3 of 12", every match lit and the page left as it was. A page that never comes (a dev server that has stopped) says so in one line and keeps its address, so ⌘R tries it again.
 - **A board**: the project's kanban (Backlog, Todo, Doing, Review, Done, Discarded), kept in the project as `.localix/board.json` for git.
@@ -119,7 +119,13 @@ terminal (no terminal opens unasked).
 Your agents reach the app only in its own terminals, and find it there with nothing installed;
 outside Localix Terminal they are as you set them. `llxterm` is on the
 `PATH` there (the app's own program, kept first even after your profile sets a `PATH`), and
-`llxterm guide` prints how to use the window tool. Claude Code 2.1.280 and later loads the
+`llxterm guide` prints how to use the window tool, a topic at a time (`llxterm guide commands`,
+`pages`, `terminals`, `panes`, `board`, `files`, `person`, `store`; through MCP, the tool's
+`guide` action); the window tool's description, the Claude Code plugin's short skills and
+`llxterm window --help` all lead there. Each action is also a short command, and `+` joins
+several into one call: `llxterm open localhost:3000 + click "Create account" + wait Welcome`
+opens a page, clicks a button by its name and checks the result in one call; the first step
+that fails or misses stops the rest and the command exits 1. Claude Code 2.1.280 and later loads the
 plugin from the app's copy of it (`CLAUDE_CODE_PLUGIN_DIRS`; the comments mod needs 2.1.287),
 unless your organization's managed settings turn plugin folders off. Gemini CLI 0.3 and later
 and OpenCode get the window tool as an MCP server from a settings file of the app's that their
@@ -206,6 +212,23 @@ color capabilities rather than the calling agent's captured-output settings, so 
 get `CLICOLOR=1`. You can still opt out in your shell profile or for one command, for example
 `NO_COLOR=1 command`.
 
+**tmux inside Localix Terminal.** A terminal says it is `xterm-256color` with true colour, and
+`llxterm` and its version to a program that asks (XTVERSION). tmux gives a terminal it does not
+know the features its `TERM` names, so tell it what this one draws, in `~/.tmux.conf`:
+
+```sh
+set -g default-terminal "tmux-256color"  # where `infocmp tmux-256color` finds it; else screen-256color
+set -g mouse on                           # Option-drag still selects text
+set -g focus-events on                    # programs in tmux hear the window come and go
+set -g set-clipboard on                   # copy mode reaches the pasteboard (OSC 52)
+set -g allow-passthrough on               # a program that wraps its sequences for tmux reaches the terminal
+set -as terminal-features 'xterm-256color:RGB:usstyle:overline:strikethrough:hyperlinks:sync'
+```
+
+The last line turns on curly and coloured underlines, overline, strikethrough and links
+(OSC 8). It is matched by `TERM`, so it applies to every terminal that says `xterm-256color`.
+Inside tmux the shell's command marks stay in tmux: no finished command is told from there.
+
 | Keys | Does | Keys | Does |
 | --- | --- | --- | --- |
 | ⌘1…⌘8, ⌘9 | the project's tab by its place (one setting for the row), the last | ⌘L | address field |
@@ -223,7 +246,7 @@ get `CLICOLOR=1`. You can still opt out in your shell profile or for one command
 
 In a terminal: ⌘F opens a find row under it (Return and ⇧Return walk the matches, Esc closes it and gives the keys back), ⌘K clears (a full-screen program such as an editor or tmux keeps its screen), ⌘← ⌘→ line start and end, ⌥← ⌥→ words, ⌘⌫ ⌥⌫ delete to the start and a word, ⌘↑ ⌘↓ top and bottom. ⇧↩ sends LF, a new line in a coding agent's prompt instead of submitting, and Enter at a shell. Option types your layout's characters until Settings → Terminal makes the left, the right or both Option keys Meta (⌥B and ⌥F move by words in a shell, as Alt does; ⌥↩ sends ESC CR). Option-drag selects text even where a program took the mouse, rather than a column. A program can copy to the pasteboard (OSC 52, as tmux and vim over ssh do) from the terminal you are typing in, up to 1 MiB of text; no program can read the pasteboard.
 
-**Settings** (⌘, or the gear at the top of the column): theme, how much of the desktop the glass lets through, the interface and code fonts, the terminals' font size, which Option key is Meta in a terminal (left, right, both or neither), and every shortcut: click its keys and press new ones (⌫ takes it off; one already taken asks first), reset one or all. They apply at once and are kept in `~/.config/llxterm/settings.json`.
+**Settings** (⌘, or the gear at the top of the column): theme, how much of the desktop the glass lets through, the interface and code fonts, the terminals' font size, which Option key is Meta in a terminal (left, right, both or neither), whether agents resume in their terminals, how long a command runs before its end out of sight is told (or never), and every shortcut: click its keys and press new ones (⌫ takes it off; one already taken asks first), reset one or all. They apply at once and are kept in `~/.config/llxterm/settings.json`.
 
 </details>
 

@@ -96,3 +96,18 @@ fn the_shell_back_in_front_takes_what_its_program_left_at_work() {
         states(&session) == [("a".to_string(), Doing::Done)]
     });
 }
+
+#[test]
+fn a_program_that_leaves_the_front_takes_what_it_left_at_work_when_the_next_comes_at_once() {
+    // The next job comes in front as the program ends, with no output while the shell was:
+    // the shell's own moment in front is never seen, the program's leaving is.
+    let session = start(
+        r#"sh -c 'set -m; sh -c "printf \"\\033]7501;state=working\\007\\033]7501;state=done:id=a\\007busy \"; sleep 1"; sh -c "sleep 0.5; printf next; sleep 20"'"#,
+    );
+    assert_eq!(session.wait(Some("busy"), 0, DEFAULT_WAIT), Until::Matched);
+    assert_eq!(states(&session).len(), 2, "{:?}", states(&session));
+    assert_eq!(session.wait(Some("next"), 0, DEFAULT_WAIT), Until::Matched);
+    until("what was at work goes with its program", || {
+        states(&session) == [("a".to_string(), Doing::Done)]
+    });
+}

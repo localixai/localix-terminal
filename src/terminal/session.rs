@@ -12,8 +12,10 @@ use super::pty::{self, Pty};
 
 mod input;
 mod output;
+mod queries;
 mod read;
 mod status;
+mod told;
 mod wait;
 use self::input::Input;
 use super::screen::Screen;
@@ -47,6 +49,9 @@ struct State {
     /// How many commands the shell had ended when the last input was typed: the wait after it
     /// counts from there, so a command that ends before the wait begins is not missed.
     typed_at: Option<u64>,
+    /// The screen's text just before the last input was typed, and that input: a wait with no
+    /// input of its own counts from there (`count_before_typed`).
+    typed: Option<(String, String)>,
     closed: bool,
     /// Called once, when the program ends: who keeps the session hears it.
     on_end: Option<Box<dyn FnOnce() + Send>>,
@@ -60,10 +65,8 @@ struct State {
     /// when), and who hears it each time it changes (its name; none when it is not known).
     front: Front,
     on_front: Option<Arc<Fronted>>,
-    /// Called when the program's note for the person comes or goes, and the number of the last
-    /// one it was called for.
-    on_note: Option<Arc<dyn Fn() + Send + Sync>>,
-    noted: u32,
+    /// What is told of the program's notes and the shell's commands (`told.rs`).
+    told: told::Told,
     /// Called when what the program says of its state changes, and the count of changes
     /// (`Records::changes`) it was last called for.
     on_status: Option<Arc<dyn Fn() + Send + Sync>>,
@@ -186,6 +189,7 @@ impl Session {
                 unsent: Vec::new(),
                 replay: false,
                 typed_at: None,
+                typed: None,
                 closed: false,
                 on_end: None,
                 on_title: None,
@@ -193,8 +197,7 @@ impl Session {
                 titled_at: now,
                 front: Front::default(),
                 on_front: None,
-                on_note: None,
-                noted: 0,
+                told: told::Told::default(),
                 on_status: None,
                 statused: 0,
             }),
@@ -224,38 +227,6 @@ impl Session {
         Ok(session)
     }
 
-    /// Type `input` (a line break is Enter; lines are one paste for a program that takes
-    /// pastes), then press `keys` one at a time. A key that does not
-    /// exist is refused before anything is typed.
-    pub fn type_in(&self, input: &str, names: &[String]) -> Result<(), String> {
-        let (cursor, pastes) = {
-            let mut state = self.shared.lock();
-            state.typed_at = Some(state.screen.marks().ended().0);
-            state.screen.marks_mut().typed_in();
-            (
-                state.screen.application_cursor(),
-                state.screen.bracketed_paste(),
-            )
-        };
-        let mut pressed = Vec::new();
-        for name in names {
-            pressed.extend(
-                keys::encode(name, cursor)
-                    .ok_or_else(|| format!("no key called `{name}`: {}", keys::NAMES))?,
-            );
-        }
-        let (mut bytes, mut after) = keys::typed(input, pastes);
-        after.extend(pressed);
-        if bytes.is_empty() || after.is_empty() {
-            bytes.extend(after);
-            return self.input.send(&bytes);
-        }
-        // Text followed at once by Enter is taken for a paste.
-        self.input.send(&bytes)?;
-        nap(30);
-        self.input.send(&after)
-    }
-
     /// The window's page is new, `columns` by `rows`: the terminal takes that size and the page
     /// is sent the whole screen.
     pub fn loaded(&self, columns: u16, rows: u16) {
@@ -281,17 +252,18 @@ impl Session {
     }
 
     /// What the person typed in the window, as the terminal sends it: queued, the window never
-    /// waits for the program to read it.
+    /// waits for the program to read it. It is taken as seen before it is sent: a program that
+    /// answers at once asks again after the person's keys, never in the round they answered.
     pub fn typed(&self, text: &str) {
         let cursor = {
             let mut state = self.shared.lock();
             if read::edits_the_line(text) {
-                state.screen.marks_mut().typed_in();
+                state.screen.marks_mut().typed_in(true);
             }
             state.screen.application_cursor()
         };
-        self.input.queue(&keys::from_window(text, cursor));
         self.attended(text);
+        self.input.queue(&keys::from_window(text, cursor));
     }
 
     pub fn command(&self) -> &str {

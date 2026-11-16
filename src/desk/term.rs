@@ -50,6 +50,7 @@ impl Desk {
             report: until.said(wanted, most),
             state: Some(session.snapshot()),
             shot: None,
+            missed: missed(until, wanted),
         };
         if until == Until::Exited {
             self.drop_session(id);
@@ -203,16 +204,14 @@ impl Desk {
             ));
         }
         let wanted = text(args, "wait_for");
-        // What the input itself holds the terminal echoes: the wait is for the program's output.
-        let before = wanted.map_or(0, |wanted| {
-            session.count(wanted)
-                + if wanted.is_empty() {
-                    0
-                } else {
-                    input.matches(wanted).count()
-                }
-        });
         let keys = strings(args, "keys");
+        // What the input itself holds the terminal echoes: the wait is for the program's output.
+        // With nothing to type, it is for the answer to what was typed last.
+        let typing = !input.is_empty() || !keys.is_empty();
+        let before = wanted.map_or(0, |wanted| match typing {
+            true => session.count(wanted) + input.matches(wanted).count(),
+            false => session.count_before_typed(wanted),
+        });
         if keys.len() > MAX_KEYS {
             return Err(format!("`keys` is at most {MAX_KEYS}: press them in parts"));
         }
@@ -225,6 +224,7 @@ impl Desk {
             report: until.said(wanted, most),
             state: Some(session.snapshot()),
             shot: None,
+            missed: missed(until, wanted),
         })
     }
 
@@ -314,6 +314,11 @@ impl Desk {
         }
         Ok(key)
     }
+}
+
+/// A wait for text that ended any other way than with the text: it did not hold.
+fn missed(until: Until, wanted: Option<&str>) -> bool {
+    wanted.is_some() && until != Until::Matched
 }
 
 /// Where a terminal `args` asks for starts: its `workdir`, from the caller's directory.

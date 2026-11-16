@@ -40,6 +40,9 @@ pub(super) struct Registry {
     said: HashMap<String, Vec<Said>>,
     next_said: u64,
     owners: HashMap<String, Known>,
+    /// Tab keys in the order they were last worked in, the latest last: where a step that
+    /// names no tab works.
+    used: Vec<String>,
 }
 
 impl Registry {
@@ -79,12 +82,29 @@ impl Registry {
             self.persons.insert(key.to_string());
         } else {
             self.persons.remove(key);
+            self.used(key);
         }
     }
 
     pub(super) fn release(&mut self, key: &str) {
         self.tabs.remove(key);
         self.persons.remove(key);
+        self.used.retain(|used| used != key);
+    }
+
+    /// Tab `key` was worked in just now.
+    pub(super) fn used(&mut self, key: &str) {
+        self.used.retain(|used| used != key);
+        self.used.push(key.to_string());
+    }
+
+    /// The tab of `owner`'s it worked in last, of the kind whose keys start with `letter` (any
+    /// kind with none).
+    pub(super) fn last_used(&self, owner: &str, letter: Option<char>) -> Option<String> {
+        (self.used.iter().rev())
+            .filter(|key| letter.is_none_or(|letter| key.starts_with(letter)))
+            .find(|key| self.tabs.get(*key).is_some_and(|of| of == owner))
+            .cloned()
     }
 
     /// Whether the person opened tab `key` themselves.

@@ -16,15 +16,18 @@ app's own program, which those terminals put first on the `PATH`.
 **Hold Claude to its board card** (`finish_cards`, off by default): Claude stopping with its own
 card still in Doing is asked once to finish it first.
 
-The skills allow `Bash(llxterm:*)` while they are in use; allow it for the session (or in your
+The skills allow `llxterm window` and `llxterm guide` calls while they are in use; allow them for the session (or in your
 settings) so calls do not each ask.
 
 ## What it adds
 
-- **Skill `window`** (the model's, hidden from the `/` menu): when to open pages and terminals and
-  how, the calls and their fields.
-- **Skill `board`** (the model's): when to plan work on the board, how to cut it into cards, and how
-  to hand cards to subagents. It loads with the board as it is.
+- **Skill `window`** (the model's, hidden from the `/` menu): when to open pages and terminals,
+  and their most common calls.
+- **Skill `board`** (the model's): when to plan work on the board and hand cards to subagents, and
+  its most common calls. It loads with the board's open cards, none when there are none.
+
+Both are short stubs of the app's guide, `llxterm guide [topic]`, which has the rest (every
+field, op and rule); a test of the app's holds each call they show to that guide.
 - **Agent `llxterm:worker`**: a subagent that takes one card, does it, and hands it in for your
   review (or blocks it with what it needs). Start several for cards that touch different files.
 - **Commands**: `/tabs` (this project's tabs and your latest comments, in the chat), `/llxterm:end`

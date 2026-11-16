@@ -215,14 +215,11 @@ fn a_bash_whose_own_prompt_command_ends_in_a_semicolon_or_is_strict_keeps_its_pr
     }
 }
 
-/// A folder of the app's command, holding an `llxterm` that says `ours`, gone with the test.
+/// A folder of the app's command, holding an `llxterm` that says what it is given, gone with the
+/// test.
 fn command_folder(home: &Path) -> PathBuf {
     let bin = home.join("app-bin");
-    std::fs::create_dir_all(&bin).unwrap();
-    let program = bin.join("llxterm");
-    std::fs::write(&program, "#!/bin/sh\necho ours\n").unwrap();
-    let executable = std::os::unix::fs::PermissionsExt::from_mode(0o755);
-    std::fs::set_permissions(&program, executable).unwrap();
+    crate::testing::echo_named(&bin, "llxterm");
     bin
 }
 
@@ -262,7 +259,8 @@ fn the_apps_command_stays_on_path_after_a_profile_sets_its_own() {
         std::fs::write(home.0.join(".bash_profile"), profile).unwrap();
         let bin = command_folder(&home.0);
         let session = told(shell, &home.0, &bin);
-        session.type_in("llxterm\n", &[]).unwrap();
+        // Quoted so that the line typed does not show the word its output does.
+        session.type_in("llxterm \"our\"s\n", &[]).unwrap();
         let until = session.wait(Some("ours"), 0, DEFAULT_WAIT);
         assert_eq!(until, Until::Matched, "{shell}: {}", session.snapshot());
     }

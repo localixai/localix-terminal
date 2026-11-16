@@ -5,10 +5,11 @@
 mod controls;
 #[path = "web_read.rs"]
 mod reading;
+#[path = "web_wait.rs"]
+mod waiting;
 use reading::{outline, read};
 
 use std::sync::Arc;
-use std::time::Instant;
 
 use serde_json::Value;
 
@@ -112,10 +113,11 @@ impl Desk {
         };
         // The page is diffed under its own lock, not the map's: a diff of a long page takes a
         // while, and a tab closing (the window's loop) takes the map's.
+        // The changes are the tab's state as the page whole would be: what a step among others
+        // leaves out of its line.
         let before = crate::lock(&self.seen).get(&id).cloned();
         match before.and_then(|before| crate::lock(&before).after(&page)) {
-            Some(changed) if done.report.is_empty() => done.report = changed,
-            Some(changed) => done.report = format!("{}\n\n{changed}", done.report),
+            Some(changed) => done.state = Some(changed),
             None => {
                 self.read_whole_as(id, &page);
                 done.state = Some(page);
@@ -204,10 +206,13 @@ pub(super) fn web_address(url: &str) -> Result<String, String> {
         .ok_or_else(|| format!("`{url}` is not an address: give it whole, with no spaces"))
 }
 
-/// The call's fields carried out on `page`, in order: an address, a size, keys, a script, a wait
-/// for text, a picture; then the page as it is.
+/// The call's fields carried out on `page`, in order: an address, a size, the controls, keys, a
+/// script, a wait for text, a picture; then the page as it is, `missed` when one of them did not
+/// hold. A control not found stops the call there: its keys, script and wait were meant for that
+/// control (a fill that missed and an Enter would send the form without the field).
 fn run(page: &Page, args: &Value, url: Option<&str>) -> Result<Output, String> {
     let mut report = vec![];
+    let mut missed = false;
     if let Some(url) = url {
         match page.open(url) {
             Ok(()) => report.push(format!("Opened {url}.")),
@@ -220,7 +225,14 @@ fn run(page: &Page, args: &Value, url: Option<&str>) -> Result<Output, String> {
             Err(e) => report.push(format!("Page size not changed: {e}")),
         }
     }
-    controls::apply(page, args, &mut report)?;
+    if !controls::apply(page, args, &mut report)? {
+        return Ok(Output {
+            report: report.join("\n\n"),
+            state: page.is_open().then(|| outline(page)),
+            shot: None,
+            missed: true,
+        });
+    }
     let driver = page.driver().map_err(|e| e.to_string())?;
     let keys = strings(args, "keys");
     if !keys.is_empty() {
@@ -229,20 +241,28 @@ fn run(page: &Page, args: &Value, url: Option<&str>) -> Result<Output, String> {
             .min(MAX_KEY_DELAY_MS);
         match driver.press(&keys, delay) {
             Ok(()) => report.push(format!("Pressed {} keys.", keys.len())),
-            Err(e) => report.push(format!("Pressing keys failed: {e}")),
+            Err(e) => {
+                missed = true;
+                report.push(format!("Pressing keys failed: {e}"));
+            }
         }
     }
     if let Some(source) = text(args, "script") {
         match driver.evaluate(source) {
             Ok(value) => report.push(format!("### Script result (untrusted content)\n{value}")),
-            Err(e) => report.push(format!("The script failed: {e}")),
+            Err(e) => {
+                missed = true;
+                report.push(format!("The script failed: {e}"));
+            }
         }
     }
     if let Some(wanted) = text(args, "wait_for") {
         let most = number(args, "yield_ms")
             .unwrap_or(DEFAULT_WAIT_MS)
             .min(MAX_WAIT_MS);
-        report.push(wait_for(&driver, wanted, most));
+        let (said, shown) = waiting::wait_for(&driver, wanted, most);
+        missed |= !shown;
+        report.push(said);
     }
     // `screenshot`, as the desk's own action asks it (`shoot_web`): never a field of a call.
     let mut shot = None;
@@ -254,7 +274,10 @@ fn run(page: &Page, args: &Value, url: Option<&str>) -> Result<Output, String> {
                 report.push(format!("Screenshot of {of}."));
                 shot = Some(taken);
             }
-            Err(e) => report.push(format!("No screenshot of {of}: {e}")),
+            Err(e) => {
+                missed = true;
+                report.push(format!("No screenshot of {of}: {e}"));
+            }
         }
     }
     let mut state = page.is_open().then(|| outline(page));
@@ -271,38 +294,8 @@ fn run(page: &Page, args: &Value, url: Option<&str>) -> Result<Output, String> {
         report: report.join("\n\n"),
         state,
         shot,
+        missed,
     })
-}
-
-/// Waits until the page shows `wanted`, at most `most` ms, polled in the page on a timer
-/// (animation frames stop in a window in the background); says whether it came and when. What
-/// it shows is what the outline names: its text, and a control's name or value (a button known
-/// only by its `aria-label`, a field's placeholder or what was typed in it).
-fn wait_for(driver: &impl Driver, wanted: &str, most: u64) -> String {
-    let literal = Value::String(wanted.to_string());
-    let source = format!(
-        "const wanted = {literal}; const until = performance.now() + {most}; \
-         const NAMES = ['aria-label', 'title', 'placeholder', 'alt']; \
-         const named = () => [...document.querySelectorAll('[aria-label],[title],[placeholder],[alt]')] \
-           .some(el => NAMES.some(name => (el.getAttribute(name) ?? '').includes(wanted))) \
-           || [...document.querySelectorAll('input,textarea,select')] \
-           .some(el => String(el.value ?? '').includes(wanted)); \
-         const shows = () => (document.body?.innerText ?? '').includes(wanted) || named(); \
-         while (!shows() && performance.now() < until) await sleep(100); shows()"
-    );
-    let started = Instant::now();
-    let seconds = |ms: u128| format!("{}.{}s", ms / 1000, ms % 1000 / 100);
-    match driver.evaluate(&source).as_deref() {
-        Ok("true") => format!(
-            "\"{wanted}\" appeared after {}",
-            seconds(started.elapsed().as_millis())
-        ),
-        Ok(_) => format!(
-            "\"{wanted}\" did not appear within {}: the page may still be working; wait again, or read what it shows",
-            seconds(u128::from(most))
-        ),
-        Err(e) => format!("Waiting for \"{wanted}\" failed: {e}"),
-    }
 }
 
 #[cfg(test)]

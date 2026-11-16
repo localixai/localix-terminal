@@ -1,13 +1,50 @@
 //! What is typed into a session, kept in order and written to its PTY by a thread of its own: the
 //! window's keys and pastes only queue (the window never waits on a program that is not reading),
-//! and a call's input waits until its bytes were taken, so an agent hears when they were not.
+//! and a call's input waits until its bytes were taken, so an agent hears when they were not. A
+//! call's text and keys are made into those bytes here (`Session::type_in`).
 
 use std::fs::File;
 use std::io::{self, Write};
 use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
-use super::nap;
+use super::super::keys;
+use super::{Session, nap};
+
+impl Session {
+    /// Type `input` (a line break is Enter; lines are one paste for a program that takes
+    /// pastes), then press `keys` one at a time. A key that does not
+    /// exist is refused before anything is typed.
+    pub fn type_in(&self, input: &str, names: &[String]) -> Result<(), String> {
+        let (cursor, pastes) = {
+            let mut state = self.shared.lock();
+            state.typed_at = Some(state.screen.marks().ended().0);
+            state.typed = Some((state.screen.search_text(), input.to_string()));
+            state.screen.marks_mut().typed_in(false);
+            (
+                state.screen.application_cursor(),
+                state.screen.bracketed_paste(),
+            )
+        };
+        let mut pressed = Vec::new();
+        for name in names {
+            pressed.extend(
+                keys::encode(name, cursor)
+                    .ok_or_else(|| format!("no key called `{name}`: {}", keys::NAMES))?,
+            );
+        }
+        let (mut bytes, mut after) = keys::typed(input, pastes);
+        after.extend(pressed);
+        if bytes.is_empty() || after.is_empty() {
+            bytes.extend(after);
+            return self.input.send(&bytes);
+        }
+        // Text followed at once by Enter is taken for a paste.
+        self.input.send(&bytes)?;
+        nap(30);
+        self.input.send(&after)
+    }
+}
 
 /// The most bytes that wait to be taken by the program: past it, more input is refused.
 const QUEUE_MAX: usize = 1 << 20;

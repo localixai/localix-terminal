@@ -17,6 +17,14 @@ fn the_page_is_in_the_windows_light_or_dark() {
 use crate::page::digest;
 
 #[test]
+fn the_page_leaves_the_terminals_name_to_the_session() {
+    // XTVERSION is answered by the session (session/queries.rs): an xterm.js that answered it
+    // too would type a second reply into the program's input.
+    assert!(!XTERM.contains(r#"registerCsiHandler({prefix:">",final:"q"}"#));
+    assert!(XTERM.contains(r#"registerCsiHandler({prefix:">",final:"c"}"#));
+}
+
+#[test]
 fn the_terminal_page_runs_the_vendored_scripts_by_their_hashes_and_nothing_else() {
     let page = page("session 2 · <i>");
     assert!(page.contains(&format!("<script>{XTERM}</script>")));

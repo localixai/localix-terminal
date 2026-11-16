@@ -1,12 +1,13 @@
 //! The reader's side of a terminal session: the program's output taken into the screen and sent
-//! on to the window's tab at a pace, a program's cursor and status queries answered, and how it
-//! ended once it has.
+//! on to the window's tab at a pace, a program's queries answered (`queries.rs`, and its status
+//! queries), and how it ended once it has.
 
 use std::io::{self, Read};
 use std::os::fd::AsRawFd;
 use std::time::{Duration, Instant};
 
 use super::super::pty;
+use super::queries::{Queries, Query};
 use super::{Input, PAINT_EVERY, Shared, UNSENT_MAX, nap};
 
 /// How long the reader waits for output while some waits to be sent, and while none does.
@@ -17,7 +18,8 @@ const IDLE_POLL_MS: i32 = 1000;
 const TITLE_EVERY: Duration = Duration::from_millis(250);
 
 /// The reader thread: output into the screen, frames out to the window, until the terminal
-/// closes. It answers a program's cursor-position query, which some ask before they draw.
+/// closes. It answers a program's fixed queries (where the cursor is, which some ask before they
+/// draw; which terminal it is).
 pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: u32) {
     let mut reader = reader;
     let mut buffer = vec![0u8; READ_MOST];
@@ -41,7 +43,7 @@ pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: 
             let (filled, ended) = fill(&mut reader, &mut buffer);
             gone = ended;
             if let Some(chunk) = buffer.get(..filled).filter(|chunk| !chunk.is_empty()) {
-                take_in(shared, input, chunk, queries.asked(chunk));
+                take_in(shared, input, chunk, &queries.asked(chunk));
                 front.owed = true;
                 woken.owed = true;
             }
@@ -58,7 +60,8 @@ pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: 
             return;
         }
         retitled(shared);
-        noted(shared);
+        super::told::noted(shared);
+        super::told::commanded(shared);
         super::status::statused(shared);
         paint(shared, Pace::Throttled);
         if gone {
@@ -117,35 +120,7 @@ fn fill(reader: &mut impl Read, buffer: &mut [u8]) -> (usize, bool) {
     }
     (filled, false)
 }
-/// The most cursor reports one read of output is answered with: a program that asks again and
-/// again in one breath is not reading what it is told.
-const MOST_CURSOR_REPLIES: usize = 8;
-
-/// A program's cursor-position query.
-const QUERY: &[u8] = b"\x1b[6n";
-
-/// The cursor queries in the program's output, read by read: a query split across two reads is
-/// found whole, the end of one read kept for the start of the next.
-#[derive(Default)]
-struct Queries {
-    /// The last bytes of the output so far, fewer than a query.
-    carried: Vec<u8>,
-}
-
-impl Queries {
-    /// How many queries end in `chunk`, the output read next.
-    fn asked(&mut self, chunk: &[u8]) -> usize {
-        self.carried.extend_from_slice(chunk);
-        let asked = (self.carried.windows(QUERY.len()))
-            .filter(|window| *window == QUERY)
-            .count();
-        let kept = self.carried.len().saturating_sub(QUERY.len() - 1);
-        self.carried.drain(..kept);
-        asked
-    }
-}
-
-fn take_in(shared: &Shared, input: &Input, chunk: &[u8], asked: usize) {
+fn take_in(shared: &Shared, input: &Input, chunk: &[u8], asked: &[Query]) {
     let mut state = shared.lock();
     let righted = state.screen.feed(chunk);
     state.version += 1;
@@ -158,13 +133,14 @@ fn take_in(shared: &Shared, input: &Input, chunk: &[u8], asked: usize) {
             state.replay = true;
         }
     }
-    let (row, column) = state.screen.cursor();
+    let cursor = state.screen.cursor();
     let status_asked = state.screen.status_asked();
     drop(state);
     super::status::answer(input, status_asked);
-    // The page leaves this query to the session (it answers whether or not a page is there).
-    for _ in 0..asked.min(MOST_CURSOR_REPLIES) {
-        input.queue(format!("\x1b[{row};{column}R").as_bytes());
+    // The page leaves these queries to the session (it answers whether or not a page is there).
+    let replies = super::queries::replies(asked, cursor);
+    if !replies.is_empty() {
+        input.queue(&replies);
     }
 }
 
@@ -186,22 +162,6 @@ fn retitled(shared: &Shared) {
     };
     if let Some((heard, title)) = due {
         heard(&title);
-    }
-}
-
-/// Whoever listens told that the program has another note for the person.
-fn noted(shared: &Shared) {
-    let heard = {
-        let mut state = shared.lock();
-        let number = state.screen.notes().waiting().map(|(number, _)| number);
-        match number {
-            Some(number) if number != state.noted => state.noted = number,
-            _ => return,
-        }
-        state.on_note.clone()
-    };
-    if let Some(heard) = heard {
-        heard();
     }
 }
 

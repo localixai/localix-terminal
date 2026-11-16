@@ -18,18 +18,27 @@ fn help_and_the_tool_description_need_no_server() {
     let describe = home.run(tmp, &["window"]);
     let text = String::from_utf8_lossy(&describe.stdout);
     assert!(
-        text.contains("Tabs of one window") && text.contains("\"properties\""),
+        text.contains("tabs of one window") && text.contains("\"properties\""),
         "{text}"
     );
-    // The guide is the tool's description, for an agent that runs the command and has no MCP.
+    // The guide, a topic at a time, for an agent that runs the command and has no MCP: the
+    // overview lists the topics, the kinds of tab the app lists among them.
     let guide = home.run(tmp, &["guide"]);
     let text = String::from_utf8_lossy(&guide.stdout);
     assert!(guide.status.success(), "{text}");
     assert!(
-        text.starts_with("Tabs of one window") && text.contains("- terminal (`t` tabs)"),
+        text.starts_with("The window tool")
+            && text.contains("- terminals: ")
+            && text.contains("- store: "),
         "{text}"
     );
+    let pages = home.run(tmp, &["guide", "pages"]);
+    assert!(String::from_utf8_lossy(&pages.stdout).contains("\"fill\""));
     assert_eq!(home.run(tmp, &["guide", "more"]).status.code(), Some(3));
+    assert_eq!(
+        home.run(tmp, &["guide", "pages", "more"]).status.code(),
+        Some(3)
+    );
     assert!(!home.socket().exists(), "a server was started");
 }
 
@@ -631,4 +640,68 @@ fn a_board_is_planned_from_the_cli_and_what_the_person_does_on_it_reaches_the_fo
     assert!(read.contains("c1 Cart on mobile · RETURNED"), "{read}");
     follow.kill().unwrap();
     follow.wait().unwrap();
+}
+
+#[test]
+fn short_commands_join_steps_into_one_call_and_a_missed_step_is_exit_1() {
+    let home = home("short");
+    let tmp = Path::new("/tmp");
+    // A wrong command starts nothing.
+    let wrong = home.run(tmp, &["clik", "e1"]);
+    assert_eq!(wrong.status.code(), Some(3));
+    assert!(String::from_utf8_lossy(&wrong.stderr).contains("did you mean `click`"));
+    assert!(!home.socket().exists(), "a server was started");
+
+    let program = r#"sh -c 'printf "ready> "; while read l; do echo got:$l; done'"#;
+    let done = home.run(
+        tmp,
+        &[
+            "term", program, "--wait", "ready>", "+", "type", "hi", "--enter", "+", "wait",
+            "got:hi",
+        ],
+    );
+    let text = String::from_utf8_lossy(&done.stdout);
+    assert_eq!(done.status.code(), Some(0), "{text}");
+    assert!(
+        text.starts_with("1. t1 (terminal)") && text.contains("3. t1: \"got:hi\" showed."),
+        "{text}"
+    );
+    assert_eq!(
+        text.matches("(untrusted program output)").count(),
+        1,
+        "{text}"
+    );
+
+    // Text that never shows stops the steps after it, and the command fails for `&&`.
+    let missed = home.run(
+        tmp,
+        &[
+            "wait", "never", "--ms", "300", "+", "type", "t1", "later", "--enter",
+        ],
+    );
+    let text = String::from_utf8_lossy(&missed.stdout);
+    assert_eq!(missed.status.code(), Some(1), "{text}");
+    assert!(text.contains("Stopped at step 1 of 2"), "{text}");
+    // The same wait as JSON keeps its exit code: the call was done.
+    let (ok, text) = home.window(
+        tmp,
+        r#"{"action":"interact","tab":"t1","wait_for":"never","yield_ms":300}"#,
+    );
+    assert!(ok && text.contains("did not show"), "{text}");
+
+    // `do -` reads a step a line, with no quoting to get right.
+    let mut command = home.command(tmp, &["do", "-"]);
+    command.stdin(std::process::Stdio::piped());
+    command.stdout(std::process::Stdio::piped());
+    let mut child = command.spawn().unwrap();
+    std::io::Write::write_all(
+        child.stdin.as_mut().unwrap(),
+        b"type t1 'it''s a + b' --enter\nwait \"got:its a + b\"\n",
+    )
+    .unwrap();
+    let read = child.wait_with_output().unwrap();
+    let text = String::from_utf8_lossy(&read.stdout);
+    assert_eq!(read.status.code(), Some(0), "{text}");
+    assert!(text.contains("\"got:its a + b\" showed."), "{text}");
+    home.run(tmp, &["window", "--end"]);
 }

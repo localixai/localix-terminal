@@ -10,7 +10,7 @@ Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode and Hermes, started in 
 | --- | --- |
 | Claude Code | Its plugin, loaded from the app's copy of it (`CLAUDE_CODE_PLUGIN_DIRS`): skills, a worker subagent, and a mod that follows your comments. Claude Code 2.1.280 and later; the mod needs 2.1.287. |
 | Gemini CLI, OpenCode | The window tool as an MCP server, from a settings file of the app's that their own variable names (`GEMINI_CLI_SYSTEM_DEFAULTS_PATH`, `OPENCODE_CONFIG`), merged with yours. |
-| Codex, GitHub Copilot, Hermes | `llxterm` on the terminal's `PATH`, and `llxterm guide` for how to use it. |
+| Codex, GitHub Copilot, Hermes | `llxterm` on the terminal's `PATH`, and [`llxterm guide`](window-tool.md#the-guide) for how to use it, a topic at a time. |
 
 ## Nothing is installed
 

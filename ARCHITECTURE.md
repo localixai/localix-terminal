@@ -29,13 +29,13 @@ Public paths stay stable through re-exports; implementation modules stay private
 | Boundary | Modules |
 | --- | --- |
 | Board data and rules | `board/model.rs` is the serializable vocabulary; `board/cards.rs` allocates cards; `board.rs` owns worker transitions. Neither depends on the desk or the UI. |
-| Tool calls and events | `desk/call.rs` renders and masks answers; `tab.rs` validates tab keys and kind-specific fields; `actions.rs` dispatches; `heard.rs` adapts window events; `writes.rs` writes what they change on one writer thread, in order. |
+| Tool calls and events | `desk/call.rs` renders and masks answers; `tab.rs` validates tab keys and kind-specific fields; `actions.rs` dispatches (`close.rs` and `list.rs` are closing tabs and saying what is open); `steps.rs` checks a call's steps, runs them in order on the tab the step before used and stops at the first that fails or misses (`missed`); `heard.rs` adapts window events; `writes.rs` writes what they change on one writer thread, in order. |
 | Application flows | `desk/board_ops.rs` applies worker operations; `restore.rs` reopens ledger rows; `layout_moves.rs` mutates tab placement; `layout_drawn.rs` projects the kept layout into browser keys. |
-| Page reads and actions | `desk/web_read.rs` labels untrusted snapshots and slices UTF-16 text; `web_controls.rs` resolves and acts on refs; `web.rs` orchestrates a call. |
+| Page reads and actions | `desk/web_read.rs` labels untrusted snapshots and slices UTF-16 text; `web_controls.rs` finds a control by its ref or its exact name and acts on it; `web_wait.rs` waits in the page for text; `web.rs` orchestrates a call. |
 | Native UI | `browser/host_commands.rs` is the event-loop protocol; `host_events.rs` handles native events; `host_dispatch.rs` carries out commands; `host_keys.rs`, `host_newtab.rs` and `host_panes.rs` (the Pane menu) adapt user actions. |
 | Deck and tabs | `deck_build.rs` constructs views; `deck_layout.rs` places them; `deck_panes.rs` lays a split tab's tree out and holds its dividers' views; `deck_drop.rs` previews drops and drags dividers; `deck_keys.rs` is the keyboard on the panes (a way to a pane, a divider's step, even, whether the pane in use is zoomed, which pane takes the keys); `deck_render.rs` sends state as data. `tabs_transfer.rs` moves existing views and `tabs_layout.rs` sizes them. |
 | Platform and scripts | `browser/platform.rs` is the platform facade; `platform_views.rs` handles native view behavior; `webview_scripts.rs` waits for scripts across navigation. |
-| Terminal and storage | `terminal/session.rs` owns lifecycle; `session/input.rs`, `output.rs`, `read.rs` and `wait.rs` own input, output, what is read of the screen, and waits. `terminal/marks.rs` counts the prompts a shell says it shows and the commands it says it started and ended, `terminal/hooks.rs` has the person's zsh or bash say so, `terminal/notes.rs` keeps what a program asks to tell the person, for the Event Center, and `terminal/status.rs` what a program says of its state (OSC 7501: its grammar in `status/parse.rs`, its records, and in `status/lines.rs` the line each has for the person, kept in place until they type in the terminal), whose query `session/status.rs` answers through the terminal. `store.rs` manages connections; `store/schema.rs` contains unchanged, append-only SQL steps. |
+| Terminal and storage | `terminal/session.rs` owns lifecycle; `session/input.rs` (a call's text and keys made into bytes, and the screen as it was before them, which a later wait counts from), `output.rs`, `read.rs` and `wait.rs` own input, output, what is read of the screen, and waits; `session/queries.rs` answers the fixed queries a program asks (where the cursor is, `CSI 6 n`; which terminal it is, XTVERSION), with or without a page; `session/told.rs` tells whoever listens of the program's notes and of each command the shell ended (and whether the person's own keys typed it), and keeps one of theirs that ended unseen until they type. `terminal/modes.rs` keeps the modes a program set that the emulator does not (focus reports, the cursor's shape and colour, autowrap, insert, the scroll region, origin), set again after the screen whenever a page is sent the whole of it. `terminal/marks.rs` counts the prompts a shell says it shows and the commands it says it started and ended, `terminal/hooks.rs` has the person's zsh or bash say so, `terminal/notes.rs` keeps what a program asks to tell the person, for the Event Center, and `terminal/status.rs` what a program says of its state (OSC 7501: its grammar in `status/parse.rs`, its records, and in `status/lines.rs` the line each has for the person, kept in place until they type in the terminal), whose query `session/status.rs` answers through the terminal. `store.rs` manages connections; `store/schema.rs` contains unchanged, append-only SQL steps. |
 
 ### Rules the tests check
 
@@ -183,7 +183,11 @@ normal tests in CI.
   writes it only while that terminal is in sight and has the keys in the key window
   (`Frame::is_key`, `platform::has_keys`; the rule is `panel::copy_where`, over the window's
   `panel::Keys`, so a test gives the keys without the system making a window key); a
-  request to read the pasteboard is never answered. The person's keys are the page's
+  request to read the pasteboard is never answered. The same keys decide, once, as the shell
+  says a command the person typed ended, whether they saw it end (`panel::unattended`: in
+  sight in the key window of the app in use, or it ran less than Settings → Terminal says):
+  when not, the window tells the desk (`Heard::Unattended`), which keeps it in the session
+  for the Event Center. The person's keys are the page's
   `keyboard.js`: the Mac keys, LF for Shift+Enter, and which Option is Meta (`option` of the
   window's look, from Settings, none by default), whose Return is ESC CR. A
   terminal starts with the caller's environment, but for the variables its integration names
@@ -220,7 +224,12 @@ normal tests in CI.
 - **`desk/`** is the `window` tool. A `Call` (its project and agent, directory, environment) and a
   JSON object in,
   text out. Its arguments are checked against its schema (`args.rs`) before anything is done: a field
-  it does not know, or one a tab does not take, is refused with what it takes. A page is acted on by
+  it does not know, or one a tab does not take, is refused with what it takes. Its guide
+  (`args/guide.rs`, a topic a file in `args/guide/`, and each kind's `About::guide`) is the one
+  text of how an agent uses it, printed a topic at a time (`llxterm guide [topic]`, or the tool's
+  `guide` action through MCP; the `commands` topic is the short commands' table); the tool's
+  description is built from it (the overview's lead and a line a topic), and the Claude Code
+  plugin's skills are stubs whose calls a test finds in it. A page is acted on by
   the refs of its outline (`[e12]`: `click`, `fill`, `select`, in `web.rs`), never by coordinates. The registry says who owns which tab (`w1`, `t2`) and holds what the person said about it;
   nothing acts on a tab its caller does not own. A board and a file are kinds of tab like a page or a terminal:
   `open` gives it, `interact` acts on it with an `op`, so the tools stay one surface.
@@ -243,8 +252,8 @@ normal tests in CI.
   through the server's hub; `desk/center.rs` is the Event Center; `desk/board_file.rs` writes boards out.
 - **`desk/center.rs`, `desk/center/`** are the Event Center: what waits for the person, gathered from
   its sources (`event.rs`: what an event is and how it is shown; `sources.rs`: the agent's asks, a
-  card in Review or blocked; `terminals.rs`: a program that ended, its notes, and what it says of
-  its state) whenever the feed says something changed, kept in its journal (`journal.rs`:
+  card in Review or blocked; `terminals.rs`: a program that ended, its notes, what it says of
+  its state, and a command the person typed that ended unseen) whenever the feed says something changed, kept in its journal (`journal.rs`:
   `center_events`, open and settled, with the person's marks), and shown under the strip's bell with
   buttons that take the person's own paths. An event says how it is shown (its section, tone, and
   each button's role), so the window holds no table of kinds. Where an event leads is said by the
@@ -289,8 +298,15 @@ normal tests in CI.
   shows) are subscriptions that never start the app: one waits for the app's socket through the
   files' watch of its folder, and ends as its parent does (`follow/wake.rs`: kqueue's
   `NOTE_EXIT`, a pidfd), looking now and then only where the system cannot say.
+- **`short.rs`, `short/`** are the short commands (`llxterm click e12 + wait Saved`): one table
+  of verbs, each one `window` action, which builds a step's JSON (`build.rs`) and is printed as
+  `--help`, as the guide's `commands` topic and in every usage error; `words.rs` cuts a command
+  line into steps at each lone `+` and splits a step written as a string as a shell does, with
+  no substitution. It uses nothing of the crate: the CLI sends what it builds (`cli/verbs.rs`, a
+  `steps` call, exit 1 when a step missed), and the desk reads a step given as a string through
+  it (`desk/steps.rs`), so MCP's `steps` and the command line are one grammar.
 - **`cli/app.rs`** is the program opened as the app (Localix Terminal.app from the Finder or the Dock;
-  `llxterm open` elsewhere): it is the server with its window brought to the person at once. On macOS `llxterm open` asks the system to open the bundle, as the
+  `llxterm open` with nothing or a folder elsewhere; with anything else it opens a page, a short command): it is the server with its window brought to the person at once. On macOS `llxterm open` asks the system to open the bundle, as the
   Dock does, and returns once it has (`cli/app.rs`); the app is not that terminal's. `llxterm
   open DIR` brings the window on that folder as a project
   (`window/present` with `go`). `scripts/bundle-macos.sh` builds the bundle (Info.plist, icon and
@@ -302,7 +318,8 @@ normal tests in CI.
   painted by frames, acted on by `window` calls and by what the person does in its page. A kind
   says all the window and the desk need of it in one description (`About`: its name, the letter
   of its keys, its picture, its shortcut, the tool's fields and guide) and answers through one
-  trait (`Kind`). The kinds are listed once where the app starts (`cli.rs`); the strip, the "+"
+  trait (`Kind`). The kinds are listed once (`KINDS` in `cli.rs`): the app opens them as it
+  starts, and the guide reads what each says of itself without opening it; the strip, the "+"
   menu, the shortcut table, the tool's schema, the ledger (`Kind::Made`) and `desk/made.rs`
   (a project's one tab of each kind: its key, its pane, its panel, a thread for what its page
   posts) read that list and name no kind. A new kind is a module that implements `Kind` and one

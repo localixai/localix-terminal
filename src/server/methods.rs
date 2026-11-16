@@ -218,11 +218,20 @@ pub(super) fn window_call(shared: &Shared, conn: &Conn, params: &Value) -> Outco
             .desk
             .call(&call, args)
             .map_err(|Failure::Failed(why)| RpcError::new(code::FAILED, why))?;
+        // What it was to check did not hold: a command that runs steps fails on it.
+        let missed = |mut result: Value| {
+            if answered.missed {
+                result["missed"] = json!(true);
+            }
+            result
+        };
         let Some(shot) = answered.shot.take() else {
-            return Ok((json!({"text": answered.text_with(None)}), None));
+            return Ok((missed(json!({"text": answered.text_with(None)})), None));
         };
         if conn.carries_bytes() {
-            let result = json!({"text": answered.text_with(None), "shot": {"width": shot.width, "height": shot.height}});
+            let result = missed(
+                json!({"text": answered.text_with(None), "shot": {"width": shot.width, "height": shot.height}}),
+            );
             let blob = Blob {
                 mime: "image/jpeg".into(),
                 bytes: shot.jpeg,
@@ -237,7 +246,10 @@ pub(super) fn window_call(shared: &Shared, conn: &Conn, params: &Value) -> Outco
             shot.height,
             saved.display()
         );
-        Ok((json!({"text": answered.text_with(Some(&line))}), None))
+        Ok((
+            missed(json!({"text": answered.text_with(Some(&line))})),
+            None,
+        ))
     };
     match run() {
         Ok((result, blob)) => Outcome {

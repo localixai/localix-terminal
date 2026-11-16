@@ -70,13 +70,16 @@ pub(super) fn statused(shared: &Shared) {
     }
 }
 
-/// The group in front became `group`; the terminal's first program (its shell) is `pid`. When the
-/// shell comes back in front, the program that was in front of it is gone, and what it left at
-/// work goes with it; what is done or failed stays for the person.
+/// The group in front became `group`; the terminal's first program (its shell) is `pid`. When a
+/// program leaves the front (the shell back in front, or the next job, whose start came before
+/// the shell's own moment there was seen), it is gone, and what it left at work goes with it;
+/// what is done or failed stays for the person. What the shell itself said stays as its jobs
+/// come and go.
 pub(super) fn fronted(shared: &Shared, group: Option<libc::pid_t>, pid: u32) {
     let mut state = shared.lock();
-    let back = group.is_some() && group == libc::pid_t::try_from(pid).ok();
-    if back && state.front.group.is_some_and(|had| Some(had) != group) {
+    let shell = libc::pid_t::try_from(pid).ok();
+    let left = (state.front.group).is_some_and(|had| Some(had) != group && Some(had) != shell);
+    if group.is_some() && left {
         state.screen.status_mut().drop_transient();
     }
 }

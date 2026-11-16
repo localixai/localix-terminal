@@ -15,6 +15,7 @@ const HEAD: &str = "### Page changes since you last read it whole (untrusted con
 pub(super) const UNCHANGED: &str = "### Page: no visible change since the call before";
 
 /// A tab's page as the model knows it: as it last read it whole, and as the latest call left it.
+#[derive(Clone)]
 pub(super) struct Seen {
     whole: String,
     last: String,

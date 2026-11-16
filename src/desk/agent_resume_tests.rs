@@ -14,21 +14,39 @@ pub(in crate::desk) const ID: &str = "0b8f6a52-6c1e-4b5e-9a57-3d5f0c2e9a11";
 
 /// A stand-in for Claude Code in `bin`: it says what it was started with, then waits for a line
 /// under its own name, as the agent waits for the person (`exit` set: it ends with that code at
-/// once, as one whose session is not found).
+/// once, as one whose session is not found). Each way it ends is one script a run, linked into
+/// `bin`: macOS assesses every new executable file on its first run, one at a time across the
+/// machine, and a script written for each test waited its turn for seconds.
 pub(in crate::desk) fn stand_in(bin: &Path, exit: Option<u8>) {
     use std::os::unix::fs::PermissionsExt;
-    std::fs::create_dir_all(bin).unwrap();
+    static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
     // It speaks again after it is the agent by name, as an agent draws: the terminal reads who
     // is in front as output comes, and the name again only a while after.
     let said = r#"echo "stand-in claude $*""#;
-    let script = match exit {
-        Some(code) => format!("#!/bin/bash\n{said}\nexit {code}\n"),
-        None => format!(
-            "#!/bin/bash\nexec -a claude /bin/bash -c '{said}; sleep 1; echo ready; read -r line' stand-in \"$@\"\n"
+    let (name, script) = match exit {
+        Some(code) => (
+            format!("claude-exit-{code}"),
+            format!("#!/bin/bash\n{said}\nexit {code}\n"),
+        ),
+        None => (
+            "claude-waits".to_string(),
+            format!(
+                "#!/bin/bash\nexec -a claude /bin/bash -c '{said}; sleep 1; echo ready; read -r line' stand-in \"$@\"\n"
+            ),
         ),
     };
-    std::fs::write(bin.join("claude"), script).unwrap();
-    std::fs::set_permissions(bin.join("claude"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let shared = std::env::temp_dir().join(format!("llxterm-stand-ins-{}", std::process::id()));
+    let program = shared.join(name);
+    {
+        let _one = crate::lock(&WRITING);
+        if std::fs::read_to_string(&program).ok().as_deref() != Some(script.as_str()) {
+            std::fs::create_dir_all(&shared).unwrap();
+            std::fs::write(&program, &script).unwrap();
+            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+    std::fs::create_dir_all(bin).unwrap();
+    std::os::unix::fs::symlink(&program, bin.join("claude")).unwrap();
 }
 
 /// The person's zsh in `home`, its prompt `ready> `, with `bin` first on its `PATH`; none

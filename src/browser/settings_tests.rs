@@ -220,3 +220,33 @@ fn agents_go_on_in_their_terminals_unless_the_person_turned_it_off() {
     let kept: Settings = serde_json::from_str(r#"{"theme": "dark"}"#).unwrap();
     assert_eq!(kept.resume_agents, Resuming::On);
 }
+
+#[test]
+fn a_command_typed_out_of_sight_is_told_after_thirty_seconds_unless_the_person_chose_otherwise() {
+    use std::time::Duration;
+    let mut settings = Settings::default();
+    assert_eq!(settings.command_notice, CommandNotice::After30s);
+    assert_eq!(
+        settings.command_notice.after(),
+        Some(Duration::from_secs(30))
+    );
+    assert_eq!(settings.page()["defaults"]["command_notice"], "30s");
+    for (chosen, after) in [
+        ("off", None),
+        ("10s", Some(10)),
+        ("30s", Some(30)),
+        ("1m", Some(60)),
+        ("5m", Some(300)),
+    ] {
+        settings.change(&json!({"command_notice": chosen})).unwrap();
+        assert_eq!(
+            settings.command_notice.after(),
+            after.map(Duration::from_secs)
+        );
+        assert_eq!(settings.page()["settings"]["command_notice"], chosen);
+    }
+    assert!(settings.change(&json!({"command_notice": "7s"})).is_err());
+    assert!(settings.change(&json!({"command_notice": 30})).is_err());
+    let kept: Settings = serde_json::from_str(r#"{"theme": "dark"}"#).unwrap();
+    assert_eq!(kept.command_notice, CommandNotice::After30s);
+}

@@ -36,6 +36,19 @@ impl Session {
         }
     }
 
+    /// How many times `needle` showed before the last input was typed, with the input's own
+    /// echo: a wait with no input of its own waits for the program's answer to it, which may
+    /// have come before the wait began. Nothing typed yet: none.
+    pub fn count_before_typed(&self, needle: &str) -> usize {
+        if needle.is_empty() {
+            return 0;
+        }
+        let state = self.shared.lock();
+        (state.typed.as_ref()).map_or(0, |(screen, input)| {
+            screen.matches(needle).count() + input.matches(needle).count()
+        })
+    }
+
     /// Wait for `needle` to show more than `before` times, for the output to settle, for the
     /// shell to say its command ended, or for the program to end; at most `most`.
     pub fn wait(&self, needle: Option<&str>, before: usize, most: Duration) -> Until {

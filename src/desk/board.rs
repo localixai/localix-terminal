@@ -106,6 +106,7 @@ impl Desk {
             },
             state: Some(state),
             shot: None,
+            missed: false,
         })
     }
 

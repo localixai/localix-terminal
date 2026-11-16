@@ -112,7 +112,7 @@ impl Desk {
             });
             joined.collect()
         });
-        let (mut reports, mut states, mut shot) = (vec![], vec![], None);
+        let (mut reports, mut states, mut shot, mut missed) = (vec![], vec![], None, false);
         for opened in opened {
             match opened {
                 Ok((label, out)) => {
@@ -121,6 +121,7 @@ impl Desk {
                         states.push(format!("### {label}\n{state}"));
                     }
                     shot = out.shot.or(shot);
+                    missed |= out.missed;
                 }
                 Err(why) => reports.push(format!("not opened: {}", why.message())),
             }
@@ -129,6 +130,7 @@ impl Desk {
             report: reports.join("\n"),
             state: (!states.is_empty()).then(|| states.join("\n\n")),
             shot,
+            missed,
         })
     }
 

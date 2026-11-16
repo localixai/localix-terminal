@@ -9,8 +9,15 @@ const CAPABILITIES: &str = r#"printf '%s\n' \
     "kept=${DESK_COLOR_TEST-unset}"; test -t 0 && test -t 1 && test -t 2 && printf 'tty=all\n'"#;
 
 fn run(command: &str, vars: Option<&[(String, String)]>) -> String {
-    let session = Session::start(command, &std::env::temp_dir(), vars, None).unwrap();
-    assert_eq!(session.wait(None, 0, DEFAULT_WAIT), Until::Exited);
+    ended(&Session::start(command, &std::env::temp_dir(), vars, None).unwrap())
+}
+
+/// What `session`'s program printed, once it ended. Waited for by text it never prints: a wait
+/// with nothing named ends at the first quiet, and a program may be quiet a while before its
+/// first output (its executable read for the first time, on a busy machine).
+fn ended(session: &Session) -> String {
+    let until = session.wait(Some("\u{0}never printed"), 0, DEFAULT_WAIT);
+    assert_eq!(until, Until::Exited, "{}", session.snapshot());
     session.text()
 }
 
@@ -80,10 +87,9 @@ fn run_own(command: &str, vars: &[(&str, &str)], own: &super::super::Own) -> Str
     let vars: Vec<(String, String)> = (vars.iter())
         .map(|(name, value)| ((*name).to_string(), (*value).to_string()))
         .collect();
-    let session =
-        Session::start_after(command, &std::env::temp_dir(), Some(&vars), None, "", own).unwrap();
-    assert_eq!(session.wait(None, 0, DEFAULT_WAIT), Until::Exited);
-    session.text()
+    ended(
+        &Session::start_after(command, &std::env::temp_dir(), Some(&vars), None, "", own).unwrap(),
+    )
 }
 
 #[test]
@@ -107,23 +113,19 @@ fn a_terminal_opened_with_an_agents_environment_says_which_terminal_it_is_itself
 
 #[test]
 fn the_apps_command_is_first_on_a_terminals_path() {
-    let bin = std::env::temp_dir().join(format!("llxterm-bin-{}", std::process::id()));
-    std::fs::create_dir_all(&bin).unwrap();
-    let program = bin.join("llxterm");
-    std::fs::write(&program, "#!/bin/sh\necho ours\n").unwrap();
-    let executable = std::os::unix::fs::PermissionsExt::from_mode(0o755);
-    std::fs::set_permissions(&program, executable).unwrap();
+    let scratch = crate::testing::Scratch::new();
+    let bin = scratch.path().join("bin");
+    crate::testing::echo_named(&bin, "llxterm");
     let own = super::super::Own {
         bin: Some(bin.clone()),
         vars: Vec::new(),
     };
     let vars = [("PATH", "/usr/bin:/bin")];
     let text = run_own(
-        r#"llxterm; printf '%s\n%s' "$PATH" "$LLXTERM_BIN""#,
+        r#"llxterm ours; printf '%s\n%s' "$PATH" "$LLXTERM_BIN""#,
         &vars,
         &own,
     );
-    let _ = std::fs::remove_dir_all(&bin);
     assert_eq!(
         text,
         format!("ours\n{0}:/usr/bin:/bin\n{0}", bin.display()),

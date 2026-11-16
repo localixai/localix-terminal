@@ -314,6 +314,13 @@ define colours of its own beyond its `--ground`.
   words, with the name the program gives itself beside its words in the detail; it stays in
   place while the program flips between work and waiting, and goes once the person typed in
   the terminal and the program went on, so a program cannot flood the list or the notices.
+- **A command that finished out of sight** (one the person typed at a shell, that ran at least
+  what Settings → Terminal → Finished commands says, 30 s by default, and ended while its
+  terminal was not in sight in the key window of the app in use) is one line of the Event
+  Center, "Commands Finished", which wants the person: titled by its terminal, with "Finished
+  in 4m 12s", "Failed with 2 after 45s" or "Ended after 1h 1m" beside it. A newer one of the
+  same terminal takes its place, and it goes once the person types there. It is decided once,
+  as the shell says the command ended; nothing waits on a timer.
 - **A question is a dialog**, the window's own (`dialog.rs`), one look for everything the app
   asks or announces: a mark that draws itself, a title, a sentence, and two buttons. With the
   window away (put away, in the Dock) a question is the system's alert in front instead.

@@ -2,8 +2,10 @@
 //! news for the Event Center; the title it sets, under the tab's name; the program in front, the
 //! tab's mark, and the coding agent it is, kept for the terminal (agent_resume.rs); and what the
 //! program says of its state (OSC 7501), news for the Event Center and, while it is at work, a
-//! still ring on the tab's icon.
+//! still ring on the tab's icon; and each command the person typed in it that ended, which the
+//! window tells them of when they were not looking.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 use crate::browser::Working;
@@ -52,7 +54,12 @@ impl Desk {
             Weak::clone(&self.me),
             Arc::downgrade(session),
         );
+        let agent_ran = Arc::new(AtomicBool::new(false));
+        let ran = Arc::clone(&agent_ran);
         session.on_front(move |program| {
+            if program.is_some_and(crate::browser::agent_runs) {
+                ran.store(true, Ordering::SeqCst);
+            }
             if let Some(browser) = &browser {
                 browser.runs(&format!("t{id}"), program);
                 if let Some(session) = there.upgrade() {
@@ -81,6 +88,16 @@ impl Desk {
             });
         }
         self.listen_status(id, session);
+        // A command the person typed that ended is the window's to weigh: news for them if they
+        // were not looking. A coding agent's own end is not: its status says it (OSC 7501).
+        if let Some(browser) = self.browser.clone() {
+            session.on_command(move |ended, theirs| {
+                let agent = agent_ran.swap(false, Ordering::SeqCst);
+                if theirs && !agent {
+                    browser.command_ended(id, ended.code, ended.took);
+                }
+            });
+        }
     }
 
     /// What the program of session `id` says of its state: a change of its lines is news for

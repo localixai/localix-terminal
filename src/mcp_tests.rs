@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use super::running::Running;
 use super::wire::Out;
-use super::{Server, failed, named};
+use super::{Server, failed, named, result};
 use crate::client::Caller;
 use crate::testing::Sink;
 
@@ -117,4 +117,19 @@ fn the_tool_says_truthfully_what_a_call_may_do() {
     assert_eq!(hints["idempotentHint"], false);
     assert_eq!(hints["destructiveHint"], true);
     assert_eq!(hints["openWorldHint"], true);
+}
+
+#[test]
+fn steps_that_stopped_where_one_missed_are_an_error_the_model_sees() {
+    let answer = |missed: bool| {
+        let mut value = json!({"text": "1. w1: Clicked e9 not done"});
+        if missed {
+            value["missed"] = json!(true);
+        }
+        Ok(crate::client::Answer { value, blob: None })
+    };
+    assert_eq!(result(answer(true), true)["isError"], json!(true));
+    // One call keeps its answer as it was: it was done.
+    assert!(result(answer(true), false).get("isError").is_none());
+    assert!(result(answer(false), true).get("isError").is_none());
 }

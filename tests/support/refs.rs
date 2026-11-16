@@ -84,7 +84,8 @@ pub(crate) fn scenario(browser: &Browser, origin: &str) {
         .unwrap();
     assert!(title.contains("sent:Paris:Business"), "{title}");
 
-    // A ref the page does not have stops there, and says so; one that is no ref is refused.
+    // A ref the page does not have stops there, and says so; so does a name no control has,
+    // and an empty one is refused.
     let gone = desk
         .window(
             &call,
@@ -92,10 +93,20 @@ pub(crate) fn scenario(browser: &Browser, origin: &str) {
         )
         .unwrap();
     assert!(gone.contains("Clicked e9999 not done"), "{gone}");
+    let nameless = desk
+        .window(
+            &call,
+            &json!({"action": "interact", "tab": tab, "click": "Look up"}),
+        )
+        .unwrap();
+    assert!(
+        nameless.contains("no control is named \"Look up\""),
+        "{nameless}"
+    );
     let bad = desk
         .window(
             &call,
-            &json!({"action": "interact", "tab": tab, "click": "Search"}),
+            &json!({"action": "interact", "tab": tab, "click": " "}),
         )
         .unwrap_err();
     assert!(

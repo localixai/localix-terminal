@@ -77,6 +77,9 @@ pub(in super::super) enum Cmd {
     PanelLink(u32, String),
     /// The text a program in a panel asked to put on the pasteboard (`c` of its page, OSC 52).
     PanelCopy(u32, String),
+    /// A command the person typed in a panel's terminal ended, after so long, with its code if
+    /// the shell said one: news for them if they were not looking (`panel::unattended`).
+    CommandEnded(u32, Option<i32>, std::time::Duration),
     /// A page tab waits for what was asked of it at this count: does its view still load
     /// (unloaded.rs)?
     Unanswered(u32, u64),
@@ -183,6 +186,7 @@ impl Cmd {
             | Cmd::PanelMenu(id, ..)
             | Cmd::PanelLink(id, _)
             | Cmd::PanelCopy(id, _)
+            | Cmd::CommandEnded(id, ..)
             | Cmd::Titled(id, _) => term(*id),
             Cmd::Eval { tab: Some(id), .. }
             | Cmd::Navigate { tab: Some(id), .. }
@@ -254,6 +258,7 @@ impl Cmd {
             | Cmd::PanelMenu(..)
             | Cmd::PanelLink(..)
             | Cmd::PanelCopy(..)
+            | Cmd::CommandEnded(..)
             | Cmd::Unanswered(..)
             | Cmd::Restyle
             | Cmd::Tree(..)

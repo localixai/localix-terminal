@@ -26,7 +26,8 @@ pub struct About {
     pub glyph: &'static str,
     /// The fields the tool takes on its tab, each with its JSON Schema.
     pub fields: &'static [(&'static str, &'static str)],
-    /// Its paragraph of the tool's description.
+    /// Its topic of the guide (`llxterm guide <id>`): its first sentence is its line in the
+    /// tool's description.
     pub guide: &'static str,
     /// How it is acted on, said after a field it does not take.
     pub instead: &'static str,

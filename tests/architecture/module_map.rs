@@ -18,6 +18,9 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
     ("paths", &[]),
     ("served", &[]),
     ("shots", &[]),
+    // The short commands' one table: the command line builds steps with it, the desk reads a
+    // step given as a string with it.
+    ("short", &[]),
     ("store", &[]),
     ("view", &[]),
     ("wire", &[]),
@@ -58,7 +61,8 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
         "desk",
         &[
             "board", "browser", "editor", "feed", "files", "kind", "layout", "ledger", "offers",
-            "projects", "secrets", "served", "shots", "store", "terminal", "update", "view",
+            "projects", "secrets", "served", "short", "shots", "store", "terminal", "update",
+            "view",
         ],
     ),
     // The socket: every method onto the desk, holding the window's handle; it tells the desk
@@ -75,7 +79,7 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
         "cli",
         &[
             "board", "browser", "bundle", "catalog", "client", "follow", "kind", "mcp", "out",
-            "paths", "secrets", "server", "shots",
+            "paths", "secrets", "server", "short", "shots",
         ],
     ),
     ("mcp", &["client", "out"]),

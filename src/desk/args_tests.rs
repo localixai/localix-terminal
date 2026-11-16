@@ -54,11 +54,14 @@ fn the_schema_lists_every_op_a_board_takes() {
 }
 
 #[test]
-fn the_description_fits_a_host_that_cuts_one_and_names_every_kind_before_the_guides() {
+fn the_description_fits_a_host_that_cuts_one_and_names_every_kind_before_the_topics() {
     let said = description();
     // A host that loads the tool up front keeps this much of its description.
     assert!(said.len() <= 4096, "{} bytes", said.len());
-    let lead = said.split("The kinds:").next().unwrap_or_default();
+    let lead = said
+        .split("The rest, a topic each")
+        .next()
+        .unwrap_or_default();
     for kind in ["web pages", "terminals", "board"] {
         assert!(lead.contains(kind), "the lead names no {kind}");
     }

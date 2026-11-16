@@ -81,6 +81,12 @@ pub enum Heard<'a> {
     WindowClosed(i64),
     /// What they did in the tree of files of the project this key names.
     Tree(TreeDid<'a>),
+    /// A command they typed in this key's terminal ended, after `took`, with `code` when the
+    /// shell said one, while they were not looking at it (`panel::unattended`): news for them.
+    Unattended {
+        code: Option<i32>,
+        took: std::time::Duration,
+    },
 }
 
 /// What the person did in a project's tree of files. A folder is named by its path under the

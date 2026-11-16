@@ -44,6 +44,17 @@ impl Drop for Scratch {
     }
 }
 
+/// A program called `name` in `folder` that prints its arguments: a link to the system's `echo`.
+/// Not a script written for the test: macOS assesses each new executable file on its first run,
+/// one at a time across the machine, and behind the other new scripts of a parallel run that
+/// first run waited for seconds.
+pub(crate) fn echo_named(folder: &Path, name: &str) -> PathBuf {
+    std::fs::create_dir_all(folder).unwrap();
+    let program = folder.join(name);
+    std::os::unix::fs::symlink("/bin/echo", &program).unwrap();
+    program
+}
+
 /// A stream a writer thread is given in a test: what was written to it, read back as the JSON
 /// lines it holds.
 #[derive(Clone, Default)]
