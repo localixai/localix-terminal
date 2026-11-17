@@ -1,6 +1,6 @@
 {
   "name": "llxterm",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Localix Terminal for Claude Code: Claude opens pages and terminals beside its own and plans on the project's board, in the window you watch, with a line for its tabs, its cards and your comments",
   "author": {
     "name": "rsaryev"

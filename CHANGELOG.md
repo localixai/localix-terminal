@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.8
+
 ### Added
 
 - **Short commands, and several steps in one call.** Each action of the window tool is also a

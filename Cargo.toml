@@ -1,6 +1,6 @@
 [package]
 name = "llxterm"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2024"
 rust-version = "1.96"
 description = "Localix Terminal, the terminal for you and your coding agents: sessions that belong to a project and come back as you left them, with a browser, a board and a Store that agents use too"
