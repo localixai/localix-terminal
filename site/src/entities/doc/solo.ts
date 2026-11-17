@@ -2,6 +2,7 @@
 // (content/pages/privacy.md is /privacy), with the bar and the footer and no docs menu. They take
 // the docs' standard for a page's shape, and are not in the docs' menu, search or llms.txt.
 import { DOCS } from '@/shared/config';
+import { cut } from './describe';
 import { read, render, type Heading } from './markdown';
 
 const ROOT = 'content/pages/';
@@ -38,7 +39,7 @@ export const SOLO_PAGES: SoloPage[] = Object.entries(FILES)
     try {
       const { summary, body, ...parsed } = read(text);
       // A link is written as it is meant: a page outside the docs links by address, not by file.
-      return [{ ...parsed, route: `/${slug}`, source, description: summary, html: render(body, (href) => href) }];
+      return [{ ...parsed, route: `/${slug}`, source, description: cut(summary), html: render(body, (href) => href) }];
     } catch (error) {
       problems.push(`${source}: ${error instanceof Error ? error.message : String(error)}`);
       return [];

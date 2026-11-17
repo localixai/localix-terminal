@@ -1,6 +1,7 @@
 import { DOCS, DOCS_NAV, SITE, sourceUrl } from '@/shared/config';
 import { classify } from './hrefs';
 import { read, render, type Heading } from './markdown';
+import { cut } from './describe';
 
 /** Where the docs' markdown lives in the repository. */
 const ROOT = 'content/docs/';
@@ -30,12 +31,6 @@ export type DocPage = {
 };
 
 type Draft = Omit<DocPage, 'html' | 'markdown'> & { body: string; text: string };
-
-function cut(text: string, most = 200): string {
-  if (text.length <= most) return text;
-  const head = text.slice(0, most - 1);
-  return `${head.slice(0, head.lastIndexOf(' ')).replace(/[,:;.]$/, '')}…`;
-}
 
 const problems: string[] = [];
 /** A page's name is its address: lower-case words joined by hyphens. */

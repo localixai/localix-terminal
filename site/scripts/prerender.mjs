@@ -53,6 +53,8 @@ for (const image of ssr.IMAGES) {
 }
 await writeFile(`${dist}kit.html`, ssr.renderKit(await readFile(`${dist}kit.html`, 'utf8')));
 await writeFile(`${dist}sitemap.xml`, ssr.sitemap());
+const indexNow = ssr.indexNowKey();
+if (indexNow) await writeFile(dist + indexNow.file, indexNow.text);
 // Any URL the site does not have: Pages serves 404.html with a 404 status, where it would
 // otherwise answer every unknown path with the landing and a 200.
 await writeFile(`${dist}404.html`, ssr.renderNotFound(template));

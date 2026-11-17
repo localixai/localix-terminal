@@ -67,6 +67,6 @@ export function renderDocsPage(route: string, template: string): string | undefi
 }
 
 export { landingHead } from './head';
-export { llmsDocs, llmsFull, searchIndex, sitemap } from './files';
+export { indexNowKey, llmsDocs, llmsFull, searchIndex, sitemap } from './files';
 export { SEARCH_INDEX } from '@/pages/docs';
 export { IMAGES, REPO_FILES } from '@/entities/doc';

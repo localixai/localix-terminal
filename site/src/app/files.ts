@@ -4,9 +4,12 @@ import { DOCS, DOCS_NAV, SITE as CONFIG } from '@/shared/config';
 const SITE = CONFIG.url;
 const INDEX = DOCS_NAV.index;
 
-/** sitemap.xml: the landing, the docs' index and every page, and the pages of content/pages. */
+/** sitemap.xml: the landing, the docs' index and every page when the site has docs, and the pages
+ *  of content/pages. A sitemap lists only addresses that answer 200: a site without docs has no
+ *  /docs. */
 export function sitemap(): string {
-  const urls = ['/', DOCS, ...PAGES.map((page) => page.route), ...SOLO_PAGES.map((page) => page.route)]
+  const docs = PAGES.length > 0 ? [DOCS, ...PAGES.map((page) => page.route)] : [];
+  const urls = ['/', ...docs, ...SOLO_PAGES.map((page) => page.route)]
     .map((route) => `  <url>\n    <loc>${SITE}${route === '/' ? '/' : route}</loc>\n    <changefreq>weekly</changefreq>\n  </url>`)
     .join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
@@ -14,6 +17,7 @@ export function sitemap(): string {
 
 /** The docs' part of llms.txt: each page with what it covers, by group, and the whole in one file. */
 export function llmsDocs(): string {
+  if (PAGES.length === 0) return '';
   const groups = GROUPS.map(
     (group) =>
       `### ${group.title}\n\n${group.pages.map((page) => `- [${page.title}](${SITE}${page.route}): ${page.description}`).join('\n')}`,
@@ -52,4 +56,13 @@ export function searchIndex(): string {
     }),
   );
   return JSON.stringify(rows);
+}
+
+/** IndexNow's key file, served at /<key>.txt: it proves to Bing, Yandex and the others that a
+ *  ping naming this site's pages comes from its owner. */
+export function indexNowKey(): { file: string; text: string } | undefined {
+  const key = CONFIG.indexnow;
+  if (!key) return undefined;
+  if (!/^[A-Za-z0-9-]{8,128}$/.test(key)) throw new Error(`indexnow in content/site.ts is not an IndexNow key: "${key}"`);
+  return { file: `${key}.txt`, text: key };
 }

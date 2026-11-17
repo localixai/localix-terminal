@@ -27,7 +27,7 @@ export function answer(given: Answer): void {
   if (!id) return;
   storeAnswer(given);
   if (given === 'granted') {
-    startTag(id);
+    startTag(id, SITE.analytics?.linker);
     return;
   }
   stopTag(id);
@@ -37,7 +37,7 @@ export function answer(given: Answer): void {
 /** Starts measuring at a page's load when this device said yes before. */
 export function resumeAnalytics(): void {
   const id = measurementId();
-  if (id && storedAnswer() === 'granted') startTag(id);
+  if (id && storedAnswer() === 'granted') startTag(id, SITE.analytics?.linker);
 }
 
 /** Sends one event, when measuring; a parameter outside its set drops it. */

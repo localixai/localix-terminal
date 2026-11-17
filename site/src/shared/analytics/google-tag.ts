@@ -23,7 +23,7 @@ function gtag(..._command: unknown[]): void {
 
 /** Starts measuring after a yes: the consent, then the tag's settings, then the script, which
  *  sends the page's view. A second yes after a withdrawal turns it back on without a second script. */
-export function startTag(id: string): void {
+export function startTag(id: string, linker: readonly string[] = []): void {
   window[`ga-disable-${id}`] = false;
   if (loaded) {
     gtag('consent', 'update', { ...NO_ADS, analytics_storage: 'granted' });
@@ -32,7 +32,10 @@ export function startTag(id: string): void {
   loaded = id;
   gtag('consent', 'default', { ...NO_ADS, analytics_storage: 'granted' });
   gtag('js', new Date());
-  gtag('config', id, { allow_google_signals: false, allow_ad_personalization_signals: false });
+  // Cross-domain measurement lives here, in the code, rather than in the stream's settings: links
+  // to the other domains carry the visitor's id, and an id arriving with a visit is taken.
+  const domains = linker.length > 0 ? { linker: { domains: [...linker], accept_incoming: true } } : {};
+  gtag('config', id, { allow_google_signals: false, allow_ad_personalization_signals: false, ...domains });
   const script = document.createElement('script');
   script.async = true;
   script.src = `${HOST}/gtag/js?id=${encodeURIComponent(id)}`;

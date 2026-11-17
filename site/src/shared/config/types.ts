@@ -41,9 +41,14 @@ export type SiteConfig = {
   maker?: NavLink;
   /** Usage statistics: Google Analytics 4, loaded only after a visitor's yes on a small card
    *  (content/docs/analytics.md). `ga4` is the web stream's measurement id (`G-…`), `notice` the
-   *  card's one sentence, `privacy` the page that says what is collected. Without it the site has
-   *  no card, no footer link and no tag. */
-  analytics?: { ga4: string; notice: string; privacy?: string };
+   *  card's one sentence, `privacy` the page that says what is collected, `linker` the other
+   *  domains whose sites share the measurement id, so a visitor going between them stays one
+   *  visitor. Without it the site has no card, no footer link and no tag. */
+  analytics?: { ga4: string; notice: string; privacy?: string; linker?: string[] };
+  /** An IndexNow key (8 to 128 letters, digits and dashes): the build serves it at /<key>.txt, so
+   *  the site's pages can be announced to Bing, Yandex and the other IndexNow engines the moment
+   *  they change (content/docs/site-config.md). */
+  indexnow?: string;
   /** schema.org data for the landing. */
   jsonLd?: Record<string, unknown>;
   /** The opening of llms.txt, as markdown; the docs' list follows it. */
