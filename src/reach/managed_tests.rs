@@ -20,6 +20,7 @@ fn sources(scratch: &Scratch) -> Sources {
 const REFUSES: &str = r#"{"disableSideloadFlags": true}"#;
 
 /// An XML property list of `body`, as a configuration profile delivers it.
+#[cfg(target_os = "macos")]
 fn plist(body: &str) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -91,6 +92,8 @@ fn under_merge_a_refusal_in_any_source_refuses_and_a_lower_source_cannot_ask_for
     assert!(!takes_plugin_folders(&sources(&scratch)));
 }
 
+/// A configuration profile is macOS's, read by its `plutil`: elsewhere there is none to read.
+#[cfg(target_os = "macos")]
 #[test]
 fn a_configuration_profile_is_read_as_the_second_source() {
     let scratch = Scratch::new();
@@ -104,15 +107,18 @@ fn a_configuration_profile_is_read_as_the_second_source() {
 
 #[test]
 fn a_source_that_is_there_but_cannot_be_read_refuses() {
-    for (name, content) in [
+    let mut unreadable = vec![
         ("ClaudeCode/managed-settings.json", "{ not json"),
         ("ClaudeCode/managed-settings.json", "[true]"),
         ("claude/remote-settings.json", "{"),
-        (
+    ];
+    if cfg!(target_os = "macos") {
+        unreadable.push((
             "Managed Preferences/com.anthropic.claudecode.plist",
             "not a property list",
-        ),
-    ] {
+        ));
+    }
+    for (name, content) in unreadable {
         let scratch = Scratch::new();
         scratch.file(name, content);
         assert!(
@@ -126,9 +132,16 @@ fn a_source_that_is_there_but_cannot_be_read_refuses() {
     std::fs::create_dir_all(&folder).unwrap();
     let closed = std::os::unix::fs::PermissionsExt::from_mode(0o000);
     std::fs::set_permissions(&folder, closed).unwrap();
+    // The superuser lists a folder whatever its mode (a container's tests run so): there is no
+    // folder it cannot list, and that case is not checked.
+    let listed = std::fs::read_dir(&folder).is_ok();
     let refused = !takes_plugin_folders(&sources(&scratch));
     let open = std::os::unix::fs::PermissionsExt::from_mode(0o755);
     std::fs::set_permissions(&folder, open).unwrap();
+    if listed {
+        eprintln!("skipped: a folder of mode 000 is listed (the tests run as the superuser)");
+        return;
+    }
     assert!(refused);
 }
 

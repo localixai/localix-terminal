@@ -47,6 +47,7 @@ pub mod server;
 pub mod short;
 pub mod shots;
 pub mod store;
+pub mod surface;
 pub mod terminal;
 pub mod update;
 pub mod view;

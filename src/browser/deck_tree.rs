@@ -9,7 +9,7 @@ use super::super::session;
 use super::super::strip::Key;
 use super::super::told::{Heard, TreeDid};
 use super::super::{file_icons, tree};
-use super::{Deck, LOADS, Over, Part};
+use super::{Deck, LOADS, Part};
 
 impl Deck {
     /// This window, among those that show a tree.
@@ -105,7 +105,7 @@ impl Deck {
     /// The pane at `x`, `y` of the window (points from its top left): a split window's pane
     /// there, a whole one's tab; none off the pages.
     pub(in super::super) fn pane_under(&self, x: f64, y: f64) -> Option<Key> {
-        if matches!(self.over(x, y), Over::Off) {
+        if !self.on_pages(x, y) {
             return None;
         }
         self.pane_at(x, y).or_else(|| self.shown_key())

@@ -1,5 +1,5 @@
-//! A panel as a tab of the one window, beside the browser's tabs: a terminal session's page as
-//! the shell makes it, painted from this thread, read back from its page.
+//! A panel as a tab of the one window, beside the browser's tabs: a page of the test's own,
+//! painted from this thread, read back from its page.
 
 use std::time::{Duration, Instant};
 
@@ -8,22 +8,25 @@ use llxterm::browser::{
 };
 use serde_json::{Value, json};
 
-/// What the page shows: the first rows' text, the cursor, the title, and whether it has the
-/// keyboard.
-const READ: &str = "(() => ({ \
-    rows: [0, 1, 2].map(i => term.buffer.active.getLine(i)?.translateToString(true) ?? ''), \
-    title: document.title, focus: document.hasFocus(), href: location.href, \
-    width: innerWidth, height: innerHeight, visible: document.visibilityState, \
-    cols: term.cols, rows_n: term.rows }))()";
+/// A panel's page as the test paints it, titled `title`: `W(text)` shows the text, a line a row;
+/// `E(end)` puts `end` after the title.
+fn page(title: &str) -> String {
+    format!(
+        "<!doctype html><html><head><title>{title}</title></head><body><pre id=\"out\"></pre>\
+         <script>function W(t) {{ document.getElementById('out').textContent = t }}\
+         function E(end) {{ document.title += end }}</script></body></html>"
+    )
+}
 
-/// A script that clears the terminal and writes `lines`, then the end in the title if any.
+/// What the page shows: the first rows' text, the title, and whether it has the keyboard.
+const READ: &str = "(() => { const rows = (document.getElementById('out')?.textContent ?? '').split('\\n'); \
+    return { rows: [0, 1, 2].map(i => rows[i] ?? ''), \
+    title: document.title, focus: document.hasFocus(), href: location.href, \
+    width: innerWidth, height: innerHeight, visible: document.visibilityState } })()";
+
+/// A script that shows `lines` alone, then the end in the title if any.
 fn frame(lines: &[String], end: Option<&str>) -> String {
-    use base64::Engine;
-    let text = format!("\x1b[H\x1b[2J{}", lines.join("\r\n"));
-    let write = format!(
-        "W(\"{}\")",
-        base64::engine::general_purpose::STANDARD.encode(text)
-    );
+    let write = format!("W({})", json!(lines.join("\n")));
     match end {
         Some(end) => format!("{write};E({})", json!(end)),
         None => write,
@@ -66,25 +69,23 @@ fn shown(
 }
 
 pub(crate) fn scenario(browser: &Browser, driver: &WebviewDriver) {
-    let page = llxterm::terminal::page("session 1 · cat");
-    let panel = std::sync::Arc::new(browser.panel(1, "session 1 · cat", page));
+    let panel = std::sync::Arc::new(browser.panel(1, "session 1 · cat", page("session 1 · cat")));
     let second = Duration::from_secs(1);
     let wait = Duration::from_secs(10);
 
-    // What was written shows in the terminal, and the window never took the keyboard.
+    // What was painted shows in the page, and the window never took the keyboard.
     assert!(panel.paint(&frame(&lines(&["hi", "there"]), None)));
     let read = shown(browser, &panel, wait, |read| read["rows"][1] == "there");
     assert_eq!(read["rows"], json!(["hi", "there", ""]));
     assert_eq!(read["focus"], false, "the panel took the keyboard");
     assert_eq!(read["visible"], "visible");
     // The page fills the pages' part (the window less the bar, and the tabs' side when it shows:
-    // the window stays from the scenarios before, as they left it), and the grid follows.
+    // the window stays from the scenarios before, as they left it).
     let (width, height) = (read["width"].as_f64(), read["height"].as_f64());
     assert!(
         width >= Some(600.0) && height >= Some(600.0),
         "{width:?} by {height:?}"
     );
-    assert!(read["cols"].as_u64() > Some(80), "{read}");
     let href = read["href"].clone();
 
     // A tab beside the browser's, shown as it opens.
@@ -101,11 +102,6 @@ pub(crate) fn scenario(browser: &Browser, driver: &WebviewDriver) {
     let read = shown(browser, &panel, second, |read| read["href"] != Value::Null);
     assert_eq!(read["href"], href, "the panel navigated");
 
-    super::terminal_colors::check(browser, &panel);
-    super::terminal_modes::check(browser, &panel);
-    super::terminal_keys::check(browser, &panel);
-    super::find::check(browser, &panel);
-
     // A burst: all of it runs in order, and the browser still answers.
     for n in 0..1000 {
         panel.paint(&frame(&lines(&[&n.to_string()]), None));
@@ -113,7 +109,7 @@ pub(crate) fn scenario(browser: &Browser, driver: &WebviewDriver) {
     shown(browser, &panel, second, |read| read["rows"][0] == "999");
     driver.observe().expect("the browser answers after a burst");
 
-    // A session's end, in the title.
+    // A frame that names an end in the title.
     panel.paint(&frame(&lines(&["bye"]), Some(" · exited 3")));
     shown(browser, &panel, second, |read| {
         read["title"] == "session 1 · cat · exited 3"
@@ -167,7 +163,7 @@ pub(crate) fn scenario(browser: &Browser, driver: &WebviewDriver) {
     assert_eq!(heard.len(), 1, "{heard:?}");
     assert_eq!(heard[0].0, tab);
     assert!(heard[0].1.contains("its program runs on"), "{heard:?}");
-    // Out of sight, its screen stays live: what the program prints still reaches it.
+    // Out of sight, its page stays live: what is painted still reaches it.
     assert!(panel.paint(&frame(&lines(&["after"]), None)));
     shown(browser, &panel, second, |read| read["rows"][0] == "after");
     // The agent shows it again.
@@ -249,10 +245,9 @@ pub(crate) fn glass(browser: &Browser, driver: &WebviewDriver, window: &Window, 
 }
 
 /// A panel opened before any browser window draws as a shown page does, with animation frames
-/// (an emulator draws in them): WebKit must not take it for a hidden one.
+/// (a page draws in them): WebKit must not take it for a hidden one.
 pub(crate) fn first(browser: &Browser) {
-    let page = llxterm::terminal::page("session 0 · sh");
-    let panel = browser.panel(9, "session 0 · sh", page);
+    let panel = browser.panel(9, "session 0 · sh", page("session 0 · sh"));
     let deadline = Instant::now() + Duration::from_secs(10);
     while browser.peek(&panel, "typeof W") != Ok(json!("function")) {
         assert!(Instant::now() < deadline, "the panel never loaded");
@@ -313,7 +308,7 @@ pub(crate) fn first(browser: &Browser) {
     browser.group(&tab, "alpha");
     switcher("alpha", false);
     browser.group("t8", "beta <i>");
-    let other = browser.panel(8, "session 8 · sh", llxterm::terminal::page("sh"));
+    let other = browser.panel(8, "session 8 · sh", page("sh"));
     switcher("alpha", true);
     own(1);
     // The history menu lists the shown project's past, as the app tells it; what became of each
@@ -403,8 +398,7 @@ pub(crate) fn first(browser: &Browser) {
         "the key closed {tab} of another project"
     );
     switcher("beta <i>", false);
-    browser.click("history");
-    let at = menu_entry(browser, "t8", "hidden");
+    let at = history_entry(browser, "t8", "hidden", 8);
     browser.click(&format!("visit {at}"));
     own(1);
     assert!(other.paint(&frame(&lines(&["back"]), None)));
@@ -416,6 +410,8 @@ pub(crate) fn first(browser: &Browser) {
     // were.
     browser.go("beta <i>");
     switcher("beta <i>", false);
+    // The strip's own list is macOS's: on Linux the history is GTK's menu (host_clicks.rs).
+    #[cfg(target_os = "macos")]
     history_menu(browser);
     browser.go("alpha");
     switcher("alpha", false);
@@ -466,8 +462,20 @@ fn shortcuts(browser: &Browser) {
     until("settings closed again", &|_, tabs| !has(tabs, "s1"));
 }
 
+/// The history's entry of tab `key` once it says `state`, opened as the person opens it: its
+/// number. On Linux the history is GTK's own menu, which waits for the person and has no list a
+/// check reads: the entry there is the row of the ledger the window was told, `row`.
+fn history_entry(browser: &Browser, key: &str, state: &str, row: u64) -> u64 {
+    if cfg!(target_os = "macos") {
+        browser.click("history");
+        return menu_entry(browser, key, state);
+    }
+    row
+}
+
 /// The strip's buttons and its history menu: a click opens it over the window, another (the
 /// button's, or outside the list) closes it, and a click on a tab closes it too.
+#[cfg(target_os = "macos")]
 fn history_menu(browser: &Browser) {
     let said = |script: &str, want: Value| {
         let deadline = Instant::now() + Duration::from_secs(10);
@@ -558,8 +566,7 @@ pub(crate) fn active() -> bool {
 pub(crate) fn windows(browser: &Browser) {
     let before = browser.listing().expect("a window is open").len();
     browser.new_window(77);
-    let page = llxterm::terminal::page("session 41 · sh");
-    let panel = browser.panel(41, "session 41 · sh", page);
+    let panel = browser.panel(41, "session 41 · sh", page("session 41 · sh"));
     let deadline = Instant::now() + Duration::from_secs(10);
     while browser.peek(&panel, "typeof W") != Ok(json!("function")) {
         assert!(

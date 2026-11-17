@@ -9,7 +9,7 @@ use super::Board;
 
 /// The page's script after the pages' kit, and their SHA-384: the page's policy runs it by that hash.
 const SCRIPT: &str = concat!(include_str!("../page/kit.js"), include_str!("page.js"));
-const SCRIPT_SHA384: &str = "HtWdY0SK4h1KqDc4KhYcoZUm1jvj2lMySy236tX1aM5rouap7GZTrVKIvMM4lE4+";
+const SCRIPT_SHA384: &str = "hv3ozZC1DOAo+gQ523pWqHLz9FfmzcPB3VEalovsWdk0kfJ2lL4WD4U4q7lzZ4wi";
 
 /// The page, titled `title`.
 pub fn page(title: &str) -> String {

@@ -74,8 +74,8 @@
   ⌃⌘= makes every branch of the tab even by the panes it holds, and Move Pane to New Tab puts
   the pane in use in a tab of its own. ⌘W in a tab of several panes closes the pane in use, and
   the pane used last (else the neighbour that takes its room) takes the keys. A tab dragged
-  onto the pages goes beside the pane under it on the side of the edge it is nearest, above and
-  below too. A terminal's folder is kept as it closes and as the app quits, so it opens again
+  onto the pages goes beside the pane under it, on the left or the right by the half of the
+  pane you hold it over, above or below near the pane's upper or lower edge. A terminal's folder is kept as it closes and as the app quits, so it opens again
   where its shell was.
 
 - **A split tab of more than two panes.** The window draws a tab's whole tree of panes as the
@@ -167,14 +167,116 @@
 
 ### Changed
 
+- **Focus is quiet: no blue ring and no glow anywhere.** The address field, the search fields,
+  Settings' pop-ups and search, the board's and the Store's fields, the file tree's rename
+  field and the editor's find field no longer light up in the accent with a halo when you
+  click or type in them: their own hairline turns a step firmer, in the text's colour. The
+  keyboard's focus on a button, a link or a row is one neutral ring, drawn for the keyboard
+  alone; the keyboard's pick in the tab list and the file tree is that ring round the row,
+  not a blue fill. A split's divider and the side's edge are a firmer grey line under the
+  pointer, not a blue one, and recording a shortcut looks as a field typed in does. The accent
+  stays for the one primary button of a place and a menu's selected row.
+
 - **The README shows the app in dark only.** Its pictures are the dark ones, whatever GitHub's
   theme, and `scripts/e2e.sh --update` copies only those; the light copies are gone. The run still
   checks every scene in dark and in light.
+- **An agent reads a terminal as a terminal draws it.** The screen it reads is kept by a new
+  terminal core, libghostty-vt (a terminal emulation library, linked into the program): a box a
+  program draws with the line drawing characters (`top`, `htop`, `mc`, tmux's borders) reads as
+  `┌──┐`, no longer `lqqk`; a wide character takes its two columns; after a resize the lines
+  are wrapped again to the new width and rows come back from above, where the screen was cut
+  before; and while a program holds a frame back as it draws the next (synchronized output), the
+  agent reads the frame it showed before, never half a frame; a program that holds one longer
+  than a second and then writes nothing more has it drawn when the second ends. Each terminal keeps about 10,000
+  rows of history in the core. The core also reads a shell's marks (OSC 133) and divides the
+  screen into prompt, what was typed and output, for what agents will read next. Its licences
+  are in NOTICE.md.
+- **Terminals are drawn by the window itself**, natively from the terminal core, over the
+  window's glass in your theme, code font and size, with the cursor, the selection and the
+  scrollbar as before. A row is drawn again only when it shows something else; a terminal out
+  of sight draws nothing and keeps no picture; its grid follows its pane. While you drag a
+  split's divider or the window's edge, each terminal keeps its grid and its text in place
+  (cut at the pane's edge, raised only to keep the cursor's line in a shorter pane), and its
+  program is told the new size once, as you let go: a 200-point drag told each shell 25 sizes
+  before, now one. A window resized step by step never tells a pane a size between two (a pane
+  of a split no longer stretches over the one beside it before the layout catches up), and a
+  pane put by for another's zoom keeps its size until it is back. A tab carried from the column
+  over the pages stands where it would land: the tab itself (the terminal or the page, live)
+  opens there from the edge it lands at, and the panes beside it glide aside to make room, cut
+  at their edge and never stretched. They are the views themselves: no picture stands in for
+  one, and no outline marks the place. A terminal keeps its grid and text while the tab is
+  carried and is told its new size once, as the tab lands; let go, nothing moves again. Where
+  it lands is found from the panes as they lay when the tab came over them: over a pane's
+  left half it lands on its left and over its right half on its right, under the pointer, and
+  above or below only near the pane's upper or lower edge, so a hand low in the right half
+  still lands it on the right; each side is kept until the pointer is clearly in another's
+  zone, so the place never flips back and forth (before, a rectangle of the accent marked the
+  pane, and the layout under it moved).
+  Escape, or back over the column, puts the panes back. Carried out past the window's edge,
+  the window it comes out into has the tab's views as they were. Keys go through the
+  core's encoder as the program asked (the keyboard protocol, Option as Meta on the side
+  Settings names, Shift+Return a line feed until the program asks for the protocol) with the
+  Mac's own keys on top (⌘K, ⌘← ⌘→, ⌥← ⌥→, ⌘⌫ ⌥⌫, ⌘↑ ⌘↓); an input method composes at the
+  cursor and the program gets only what is committed; the pointer selects or reaches a program
+  that takes the mouse, and a selection dragged past an edge scrolls on at the display's pace;
+  the wheel and the trackpad scroll; a right click offers Copy, Paste, Select All and Clear;
+  focus reports and bracketed paste are sent as asked; macOS's secure input is on while a
+  program reads a password, from the moment it asks (no key needs pressing first) until it is
+  done, as the terminal shows it, and a paste on Linux never holds the window while the
+  program that owns the clipboard answers. ⌘F, ⌘G and ⇧⌘G find in a terminal through the find row, alone
+  across the foot of its pane: its own search over the screen and the history, case folded in
+  every script ("привет" finds "ПРИВЕТ"), "2 of 3" or "No results", every match lit in your
+  accent and the one shown brighter, the view scrolled to it, and Esc gives the keys back. While
+  ⌘ is held, an http or https address in the output, or a link a program gave (OSC 8), is
+  underlined under the pointer, which becomes a hand; ⌘-click opens it in a tab. A program's
+  copy (OSC 52, text of at most a mebibyte) reaches the pasteboard only from the terminal shown
+  that has your keys in the window in front; no program can read the pasteboard. A bell rung
+  in a terminal you are not looking at is news in the Event Center and the tab's dot until you
+  type there; in sight it does nothing. The scrollbar shows while the pointer is over the
+  terminal and fades as it leaves (at once under Reduce Motion), is brighter pointed at, and
+  can be dragged. An emoji written as several joined (a family, a flag, a skin tone) is drawn as
+  one picture across its cells, no taller than the row. Settings → Terminal → Ligatures (on by
+  default) turns off the letters a code font joins (`->`, `!=`). Under Increase Contrast text
+  keeps a contrast of 7 to 1 with its ground; under Reduce Transparency the terminal's ground
+  is solid; in a window not in front a find's matches are grey. VoiceOver reads a terminal as
+  a text area of its screen's lines, the insertion point on the cursor's line, and reads new
+  output out as it comes, at once, as the terminal page did: not the echo of what you type, and
+  past twenty lines a sentence that there is more. An agent's `screenshot` of a terminal gives a
+  picture of it as well as its text, drawn by the window from the terminal (a tab out of sight
+  has one too). A change in Settings (code font, size, ligatures, Option as Meta, theme) is
+  drawn at once in every open terminal. The find row's count follows output that comes while
+  it is open, the match shown kept. Option as Meta sends a letter key's Latin letter under a
+  layout of another script (Meta-b moves a word back under a Cyrillic layout too).
+- **On Linux too, terminals are drawn by the window itself**, from the same core and the same
+  layout as on macOS: Pango and Cairo draw your code font (the first of its names fontconfig
+  has, else the system's monospace), its fallback fonts and colour emoji, on the terminal's own
+  solid ground in your theme, as the terminal page was there. Keys go through GTK's input
+  method (what it composes stays at the cursor; the program gets what is committed), then the
+  core's encoder: Alt as Meta on the side Settings names, Super in place of ⌘ (Super+K clears,
+  Super+↑ and Super+↓ go to the top and the bottom); the pointer, the wheel, the right-click
+  menu, Super-held links, the scrollbar, find, a program's copy and its bell work as on macOS.
+  Paste now reads the clipboard there. A screen reader is told the view is a terminal, not yet
+  its text.
+- **The cursor blinks when the program asks it to** (a blinking shape, or mode 12), as the
+  terminal page did: shown for half a second and hidden for the other half, only in the
+  terminal you type in, and never under Reduce Motion (on Linux, with GTK's animations off).
+- **A program that ended leaves a dimmed line under its last screen**, "(the program exited with
+  3)" or "(the program ended)", where its cursor was, and the cursor goes.
+- **The core answers a program's queries.** Every byte of output now reaches the terminal core,
+  which answers what a program asks (where the cursor is, which terminal it is, its colours,
+  its modes) and keeps a frame a program holds back (synchronized output) for at most a second,
+  without holding up what agents read.
+- **macOS 13 or later.** The terminal core's library is built for macOS 13, and so is the app.
+  Building it takes Rust 1.96, and on Linux Zig 0.17 (`scripts/install-zig.sh`); CONTRIBUTING.md
+  says how to build offline.
+- **`LLXTERM_RECORD=DIR`** records each terminal's raw output and resizes as asciicast v2 files,
+  readable by you alone, for development.
+
 - **No longer 16 terminals at most.** The app holds as many terminals as this machine's memory
-  and open-file limit allow, every project's counted: a terminal's page takes about 47 MiB (a
-  WebKit process of its own) and its program three descriptors and two threads in the app, so
-  a quarter of the memory and half the open-file limit bound the count, never under 16 (128 on
-  a Mac with 24 GB). One more is not opened: an agent's `open` says so in its answer, and the
+  and open-file limit allow, every project's counted: a terminal takes about 9 MiB of the app's
+  memory with 10,000 rows of history, at most 16 MiB (the core's limit on a history), and three
+  descriptors and two threads, so a quarter of the memory and half the open-file limit bound
+  the count, never under 16 (384 on a Mac with 24 GB). One more is not opened: an agent's `open` says so in its answer, and the
   Event Center has one quiet line in its project, "Terminals Not Opened", until a terminal
   opens there again.
 
@@ -222,6 +324,8 @@
 
 ### Removed
 
+- **The terminal's page.** xterm.js and the WebKit page each terminal had are gone (a terminal
+  no longer costs a WebKit process).
 - **Installing into agents, and agents outside the app's terminals.** `llxterm setup`,
   Settings → Integrations and its Copy MCP Entry, the offer bar's "Add to …", the `llxterm`
   link in `~/.local/bin` and the profile line it added, the Linux desktop entry, the Claude Code
@@ -232,6 +336,12 @@
   are left as they are.
 
 ### Fixed
+
+- **A split's divider is drawn the way its panes lie, every time.** A divider between panes
+  side by side that came to lie between panes one above the other (a tab split right, then
+  another split down, or a split changed its way) kept its upright line and moved side to
+  side: it was told its way once, and never again. Now it lies across and is dragged up and
+  down.
 
 - **No running program is ended to make room for a terminal.** At the limit, a new terminal
   took the place of the oldest one of its project whose tab you had closed, ending a program

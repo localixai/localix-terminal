@@ -302,7 +302,8 @@ scenes() {
   call "{\"action\":\"show\",\"tab\":\"$shown\"}" >/dev/null
   said=$(call '{"action":"list"}')
   has "files opened with no session stay open together" "$said" "src/checkout.ts"
-  has "the file asked for is the one in sight" "$said" "$shown (file) [shown]: src/cart.ts"
+  # The list names each file's tab too ("f2 (file) [shown] in tab 3: src/cart.ts").
+  has "the file asked for is the one in sight" "$(grep -F ': src/cart.ts' <<<"$said")" "$shown (file) [shown]"
   sleep 1
   shot editor
   # A Markdown file opens drawn as a document, its text one button away; the tool still reads
@@ -310,7 +311,10 @@ scenes() {
   said=$(call '{"action":"open","kind":"file","path":"README.md"}')
   doc=$(grep -o 'f[0-9][0-9]*' <<<"$said" | head -1)
   sleep 1
-  has "a Markdown file's tab holds its text" "$(call "{\"action\":\"interact\",\"tab\":\"$doc\"}")" "# Acme Shop"
+  # Read into a variable first: inside a quoted `$( )` the system's bash 3.2 takes the call's
+  # braces and comma for a brace expansion, and hands the call over in two pieces.
+  said=$(call "{\"action\":\"interact\",\"tab\":\"$doc\"}")
+  has "a Markdown file's tab holds its text" "$said" "# Acme Shop"
   if command -v agent-desktop >/dev/null; then
     said=$(offered)
     has "a Markdown file opens as a document" "$said" "Acme Shop"

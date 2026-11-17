@@ -2,7 +2,7 @@
 name = "llxterm"
 version = "0.1.7"
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.96"
 description = "Localix Terminal, the terminal for you and your coding agents: sessions that belong to a project and come back as you left them, with a browser, a board and a Store that agents use too"
 license = "MIT"
 publish = false
@@ -23,8 +23,12 @@ url = "2.5.8"
 libc = "0.2"
 # An update's archive is checked against the checksum its release lists.
 sha2 = "0.11.1"
-# A terminal session's screen.
-vt100 = "0.16.2"
+# The terminal core, a session's screen (src/terminal/core.rs): libghostty-vt 1.0.1 through its
+# raw bindings, linked statically. Its build fetches the release's library and holds it to the
+# sha256 the crate pins (Cargo.lock holds the crate's), or builds it with Zig where no prebuilt
+# library exists (Linux); `GHOSTTY_VT_LIB_DIR` or `GHOSTTY_RELEASE_DIR` build offline
+# (CONTRIBUTING.md). An exact version: its C ABI is the release's.
+ghostty-vt-sys = "=0.9.0"
 # What the desk keeps across restarts: the change feed, the boards, the Event Center's journal. Built
 # in, so the binary needs no SQLite of the system.
 rusqlite = { version = "0.41.1", features = ["bundled", "fallible_uint"] }
@@ -36,10 +40,21 @@ block2 = "0.6"
 # `exception`: a panel's window lets go of an observer AppKit no longer finds (nspanel.rs).
 objc2 = { version = "0.6", features = ["exception"] }
 objc2-web-kit = { version = "0.3", default-features = false, features = ["std", "WKWebView", "WKWebViewConfiguration"] }
+# The terminal's canvas (browser/term_view/macos): Core Text lays out and draws its glyphs into a
+# Core Graphics bitmap. The same 0.3 line as the WebKit bindings above, which bring these already.
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFArray", "CFAttributedString", "CFCGTypes", "CFDictionary", "CFNumber", "CFString"] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGFont", "CGGeometry", "CGImage", "CGPath"] }
+objc2-core-text = { version = "0.3", default-features = false, features = ["std", "CTFont", "CTFontDescriptor", "CTFontTraits", "CTLine", "CTRun", "CTStringAttributes", "objc2-core-graphics"] }
+# The terminal's view in the window (browser/term_view/macos/view.rs): an NSView of its own that
+# takes keys, the pointer and an input method's text. The same 0.3 line, brought by the window.
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSEvent", "NSResponder", "NSTextInputClient", "NSView"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSAttributedString", "NSGeometry", "NSRange", "NSString"] }
 
-# A page's place in the window's GTK box, and the WebView's own snapshot for a screenshot.
+# A page's place in the window's GTK box, and the WebView's own snapshot for a screenshot; the
+# terminal's view, its text laid out by Pango and drawn into Cairo (libraries GTK links already).
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
+pangocairo = "0.18"
 webkit2gtk = "2.0"
 
 # Test builds only: a server with no window, whose lock and socket are in `LLXTERM_TEST_DIR`,
@@ -50,6 +65,11 @@ test-server = []
 
 [dev-dependencies]
 llxterm = { path = ".", features = ["test-server"] }
+
+# The terminal canvas's pixel tests (tests/view_pixels.rs) read and write their pictures as PNG.
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFData", "CFString"] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGImage"] }
 
 # Opens a real window: run with LLXTERM_DISPLAY_TESTS=1.
 [[test]]

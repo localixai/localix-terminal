@@ -165,10 +165,11 @@ pub(super) fn on_browser(
         | Cmd::Close
         | Cmd::Panel(_)
         | Cmd::Paint(_)
+        | Cmd::TermProbe(..)
+        | Cmd::TermShot(..)
         | Cmd::Unpanel(_)
         | Cmd::PanelMenu(..)
         | Cmd::PanelLink(..)
-        | Cmd::PanelCopy(..)
         | Cmd::CommandEnded(..)
         | Cmd::Unanswered(..)
         | Cmd::Reveal(_)

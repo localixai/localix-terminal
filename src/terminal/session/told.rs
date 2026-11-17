@@ -1,7 +1,7 @@
 //! What a session tells whoever listens besides its screen: that its program has another note for
 //! the person, and that its shell ended a command (with whether the person's own keys typed it);
 //! and the command of theirs that ended while they were not looking, kept until they type in the
-//! terminal.
+//! terminal, and whether its program rang the bell while they were not looking, kept as long.
 
 use std::sync::Arc;
 
@@ -23,6 +23,9 @@ pub(super) struct Told {
     /// The last command of the person's that ended unseen, by its number; a newer one replaces it.
     pub(super) unseen: Option<(u32, Ended)>,
     numbered: u32,
+    /// The program rang the bell unseen, by the number it was given; a bell rung again before
+    /// the person looked keeps it.
+    pub(super) rang: Option<u32>,
 }
 
 impl Session {
@@ -41,6 +44,22 @@ impl Session {
         let told = &mut state.told;
         told.numbered = told.numbered.wrapping_add(1);
         told.unseen = Some((told.numbered, ended));
+    }
+
+    /// The program rang the bell while the person was not looking (the window decides): it waits
+    /// for them, numbered, until they type in the terminal; rung again meanwhile, it is the same.
+    pub fn rang_unseen(&self) {
+        let mut state = self.shared.lock();
+        let told = &mut state.told;
+        if told.rang.is_none() {
+            told.numbered = told.numbered.wrapping_add(1);
+            told.rang = Some(told.numbered);
+        }
+    }
+
+    /// The number of the bell rung unseen that waits for the person, if one does.
+    pub fn unseen_bell(&self) -> Option<u32> {
+        self.shared.lock().told.rang
     }
 
     /// The command of the person's that ended unseen and waits for them, with its number.

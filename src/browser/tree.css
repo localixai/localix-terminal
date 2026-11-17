@@ -10,8 +10,7 @@
 }
 #fh:hover{background:var(--ov-2);color:var(--ink);transition:none}
 #fh:active{background:var(--ov-3);transition:none}
-#fh:focus-visible{box-shadow:inset 0 0 0 1px var(--accent),0 0 0 3px var(--acc-2)}
-html[data-inactive] #fh:focus-visible{box-shadow:none}
+html[data-part=side] #fh:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 #fr{position:relative}
 /* A row: the folder's disclosure (a file keeps its place empty, so the pictures line up), the
    picture of its kind, and its name. It rests in the quiet ink and is lit under the pointer. */
@@ -28,17 +27,16 @@ html[data-inactive] #fh:focus-visible{box-shadow:none}
 .fe .fn{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* The line that says how many more a folder holds than the tree lists: words, not an entry. */
 .fe.more{color:var(--ink-2);pointer-events:none}
-/* The pick: grey where the tree does not have the keyboard, the accent with white words where it
-   does (grey again in an inactive window, frame.css). */
+/* The pick: grey, and in the keyboard's ring where the tree has the keyboard (frame.css,
+   --focus), never the accent; the tree itself takes no ring. */
 .fe[data-pick]{color:var(--fg);background:var(--ov-2)}
-#ft:focus-visible .fe[data-pick]{background:var(--acc-sel);color:var(--on-sel)}
-#ft:focus-visible .fe[data-pick] .ch{color:inherit}
+#ft:focus-visible .fe[data-pick]{box-shadow:inset 0 0 0 2px var(--focus)}
 html[data-inactive] .fe .fi{opacity:.6}
 /* What the app would not do, said under the entry it was asked of: words, in the quiet ink. */
 .fe.note{color:var(--ink-2);font-size:11px;line-height:14px}
 .fe.note:is(:hover,:active){background:none}
 /* A name being written: the field takes the name's place, in the row's own letters. */
-.fe .fx{display:block;width:100%;height:20px;box-sizing:border-box;margin:0;padding:0 4px;border:0;border-radius:var(--r-1);outline:0;background:var(--card);color:var(--fg);font:inherit;box-shadow:inset 0 0 0 1px var(--accent),0 0 0 3px var(--acc-2)}
+.fe .fx{display:block;width:100%;height:20px;box-sizing:border-box;margin:0;padding:0 4px;border:0;border-radius:var(--r-1);outline:0;background:var(--card);color:var(--fg);font:inherit;box-shadow:var(--field-on)}
 .fe:has(.fx),.fe:has(.fx):is(:hover,:active){background:none;color:var(--fg)}
 /* An entry carried: its row waits, dimmed; the folder it would go into is lit in the accent's
    wash, the tree's own folder by a line around the tree; rows are not lit under the pointer. */

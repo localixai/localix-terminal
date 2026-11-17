@@ -7,7 +7,7 @@ fn a_pages_menu_reads_as_items_lines_and_submenus_counted_in_order() {
     let entries: Vec<Entry> = serde_json::from_str(
         r#"[{"label":"Open"},{"line":true},
             {"label":"Move To","items":[{"label":"Todo","marked":true},{"label":"Done","off":true}]},
-            {"label":"Paste","paste":true}]"#,
+            {"label":"Paste"}]"#,
     )
     .unwrap();
     let labels: Vec<&str> = (flat(&entries).into_iter())
@@ -17,7 +17,6 @@ fn a_pages_menu_reads_as_items_lines_and_submenus_counted_in_order() {
         })
         .collect();
     assert_eq!(labels, ["Open", "Todo", "Done", "Paste"]);
-    assert!(matches!(flat(&entries)[3], Entry::Item { paste: true, .. }));
     assert!(matches!(
         flat(&entries)[1],
         Entry::Item { marked: true, .. }

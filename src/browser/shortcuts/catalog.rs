@@ -221,7 +221,7 @@ pub(in super::super) fn of_find(does: &str) -> bool {
 
 /// The way a new pane goes from the one in use for what a shortcut `does` (`true`: side by
 /// side), when it splits: Split Right and Split Down are greyed where it would not fit.
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 pub(in super::super) fn of_split(does: &str) -> Option<bool> {
     match does {
         "key split right" => Some(true),
@@ -232,7 +232,7 @@ pub(in super::super) fn of_split(does: &str) -> Option<bool> {
 
 /// Whether what a shortcut `does` zooms the pane in use: Zoom Pane is greyed over a pane alone
 /// in its tab, which has nothing to put by.
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 pub(in super::super) fn of_zoom(does: &str) -> bool {
     does == "key zoom"
 }

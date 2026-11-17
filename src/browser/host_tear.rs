@@ -1,26 +1,18 @@
 //! A tab carried out of a window's list, as docs/windows.md has it: past the window's edge it
 //! comes out into a window of its own that follows the pointer (with one tab only, its window is
 //! what moves); over another window's list that window turns clear and the list opens a slot;
-//! let go over a list the tab goes into it, elsewhere its window stays. Nothing is written to the
-//! layout before it is let go.
+//! let go over a list the tab goes into it, elsewhere its window stays. Nothing is written to
+//! the layout before it is let go. The gesture's state is the carry's (`host_carry.rs`).
 
 use tao::event_loop::EventLoopWindowTarget;
 
-use super::super::super::chip::Chip;
+use super::super::super::carry::Point;
 use super::super::super::deck::Deck;
 use super::super::super::strip::Key;
 use super::{Cmd, Looping};
 
-/// How far past the window's edge the pointer carries a tab before it comes out (points).
-const OUT: f64 = 10.0;
-
 /// Where the pointer is in a window a tab came out into: over its list's first row.
 const GRAB: (f64, f64) = (72.0, 54.0);
-
-/// A tab held in a side's list: its card, drawn where the pointer is (chip.rs).
-pub(super) struct Held {
-    chip: Chip,
-}
 
 /// A tab out of its window's list, carried by the pointer.
 pub(super) struct Tear {
@@ -39,138 +31,54 @@ pub(super) struct Tear {
     pub(super) before: Option<String>,
 }
 
-/// A point, in points.
-type Point = (f64, f64);
-
-/// A side's message about a carried tab: what, its pane's key, its point in the side's page, and
-/// the pointer on the screen when the page says it.
-fn said(said: &str) -> Option<(&str, &str, Point, Option<Point>)> {
-    let parts: Vec<&str> = said.split(' ').collect();
-    let number = |part: &str| part.parse::<f64>().ok();
-    match parts.as_slice() {
-        [verb @ ("drop-over" | "drop"), key, x, y] => {
-            Some((verb, key, (number(x)?, number(y)?), None))
-        }
-        [verb @ ("drop-over" | "drop"), key, x, y, sx, sy] => Some((
-            verb,
-            key,
-            (number(x)?, number(y)?),
-            Some((number(sx)?, number(sy)?)),
-        )),
-        _ => None,
-    }
-}
-
-/// `said` as a window's own side reads it: the screen's point is the carrying's only.
-pub(super) fn plain(said: &str) -> String {
-    let parts: Vec<&str> = said.split(' ').collect();
-    match parts.as_slice() {
-        [verb @ ("drop-over" | "drop"), key, x, y, _, _] => format!("{verb} {key} {x} {y}"),
-        _ => said.to_string(),
-    }
-}
-
 impl Looping {
-    /// A side's message, when it is about a tab carried out of a list (or about to come out):
-    /// whether it was, and is done with.
-    pub(super) fn tear(&mut self, message: &str, target: &EventLoopWindowTarget<Cmd>) -> bool {
-        if let Some(rest) = message.strip_prefix("drag-start ") {
-            self.hold(rest);
-            return true;
-        }
-        if message == "drag-end" {
-            self.held = None;
-            return true;
-        }
-        if let Some(at) = message.strip_prefix("drag-at ") {
-            let mut point = at.split(' ').filter_map(|part| part.parse::<f64>().ok());
-            if let (Some(x), Some(y), Some(held)) = (point.next(), point.next(), &self.held) {
-                held.chip.follow(x, y);
-            }
-            return true;
-        }
-        if let Some(before) = message.strip_prefix("slot ") {
-            if let Some(tear) = self.tear.as_mut() {
-                tear.before = (before != "end").then(|| before.to_string());
-            }
-            return true;
-        }
-        if message == "drop-off" {
-            return self.take_back();
-        }
-        let Some((verb, key, (x, y), on_screen)) = said(message) else {
-            return false;
-        };
-        let Some(key) = Key::parse(key) else {
-            return false;
-        };
-        let from = self
-            .tear
-            .as_ref()
-            .map_or_else(|| self.windows.at(), |tear| tear.from);
-        let Some(point) = self.windows.deck(from).and_then(|deck| {
-            let top = deck.top();
-            // The screen's point as the page says it: a window that moves under the pointer moves
-            // the page's points with it, so they and where the window was disagree.
-            (on_screen.or_else(|| deck.to_screen(x, y + top))).map(|screen| (screen, (x, y + top)))
-        }) else {
-            return false;
-        };
-        match verb {
-            "drop" => self.let_go(),
-            _ => self.carry(key, point, target),
-        }
-    }
-
-    /// A tab held in the window in use's side (`GX GY X Y W H [IH]`: where in its card the pointer
-    /// holds it, the card's place in the side's page, and the page's height): its card is drawn
-    /// where the pointer is from now on, over everything, till it is let go.
-    fn hold(&mut self, said: &str) {
-        let numbers: Vec<f64> = (said.split(' '))
-            .filter_map(|part| part.parse().ok())
-            .collect();
-        let (gx, gy, x, y, width, height, inner) = match numbers[..] {
-            [gx, gy, x, y, width, height] => (gx, gy, x, y, width, height, None),
-            [gx, gy, x, y, width, height, inner] => (gx, gy, x, y, width, height, Some(inner)),
-            _ => return,
-        };
-        let at = self.windows.at();
-        let Some(side) = self.windows.deck(at).and_then(|deck| deck.side_view()) else {
-            return;
-        };
-        let chip = Chip::lift(side, (x, y, width, height), (gx, gy), inner);
-        self.held = Some(Held { chip });
-    }
-
-    /// The card seen where the pointer is, or not (a window carries the tab).
+    /// The carried tab's card seen where the pointer is, or not (a window carries the tab).
     pub(super) fn card(&self, shown: bool) {
-        if let Some(held) = &self.held {
-            held.chip.show(shown);
+        if let Some(carrying) = &self.carry {
+            carrying.chip.show(shown);
         }
     }
 
-    /// The tab is carried to `screen`, a point of the screen (`window`, of its window): out past
-    /// the window's edge it comes out, then its window follows, over a list or not.
-    fn carry(
+    /// The tab of `key` carried out past its window's edge, at `x`, `y` of its side's page
+    /// (`screen`, the screen's point as the page says it).
+    pub(super) fn follow(
         &mut self,
         key: Key,
-        (screen, window): ((f64, f64), (f64, f64)),
+        (x, y): Point,
+        screen: Option<Point>,
         target: &EventLoopWindowTarget<Cmd>,
     ) -> bool {
-        if self.tear.is_none() {
-            let from = self.windows.at();
-            let Some((.., wide, tall)) = self.windows.deck(from).and_then(Deck::on_screen) else {
-                return false;
-            };
-            let out = window.0 < -OUT
-                || window.1 < -OUT
-                || window.0 > wide + OUT
-                || window.1 > tall + OUT;
-            if !out || !self.come_out(key, from, screen, target) {
-                return false;
-            }
+        let from = (self.carry.as_ref()).map_or_else(|| self.windows.at(), |it| it.from);
+        // The screen's point as the page says it: a window that moves under the pointer moves the
+        // page's points with it, so they and where the window was disagree.
+        let point = self
+            .windows
+            .deck(from)
+            .and_then(|deck| screen.or_else(|| deck.to_screen(x, y + deck.top())));
+        point.is_some_and(|point| self.carry_out(key, from, point, target))
+    }
+
+    /// The tab carried out of window `from` to `screen`, a point of the screen: it comes out
+    /// first, then its window follows, over a list or not.
+    fn carry_out(
+        &mut self,
+        key: Key,
+        from: usize,
+        screen: Point,
+        target: &EventLoopWindowTarget<Cmd>,
+    ) -> bool {
+        let torn = self
+            .carry
+            .as_ref()
+            .is_some_and(|carrying| carrying.tear.is_some());
+        if !torn && !self.come_out(key, from, screen, target) {
+            return false;
         }
-        let Some(tear) = self.tear.as_ref() else {
+        let Some(tear) = self
+            .carry
+            .as_ref()
+            .and_then(|carrying| carrying.tear.as_ref())
+        else {
             return false;
         };
         let (moving, grab, loose, from, was) =
@@ -198,13 +106,17 @@ impl Looping {
             if let Some(deck) = over.and_then(|at| self.windows.deck(at)) {
                 deck.to_front();
             }
-            if let Some(tear) = self.tear.as_mut() {
+            if let Some(tear) = self
+                .carry
+                .as_mut()
+                .and_then(|carrying| carrying.tear.as_mut())
+            {
                 tear.over = over;
                 tear.before = None;
             }
         }
         if let Some(deck) = over.and_then(|at| self.windows.deck(at)) {
-            let tall = (self.held.as_ref()).map_or(44.0, |held| held.chip.height());
+            let tall = (self.carry.as_ref()).map_or(44.0, |carrying| carrying.chip.height());
             deck.tell_side(&format!(
                 "DS({},{})",
                 deck.list_y(screen.1).round(),
@@ -215,7 +127,8 @@ impl Looping {
     }
 
     /// The tab of `key` comes out of window `from` at `screen`: into a new window that follows
-    /// the pointer, or, when it is the only tab the window shows, the window itself follows.
+    /// the pointer, its views moved into it as they are, or, when it is the only tab the
+    /// window shows, the window itself follows.
     fn come_out(
         &mut self,
         key: Key,
@@ -223,8 +136,6 @@ impl Looping {
         screen: (f64, f64),
         target: &EventLoopWindowTarget<Cmd>,
     ) -> bool {
-        // Laid out over the pages a moment ago, the window goes back as it was first.
-        self.on(target).command(Cmd::SideClicked("drop-off".into()));
         let group = crate::lock(&self.shared.scope).shown().to_string();
         let name = key.name();
         let arranged = self.shared.arranged_here();
@@ -247,7 +158,7 @@ impl Looping {
             // out of it till it is let go, wherever the pointer is.
             source.tell_side("TO()");
             self.card(false);
-            self.tear = Some(Tear {
+            let tear = Some(Tear {
                 keys,
                 from,
                 moving: from,
@@ -256,6 +167,9 @@ impl Looping {
                 over: None,
                 before: None,
             });
+            if let Some(carrying) = self.carry.as_mut() {
+                carrying.tear = tear;
+            }
             return true;
         }
         let mut deck = match Deck::empty((target, 1), &self.shared, &self.proxy) {
@@ -282,7 +196,7 @@ impl Looping {
         }
         self.card(false);
         let moving = self.windows.add_loose(deck, &self.shared);
-        self.tear = Some(Tear {
+        let tear = Some(Tear {
             keys,
             from,
             moving,
@@ -291,10 +205,9 @@ impl Looping {
             over: None,
             before: None,
         });
+        if let Some(carrying) = self.carry.as_mut() {
+            carrying.tear = tear;
+        }
         true
     }
 }
-
-#[cfg(test)]
-#[path = "host_tear_tests.rs"]
-mod tests;

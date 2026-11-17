@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use super::super::{DEFAULT_WAIT, Session, Until, nap};
+use crate::surface::Surface;
 
 fn start(command: &str) -> Session {
     Session::start(command, &std::env::temp_dir(), None, None).unwrap()
@@ -20,7 +21,7 @@ fn each_command_the_shell_ends_is_told_once_with_whether_the_persons_keys_typed_
     let told = Arc::clone(&heard);
     session.on_command(move |ended, theirs| told.lock().unwrap().push((ended.code, theirs)));
     assert_eq!(session.wait(Some("one"), 0, DEFAULT_WAIT), Until::Matched);
-    session.typed("x\r");
+    Surface::text(&session, "x\r");
     assert_eq!(session.wait(Some("two"), 0, DEFAULT_WAIT), Until::Matched);
     session.type_in("y\n", &[]).unwrap();
     assert_eq!(session.wait(Some("three"), 0, DEFAULT_WAIT), Until::Matched);

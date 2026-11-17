@@ -91,6 +91,14 @@ pub(crate) fn scenario(browser: &Browser) {
         |row| row["ring"] == json!(2) && row["dot"] == json!(false),
     );
     assert_eq!(at_work["turns"], json!("nonenone"), "nothing of it moves");
+    // Its view draws the program's text; the report itself is never drawn.
+    let drawn = super::terminal_view::seen_in(browser, 1, |seen| {
+        seen.shown && seen.rows.iter().any(|row| row.trim() == "one")
+    });
+    assert!(
+        !drawn.rows.iter().any(|row| row.contains("7501")),
+        "{drawn:#?}"
+    );
     assert!(
         at_work["title"]
             .as_str()

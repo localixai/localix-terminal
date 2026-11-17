@@ -107,3 +107,14 @@ pub(crate) fn pasted() -> String {
         .to_string_lossy()
         .into_owned()
 }
+
+/// `text` put on the pasteboard alone, as the person copying it would.
+pub(crate) fn put(text: &str) {
+    let text = std::ffi::CString::new(text).unwrap();
+    let (board, text, plain) = (general(), string(&text), string(PLAIN));
+    // SAFETY: a pasteboard clears its contents and answers a change count.
+    let _: isize = unsafe { msg_send![&*board, clearContents] };
+    // SAFETY: a pasteboard takes a string of a type, and answers whether it took it.
+    let _: objc2::runtime::Bool =
+        unsafe { msg_send![&*board, setString: &*text, forType: &*plain] };
+}

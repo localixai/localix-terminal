@@ -29,8 +29,6 @@ use llxterm::view::{Action, ViewError};
 
 #[path = "support/board.rs"]
 mod board;
-#[path = "support/find.rs"]
-mod find;
 #[cfg(target_os = "macos")]
 #[path = "support/page_find.rs"]
 mod page_find;
@@ -54,12 +52,40 @@ mod room;
 mod status;
 #[path = "support/steps.rs"]
 mod steps;
-#[path = "support/terminal_colors.rs"]
-mod terminal_colors;
-#[path = "support/terminal_keys.rs"]
-mod terminal_keys;
-#[path = "support/terminal_modes.rs"]
-mod terminal_modes;
+#[cfg(target_os = "macos")]
+#[path = "support/term_access.rs"]
+mod term_access;
+#[cfg(target_os = "macos")]
+#[path = "support/term_carry.rs"]
+mod term_carry;
+#[path = "support/term_close.rs"]
+mod term_close;
+#[cfg(target_os = "macos")]
+#[path = "support/term_drag.rs"]
+mod term_drag;
+#[cfg(target_os = "macos")]
+#[path = "support/term_drop.rs"]
+mod term_drop;
+#[path = "support/term_find.rs"]
+mod term_find;
+#[path = "support/term_look.rs"]
+mod term_look;
+#[cfg(target_os = "macos")]
+#[path = "support/term_modes.rs"]
+mod term_modes;
+#[cfg(target_os = "macos")]
+#[path = "support/term_raise.rs"]
+mod term_raise;
+#[path = "support/term_said.rs"]
+mod term_said;
+#[cfg(target_os = "macos")]
+#[path = "support/term_select.rs"]
+mod term_select;
+#[cfg(target_os = "macos")]
+#[path = "support/term_split.rs"]
+mod term_split;
+#[path = "support/terminal_view.rs"]
+mod terminal_view;
 #[path = "support/told.rs"]
 mod told;
 #[cfg(target_os = "macos")]
@@ -1298,6 +1324,9 @@ fn main() {
     unsafe { std::env::set_var("DESK_WINDOWS", "unseen") };
     // SAFETY: as above.
     unsafe { std::env::set_var("LLXTERM_TEST_DIR", &home) };
+    // The settings a scene changes are the run's own, never the person's (paths.rs `config`).
+    // SAFETY: as above.
+    unsafe { std::env::set_var("XDG_CONFIG_HOME", home.join("config")) };
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|arg| arg == "--list") {
         if !args.iter().any(|arg| arg == "--ignored") {
@@ -1312,6 +1341,15 @@ fn main() {
     if !driving && !paneling {
         return;
     }
+    // A word more after `driver` or `panel` picks the scenes whose names hold it (`panel
+    // carried`): the first panel's, which the others stand on, runs with them.
+    let only: Vec<String> = (filters.iter())
+        .filter(|word| !"driver".contains(word.as_str()) && !"panel".contains(word.as_str()))
+        .map(|word| (*word).clone())
+        .collect();
+    let picked = move |name: &str| {
+        only.is_empty() || name == "panel (first)" || only.iter().any(|word| name.contains(word))
+    };
     let origin = serve();
     let window = Window {
         url: format!("{origin}/form.html"),
@@ -1321,14 +1359,92 @@ fn main() {
     };
     // A window that cannot open ends the run with 3.
     browser::host(move |browser| {
-        let run = |name: &str, test: &dyn Fn()| match catch_unwind(AssertUnwindSafe(test)) {
-            Ok(()) => {
-                println!("{name}: ok");
-                true
+        let run = |name: &str, test: &dyn Fn()| {
+            if !picked(name) {
+                return true;
             }
-            Err(_) => false,
+            match catch_unwind(AssertUnwindSafe(test)) {
+                Ok(()) => {
+                    println!("{name}: ok");
+                    true
+                }
+                Err(_) => false,
+            }
         };
         if paneling && !run("panel (first)", &|| panel::first(&browser)) {
+            return 1;
+        }
+        // A terminal drawn by the window itself, and the keys its view hands the program.
+        #[cfg(target_os = "macos")]
+        if paneling && !run("terminal view", &|| terminal_view::scenario(&browser)) {
+            return 1;
+        }
+        // A terminal closed leaves nothing of its view in the window.
+        if paneling && !run("terminal closed", &|| term_close::scenario(&browser)) {
+            return 1;
+        }
+        // Find in a terminal, through the toolbar's row alone under it.
+        if paneling && !run("terminal find", &|| term_find::scenario(&browser)) {
+            return 1;
+        }
+        // A terminal's colours, links, copy, bell and full screen.
+        if paneling && !run("terminal said", &|| term_said::scenario(&browser)) {
+            return 1;
+        }
+        // Selecting with the pointer, Copy, Select All, the scrollbar and the wheel.
+        #[cfg(target_os = "macos")]
+        if paneling && !run("terminal selection", &|| term_select::scenario(&browser)) {
+            return 1;
+        }
+        // What a program asks of its terminal: focus reports, the cursor's shape, framed paste.
+        #[cfg(target_os = "macos")]
+        if paneling && !run("terminal modes", &|| term_modes::scenario(&browser)) {
+            return 1;
+        }
+        // The display options and the settings drawn at once, the long line wrapped again.
+        if paneling && !run("terminal look", &|| term_look::scenario(&browser)) {
+            return 1;
+        }
+        // VoiceOver, an agent's picture, and a view out of sight.
+        #[cfg(target_os = "macos")]
+        if paneling && !run("terminal reader", &|| term_access::scenario(&browser)) {
+            return 1;
+        }
+        // Two views in a split tab, zoomed and back: macOS's, where a pane takes its rectangle
+        // (on Linux a terminal's view fills the window's box, linux/view.rs `place`).
+        #[cfg(target_os = "macos")]
+        if paneling && !run("terminal split", &|| term_split::scenario(&browser)) {
+            return 1;
+        }
+        // A tab carried from the side across a terminal: the tab itself stands where it would
+        // land, which changes only as the pointer crosses into another edge's zone.
+        #[cfg(target_os = "macos")]
+        if paneling && !run("terminal carried over", &|| term_drop::scenario(&browser)) {
+            return 1;
+        }
+        // A tab carried under and over a terminal with a full screen: its text is raised with
+        // the pane's edge, never at once.
+        #[cfg(target_os = "macos")]
+        if paneling
+            && !run("terminal carried over, its text raised", &|| {
+                term_raise::scenario(&browser)
+            })
+        {
+            return 1;
+        }
+        // A carried tab put back with Escape, carried out of its window, and along its list.
+        #[cfg(target_os = "macos")]
+        if paneling
+            && !run("tab carried back and out", &|| {
+                term_carry::scenario(&browser)
+            })
+        {
+            return 1;
+        }
+        // The split's divider dragged and its window resized: each terminal told its grid once
+        // the size settles, its text in place meanwhile, nothing animated or left empty.
+        #[cfg(target_os = "macos")]
+        if paneling && !run("terminal split moved", &|| term_drag::scenario(&browser)) {
             return 1;
         }
         #[cfg(target_os = "macos")]

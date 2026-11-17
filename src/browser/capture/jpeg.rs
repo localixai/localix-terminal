@@ -104,6 +104,17 @@ pub(super) unsafe fn take(image: *mut AnyObject) -> Result<Picture, String> {
     })
 }
 
+/// A picture the window drew itself, kept (retained) to be encoded on the window's ground.
+pub(super) fn drawn(image: &objc2_core_graphics::CGImage) -> Picture {
+    let image: *const objc2_core_graphics::CGImage = image;
+    // SAFETY: a live CGImage; retained, it outlives the caller's handle.
+    let image = unsafe { CGImageRetain(image.cast_mut().cast()) };
+    Picture {
+        image,
+        ground: ground(),
+    }
+}
+
 /// The window's background colour, in the appearance in force now, as fixed sRGB components.
 fn ground() -> Option<Retained<AnyObject>> {
     // SAFETY: NSColor's class method answers the shared, live system colour.

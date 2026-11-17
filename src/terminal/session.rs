@@ -1,6 +1,6 @@
 //! A terminal session: a program in a PTY whose screen is kept as a terminal would show it. A
-//! reader thread feeds the screen and paints it into the window's tab when one is attached;
-//! calls type into it and wait for its output to settle or for a text to show.
+//! reader thread feeds the screen; calls type into it and wait for its output to settle or for a
+//! text to show.
 
 use std::io;
 use std::path::Path;
@@ -12,23 +12,20 @@ use super::pty::{self, Pty};
 
 mod input;
 mod output;
-mod queries;
 mod read;
+mod record;
 mod status;
+mod surface;
 mod told;
 mod wait;
 use self::input::Input;
 use super::screen::Screen;
-use super::{COLUMNS, ROWS, keys};
+use super::{COLUMNS, ROWS};
 
-/// Draws a script into the window's page (`W(..)` output, `R(..)` the screen again, `E(..)` the
-/// end); false once the tab is gone.
-pub type Painter = Box<dyn Fn(String) -> bool + Send + Sync>;
+/// What shows a session in the window (its tab): held while the session is open and let go of
+/// as it closes, which closes the tab.
+pub type View = Box<dyn Send + Sync>;
 
-/// Output is sent to the window at most this often.
-const PAINT_EVERY: Duration = Duration::from_millis(16);
-/// The most output kept for a window that does not keep up: past it the screen is sent again.
-const UNSENT_MAX: usize = 1 << 20;
 /// The longest a call waits when it names no limit.
 pub const DEFAULT_WAIT: Duration = Duration::from_secs(10);
 
@@ -40,12 +37,7 @@ struct State {
     ended: bool,
     /// How the program ended, once it has and it is known.
     status: Option<i32>,
-    painter: Option<Arc<Painter>>,
-    painted_at: Instant,
-    /// Output the window has not been sent yet, as the program wrote it.
-    unsent: Vec<u8>,
-    /// The window is to be sent the whole screen again, not the output since.
-    replay: bool,
+    view: Option<View>,
     /// How many commands the shell had ended when the last input was typed: the wait after it
     /// counts from there, so a command that ends before the wait begins is not missed.
     typed_at: Option<u64>,
@@ -71,6 +63,14 @@ struct State {
     /// (`Records::changes`) it was last called for.
     on_status: Option<Arc<dyn Fn() + Send + Sync>>,
     statused: u64,
+    /// The program's output and the resizes, recorded as they come when `LLXTERM_RECORD` says
+    /// where (development only, `record.rs`).
+    record: Option<record::Record>,
+    /// What the session keeps for its view (`surface.rs`).
+    viewed: surface::Viewed,
+    /// Told as the screen changes (at most a frame apart while output keeps coming): a view
+    /// draws its next frame then.
+    on_changed: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 /// Hears the program in front of a terminal, by the name it was started as.
@@ -118,6 +118,10 @@ pub struct Session {
     /// program that is not reading never holds it.
     control: std::fs::File,
     child: Mutex<Child>,
+    /// What a view drew from last (`surface.rs`): made as one first draws, behind a lock of its
+    /// own, shared with the core (which brings it up to the moment a program holds its frame),
+    /// and always taken after the session's.
+    render: super::Drawn,
 }
 
 /// How a wait ended.
@@ -138,14 +142,14 @@ pub enum Until {
 }
 
 impl Session {
-    /// Start `command` in `dir`; `painter` shows it in a window.
+    /// Start `command` in `dir`; `view` shows it in a window.
     pub fn start(
         command: &str,
         dir: &Path,
         vars: Option<&[(String, String)]>,
-        painter: Option<Painter>,
+        view: Option<View>,
     ) -> io::Result<Self> {
-        Self::start_after(command, dir, vars, painter, "", &super::Own::default())
+        Self::start_after(command, dir, vars, view, "", &super::Own::default())
     }
 
     /// `start`, its screen showing `before` first, dimmed (the last screen of the terminal it
@@ -158,10 +162,13 @@ impl Session {
         command: &str,
         dir: &Path,
         vars: Option<&[(String, String)]>,
-        painter: Option<Painter>,
+        view: Option<View>,
         before: &str,
         own: &super::Own,
     ) -> io::Result<Self> {
+        // Before the program: a screen the core cannot make starts nothing.
+        let screen = Screen::new(ROWS, COLUMNS).map_err(io::Error::other)?;
+        let render = screen.core().drawn();
         let Pty { mut child, master } = pty::spawn(command, dir, vars, own)?;
         let ends = master
             .try_clone()
@@ -179,15 +186,12 @@ impl Session {
         let now = Instant::now();
         let shared = Arc::new(Shared {
             state: Mutex::new(State {
-                screen: Screen::new(ROWS, COLUMNS),
+                screen,
                 version: 0,
                 changed_at: now,
                 ended: false,
                 status: None,
-                painter: painter.map(Arc::new),
-                painted_at: now,
-                unsent: Vec::new(),
-                replay: false,
+                view,
                 typed_at: None,
                 typed: None,
                 closed: false,
@@ -200,6 +204,9 @@ impl Session {
                 told: told::Told::default(),
                 on_status: None,
                 statused: 0,
+                record: record::Record::from_env(ROWS, COLUMNS),
+                viewed: surface::Viewed::default(),
+                on_changed: None,
             }),
             wake: Condvar::new(),
         });
@@ -210,6 +217,7 @@ impl Session {
             input: Arc::new(Input::default()),
             control,
             child: Mutex::new(child),
+            render,
         };
         // Before the reader starts: the program's first output comes after it.
         if !before.trim().is_empty() {
@@ -227,43 +235,15 @@ impl Session {
         Ok(session)
     }
 
-    /// The window's page is new, `columns` by `rows`: the terminal takes that size and the page
-    /// is sent the whole screen.
-    pub fn loaded(&self, columns: u16, rows: u16) {
-        self.resized(columns, rows);
-        self.behind();
-    }
-
-    /// The window's page is behind the screen (it is new, or dropped output): it is sent the whole
-    /// screen again.
-    pub fn behind(&self) {
-        self.shared.lock().replay = true;
-        // Now, not when the reader next wakes: an idle one sleeps a while.
-        output::paint_now(&self.shared);
-    }
-
     /// The window's pane changed to `columns` by `rows`: the program is told, as at a terminal.
     pub fn resized(&self, columns: u16, rows: u16) {
         if columns == 0 || rows == 0 {
             return;
         }
         let _ = pty::resize(&self.control, columns, rows);
-        self.shared.lock().screen.resize(rows, columns);
-    }
-
-    /// What the person typed in the window, as the terminal sends it: queued, the window never
-    /// waits for the program to read it. It is taken as seen before it is sent: a program that
-    /// answers at once asks again after the person's keys, never in the round they answered.
-    pub fn typed(&self, text: &str) {
-        let cursor = {
-            let mut state = self.shared.lock();
-            if read::edits_the_line(text) {
-                state.screen.marks_mut().typed_in(true);
-            }
-            state.screen.application_cursor()
-        };
-        self.attended(text);
-        self.input.queue(&keys::from_window(text, cursor));
+        let mut state = self.shared.lock();
+        record::keep(&mut state.record, |record| record.resize(rows, columns));
+        state.screen.resize(rows, columns);
     }
 
     pub fn command(&self) -> &str {
@@ -319,6 +299,26 @@ impl Session {
         heard(name.as_deref());
     }
 
+    /// `view` shows the session from now on: held while it is open and let go of as it closes,
+    /// at once when it closed already.
+    pub fn keep_view(&self, view: View) {
+        let mut state = self.shared.lock();
+        if state.closed {
+            drop(state);
+            drop(view);
+            return;
+        }
+        let before = state.view.replace(view);
+        drop(state);
+        drop(before);
+    }
+
+    /// `heard` each time the screen changes, a frame apart at most while output keeps coming,
+    /// and once as the program ends.
+    pub fn on_changed(&self, heard: impl Fn() + Send + Sync + 'static) {
+        self.shared.lock().on_changed = Some(Arc::new(heard));
+    }
+
     /// `heard` with the program's title each time it changes: now, if it set one already.
     pub fn on_title(&self, heard: impl Fn(&str) + Send + Sync + 'static) {
         let heard: Arc<Titled> = Arc::new(heard);
@@ -337,14 +337,14 @@ impl Session {
     /// End the program and its tab, once: a second close would signal a process group whose
     /// leader was reaped, an id the system may have given to another by then.
     pub fn close(&self) {
-        let painter = {
+        let view = {
             let mut state = self.shared.lock();
             if std::mem::replace(&mut state.closed, true) {
                 return;
             }
-            state.painter.take()
+            state.view.take()
         };
-        drop(painter);
+        drop(view);
         self.input.close();
         // The reader drains the terminal meanwhile, which a killed program's exit waits for,
         // and lets go of it once the program is reaped (`ended`).

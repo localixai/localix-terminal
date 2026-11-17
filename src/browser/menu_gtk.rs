@@ -60,6 +60,48 @@ pub(super) fn show(strip: &WebView, entries: &[Entry]) -> Option<usize> {
     if !menu.is_visible() {
         menu.popup_easy(1, gtk::current_event_time());
     }
+    answer(&menu, &waiting, &picked, entries)
+}
+
+/// `entries` as a menu over `widget` with its top left at `at` (its points), as a right click
+/// there opens one: the place of the item picked, or none.
+pub(super) fn show_in(widget: &gtk::Widget, at: (f64, f64), entries: &[Entry]) -> Option<usize> {
+    let menu = gtk::Menu::new();
+    let picked = Arc::new(AtomicUsize::new(usize::MAX));
+    fill(&menu, entries, &picked, &mut 0);
+    menu.set_attach_widget(Some(widget));
+    menu.show_all();
+    let waiting = glib::MainLoop::new(None, false);
+    let done = waiting.clone();
+    menu.connect_deactivate(move |_| {
+        let done = done.clone();
+        glib::idle_add_local_once(move || done.quit());
+    });
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a place in a widget, in points"
+    )]
+    let (x, y) = (at.0.round() as i32, at.1.round() as i32);
+    let under = gtk::gdk::Rectangle::new(x, y, 1, 1);
+    if let Some(window) = widget.window() {
+        menu.popup_at_rect(
+            &window,
+            &under,
+            gtk::gdk::Gravity::NorthWest,
+            gtk::gdk::Gravity::NorthWest,
+            None,
+        );
+    }
+    answer(&menu, &waiting, &picked, entries)
+}
+
+/// The person's answer to `menu` once it shows: the place of the item picked, or none.
+fn answer(
+    menu: &gtk::Menu,
+    waiting: &glib::MainLoop,
+    picked: &AtomicUsize,
+    entries: &[Entry],
+) -> Option<usize> {
     if !menu.is_visible() {
         return None;
     }

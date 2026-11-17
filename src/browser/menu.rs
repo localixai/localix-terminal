@@ -90,16 +90,21 @@ pub(super) fn modifiers(chord: &super::shortcuts::Chord, shift: bool) -> usize {
 /// Show `entries` as a menu at `at` of `view` (its points, from its top left) and wait for the
 /// person: the place of the item picked among the menu's items, or none when they dismissed it.
 pub(super) fn show(view: &WebView, at: (f64, f64), entries: &[Entry]) -> Option<usize> {
+    let view = view.webview();
+    // A WKWebView's coordinates run downwards, as the page's do.
+    show_in(&view, at, entries)
+}
+
+/// `show` over any view of the window (`view`, an NSView), at `at` of it in its own points.
+pub(super) fn show_in(view: &AnyObject, at: (f64, f64), entries: &[Entry]) -> Option<usize> {
     let target = picker()?;
     let menu = filled(entries, target, &mut 0)?;
     PICKED.store(-1, Ordering::SeqCst);
-    let view = view.webview();
     let point = CGPoint { x: at.0, y: at.1 };
     // The menu runs until the person picks or dismisses it; the window keeps drawing meanwhile.
-    // A WKWebView's coordinates run downwards, as the page's do.
     // SAFETY: a menu pops up over a view, at a point of it, with no item placed under it.
     let _: Bool = unsafe {
-        msg_send![&*menu, popUpMenuPositioningItem: std::ptr::null::<AnyObject>(), atLocation: point, inView: &*view]
+        msg_send![&*menu, popUpMenuPositioningItem: std::ptr::null::<AnyObject>(), atLocation: point, inView: view]
     };
     usize::try_from(PICKED.load(Ordering::SeqCst)).ok()
 }

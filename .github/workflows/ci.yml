@@ -26,6 +26,9 @@ jobs:
           persist-credentials: false
       - run: scripts/check-versions.sh
       - run: sh -n install.sh && sh -n plugins/claude-code/bin/llxterm
+      # The terminal core is built from source on Linux, with the Zig its bindings take.
+      - name: Zig for the terminal core
+        run: scripts/install-zig.sh >> "$GITHUB_PATH"
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
@@ -37,6 +40,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The terminal core is built from source on Linux, with the Zig its bindings take.
+      - name: Zig for the terminal core
+        run: scripts/install-zig.sh >> "$GITHUB_PATH"
       - name: cargo check on the rust-version of Cargo.toml
         run: |
           msrv=$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)
@@ -64,7 +70,7 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
-      - run: bun test src/browser src/terminal plugins/claude-code/hooks
+      - run: bun test src/browser src/editor plugins/claude-code/hooks
       # Advisories, licences and sources of the dependency tree, as deny.toml says.
       - run: cargo deny --locked check
       - name: The app bundles and its signature holds (ad hoc, nothing is notarized)

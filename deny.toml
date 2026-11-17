@@ -32,6 +32,36 @@ allow = [
 ]
 confidence-threshold = 0.9
 
+# The terminal core's build script (ghostty-vt-sys) fetches libghostty-vt's release over HTTPS:
+# with the system's TLS on macOS, and with rustls on Linux. These crates are build dependencies
+# of that script alone and never in the program; each licence is allowed for its crate alone.
+# The root certificates the fetch trusts (Mozilla's list), under the CDLA's permissive terms.
+[[licenses.exceptions]]
+crate = "webpki-root-certs"
+allow = ["CDLA-Permissive-2.0"]
+
+[[licenses.exceptions]]
+crate = "webpki-roots"
+allow = ["CDLA-Permissive-2.0"]
+
+# rustls's cryptography and certificate checks, ISC.
+[[licenses.exceptions]]
+crate = "ring"
+allow = ["ISC"]
+
+[[licenses.exceptions]]
+crate = "rustls-webpki"
+allow = ["ISC"]
+
+[[licenses.exceptions]]
+crate = "untrusted"
+allow = ["ISC"]
+
+# Constant-time comparisons under rustls, BSD-3-Clause.
+[[licenses.exceptions]]
+crate = "subtle"
+allow = ["BSD-3-Clause"]
+
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"

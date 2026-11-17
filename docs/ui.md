@@ -146,7 +146,8 @@ define colours of its own beyond its `--ground`.
   Text up to 17 pt keeps 4.5:1 against what is behind it; aim for 7:1 for small text.
 - **Fills** mix `currentColor`, so one rule suits light and dark: `--ov-1` 5% to `--ov-4` 20%.
 - **The accent** is the system's (`-apple-system-control-accent`). It is used sparingly: the
-  selected row, the primary action, a focus ring. Never two tinted controls side by side.
+  selected row of a menu, the primary action. Never a focus, and never two tinted controls
+  side by side.
   Words on an accent fill take `--on-acc`; words on a selection take `--on-sel`, which turns to
   the normal ink when the window is inactive.
 - **Each custom colour** has a light, a dark and an Increase Contrast value. A colour without
@@ -239,18 +240,32 @@ define colours of its own beyond its `--ground`.
 - **Press.** Every custom button has a pressed state (`--ov-3`), shown at once.
 - **Selection:**
   - The shown tab's row is a neutral fill with a hairline, as a browser's tab list is.
-  - The keyboard's pick in a list (the side's arrows) is the accent with white words, while the
-    list has focus. The pointer's hover is a lighter fill: never the same look as the pick.
+  - The keyboard's pick in a list (the side's arrows, the tree's) is the row in the keyboard's
+    ring, while the list has focus; the list itself takes no ring. The pointer's hover is a
+    lighter fill: never the same look as the pick. A menu's row under the pointer or the
+    keyboard is the accent, as the system's menus are.
   - In an inactive window every selection is grey
     (`-apple-system-unemphasized-selected-content-background`), with the normal ink.
 - **The inactive window recedes** (`data-inactive`):
   - glyphs drop to about 60% opacity;
   - the accent turns the system's grey, and selection turns grey;
-  - hairlines lighten, and a field loses its focus ring.
+  - hairlines lighten, the keyboard's ring fades, and a field typed in keeps only its resting
+    hairline.
 
   The material stays as it is ([Glass](#glass)).
-- **The focus ring** shows for the keyboard only (`:focus-visible`), around text fields and
-  search fields. Lists show their pick by the row's highlight, not a ring.
+- **Focus is quiet and of the text's colour: never the accent, never a glow.** One place sets
+  it for every page (`frame.css`: `--focus`, `--field-on`), and a page says only where a ring
+  sits differently.
+  - **The keyboard's ring** shows for the keyboard only (`:focus-visible`): one firm line of
+    the text's colour at half strength (2 points, a point off the control; inside a row or a
+    bar's button), round buttons, links and rows. A pointer's click never draws it.
+  - **A field typed in and a pop-up chosen from take no ring**: their own hairline is a step
+    firmer (a full point, the text's colour at about a third) while they have the focus,
+    however they came by it. Recording a shortcut looks the same, since it is typed in.
+  - **A divider and the side's edge** are a firmer line of the same colour under the pointer,
+    held, or under the keyboard; their width never changes.
+  - Under Increase Contrast the ring and the line are the text's colour in full, the line two
+    points.
 - **The keyboard reaches everything:**
   - Tab and Shift-Tab move through the controls;
   - the arrow keys move inside a list or a menu;
@@ -403,6 +418,38 @@ wait.
 - **Direct manipulation follows the pointer one to one**, with no transition. That covers a
   carried tab, a carried entry of the tree, the side's edge and the split's divider. The
   spring starts on release.
+- **What a pane holds keeps its place while its edge moves.** As a split's divider or the
+  window's edge is dragged, the panes follow the pointer, and a terminal in one keeps its grid:
+  its text stays where it was, cut at the pane's edge (never drawn over the pane beside it),
+  raised only as far as keeps the cursor's line in a pane grown shorter. Its program is told
+  the new size once, as the person lets go, so a shell or an agent redraws once, not at every
+  step. Between the system's resize of the window and the layout that follows it, a pane grows
+  only along the window's own right and bottom edges, never over its neighbour; a pane put by
+  for another's zoom keeps its size until it is back.
+- **A carried tab stands where it lands.** Over the pages, the tab's own view stands where it
+  would land (the terminal or the page itself, drawing as it does anywhere), opening from the
+  edge it lands at, and the panes beside it make room: the views themselves, laid out once
+  for that landing and drawn there from where they stood by springs the system plays on their
+  layers (`--spring`), each cut at its edge and never scaled, what it holds keeping its place
+  from its top left, as while a divider is held. No picture stands in for a view, and nothing
+  marks the place but the tab itself: no outline, no tint. A terminal keeps its grid while the
+  tab is carried (held, as while a divider is dragged), so no program is told a size; where
+  its pane grows shorter, its text is raised to keep the cursor's line by that same spring,
+  going up with the pane's edge and never at once. Where it
+  lands is found from the panes as the layout keeps them, never from where they are drawn
+  meanwhile. A pane's left half is its left and its right half its right, so the tab stands
+  under the pointer; over it and under it are taken near the pane's upper and lower edge
+  only, in a zone as wide as the pane on the edge that narrows to nothing a quarter of the
+  pane's height in (*ours*), so a pointer low in a half is still that half, and a corner is
+  its side's. No place in a pane lands nowhere. Another side is taken only once the pointer
+  is in its zone by 8 points or a twentieth of the pane's shorter side, another pane only 8
+  points past the divider, so the target never flips back and forth. The window is
+  laid out once for each landing, never for a step of the pointer, and a new landing takes
+  the views on from where they are drawn. Let go, the layout is told and nothing moves again:
+  a terminal whose pane changed is told one new grid. Escape, or back over the list, the
+  panes spring back where the layout keeps them. Out past the window's edge, the tab's views
+  move into the window it comes out into as they are. Under Reduce Motion nothing travels:
+  the views stand where they go, and the tab's fades in (`--t-fade`).
 - **Springs move things. Curves fade them.** Start at bounce 0. Add bounce (at most 0.15, and
   0.3 for a release with real momentum) only when the gesture carried momentum. A tap never
   overshoots.
@@ -418,11 +465,17 @@ The tokens (`frame.css`) set the timings; a component never picks its own durati
 | `--t-out`      | hover off, a colour going out, an exit's fade    | 120 ms, `--ease`                    |
 | `--t-fade`     | a cross-fade; every move under Reduce Motion     | 150 ms                              |
 | `--t-move`     | short moves                                      | 200 ms                              |
-| `--spring`     | bounce 0: open from an anchor, a side, a layout  | `linear()` of a damped spring       |
+| `--spring`     | bounce 0: open from an anchor, a side, a layout, panes making room for a carried tab | `linear()` of a damped spring |
 | `--spring-b`   | bounce 0.15: siblings making room, a tab landing | `linear()` of a damped spring       |
 
 - A spring's CSS duration is its settling time: about 1.47 × its perceptual duration at bounce
   0, and 1.39 × at 0.15. Design by the moment it has visibly arrived (90%, at 0.62 ×).
+- Native code moves by the same tokens (`browser/motion.rs`, checked against the sheet): a
+  Core Animation spring of mass 1 whose stiffness and damping come from that perceptual
+  duration and bounce, played over the settling time from where the layer is drawn now. A
+  view a layout moved is laid out once; what travels is its layer's place and how much of it
+  shows (`browser/glide.rs`), composited by the system, never a second layout or a size on
+  the way.
 - Opacity is quicker than the move it goes with: an entrance's fade is `--t-in`, an exit's
   `--t-out`, a cross-fade `--t-fade`.
 - **Reduce Motion**:
@@ -443,7 +496,11 @@ The tokens (`frame.css`) set the timings; a component never picks its own durati
   above and below, the gutter's 16 pt at the sides; the window's text field (`.field`, 24 pt
   here, as the editor's), the count in Callout and `--ink-2` with a width that does not change
   as it counts, and quiet icon buttons (`.btn.plain.ico`, 24 pt): the previous match, the next,
-  and Close at the end. The screen ends over the row, so it covers no line.
+  and Close at the end. The screen ends over the row, so it covers no line. It is the browser
+  toolbar's row (below), laid alone across the foot of the terminal's pane with the address
+  hidden (`data-term`); the terminal searches its own screen and history, every script's case
+  folded, and counts at once, and again as output comes while the row is open (as the terminal
+  says it changed, never on a clock), the match shown kept and nothing scrolled.
 - **A web page's find is the same row under the browser's toolbar**, as a browser's find bar
   sits under its toolbar: the page is someone else's, so nothing of the window's is drawn in it.
   The toolbar grows by the row's 40 pt with its hairline under it, and the page starts below.
@@ -495,9 +552,6 @@ when its gap is closed.
 
 - The side's head has a Settings button. Apple keeps Settings to ⌘, and the app menu, with no
   toolbar button for it.
-- The terminal's screen-reader tree (xterm's `screenReaderMode`) is on only when VoiceOver ran
-  as the page was told its look (at its start and at each restyle). Turning VoiceOver on or off
-  does not tell the pages by itself.
 - Pages still mix `currentColor` and hex in places where a system keyword fits.
 - The editor's own actions (Save, Find, and a Markdown file's turn between the document and
   its text) are keys of its page alone: none has a home in the menu bar yet, and none is in

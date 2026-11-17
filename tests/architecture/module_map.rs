@@ -22,6 +22,8 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
     // step given as a string with it.
     ("short", &[]),
     ("store", &[]),
+    // What a terminal shows and is told, as data: the window draws it, the terminal is it.
+    ("surface", &[]),
     ("view", &[]),
     ("wire", &[]),
     // What is kept, and the parts of their own: each below the desk, none knows the window.
@@ -35,7 +37,7 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
     // What the app's terminals are told for the agents run in them: where the program is, and
     // the app's own data folder for what it names, and a system tool run within a deadline.
     ("reach", &["bundle", "fetch", "paths"]),
-    ("terminal", &["fds", "page"]),
+    ("terminal", &["fds", "surface"]),
     // An editor's page and what it is told: it knows no file but the text it is handed.
     ("editor", &["page"]),
     // The app kept up to date: it knows where the app is, and nothing of the window or the desk.
@@ -53,7 +55,7 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
     (
         "browser",
         &[
-            "agents", "bundle", "kind", "page", "paths", "shots", "update", "view",
+            "agents", "bundle", "kind", "page", "paths", "shots", "surface", "update", "view",
         ],
     ),
     // The window tool, over the window, the terminals and the kept owners.
@@ -61,8 +63,8 @@ pub(crate) const ALLOWED: &[(&str, &[&str])] = &[
         "desk",
         &[
             "board", "browser", "editor", "feed", "files", "kind", "layout", "ledger", "offers",
-            "projects", "secrets", "served", "short", "shots", "store", "terminal", "update",
-            "view",
+            "projects", "secrets", "served", "short", "shots", "store", "surface", "terminal",
+            "update", "view",
         ],
     ),
     // The socket: every method onto the desk, holding the window's handle; it tells the desk

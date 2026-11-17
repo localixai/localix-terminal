@@ -1,0 +1,15 @@
+size 40x120
+cursor 11 1
+screen main
+history 0
+---
+demo % cat wide.txt
+CJK: 日本語 中文 한국어
+Emoji: 👍 👍🏽 👨‍👩‍👧 🇺🇦 🇯🇵
+Combining: é ä ñ
+Variation: ❤️ ☺️ ✔︎
+Tabs:   a       b       c
+                                                                                                                      日
+X
+Box: ┌─┬─┐ │ │ └─┴─┘
+demo % exit

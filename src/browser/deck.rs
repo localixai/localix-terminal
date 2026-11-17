@@ -28,6 +28,8 @@ mod documents;
 mod dropping;
 #[path = "deck_find.rs"]
 mod finding;
+#[path = "deck_preview.rs"]
+mod preview;
 #[path = "deck_render.rs"]
 mod render;
 #[path = "deck_said.rs"]
@@ -50,7 +52,7 @@ mod tear;
 #[path = "deck_tree.rs"]
 mod tree;
 use super::tabs::{self, Tabs};
-pub(super) use dropping::Landed;
+pub(super) use dropping::{Landed, Plan};
 pub(super) use history::Revisit;
 
 /// How many ended terminals keep their last screen.
@@ -68,9 +70,10 @@ pub(super) enum Shown {
     Nothing,
 }
 
-/// A tab on its way to another window: its page or its panel, with its view as it is.
+/// A tab on its way to another window: its page or its panel, with its view as it is (a page's
+/// held apart: a WebKitGTK view is several kilobytes).
 pub(super) enum Carried {
-    Page(tabs::Carried),
+    Page(Box<tabs::Carried>),
     Panel(Open),
 }
 
@@ -108,15 +111,14 @@ pub(super) struct Deck {
     tabs: std::sync::Mutex<Vec<super::Arranging>>,
     /// What of the shown tab's tree waits for the layout (split.rs).
     pub(super) split: super::split::Split,
-    /// A tab dragged over the pages: the pane it lands beside now and on which side, none off
-    /// them.
-    drop: Option<(Key, super::Side)>,
     /// The panes the person used, the latest first: a way to a pane ties to the one used last,
     /// and a pane closed leaves the keys to it (deck_keys.rs). Never kept.
     recent: std::sync::Mutex<Vec<Key>>,
-    /// While a tab carried over the pages is laid out where it lands: what the person had made
-    /// of the tab shown before, to go back to when it is carried off them.
-    landing: Option<Landing>,
+    /// The carried tab standing where it would land, while one does (deck_preview.rs): the
+    /// window is laid out as that landing would lay it, and nothing is told until it is let go.
+    preview: Option<preview::Preview>,
+    /// What carrying a tab over the panes cost, for checks.
+    cost: std::sync::Mutex<preview::Cost>,
     /// The side is open, or slid shut.
     side_open: bool,
     /// The side's width while open, in points: `strip::SIDE` until the person drags its edge.
@@ -290,7 +292,7 @@ impl Deck {
                 if web.is_bare() {
                     self.web = None;
                 }
-                Carried::Page(page)
+                Carried::Page(Box::new(page))
             }
             Key::Term(id) => {
                 let at = (self.terms.iter())
@@ -313,11 +315,11 @@ impl Deck {
             Carried::Page(page) => {
                 let native = &self.frame.native;
                 let web = (self.web).get_or_insert_with(|| Tabs::empty(native, page.window()));
-                web.take_in(page, native, shared);
+                web.take_in(*page, native, shared);
                 self.shown = Shown::Web;
             }
             Carried::Panel(open) => {
-                platform::reparent(&open.webview, &self.frame.native);
+                open.face.reparent(&self.frame.native);
                 self.shown = Shown::Term(open.id);
                 self.terms.retain(|kept| kept.id != open.id);
                 self.terms.push(open);
@@ -365,21 +367,3 @@ enum Part {
 /// How many times a part of the strip loaded its page: one that loads again has lost what it was
 /// told, so the next refresh tells it all again (`Deck::say`).
 pub(super) static LOADS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-
-/// What the person had made of the tab shown before a tab carried over the pages was laid out
-/// where it lands.
-#[derive(Debug, Clone)]
-pub(super) struct Landing {
-    pub(super) was: Option<super::split::Own>,
-}
-
-/// Where a point of the window is for a tab carried there.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Over {
-    /// Off the pages.
-    Off,
-    /// The middle of a whole window's pages: where the tab lands stays as it is.
-    Middle,
-    /// Near an edge of a pane: the tab lands beside that pane, on that side.
-    Pane(Key, super::Side),
-}

@@ -44,18 +44,59 @@ fn a_row_counts_what_its_page_found_of_the_query_it_holds_now() {
     sought.asked("needle", "#0a84ff");
     // The count of a query typed over comes late: it is not this one's.
     assert!(!sought.found(&found("nee", 0, 9)));
-    assert_eq!(sought.told(3)["of"], Value::Null);
+    let page = Key::Web(3);
+    assert_eq!(sought.told(page)["of"], Value::Null);
     assert!(sought.found(&found("needle", 2, 12)));
     assert_eq!(
-        sought.told(3),
-        json!({ "tab": 3, "query": "needle", "at": 2, "of": 12 })
+        sought.told(page),
+        json!({ "tab": "w3", "term": false, "query": "needle", "at": 2, "of": 12 })
     );
     // The same query again (a step, another accent) keeps its count until the page says more;
     // another query has none yet.
     sought.asked("needle", "#8e8e93");
-    assert_eq!(sought.told(3)["of"], 12);
+    assert_eq!(sought.told(page)["of"], 12);
     sought.asked("needles", "#8e8e93");
-    assert_eq!(sought.told(3)["at"], Value::Null);
+    assert_eq!(sought.told(page)["at"], Value::Null);
+}
+
+#[test]
+fn a_terminals_row_counts_what_its_own_find_says_at_once() {
+    let mut sought = Sought::default();
+    sought.asked("привет", "#0a84ff");
+    assert_eq!(
+        step_of(Seeking::Type, "привет", &sought),
+        FindStep::Needle("привет".into())
+    );
+    assert_eq!(step_of(Seeking::Next, "привет", &sought), FindStep::Next);
+    assert_eq!(
+        step_of(Seeking::Previous, "привет", &sought),
+        FindStep::Previous
+    );
+    // A step typed over the query finds it anew.
+    assert_eq!(
+        step_of(Seeking::Next, "пока", &sought),
+        FindStep::Needle("пока".into())
+    );
+    sought.counted(Count { at: 2, total: 7 });
+    let term = Key::Term(5);
+    assert_eq!(
+        sought.told(term),
+        json!({ "tab": "t5", "term": true, "query": "привет", "at": 1, "of": 7 })
+    );
+    sought.counted(Count { at: 0, total: 0 });
+    assert_eq!(
+        (
+            sought.told(term)["at"].clone(),
+            sought.told(term)["of"].clone()
+        ),
+        (json!(-1), json!(0))
+    );
+}
+
+#[test]
+fn a_terminals_find_row_lies_across_the_foot_of_its_pane() {
+    let pane = Rect::new(200.0, 52.0, 600.0, 400.0);
+    assert_eq!(row_under(pane), Rect::new(200.0, 412.0, 600.0, FIND_ROW));
 }
 
 #[test]

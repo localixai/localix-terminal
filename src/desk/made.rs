@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, Weak};
 
 use serde_json::Value;
 
-use crate::browser::{Asked, Pane, Panel};
+use crate::browser::{Asked, Panel};
 use crate::kind::{About, Kind};
 use crate::projects::ProjectId;
 
@@ -226,8 +226,8 @@ impl Desk {
                 log::warn!("what the person did in a tab was dropped: too much waits");
             }
         }));
-        panel.sizing(Arc::new(move |pane, _, _| {
-            if pane == Pane::Loaded && loaded.try_send(Work::Loaded).is_err() {
+        panel.on_load(Arc::new(move || {
+            if loaded.try_send(Work::Loaded).is_err() {
                 log::warn!("a tab was not painted as its page loaded: too much waits");
             }
         }));

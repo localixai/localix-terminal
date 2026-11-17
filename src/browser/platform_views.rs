@@ -228,14 +228,14 @@ pub(in super::super) fn follow(webview: &wry::WebView, follow: Follow) {
     };
     use objc2::msg_send;
     use wry::WebViewExtMacOS;
+    let view = webview.webview();
     let mask = match follow {
-        Follow::Fill => WIDTH_SIZABLE | HEIGHT_SIZABLE,
+        Follow::Fill => filling(&view),
         Follow::Top => WIDTH_SIZABLE | MIN_Y_MARGIN,
         Follow::Centre => MIN_X_MARGIN | MAX_X_MARGIN | MIN_Y_MARGIN | MAX_Y_MARGIN,
         Follow::Side => HEIGHT_SIZABLE,
         Follow::Still => 0,
     };
-    let view = webview.webview();
     // SAFETY: an NSView answers its NSAutoresizingMaskOptions (an NSUInteger).
     let now: usize = unsafe { msg_send![&*view, autoresizingMask] };
     // Every layout says it again: one already following so is left alone.
@@ -243,6 +243,43 @@ pub(in super::super) fn follow(webview: &wry::WebView, follow: Follow) {
         // SAFETY: an NSView takes an NSAutoresizingMaskOptions (an NSUInteger).
         let _: () = unsafe { msg_send![&*view, setAutoresizingMask: mask] };
     }
+}
+
+/// How a view that fills its part of the window (a page's or a terminal's, `Follow::Fill`)
+/// follows the window's edge as it is dragged, before the layout that the resize brings: held to
+/// the window's top and left, it grows along the window's right and bottom edges where it lies
+/// on them, and elsewhere keeps its size. A tab alone grows with the window both ways; a pane of
+/// a split never lies over the pane beside it, and the layout shares the change out after.
+#[cfg(target_os = "macos")]
+pub(in super::super) fn filling(view: &objc2::runtime::AnyObject) -> usize {
+    use crate::browser::appkit::masks::{
+        HEIGHT_SIZABLE, MAX_Y_MARGIN, MIN_Y_MARGIN, WIDTH_SIZABLE,
+    };
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2_core_foundation::CGRect;
+    // SAFETY: an NSView answers its superview, or nil.
+    let parent: Option<Retained<AnyObject>> = unsafe { msg_send![view, superview] };
+    let Some(parent) = parent else {
+        return WIDTH_SIZABLE | HEIGHT_SIZABLE;
+    };
+    // SAFETY: an NSView answers its frame, a CGRect.
+    let frame: CGRect = unsafe { msg_send![view, frame] };
+    // SAFETY: and its bounds, a CGRect.
+    let bounds: CGRect = unsafe { msg_send![&*parent, bounds] };
+    // SAFETY: and whether it counts from the top, a BOOL.
+    let flipped: bool = unsafe { msg_send![&*parent, isFlipped] };
+    let near = |a: f64, b: f64| (a - b).abs() < 0.5;
+    let right = near(frame.origin.x + frame.size.width, bounds.size.width);
+    let bottom = match flipped {
+        true => near(frame.origin.y + frame.size.height, bounds.size.height),
+        false => near(frame.origin.y, 0.0),
+    };
+    // Held to the top: the margin under it is the one that changes.
+    let under = if flipped { MAX_Y_MARGIN } else { MIN_Y_MARGIN };
+    let across = if right { WIDTH_SIZABLE } else { 0 };
+    across | if bottom { HEIGHT_SIZABLE } else { under }
 }
 
 /// GTK owns its children's layout; elsewhere there is no native autoresizing mask to set.

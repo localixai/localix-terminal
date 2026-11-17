@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 
 use super::On;
-use crate::browser::choice::{self, Entry};
+use crate::browser::choice::Entry;
 use crate::browser::platform;
 use crate::browser::strip::Key;
 use crate::browser::{Asked, Heard};
@@ -44,7 +44,6 @@ fn entries(groups: &[Vec<Item>], shown: bool) -> Vec<Entry> {
                 label: item.title().to_string(),
                 marked: false,
                 off: false,
-                paste: false,
                 icon: None,
                 // The person's own keys for it, at its right as the menu bar shows them. Close's
                 // close the tab shown: beside another tab, they would mislead.
@@ -259,34 +258,27 @@ impl On<'_> {
     }
 
     /// Panel `id`'s menu of `items`, at `at` of it, and the pick handed to its page: the page's
-    /// `chosen(place, pasted)` runs, given the pasteboard's text when the item asks for it, and
-    /// the text it answers, if any, is copied. So the page says what its menu does, and the window
-    /// knows no panel's items.
+    /// `chosen(place)` runs, and the text it answers, if any, is copied. So the page says what
+    /// its menu does, and the window knows no panel's items.
     pub(super) fn panel_menu(&mut self, id: u32, at: (u32, u32), items: &[Entry]) {
-        let Some(open) = self.deck.as_ref().and_then(|deck| deck.term(id)) else {
+        let Some(page) = (self.deck.as_ref())
+            .and_then(|deck| deck.term(id))
+            .and_then(|open| open.face.page())
+        else {
             return;
         };
         let at = (f64::from(at.0), f64::from(at.1));
-        let Some(place) = platform::show(&open.webview, at, items) else {
+        let Some(place) = platform::show(page, at, items) else {
             return;
         };
-        let pasted = match choice::flat(items).get(place) {
-            Some(Entry::Item { paste: true, .. }) => platform::pasted(),
-            _ => None,
-        };
-        let script = format!(
-            "window.chosen ? window.chosen({place}, {}) : null",
-            serde_json::json!(pasted)
-        );
-        let _ = open
-            .webview
-            .evaluate_script_with_callback(&script, |answer| {
-                if let Ok(text) = serde_json::from_str::<String>(&answer)
-                    && !text.is_empty()
-                {
-                    platform::copy(&text);
-                }
-            });
+        let script = format!("window.chosen ? window.chosen({place}) : null");
+        let _ = page.evaluate_script_with_callback(&script, |answer| {
+            if let Ok(text) = serde_json::from_str::<String>(&answer)
+                && !text.is_empty()
+            {
+                platform::copy(&text);
+            }
+        });
     }
 }
 

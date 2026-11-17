@@ -31,12 +31,13 @@ fn caller(agent: &str, more: Value) -> Value {
 }
 
 /// The next event `received` brings past the `tab/changed` and `board/changed` the first,
-/// unnamed subscription may still have on their way when it is narrowed.
-fn next_named(received: &Receiver<(String, Value)>) -> (String, Value) {
+/// unnamed subscription may still have on their way when it is narrowed; none when nothing
+/// comes within five seconds.
+fn next_named(received: &Receiver<(String, Value)>) -> Option<(String, Value)> {
     loop {
-        let (method, note) = received.recv_timeout(Duration::from_secs(5)).unwrap();
+        let (method, note) = received.recv_timeout(Duration::from_secs(5)).ok()?;
         if method != "tab/changed" && method != "board/changed" {
-            return (method, note);
+            return Some((method, note));
         }
     }
 }
@@ -202,7 +203,7 @@ fn a_comment_reaches_a_subscriber_and_is_told_again_until_it_is_acknowledged() {
         "test/say",
         json!({"tab": "t1", "words": "this button is wrong"}),
     );
-    let (method, note) = next_named(&received);
+    let (method, note) = next_named(&received).unwrap();
     assert_eq!(method, "comment/added");
     assert_eq!(
         (
@@ -244,13 +245,13 @@ fn a_comment_reaches_a_subscriber_and_is_told_again_until_it_is_acknowledged() {
         "window/call",
         window("o", &json!({"action": "close", "tab": "t1"})),
     );
-    let (method, closed) = next_named(&received);
+    let (method, closed) = next_named(&received).unwrap();
     assert_eq!(
         (method.as_str(), closed["tab"].clone()),
         ("tab/closed", json!("t1"))
     );
     asked(&client, "app/quit", json!({}));
-    let (method, _) = next_named(&received);
+    let (method, _) = next_named(&received).unwrap();
     assert_eq!(method, "app/quitting");
     let (method, _) = heard_by_other.recv_timeout(Duration::from_secs(5)).unwrap();
     assert_eq!(method, "app/quitting");

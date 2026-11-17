@@ -1,8 +1,8 @@
 //! The terminals' events, while their tab is open: a program that ended, what a program asks to
 //! tell the person (OSC 9, OSC 777), what it says of its state (OSC 7501), and a command the
-//! person typed that ended while they were not looking. Of that, a program that waits for the
-//! person, one that failed and such a command want them; one that is done is listed quietly; one
-//! at work or at rest is no event. Its words are the program's, shown as its title is.
+//! person typed that ended while they were not looking, and a bell its program rang meanwhile.
+//! Of that, a bell, a program that waits for the person, one that failed and such a command want
+//! them; one that is done is listed quietly; one at work or at rest is no event. Its words are the program's, shown as its title is.
 
 use std::collections::HashSet;
 use std::time::Duration;
@@ -26,6 +26,8 @@ struct Had {
     said: Vec<Status>,
     /// A command the person typed that ended unseen, by its number.
     unseen: Option<(u32, Ended)>,
+    /// A bell its program rang unseen, by its number.
+    bell: Option<u32>,
 }
 
 impl Source for Terminals {
@@ -40,9 +42,14 @@ impl Source for Terminals {
                 note: session.note(),
                 said: session.status_lines(),
                 unseen: session.unseen_command(),
+                bell: session.unseen_bell(),
             })
             .filter(|had| {
-                had.ended || had.note.is_some() || !had.said.is_empty() || had.unseen.is_some()
+                had.ended
+                    || had.note.is_some()
+                    || !had.said.is_empty()
+                    || had.unseen.is_some()
+                    || had.bell.is_some()
             })
             .collect();
         // Where the agent in a terminal waits with words of its own (a long turn's last line),
@@ -71,6 +78,14 @@ impl Source for Terminals {
             if let Some((number, words)) = had.note {
                 let event = Event::new(format!("said:{key}:{number}"), Kind::Said, &group, &key)
                     .says(title, words)
+                    .names_its_tab()
+                    .button("Show", show());
+                events.push(event);
+            }
+            // A bell is the program's way to ask for the person, said in words of its own.
+            if let Some(number) = had.bell {
+                let event = Event::new(format!("bell:{key}:{number}"), Kind::Said, &group, &key)
+                    .says(title, "Rang the bell".to_owned())
                     .names_its_tab()
                     .button("Show", show());
                 events.push(event);

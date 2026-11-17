@@ -17,7 +17,7 @@ cask "llxterm" do
   end
 
   depends_on arch: :arm64
-  depends_on macos: ">= :monterey"
+  depends_on macos: ">= :ventura"
 
   app "Localix Terminal.app"
 

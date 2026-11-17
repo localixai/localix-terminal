@@ -150,6 +150,34 @@ pub(super) fn capture(
     };
 }
 
+/// A picture the window drew itself (a terminal's view), as JPEG on the window's ground: encoded
+/// on a thread of its own, the answer sent to `reply`.
+#[cfg(target_os = "macos")]
+pub(super) fn drawn(image: &objc2_core_graphics::CGImage, reply: SyncSender<Result<Shot, String>>) {
+    let picture = jpeg::drawn(image);
+    let failed = reply.clone();
+    let spawned = std::thread::Builder::new()
+        .name("desk-picture".into())
+        .spawn(move || drop(reply.send(picture.encode())));
+    if let Err(why) = spawned {
+        drop(failed.send(Err(format!("the picture was not encoded: {why}"))));
+    }
+}
+
+/// A picture the window drew itself (a terminal's), sent to `reply` as JPEG: encoded here, on
+/// GTK's thread, where its libraries are used.
+#[cfg(target_os = "linux")]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "one signature on every system: macOS hands the reply to a thread of its own"
+)]
+pub(super) fn drawn(
+    image: &::gtk::cairo::ImageSurface,
+    reply: std::sync::mpsc::SyncSender<Result<Shot, String>>,
+) {
+    let _ = reply.send(gtk::drawn(image));
+}
+
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 #[expect(
     clippy::needless_pass_by_value,

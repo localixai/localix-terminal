@@ -10,7 +10,7 @@ use std::sync::{Arc, Weak};
 use serde_json::Value;
 
 use crate::board::{self, Board, Worker};
-use crate::browser::{Pane, Panel};
+use crate::browser::Panel;
 use crate::feed::{Entity, Op};
 use crate::projects::ProjectId;
 
@@ -234,8 +234,8 @@ impl Desk {
                 log::warn!("the person's action on the board was dropped: too many wait");
             }
         }));
-        panel.sizing(Arc::new(move |pane, _, _| {
-            if pane == Pane::Loaded && loaded.try_send(Work::Repaint).is_err() {
+        panel.on_load(Arc::new(move || {
+            if loaded.try_send(Work::Repaint).is_err() {
                 log::warn!("the board was not painted as its page loaded: too many wait");
             }
         }));

@@ -5,8 +5,10 @@
 use std::sync::Arc;
 use std::sync::mpsc::sync_channel;
 
+use super::super::super::panel::Body;
 use super::super::super::presence::Event;
 use super::super::super::strip::{Click, Found, Key, Seek};
+use super::super::super::term_view::TermProbe;
 use super::super::super::windows::Route;
 use super::super::{Confirm, Noted, Window};
 use super::{Cmd, Drawn};
@@ -69,7 +71,7 @@ fn unnamed() -> Vec<(Cmd, Route, Drawn)> {
             Drawn::Itself,
         ),
         (
-            Cmd::Panel((1, String::new(), String::new(), Arc::default())),
+            Cmd::Panel((1, String::new(), Body::Page(String::new()), Arc::default())),
             Route::Current,
             Drawn::Settles,
         ),
@@ -147,6 +149,16 @@ fn named() -> Vec<(Cmd, Route, Drawn)> {
         (eval(Some(3), None), pane("t3"), Drawn::Itself),
         (eval(None, Some(4)), pane("w4"), Drawn::Itself),
         (Cmd::Paint(3), pane("t3"), Drawn::Itself),
+        (
+            Cmd::TermProbe(3, TermProbe::Seen, sync_channel(1).0),
+            pane("t3"),
+            Drawn::Itself,
+        ),
+        (
+            Cmd::TermShot(3, sync_channel(1).0),
+            pane("t3"),
+            Drawn::Itself,
+        ),
         (Cmd::Unpanel(3), pane("t3"), Drawn::Settles),
         (Cmd::PanelMenu(3, (1, 2), vec![]), pane("t3"), Drawn::Itself),
         (

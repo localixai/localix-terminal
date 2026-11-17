@@ -13,10 +13,12 @@ fn the_open_file_limit_bounds_terminals_by_the_descriptors_each_holds() {
 }
 
 #[test]
-fn memory_bounds_terminals_by_their_pages() {
-    // A quarter of the machine's memory, at 48 MiB a terminal's page.
-    assert_eq!(bound(None, Some(24 * GIB)), 128);
-    assert_eq!(bound(Some(10_240), Some(8 * GIB)), 42);
+fn memory_bounds_terminals_by_what_each_takes_with_its_history_full() {
+    // A quarter of the machine's memory, at 16 MiB a terminal.
+    assert_eq!(bound(None, Some(24 * GIB)), 384);
+    assert_eq!(bound(Some(10_240), Some(8 * GIB)), 128);
+    // A machine of 4 GiB holds 64, more than a display check of the room opens.
+    assert_eq!(bound(None, Some(4 * GIB)), 64);
 }
 
 #[test]

@@ -68,8 +68,7 @@ where
         stale: false,
         shared,
         proxy,
-        tear: None,
-        held: None,
+        carry: None,
     };
     event_loop.run(move |event, target, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -89,10 +88,8 @@ struct Looping {
     stale: bool,
     shared: Arc<Shared>,
     proxy: EventLoopProxy<Cmd>,
-    /// A tab carried out of a window's list, while it is.
-    tear: Option<tear::Tear>,
-    /// A tab held in a side's list, while it is.
-    held: Option<tear::Held>,
+    /// A tab carried from a side's list, while it is (host_carry.rs).
+    carry: Option<carrying::Carrying>,
 }
 
 impl Looping {
@@ -184,15 +181,11 @@ impl Looping {
 
     /// A command, in the window it is for: a pane's, the one pressed in, or the one in use.
     fn command(&mut self, command: Cmd, target: &EventLoopWindowTarget<Cmd>) {
-        // A tab carried out of a list is the windows' together, not one window's.
+        // A tab carried from a list is the windows' together, not one window's.
         if let Cmd::SideClicked(said) = &command
-            && self.tear(said, target)
+            && self.carried(said, target)
         {
             return;
-        }
-        let mut command = command;
-        if let Cmd::SideClicked(said) = &mut command {
-            *said = tear::plain(said);
         }
         let route = command.route();
         if let Cmd::NewWindow(id) = &command {
@@ -323,6 +316,8 @@ mod keys;
 #[path = "host_newtab.rs"]
 mod newtab;
 
+#[path = "host_carry.rs"]
+mod carrying;
 #[path = "host_clicks.rs"]
 mod clicks;
 #[path = "host_dialog.rs"]

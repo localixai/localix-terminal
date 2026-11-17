@@ -10,7 +10,7 @@ const SCRIPT: &str = concat!(
     include_str!("../page/across.js"),
     include_str!("page.js")
 );
-const SCRIPT_SHA384: &str = "B3Jc7ORcRJZ3XCAtvsyzgCXSrGOjiAMOAf6iKRg3WPWAydAbt55GTAQvaVYHEFNu";
+const SCRIPT_SHA384: &str = "cFhyHAJuyLNkoU1uC1YHv/h6VuB1Bi4Gzr00G0uyCWKR6O7iGOWD+LP/rVQ1UK7D";
 
 /// The page, titled `title`.
 pub(super) fn page(title: &str) -> String {

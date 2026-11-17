@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use super::super::super::status::Doing;
 use super::super::{DEFAULT_WAIT, Session, Until};
+use crate::surface::Surface;
 
 fn start(command: &str) -> Session {
     Session::start(command, &std::env::temp_dir(), None, None).unwrap()
@@ -65,9 +66,9 @@ fn what_is_done_stays_until_the_person_types_in_the_terminal() {
         told.fetch_add(1, Ordering::SeqCst);
     });
     // What the window answers the program for them is not the person; a key of theirs is.
-    session.typed("\x1b[2;2R");
+    Surface::text(&session, "\x1b[2;2R");
     assert_eq!(states(&session).len(), 1);
-    session.typed("y");
+    Surface::text(&session, "y");
     assert!(states(&session).is_empty());
     assert_eq!(heard.load(Ordering::SeqCst), 1);
 }

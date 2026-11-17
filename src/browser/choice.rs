@@ -1,5 +1,5 @@
 //! What a menu offers, for every platform: items, lines between groups, and submenus. A page of
-//! a panel sends its own (the board's card menu, the terminal's), the strip's buttons theirs; the
+//! a panel sends its own (the board's card menu, the Store's), the strip's buttons theirs; the
 //! system's menu shows them (menu.rs, menu_gtk.rs) and answers the place of the item picked.
 
 use serde::Deserialize;
@@ -20,9 +20,6 @@ pub(super) enum Entry {
         /// Shown, and not picked.
         #[serde(default)]
         off: bool,
-        /// Picked, the pasteboard's text goes to the page with it (a terminal's Paste).
-        #[serde(default)]
-        paste: bool,
         /// A picture beside it: an SVG in one colour, tinted as the item's text (macOS). Never
         /// from a page: the window's own menus alone set it.
         #[serde(skip)]
@@ -43,14 +40,15 @@ pub(super) fn items(labels: &[&str], marked: Option<usize>) -> Vec<Entry> {
             label: (*label).to_string(),
             marked: marked == Some(at),
             off: false,
-            paste: false,
             icon: None,
             key: None,
         })
         .collect()
 }
 
-/// The items of `entries` in order, a submenu's in its place: what a pick's place counts.
+/// The items of `entries` in order, a submenu's in its place: what a pick's place counts (GTK's
+/// menu counts its items so; AppKit's answers the item itself).
+#[cfg(any(test, not(target_os = "macos")))]
 pub(super) fn flat(entries: &[Entry]) -> Vec<&Entry> {
     let mut out = vec![];
     for entry in entries {

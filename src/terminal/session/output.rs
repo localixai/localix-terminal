@@ -1,55 +1,57 @@
-//! The reader's side of a terminal session: the program's output taken into the screen and sent
-//! on to the window's tab at a pace, a program's queries answered (`queries.rs`, and its status
-//! queries), and how it ended once it has.
+//! The reader's side of a terminal session: the program's output taken into the screen, what
+//! the core answered a program's queries with written back to it (and the session's answers to
+//! its status queries), and how it ended once it has.
 
 use std::io::{self, Read};
 use std::os::fd::AsRawFd;
 use std::time::{Duration, Instant};
 
 use super::super::pty;
-use super::queries::{Queries, Query};
-use super::{Input, PAINT_EVERY, Shared, UNSENT_MAX, nap};
+use super::{Input, Shared, nap};
 
-/// How long the reader waits for output while some waits to be sent, and while none does.
-const PAINT_POLL_MS: i32 = 16;
+/// How long the reader waits for output while something waits to be told, and while nothing does.
+const BUSY_POLL_MS: i32 = 16;
 const IDLE_POLL_MS: i32 = 1000;
 /// A title is told on at most this often: a program that sets one all the time is heard now and
 /// then, the newest each time.
 const TITLE_EVERY: Duration = Duration::from_millis(250);
 
-/// The reader thread: output into the screen, frames out to the window, until the terminal
-/// closes. It answers a program's fixed queries (where the cursor is, which some ask before they
-/// draw; which terminal it is).
+/// The reader thread: output into the screen, until the terminal closes; what the core answers a
+/// program's queries with (where the cursor is, which some ask before they draw; which terminal
+/// it is) is written back to it, with or without a view.
 pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: u32) {
     let mut reader = reader;
     let mut buffer = vec![0u8; READ_MOST];
-    let mut queries = Queries::default();
     // What follows the output at a pace of its own, not with every kilobyte of a flood: the
     // program in front read again, and whoever waits on the screen woken.
     let mut front = Paced::default();
     let mut woken = Paced::default();
     loop {
         let mut gone = false;
-        // Output waiting for the pace (or a title held back) is sent within a frame; with none,
-        // the reader sleeps until the program writes or ends (its end, a kill among them, wakes
-        // the poll too).
-        let idle = {
+        // A title held back or a wake owed is told within a frame; with none, the reader sleeps
+        // until the program writes or ends (its end, a kill among them, wakes the poll too).
+        // While a program holds its frame back, the wait ends when the hold's second does: the
+        // one deadline there is, and only while a frame is held (`held_out`).
+        let (idle, hold) = {
             let state = shared.lock();
-            let sent = state.unsent.is_empty() && !state.replay;
-            sent && state.screen.retitled() == state.titled && !front.owed && !woken.owed
+            let idle = state.screen.retitled() == state.titled && !front.owed && !woken.owed;
+            (idle, state.screen.core().hold_left())
         };
-        let wait = if idle { IDLE_POLL_MS } else { PAINT_POLL_MS };
+        let wait = if idle { IDLE_POLL_MS } else { BUSY_POLL_MS };
+        let wait = hold.map_or(wait, |left| wait.min(millis_past(left)));
         if pty::readable(reader.as_raw_fd(), wait) {
             let (filled, ended) = fill(&mut reader, &mut buffer);
             gone = ended;
             if let Some(chunk) = buffer.get(..filled).filter(|chunk| !chunk.is_empty()) {
-                take_in(shared, input, chunk, &queries.asked(chunk));
+                take_in(shared, input, chunk);
                 front.owed = true;
                 woken.owed = true;
             }
         }
+        held_out(shared);
         if woken.due(WAKE_EVERY) {
             shared.wake.notify_all();
+            changed(shared);
         }
         // The one that floods is the one in front.
         if front.due(FRONT_EVERY) {
@@ -63,7 +65,6 @@ pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: 
         super::told::noted(shared);
         super::told::commanded(shared);
         super::status::statused(shared);
-        paint(shared, Pace::Throttled);
         if gone {
             let status = exit_status(pid);
             let mut state = shared.lock();
@@ -74,9 +75,8 @@ pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: 
             let heard = state.on_end.take();
             drop(state);
             super::status::statused(shared);
-            paint(shared, Pace::Now);
-            paint_ended(shared, status);
             shared.wake.notify_all();
+            changed(shared);
             if let Some(heard) = heard {
                 heard();
             }
@@ -92,7 +92,7 @@ pub(super) fn read(reader: &std::fs::File, input: &Input, shared: &Shared, pid: 
 /// the close that waits for it would never return.
 fn drain_closed(reader: &mut &std::fs::File, buffer: &mut [u8], shared: &Shared) {
     loop {
-        if pty::readable(reader.as_raw_fd(), PAINT_POLL_MS) && fill(reader, buffer).1 {
+        if pty::readable(reader.as_raw_fd(), BUSY_POLL_MS) && fill(reader, buffer).1 {
             return;
         }
         if shared.lock().ended {
@@ -102,8 +102,8 @@ fn drain_closed(reader: &mut &std::fs::File, buffer: &mut [u8], shared: &Shared)
 }
 
 /// The most output taken in at once. A PTY hands over a kilobyte or a few a read however much
-/// waits, so the reads go on until this much is in hand or no more waits: the screen, whoever
-/// waits on it and the window are told once for all that waited.
+/// waits, so the reads go on until this much is in hand or no more waits: the screen and whoever
+/// waits on it are told once for all that waited.
 const READ_MOST: usize = 1 << 16;
 /// Reads into `buffer` until it is full or nothing more waits. How much was read, and whether the
 /// program is gone (its end of the terminal closed).
@@ -120,27 +120,44 @@ fn fill(reader: &mut impl Read, buffer: &mut [u8]) -> (usize, bool) {
     }
     (filled, false)
 }
-fn take_in(shared: &Shared, input: &Input, chunk: &[u8], asked: &[Query]) {
+fn take_in(shared: &Shared, input: &Input, chunk: &[u8]) {
     let mut state = shared.lock();
-    let righted = state.screen.feed(chunk);
+    // Recorded as the program wrote it, before the screen filters anything out.
+    super::record::keep(&mut state.record, |record| record.output(chunk));
+    state.screen.feed(chunk);
     state.version += 1;
     state.changed_at = Instant::now();
-    if state.painter.is_some() && !state.replay {
-        state.unsent.extend_from_slice(chunk);
-        state.unsent.extend_from_slice(righted);
-        if state.unsent.len() > UNSENT_MAX {
-            state.unsent.clear();
-            state.replay = true;
-        }
-    }
-    let cursor = state.screen.cursor();
+    let replies = state.screen.replies();
     let status_asked = state.screen.status_asked();
     drop(state);
-    super::status::answer(input, status_asked);
-    // The page leaves these queries to the session (it answers whether or not a page is there).
-    let replies = super::queries::replies(asked, cursor);
+    // The core's answers, written after the lock is let go of.
     if !replies.is_empty() {
         input.queue(&replies);
+    }
+    super::status::answer(input, status_asked);
+}
+
+/// A frame a program held past its second let go of, as the program would have: whoever
+/// waits and the view are told at once, so its newest frame is drawn with nothing more written.
+fn held_out(shared: &Shared) {
+    if shared.lock().screen.core_mut().let_go_if_long() {
+        shared.wake.notify_all();
+        changed(shared);
+    }
+}
+
+/// `left` in whole milliseconds, rounded up, as a poll waits.
+fn millis_past(left: Duration) -> i32 {
+    i32::try_from(left.as_millis())
+        .unwrap_or(i32::MAX)
+        .saturating_add(1)
+}
+
+/// The view told the screen changed, outside the lock.
+fn changed(shared: &Shared) {
+    let heard = shared.lock().on_changed.clone();
+    if let Some(heard) = heard {
+        heard();
     }
 }
 
@@ -218,72 +235,6 @@ fn fronted(shared: &Shared, master: std::os::fd::RawFd, pid: u32) {
     };
     if let Some(heard) = heard {
         heard(name.as_deref());
-    }
-}
-
-/// What waits for the window sent now, whatever the pace.
-pub(super) fn paint_now(shared: &Shared) {
-    paint(shared, Pace::Now);
-}
-
-/// Whether a send waits for the pace.
-#[derive(Clone, Copy)]
-enum Pace {
-    Throttled,
-    Now,
-}
-
-/// What a send to the window carries.
-enum Frame {
-    /// The whole screen, drawn again.
-    Screen(Vec<u8>),
-    /// The program's output since the last send.
-    Output(Vec<u8>),
-}
-
-/// The output (or the whole screen) to the window if there is some and it is due; a window that
-/// is gone is let go.
-fn paint(shared: &Shared, pace: Pace) {
-    let due = {
-        let mut state = shared.lock();
-        let ready = matches!(pace, Pace::Now) || state.painted_at.elapsed() >= PAINT_EVERY;
-        match (ready, state.painter.clone()) {
-            (true, Some(painter)) if state.replay => {
-                state.replay = false;
-                state.unsent.clear();
-                state.painted_at = Instant::now();
-                Some((painter, Frame::Screen(state.screen.replay())))
-            }
-            (true, Some(painter)) if !state.unsent.is_empty() => {
-                state.painted_at = Instant::now();
-                Some((painter, Frame::Output(std::mem::take(&mut state.unsent))))
-            }
-            _ => None,
-        }
-    };
-    // Encoded after the lock is let go: a long frame holds nobody up.
-    if let Some((painter, frame)) = due {
-        let script = match frame {
-            Frame::Screen(bytes) => format!("R(\"{}\")", encode(&bytes)),
-            Frame::Output(bytes) => format!("W(\"{}\")", encode(&bytes)),
-        };
-        if !painter(script) {
-            shared.lock().painter = None;
-        }
-    }
-}
-
-fn encode(bytes: &[u8]) -> String {
-    use base64::Engine;
-    base64::engine::general_purpose::STANDARD.encode(bytes)
-}
-
-fn paint_ended(shared: &Shared, status: Option<i32>) {
-    let end = status.map_or_else(|| " · exited".to_string(), |c| format!(" · exited {c}"));
-    let painter = shared.lock().painter.clone();
-    if let Some(painter) = painter {
-        let end = serde_json::to_string(&end).unwrap_or_default();
-        painter(format!("E({end})"));
     }
 }
 

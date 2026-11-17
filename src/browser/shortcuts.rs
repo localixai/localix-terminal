@@ -7,7 +7,10 @@ mod panes;
 
 pub(super) use catalog::{Shortcut, every};
 #[cfg(any(target_os = "macos", test))]
-pub(super) use catalog::{groups, of_find, of_page, of_split, of_zoom};
+pub(super) use catalog::{groups, of_find, of_page};
+/// What greys the menu bar's Split and Zoom items: the menu bar is macOS's alone.
+#[cfg(target_os = "macos")]
+pub(super) use catalog::{of_split, of_zoom};
 
 use std::collections::BTreeMap;
 

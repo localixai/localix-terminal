@@ -71,9 +71,21 @@ impl Deck {
         Some(geometry::lay(&tree, area, SPACING))
     }
 
-    /// The tree laid out as the window shows it now: none while a list it must stand aside
+    /// The panes laid out as the window shows them now (the tree of the tab shown, or a
+    /// carried tab's landing while it stands there): none while a list it must stand aside
     /// for is open over the pages.
     pub(in super::super) fn panes(&self) -> Option<Panes> {
+        let raised = platform::OVER_PAGES;
+        split::under(
+            self.drawn_in(self.area(false)),
+            self.covered() || self.typing,
+            raised,
+        )
+    }
+
+    /// The tree of the tab shown laid out as the layout keeps it, whatever a carried tab
+    /// shows meanwhile: none while a list it must stand aside for is open over the pages.
+    pub(in super::super) fn panes_kept(&self) -> Option<Panes> {
         let raised = platform::OVER_PAGES;
         split::under(
             self.panes_in(self.area(false)),
@@ -114,12 +126,17 @@ impl Deck {
     /// One divider's view for each divider of the tree the window may draw now, made on the
     /// window's loop before they are laid out (a view is never made during a drag's frame).
     pub(in super::super) fn lines_enough(&mut self) {
-        if self.side.is_none() {
-            return;
-        }
         let wanted = self
             .panes_in(self.area(false))
             .map_or(0, |panes| panes.dividers.len());
+        self.lines_for(wanted);
+    }
+
+    /// At least `wanted` dividers' views, the ones missing made now.
+    pub(super) fn lines_for(&mut self, wanted: usize) {
+        if self.side.is_none() {
+            return;
+        }
         while self.lines.len() < wanted {
             let part = Part::Line(self.lines.len());
             match super::construction::strip_page(
@@ -170,17 +187,7 @@ impl Deck {
                 false => platform::Follow::Still,
             };
             platform::follow(line, follow);
-            // Told which way it moves, and its name and orientation for assistive tools.
-            let (way, oriented, named) = match divider.across {
-                true => ("across", "vertical", "Split width"),
-                false => ("down", "horizontal", "Split height"),
-            };
-            let script = format!(
-                "document.documentElement.dataset.way='{way}';\
-                 const l=document.getElementById('line');\
-                 l.setAttribute('aria-orientation','{oriented}');l.setAttribute('aria-label','{named}')"
-            );
-            self.say((Part::Line(at), line), "way", &script);
+            self.say((Part::Line(at), line), "way", &way(divider.across));
         }
     }
 
@@ -189,3 +196,23 @@ impl Deck {
         self.lines.iter().take(count)
     }
 }
+
+/// What a divider's page is told of the way it moves (`across`: between panes side by side),
+/// with its name and orientation for assistive tools. A view of the pool is told again as the
+/// divider it lies over changes, so the script keeps what it names to itself: a name declared
+/// in the page's own scope could not be declared a second time, and nothing of it would run.
+fn way(across: bool) -> String {
+    let (way, oriented, named) = match across {
+        true => ("across", "vertical", "Split width"),
+        false => ("down", "horizontal", "Split height"),
+    };
+    format!(
+        "{{document.documentElement.dataset.way='{way}';\
+         const l=document.getElementById('line');\
+         l.setAttribute('aria-orientation','{oriented}');l.setAttribute('aria-label','{named}')}}"
+    )
+}
+
+#[cfg(test)]
+#[path = "deck_panes_tests.rs"]
+mod tests;

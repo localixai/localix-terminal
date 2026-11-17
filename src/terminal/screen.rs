@@ -1,17 +1,19 @@
-//! A terminal session's screen, for a window that shows it: the output applied as a terminal
-//! would (cursor moves, erases, redraws), for what the model reads and for a page that needs the
-//! whole screen again. The bytes are untrusted, so only text, line moves (`\n`, `\r`, `\t`,
-//! `\b`) and CSI sequences reach this emulator: no title, no clipboard write, no string sequence.
-//! The title a program sets (OSC 0 or 2) is kept aside as plain text, for the tab's subtitle,
-//! a shell's marks of its commands (OSC 133) are counted, a note for the person (OSC 9,
-//! OSC 777) is kept as plain text, and what the program says of its state (OSC 7501) is kept
-//! in its records, its queries counted for the session to answer. The modes the emulator does
-//! not keep (`modes.rs`) are read from the CSIs and OSCs that pass, and set again in a replay.
+//! A terminal session's screen: the output applied as a terminal would (cursor moves, erases,
+//! redraws, wide characters, the lines a box is drawn with, a resize that wraps lines again), by
+//! the terminal core, for what agents read. The core gets the output whole and answers a program's
+//! queries itself; the session reads beside it what the core has no callback for
+//! (`screen/safe.rs`: the title, a shell's marks, notes, the program's state). A frame a program
+//! holds back while it draws the next (synchronized output) is read as the screen showed it when
+//! the hold began, which the core keeps.
 
+use super::core::{Core, Refused};
 use super::marks::Marks;
-use super::modes::Modes;
 use super::notes::Notes;
-use super::status::{self, Records, Said};
+use super::status::Records;
+
+mod safe;
+
+use safe::Safe;
 
 /// What puts right a terminal a command left wrong: no mouse reports of any kind, in any
 /// encoding, and the cursor shown.
@@ -19,34 +21,50 @@ const RIGHTED: &[u8] = b"\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?25h";
 
 pub(super) struct Screen {
     safe: Safe,
-    parser: vt100::Parser,
+    core: Core,
 }
 
 impl Screen {
-    pub(super) fn new(rows: u16, columns: u16) -> Self {
-        Self {
+    /// A blank screen of `rows` by `columns`.
+    ///
+    /// # Errors
+    /// A grid with no rows or columns.
+    pub(super) fn new(rows: u16, columns: u16) -> Result<Self, Refused> {
+        Ok(Self {
             safe: Safe::default(),
-            parser: vt100::Parser::new(rows, columns, 0),
-        }
+            core: Core::new(rows, columns)?,
+        })
     }
 
-    /// Takes in the program's output. What it gives back is the terminal's own, to be drawn
-    /// after it: when the shell says a command ended and runs nothing more, what that command
-    /// left on (the mouse reported, the cursor hidden) is put right, or the prompt would take
-    /// clicks as typing.
-    pub(super) fn feed(&mut self, bytes: &[u8]) -> &'static [u8] {
+    /// Takes in the program's output. When the shell says a command ended and runs nothing
+    /// more, what that command left on (the mouse reported, the cursor hidden) is put right, or
+    /// the prompt would take clicks as typing; whether it was.
+    pub(super) fn feed(&mut self, bytes: &[u8]) -> bool {
         let ended = self.safe.marks.ended().0;
-        let kept = self.safe.keep(bytes);
-        self.parser.process(&kept);
-        let screen = self.parser.screen();
-        let left_on =
-            screen.hide_cursor() || screen.mouse_protocol_mode() != vt100::MouseProtocolMode::None;
+        self.safe.read(bytes);
+        self.core.feed(bytes);
+        let left_on = !self.core.cursor_visible() || self.core.mouse_tracking();
         let marks = &self.safe.marks;
         if marks.ended().0 == ended || marks.running().is_some() || !left_on {
-            return &[];
+            return false;
         }
-        self.parser.process(RIGHTED);
-        RIGHTED
+        self.core.feed(RIGHTED);
+        true
+    }
+
+    /// Whether a program holds its frame back now (and not past the core's most): a view keeps
+    /// drawing the frame from before the hold until it lets go.
+    pub(super) fn holding(&self) -> bool {
+        self.core.holding()
+    }
+
+    /// The core, for a view to draw and act on.
+    pub(super) fn core(&self) -> &Core {
+        &self.core
+    }
+
+    pub(super) fn core_mut(&mut self) -> &mut Core {
+        &mut self.core
     }
 
     /// The title the program set last, cleaned to plain words; `None` until it sets one.
@@ -61,7 +79,7 @@ impl Screen {
 
     /// Whether the program asked for cursor keys in application mode (DECCKM).
     pub(super) fn application_cursor(&self) -> bool {
-        self.parser.screen().application_cursor()
+        self.core.application_cursor()
     }
 
     /// What the shell said of its commands.
@@ -95,278 +113,46 @@ impl Screen {
 
     /// Whether the program asked to be told where a paste starts and ends.
     pub(super) fn bracketed_paste(&self) -> bool {
-        self.parser.screen().bracketed_paste()
+        self.core.bracketed_paste()
     }
 
     /// The screen as text, its blank rows at the end left out, and where the cursor is (row and
-    /// column, from 1).
+    /// column, from 1): the frame a program holds back while it draws the next.
     pub(super) fn text(&self) -> (String, (u16, u16)) {
-        let screen = self.parser.screen();
-        let rows: Vec<String> = screen
-            .rows(0, screen.size().1)
-            .map(|row| row.chars().filter(|c| !c.is_control()).collect::<String>())
-            .map(|row| row.trim_end().to_string())
-            .collect();
-        let used = rows
-            .iter()
-            .rposition(|row| !row.is_empty())
-            .map_or(0, |at| at + 1);
-        (rows[..used].join("\n"), self.cursor())
+        (self.core.held_text()).unwrap_or_else(|| (self.core.text(), self.core.cursor()))
     }
 
     /// The screen as text to look in: a row that wraps on to the next is joined to it with no line
     /// break and its trailing spaces kept, so a text that crosses the pane's edge is found whole.
     /// The rows are as `text` has them otherwise.
     pub(super) fn search_text(&self) -> String {
-        let screen = self.parser.screen();
-        let rows = screen.size().0;
-        let mut out = String::new();
-        for (at, row) in (0..rows).zip(screen.rows(0, screen.size().1)) {
-            let row: String = row.chars().filter(|c| !c.is_control()).collect();
-            if screen.row_wrapped(at) {
-                out.push_str(&row);
-            } else {
-                out.push_str(row.trim_end());
-                out.push('\n');
-            }
-        }
-        out.truncate(out.trim_end_matches('\n').len());
-        out
+        (self.core.held_search()).unwrap_or_else(|| self.core.search_text())
     }
 
-    /// Where the cursor is: row and column, from 1.
+    /// Where the cursor is now: row and column, from 1, held frame or not.
+    #[cfg(test)]
     pub(super) fn cursor(&self) -> (u16, u16) {
-        let (row, column) = self.parser.screen().cursor_position();
-        (row + 1, column + 1)
-    }
-
-    /// The screen as a terminal would be told to draw it: a page that reset draws it again, in the
-    /// alternate screen if the program is in it, with the input modes it asked for (bracketed
-    /// paste, the mouse, the cursor keys and the keypad), and then the modes the emulator does
-    /// not keep (focus reports, the cursor's shape and colour, the scroll region…), which a reset
-    /// page has lost.
-    pub(super) fn replay(&self) -> Vec<u8> {
-        let screen = self.parser.screen();
-        let mut drawn = if screen.alternate_screen() {
-            b"\x1b[?1049h".to_vec()
-        } else {
-            Vec::new()
-        };
-        drawn.extend(screen.state_formatted());
-        drawn.extend(self.safe.modes.replayed(self.cursor()));
-        drawn
+        self.core.cursor()
     }
 
     /// The grid's rows and columns.
     pub(super) fn size(&self) -> (u16, u16) {
-        self.parser.screen().size()
+        self.core.size()
     }
 
+    /// The grid becomes `rows` by `columns`, its lines wrapped again to fit and its scroll region
+    /// the whole of it; a held frame is let go, as the core lets go of the hold. The same size
+    /// changes nothing, and a grid of no rows or columns is not taken.
     pub(super) fn resize(&mut self, rows: u16, columns: u16) {
         if (rows, columns) != self.size() {
-            self.safe.modes.resized();
-        }
-        self.parser.screen_mut().set_size(rows, columns);
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-enum State {
-    #[default]
-    Ground,
-    Escape,
-    Csi,
-    /// An OSC, DCS, APC, PM or SOS string, dropped up to BEL or `ESC \`.
-    Text,
-    TextEscape,
-    /// After `ESC (` and its kin: one more byte, dropped.
-    Charset,
-}
-
-/// The longest OSC kept to read a title from; the rest of a longer one is dropped.
-const OSC_MAX: usize = 512;
-/// The longest status report (`7501;` and its body): one longer is dropped whole, since a report
-/// cut short is a broken one.
-const STATUS_MAX: usize = "7501;".len() + status::BODY_MOST;
-/// The most characters of a title kept.
-const TITLE_MAX: usize = 80;
-/// The longest CSI read for a mode: one longer sets none.
-const CSI_MAX: usize = 32;
-
-/// What of the output may reach the emulator; its state carries over between reads.
-#[derive(Debug, Default)]
-struct Safe {
-    state: State,
-    /// The OSC being read, when the string is one (`ESC ]`), up to `OSC_MAX` bytes (a status
-    /// report's `STATUS_MAX`), and whether more came than was kept.
-    osc: Option<Vec<u8>>,
-    cut: bool,
-    title: Option<String>,
-    /// Counts the times the title changed, so a reader knows when to pass it on.
-    retitled: u32,
-    marks: Marks,
-    notes: Notes,
-    status: Records,
-    /// The status queries not answered yet.
-    asked: usize,
-    /// The CSI being read, after its `ESC [`, up to one byte past `CSI_MAX`.
-    csi: Vec<u8>,
-    modes: Modes,
-}
-
-impl Safe {
-    fn keep(&mut self, bytes: &[u8]) -> Vec<u8> {
-        let mut kept = Vec::with_capacity(bytes.len());
-        for &byte in bytes {
-            self.step(byte, &mut kept);
-        }
-        kept
-    }
-
-    /// One byte of the output: what of it is kept, and the state it leaves.
-    fn step(&mut self, byte: u8, kept: &mut Vec<u8>) {
-        self.state = match (self.state, byte) {
-            (State::Ground, 0x1b) => State::Escape,
-            (State::Ground, b'\n' | b'\r' | b'\t' | 0x08) => {
-                kept.push(byte);
-                State::Ground
-            }
-            (State::Ground, ..0x20 | 0x7f) => State::Ground,
-            (State::Ground, _) => {
-                kept.push(byte);
-                State::Ground
-            }
-            (State::Escape, b'[') => {
-                kept.extend_from_slice(b"\x1b[");
-                self.csi.clear();
-                State::Csi
-            }
-            (State::Escape, b']') => {
-                self.osc = Some(Vec::new());
-                self.cut = false;
-                State::Text
-            }
-            // A full reset (RIS) takes what the program said of its state and the modes it set,
-            // and resets the emulator.
-            (State::Escape, b'c') => {
-                self.status.reset();
-                self.modes.reset();
-                kept.extend_from_slice(b"\x1bc");
-                State::Ground
-            }
-            (State::Escape, b'P' | b'X' | b'^' | b'_') => State::Text,
-            (State::Escape, 0x20..=0x2f) => State::Charset,
-            (State::Escape, 0x1b) => State::Escape,
-            // Two-byte escapes (save and restore the cursor, a reverse index, the keypad's
-            // modes) are kept; anything else is dropped.
-            (State::Escape, b'7' | b'8' | b'M' | b'D' | b'E' | b'=' | b'>') => {
-                kept.extend_from_slice(&[0x1b, byte]);
-                State::Ground
-            }
-            (State::Escape, _) | (State::Charset, _) => State::Ground,
-            (State::Csi, 0x20..=0x3f) => {
-                kept.push(byte);
-                if self.csi.len() <= CSI_MAX {
-                    self.csi.push(byte);
-                }
-                State::Csi
-            }
-            (State::Csi, 0x40..=0x7e) => {
-                kept.push(byte);
-                if self.csi.len() <= CSI_MAX {
-                    self.modes.csi(&self.csi, byte);
-                }
-                State::Ground
-            }
-            // A sequence broken off: what was kept of it is ended harmlessly, as `m`.
-            (State::Csi, 0x1b) => {
-                kept.push(b'm');
-                State::Escape
-            }
-            (State::Csi, _) => {
-                kept.push(b'm');
-                State::Ground
-            }
-            (State::Text, 0x07) => {
-                self.string_ended();
-                State::Ground
-            }
-            // CAN and SUB cancel a string, as they do any sequence.
-            (State::Text, 0x18 | 0x1a) => {
-                self.osc = None;
-                State::Ground
-            }
-            (State::Text, 0x1b) => State::TextEscape,
-            (State::Text, _) => {
-                if let Some(osc) = self.osc.as_mut() {
-                    let most = if osc.starts_with(b"7501;") {
-                        STATUS_MAX
-                    } else {
-                        OSC_MAX
-                    };
-                    if osc.len() < most {
-                        osc.push(byte);
-                    } else {
-                        self.cut = true;
-                    }
-                }
-                State::Text
-            }
-            (State::TextEscape, b'\\') => {
-                self.string_ended();
-                State::Ground
-            }
-            // A string broken off by another escape: dropped, and that escape begins a
-            // sequence of its own, as a terminal reads it.
-            (State::TextEscape, _) => {
-                self.osc = None;
-                self.state = State::Escape;
-                return self.step(byte, kept);
-            }
-        };
-    }
-
-    /// A string sequence ended: the title, when it was an OSC that sets one, the cursor's
-    /// colour, a shell's mark, a note for the person, or what the program says of its state.
-    fn string_ended(&mut self) {
-        let Some(osc) = self.osc.take() else { return };
-        let text = String::from_utf8_lossy(&osc);
-        if !self.cut && self.modes.osc(&text) {
-            return;
-        }
-        if let Some(body) = text.strip_prefix("7501;") {
-            match status::read(body).filter(|_| !self.cut) {
-                Some(Said::Query) => self.asked += 1,
-                Some(Said::Report(report)) => drop(self.status.apply(report)),
-                None => {}
-            }
-            return;
-        }
-        let Some(("0" | "2", title)) = text.split_once(';') else {
-            self.marks.read(&text);
-            return self.notes.read(&text);
-        };
-        if let Some(title) = clean_title(title)
-            && self.title.as_ref() != Some(&title)
-        {
-            self.title = Some(title);
-            self.retitled = self.retitled.wrapping_add(1);
+            let _ = self.core.resize(rows, columns);
         }
     }
-}
 
-/// A title as words: control characters out, and the spinner or status mark a program puts in
-/// front (`✳`, `⠋`, `·`) left off, so a title that only spins reads the same. `None` when no
-/// words are left.
-fn clean_title(title: &str) -> Option<String> {
-    let words: String = title
-        .chars()
-        .filter(|c| !c.is_control())
-        .skip_while(|c| !c.is_alphanumeric())
-        .take(TITLE_MAX)
-        .collect();
-    let words = words.trim_end();
-    (!words.is_empty()).then(|| words.to_string())
+    /// What the core answered the program's queries with since this was last asked.
+    pub(super) fn replies(&mut self) -> Vec<u8> {
+        self.core.replies()
+    }
 }
 
 #[cfg(test)]
@@ -374,5 +160,5 @@ fn clean_title(title: &str) -> Option<String> {
 mod tests;
 
 #[cfg(test)]
-#[path = "screen_modes_tests.rs"]
-mod modes_tests;
+#[path = "screen_drawn_tests.rs"]
+mod drawn_tests;

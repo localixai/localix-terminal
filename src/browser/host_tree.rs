@@ -92,7 +92,6 @@ fn entries(groups: &[Vec<Item>], terminal: bool) -> Vec<Entry> {
             label: item.title().to_string(),
             marked: false,
             off: *item == Item::Give && !terminal,
-            paste: false,
             icon: None,
             key: None,
         }));

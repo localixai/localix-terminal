@@ -24,7 +24,6 @@ impl On<'_> {
             label,
             marked,
             off,
-            paste: false,
             icon,
             key: None,
         };
@@ -91,7 +90,6 @@ impl On<'_> {
                     },
                     marked: tab.shown,
                     off: false,
-                    paste: false,
                     icon: Some(mark.map_or_else(|| icons::of_kind(key.kind()), |agent| agent.mark)),
                     key: None,
                 }

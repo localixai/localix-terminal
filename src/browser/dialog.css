@@ -32,7 +32,7 @@ html[data-reduced] #dlg .card{--paper:var(--card)}
 #dlg .says p{margin:5px 0 0;font-size:12px;line-height:17px;color:var(--ink-2);text-wrap:balance}
 /* What is new: the one part that scrolls, about eight lines of it in sight. */
 #dlg .notes{flex:0 1 auto;min-height:0;max-height:148px;overflow-y:auto;margin:0 12px;padding:10px 12px 6px;border-radius:var(--r-3);background:var(--ov-1);font-size:12px;line-height:17px;color:var(--ink-2);overflow-wrap:anywhere}
-#dlg .notes:focus-visible{outline:3px solid var(--acc-3);outline-offset:1px}
+#dlg .notes:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 #dlg .notes h3{display:none}
 #dlg .notes h4{margin:8px 0 3px;font:600 11px/14px var(--ui-font,var(--ui-sys));color:var(--ink-3)}
 #dlg .notes h4:first-of-type{margin-top:2px}
@@ -45,7 +45,7 @@ html[data-reduced] #dlg .card{--paper:var(--card)}
 #dlg .fields .field{font-size:13px;line-height:16px;color:var(--ink)}
 /* The acts: the one that does it is the place's one accent; the other is quiet. */
 #dlg .acts{flex:none;display:flex;justify-content:flex-end;gap:8px;padding:14px 12px 12px}
-#dlg .btn:focus-visible{outline:3px solid var(--acc-3);outline-offset:1px}
+#dlg .btn:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 @keyframes dlg-veil{from{opacity:0}}
 @keyframes dlg-in{from{opacity:0;transform:translateY(8px) scale(.97)}}
 @keyframes dlg-fade{from{opacity:0}}

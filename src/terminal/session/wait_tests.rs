@@ -4,6 +4,7 @@
 use std::time::Duration;
 
 use super::super::{DEFAULT_WAIT, Session, Until};
+use crate::surface::Surface;
 
 fn start(command: &str) -> Session {
     Session::start(command, &std::env::temp_dir(), None, None).unwrap()
@@ -171,18 +172,18 @@ fn a_line_is_typed_only_into_the_shell_in_front_at_a_prompt_nothing_was_typed_at
     assert_eq!(session.wait(Some("ready"), 0, DEFAULT_WAIT), Until::Matched);
     assert!(session.at_prompt(true), "{}", session.snapshot());
     // The person typed at it: what is on the line now is theirs.
-    session.typed("a");
+    Surface::text(&session, "a");
     assert!(!session.at_prompt(true) && !session.at_prompt(false));
     // A reply of the terminal's own (its attributes, a report of the pointer) is no typing.
     let fresh = start(&format!("sh -c '{PROMPT}; printf ready; sleep 20'"));
     assert_eq!(fresh.wait(Some("ready"), 0, DEFAULT_WAIT), Until::Matched);
-    fresh.typed("\x1b[?1;2c");
+    Surface::text(&fresh, "\x1b[?1;2c");
     assert!(fresh.at_prompt(true));
     // An arrow brings a line back from the history: typing.
-    fresh.typed("\x1b[A");
+    Surface::text(&fresh, "\x1b[A");
     assert!(!fresh.at_prompt(true));
     // A command at work is never typed into.
-    session.typed("\r");
+    Surface::text(&session, "\r");
     assert_eq!(session.wait(Some("busy"), 0, DEFAULT_WAIT), Until::Matched);
     assert!(!session.at_prompt(false), "{}", session.snapshot());
     // Its end and a new prompt: clean again.

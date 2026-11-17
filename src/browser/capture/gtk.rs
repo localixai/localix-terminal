@@ -1,6 +1,6 @@
 //! The picture on Linux: WebKitGTK's own snapshot of what the view shows (its compositor's
-//! pixels, as on macOS), cut to the clip, made smaller to `MAX_EDGE` and encoded by gdk-pixbuf,
-//! all libraries the WebView already brings.
+//! pixels, as on macOS), or one the window drew itself (a terminal's), cut to the clip, made
+//! smaller to `MAX_EDGE` and encoded by gdk-pixbuf, all libraries the WebView already brings.
 
 use std::sync::mpsc::SyncSender;
 
@@ -31,6 +31,11 @@ pub(in super::super) fn capture(
             let _ = reply.send(shot);
         },
     );
+}
+
+/// A picture the window drew itself, whole, as JPEG.
+pub(in super::super) fn drawn(image: &gtk::cairo::ImageSurface) -> Result<Shot, String> {
+    encode(image, f64::from(image.width().max(1)), None)
 }
 
 /// The surface WebKit drew, cut to `clip` (CSS pixels of a view `shown` wide), as JPEG.

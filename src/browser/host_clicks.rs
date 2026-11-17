@@ -47,18 +47,12 @@ impl On<'_> {
     }
 
     /// Whether `said` is one of what a drag sends a frame at a time (the side's edge, the line
-    /// between the halves, a tab carried over the pages, the strip's glass): it changes no tab
+    /// between the halves, the strip's glass): it changes no tab
     /// shown, so the window is neither kept on its project nor drawn again for it.
     pub(super) fn streamed(said: &str) -> bool {
         matches!(
             click(said),
-            Some(
-                Click::SideWidth(..)
-                    | Click::SplitMove(..)
-                    | Click::DropOver(..)
-                    | Click::DropOff
-                    | Click::Glass(_)
-            )
+            Some(Click::SideWidth(..) | Click::SplitMove(..) | Click::Glass(_))
         )
     }
 
@@ -108,21 +102,6 @@ impl On<'_> {
                 (self.shared).heard(&key.name(), Heard::Placed(before.as_deref()));
                 return;
             }
-            // Carried over the pages, the window lays the tab out where it lands as it moves;
-            // off them, back as it was.
-            Some(Click::DropOver(key, x, y)) => {
-                if let Some(open) = self.deck.as_mut() {
-                    open.drop_over(key, Some((f64::from(x), f64::from(y))));
-                }
-                return;
-            }
-            Some(Click::DropOff) => {
-                if let Some(open) = self.deck.as_mut() {
-                    open.drop_off();
-                }
-                return;
-            }
-            Some(Click::Drop(key, x, y)) => return self.dropped(key, f64::from(x), f64::from(y)),
             Some(Click::SplitEven(at)) => {
                 let held = (self.deck.as_mut()).and_then(|open| open.split_even(at));
                 return self.split_sized(held);

@@ -38,8 +38,8 @@ function svgPath(d, grid = 16, size = 0) {
 
 // A menu is the system's own (the window shows it, panel.rs): its entries, each with what it
 // does, shown at a place of the page; the window hands the place of the one picked back to
-// `chosen`. An entry is `{label, run}`, with `marked` checked, `off` shown and not picked and
-// `paste` handed the pasteboard's text; a submenu is `{label, items}`, a line `{line}`.
+// `chosen`. An entry is `{label, run}`, with `marked` checked and `off` shown and not picked; a
+// submenu is `{label, items}`, a line `{line}`.
 let offered = [];
 function systemMenu(x, y, entries) {
   offered = [];
@@ -47,7 +47,7 @@ function systemMenu(x, y, entries) {
     if (entry.line) return { line: true };
     if (entry.items) return { label: entry.label, items: items(entry.items) };
     offered.push(entry.run || (() => {}));
-    return { label: entry.label, marked: !!entry.marked, off: !!entry.off, paste: !!entry.paste };
+    return { label: entry.label, marked: !!entry.marked, off: !!entry.off };
   });
   const said = items(entries);
   post("m " + Math.round(x) + " " + Math.round(y) + " " + JSON.stringify(said));
@@ -58,9 +58,9 @@ function menuUnder(anchor, entries) {
   systemMenu(box.left, box.bottom + 4, entries);
 }
 // What an entry's `run` answers as text goes back to the window (a terminal's Copy).
-window.chosen = (place, text) => {
+window.chosen = (place) => {
   const run = offered[place];
   offered = [];
-  const answer = run ? run(text) : undefined;
+  const answer = run ? run() : undefined;
   return typeof answer === "string" ? answer : null;
 };

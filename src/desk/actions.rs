@@ -19,12 +19,7 @@ impl Desk {
                 let tab = self.tab(call, text(args, "tab"))?;
                 Ok(match tab.kind {
                     Kind::Web => self.shoot_web(tab.id, text(args, "selector"))?,
-                    Kind::Term => Output {
-                        report: "A terminal is read as text: its screen is below.".into(),
-                        state: Some(self.session(tab.id)?.snapshot()),
-                        shot: None,
-                        missed: false,
-                    },
+                    Kind::Term => self.shoot_term(tab.id)?,
                     Kind::Board => Output {
                         report: "A board is read as text: it is below.".into(),
                         state: Some(self.board_text(&tab.key)?),

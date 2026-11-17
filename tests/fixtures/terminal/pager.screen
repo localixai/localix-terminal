@@ -1,0 +1,8 @@
+size 40x120
+cursor 4 1
+screen main
+history 0
+---
+demo % man ls
+demo % less long.txt
+demo % exit

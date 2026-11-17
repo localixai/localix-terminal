@@ -40,11 +40,9 @@ button,input,textarea{font:inherit;color:inherit}
 /* The arrow over what can be pressed, as the system's own; the caret where words are typed. */
 input,textarea,label.new{cursor:text}
 svg{display:block;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
-:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 45%,transparent)}
-@media (prefers-contrast:more){:focus-visible{box-shadow:0 0 0 3px var(--accent)}}
 /* A card the keyboard is on is lit as its row, never by a ring; the one open keeps its frame. */
-.card:focus-visible{box-shadow:var(--raise);background:color-mix(in srgb,var(--raised),currentColor 10%)}
-.card.sel:focus-visible{box-shadow:0 0 0 2px var(--accent),var(--raise)}
+.card:focus-visible{outline:0;background:color-mix(in srgb,var(--raised),currentColor 10%)}
+.card:focus-visible:not(.sel){box-shadow:var(--raise)}
 
 /* The bar: how far the board is, its name, and a field that adds a card to Backlog. */
 .bar{flex:none;display:flex;align-items:center;gap:8px;padding:12px 16px}
@@ -56,7 +54,7 @@ svg{display:block;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:
 .count{color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
 .new{flex:1;min-width:140px;max-width:440px;margin-left:auto;display:flex;align-items:center;gap:7px;height:28px;padding:0 6px 0 10px;
   border-radius:var(--r-3);background:var(--ov-1);color:var(--ink-2);transition:background var(--t-out)}
-.new:focus-within{background:var(--raised);box-shadow:0 0 0 .5px var(--ov-4),0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent);color:var(--fg)}
+.new:focus-within{background:var(--raised);box-shadow:var(--field-on);color:var(--fg)}
 .new input{flex:1;min-width:0;border:0;outline:0;background:transparent;padding:0;box-shadow:none!important}
 .new input::placeholder{color:-apple-system-placeholder-text}
 kbd{font:500 10px/13px var(--ui-font,var(--ui-sys));color:var(--ink-2);padding:3px 5px;border-radius:var(--r-1);background:var(--ov-1)}
@@ -168,7 +166,7 @@ button.pill:active{background:var(--ov-3)}
 .btn.ico{width:28px;height:28px;padding:0;justify-content:center}
 textarea{width:100%;border:0;border-radius:var(--r-2);padding:7px 9px;background:var(--raised);box-shadow:0 0 0 .5px var(--ov-4);
   outline:none;resize:none;user-select:text;-webkit-user-select:text;line-height:16px;transition:background var(--t-out)}
-textarea:focus{box-shadow:0 0 0 .5px var(--ov-4),0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent)!important}
+textarea:focus{box-shadow:var(--field-on)!important}
 textarea::placeholder{color:-apple-system-placeholder-text}
 
 /* The card opened: an inspector at the side, on a veil of its own. */

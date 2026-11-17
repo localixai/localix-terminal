@@ -37,7 +37,6 @@ select{font:inherit;font-size:13px;line-height:16px;color:inherit;background:var
   background-position:calc(100% - 13px) 52%,calc(100% - 9px) 52%;background-size:4px 4px;background-repeat:no-repeat;min-width:160px;transition:background-color var(--t-out) var(--ease)}
 select:hover{background-color:var(--ov-2);transition:none}
 select:active{background-color:var(--ov-3)}
-:focus-visible{outline:3px solid var(--acc-3);outline-offset:0}
 .step{display:inline-flex;align-items:center;gap:2px;height:var(--ctl);border-radius:var(--r-3);background:var(--ov-1);box-shadow:var(--hair-in)}
 .step button{font:inherit;font-size:15px;line-height:1;width:28px;height:calc(var(--ctl) - 4px);border:0;background:none;color:inherit;border-radius:var(--r-2);transition:background-color var(--t-out) var(--ease)}
 .step button:hover:not(:disabled){background:var(--ov-2);transition:none}
@@ -51,8 +50,7 @@ select:active{background-color:var(--ov-3)}
    own ground, never a ground of its own. */
 #find{display:flex;align-items:center;gap:8px;margin:0 0 10px;padding:0 10px;height:28px;border-radius:var(--r-3);background:var(--ov-1);box-shadow:var(--hair-in);cursor:text;transition:background-color var(--t-out) var(--ease)}
 #find:hover{background:var(--ov-2);transition:none}
-#find:has(input:focus-visible){outline:3px solid var(--acc-3)}
-html[data-inactive] #find:has(input:focus-visible){outline:0}
+#find:focus-within{box-shadow:var(--field-on)}
 #find input{flex:1;min-width:0;font:inherit;color:inherit;background:none;border:0;outline:0;padding:0;user-select:text;-webkit-user-select:text}
 #find input::placeholder{color:-apple-system-placeholder-text}
 #find svg{width:13px;height:13px;fill:none;stroke:var(--ink-2);stroke-width:1.5}
@@ -66,8 +64,9 @@ html[data-inactive] #find:has(input:focus-visible){outline:0}
 .chip:active{background:var(--ov-3);transition:none}
 .chip.has,.chip.has:hover{min-width:0;height:auto;padding:0;background:none;box-shadow:none}
 .chip.none{color:var(--ink-2)}
-/* Recording keys: the accent ring and the words say so; nothing pulses. */
-.chip.rec{color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)}
+/* Recording keys: it is typed in, so it takes a field's line (frame.css, --field-on) and a
+   firmer fill, and the words say so; nothing pulses, and nothing is the accent. */
+.chip.rec,.chip.rec:hover{background:var(--ov-2);box-shadow:var(--field-on)}
 .chip.rec.short{color:var(--warn);box-shadow:inset 0 0 0 1.5px var(--warn)}
 .keys{display:inline-flex;align-items:center;gap:3px}
 .cap{box-sizing:border-box;min-width:22px;height:22px;padding:0 6px;display:inline-grid;place-items:center;font-size:12px;line-height:1;border-radius:var(--r-1);background:var(--ov-1);font-variant-numeric:tabular-nums}
@@ -128,6 +127,9 @@ running 230 tests  <span class="p">ok</span>  0O 1lI {}[]=&gt; -&gt;</div>
     <div class="row"><div class="l"><b>Option key as Meta</b><small>Option and a key send Escape and the key, as shells and editors expect; an Option that is not Meta types its characters.</small></div>
       <button class="ic gone" data-reset="option_meta" aria-label="Reset Option key as Meta"></button>
       <select id="option_meta" aria-label="Option key as Meta"></select></div>
+    <div class="row"><div class="l"><b>Ligatures</b><small>Letters the code font joins, such as -&gt; and !=, drawn joined.</small></div>
+      <button class="ic gone" data-reset="ligatures" aria-label="Reset Ligatures"></button>
+      <select id="ligatures" aria-label="Ligatures"></select></div>
     <div class="row"><div class="l"><b>Resume agents</b><small>A coding agent left running in a terminal goes on in its session there when the app opens again.</small></div>
       <button class="ic gone" data-reset="resume_agents" aria-label="Reset Resume agents"></button>
       <select id="resume_agents" aria-label="Resume agents"></select></div>
@@ -164,6 +166,7 @@ const LEVELS = [["off", "Off"], ["low", "Low"], ["standard", "Standard"], ["high
 const UPDATES = [["auto", "Download Automatically"], ["manual", "Only When I Check"]];
 const OPTIONS = [["left", "Left Option"], ["right", "Right Option"], ["both", "Both"], ["off", "Off"]];
 const RESUMES = [["on", "When the App Opens"], ["off", "Never"]];
+const LIGATURES = [["on", "On"], ["off", "Off"]];
 const NOTICES = [["10s", "After 10 Seconds"], ["30s", "After 30 Seconds"], ["1m", "After 1 Minute"], ["5m", "After 5 Minutes"], ["off", "Never"]];
 const GLASSY = "How much of the desktop shows through the glass.";
 const REDUCED = "Reduced by Accessibility settings (Display > Reduce transparency).";
@@ -211,7 +214,7 @@ function choices(id, list, value) {
   select.value = value;
 }
 const fontList = (fonts) => fonts.map((font) => [font.id, font.name]);
-for (const id of ["theme", "transparency", "ui_font", "code_font", "updates", "option_meta", "resume_agents", "command_notice"]) {
+for (const id of ["theme", "transparency", "ui_font", "code_font", "updates", "option_meta", "ligatures", "resume_agents", "command_notice"]) {
   document.getElementById(id).addEventListener("change", (event) => change(id, event.target.value));
 }
 const step = (by) => cur && data && change("font_size", Math.min(data.sizes[1], Math.max(data.sizes[0], cur.font_size + by)));
@@ -224,12 +227,12 @@ addEventListener("desk-look", () => cur && show());
 // The setting a reset button is for: its name in the settings, and in the defaults the page is
 // told (settings.rs `page`); the words for the default it goes back to.
 const RESETS = { theme: "theme", transparency: "transparency", ui_font: "ui_font", code_font: "code_font", font_size: "size", updates: "updates",
-  option_meta: "option_meta", resume_agents: "resume_agents", command_notice: "command_notice" };
+  option_meta: "option_meta", ligatures: "ligatures", resume_agents: "resume_agents", command_notice: "command_notice" };
 function defaultLabel(name) {
   const value = data.defaults[RESETS[name]];
   if (name === "font_size") return value + " pt";
-  const list = { theme: THEMES, transparency: LEVELS, updates: UPDATES, option_meta: OPTIONS, resume_agents: RESUMES,
-    command_notice: NOTICES }[name];
+  const list = { theme: THEMES, transparency: LEVELS, updates: UPDATES, option_meta: OPTIONS, ligatures: LIGATURES,
+    resume_agents: RESUMES, command_notice: NOTICES }[name];
   if (list) return list.find(([key]) => key === value)?.[1];
   return data[name === "ui_font" ? "ui_fonts" : "code_fonts"].find((font) => font.id === value)?.name;
 }
@@ -250,6 +253,7 @@ function show() {
   document.getElementById("tnote").textContent = reduced ? REDUCED : GLASSY;
   choices("updates", UPDATES, cur.updates);
   choices("option_meta", OPTIONS, cur.option_meta);
+  choices("ligatures", LIGATURES, cur.ligatures);
   choices("resume_agents", RESUMES, cur.resume_agents);
   choices("command_notice", NOTICES, cur.command_notice);
   choices("ui_font", fontList(data.ui_fonts), cur.ui_font);

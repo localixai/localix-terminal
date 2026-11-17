@@ -112,6 +112,10 @@ pub(crate) fn scenario(browser: &Browser) {
     );
     // The prompt the agent had is not carried: it waits for the person.
     assert!(!screen.contains(&format!("{wanted} fix")), "{screen}");
+    // The resumed terminal's tab is drawn by its view, the agent's line in it.
+    super::terminal_view::seen_in(browser, 1, |seen| {
+        seen.shown && seen.rows.iter().any(|row| row.contains(&wanted))
+    });
     // Closed while the app runs, so the window is told its layout without it.
     again
         .window(&call, &json!({"action": "close", "tab": "t1"}))

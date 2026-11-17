@@ -17,7 +17,7 @@ use crate::browser::updates;
 /// The page, as settings.html is.
 const PAGE: &str = include_str!("settings.html");
 /// The SHA-384 of the page's one script: the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "nmZZzzfg8SLbKSuCuGAFvf83QBHyBSQm0GdGACg00E/ljGe7139vPHa5RPhfW4XJ";
+const SCRIPT_SHA384: &str = "p187CjzvPqvN2mT2UzYH9/24HnCTb2/X7znyK+tSxiG+bof5lTROGS8UlUu6EXn8";
 
 /// The page, its script run by its hash.
 fn page() -> String {

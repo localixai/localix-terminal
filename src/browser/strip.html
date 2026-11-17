@@ -90,10 +90,10 @@ html.dragging,html.dragging *{cursor:grabbing!important;user-select:none}
 html[data-part=line] body>*:not(#line){display:none!important}
 html[data-part=line],html[data-part=line] body{background:transparent!important}
 html[data-part=line] #line{display:block;position:fixed;inset:0;cursor:col-resize;touch-action:none;outline:none}
-/* The line between the halves: one point, a quiet fill; hot (under the pointer, held) the
-   accent, its width never changing. */
+/* The line between the halves: one point, a quiet fill; hot (under the pointer, held, or the
+   keyboard's) a firmer one of the text's colour, never the accent, its width never changing. */
 html[data-part=line] #line::after{content:"";position:absolute;top:0;bottom:0;left:calc(50% - .5px);width:1px;background:var(--ov-3);transition:background-color var(--t-out) var(--ease)}
-html[data-part=line] #line:hover::after,html[data-part=line] #line.held::after,html[data-part=line] #line:focus-visible::after{background:var(--accent);transition:none}
+html[data-part=line] #line:hover::after,html[data-part=line] #line.held::after,html[data-part=line] #line:focus-visible::after{background:var(--focus);transition:none}
 html[data-part=line].held,html[data-part=line].held *{cursor:col-resize!important;user-select:none}
 /* A divider between panes one above the other: the same point of fill, lying across. */
 html[data-part=line][data-way=down] #line{cursor:row-resize}
@@ -127,6 +127,10 @@ html:not([data-part=nav]) #find,html[data-part=nav][data-blank] #find{display:no
 html[data-part=nav] #find{box-shadow:inset 0 -.5px 0 var(--ov-3)}
 html[data-part=nav]:not([data-glass]) #find{background:var(--ground)}
 @media (prefers-contrast:more){html[data-part=nav] #find{box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--fg) 45%,transparent)}}
+/* Under a terminal the row is alone across the foot of its pane, a hairline above it. */
+html[data-part=nav][data-term] #browse{display:none!important}
+html[data-part=nav][data-term] #find{box-shadow:inset 0 .5px 0 var(--ov-3)}
+@media (prefers-contrast:more){html[data-part=nav][data-term] #find{box-shadow:inset 0 1px 0 color-mix(in srgb,var(--fg) 45%,transparent)}}
 #browse #addr{width:100%}
 #browse #nav{justify-self:start}
 #browse #tools{justify-self:end}
@@ -146,7 +150,7 @@ html[data-part=nav][data-blank] #blank{position:fixed;inset:0;display:flex;overf
 #blank .start button{font:inherit;font-size:13px;line-height:16px;color:var(--ink-2);background:none;border:0;border-radius:var(--r-2);height:28px;padding:0 10px;display:flex;align-items:center;justify-content:space-between;gap:24px;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 #blank .start button:hover{background:var(--ov-2);color:var(--fg);transition:none}
 #blank .start button:active{background:var(--ov-3);transition:none}
-#blank .start button:focus-visible{outline:auto 1px -webkit-focus-ring-color;outline-offset:-1px}
+#blank .start button:focus-visible{outline-offset:-2px}
 #blank .start kbd{font:inherit;color:var(--ink-3);font-variant-numeric:tabular-nums}
 /* Under them, the agents installed, centred under the column: each its mark alone, an icon button
    as any other; its name is its tooltip. */
@@ -167,7 +171,7 @@ html[data-part=nav][data-blank] #blank{position:fixed;inset:0;display:flex;overf
 /* The address field, as Safari's: the page's host while it rests, its whole address to edit. */
 #addr{position:relative;cursor:text;background:var(--ov-1);min-width:0;height:28px;border-radius:14px;display:flex;align-items:center;gap:8px;padding:0 3px 0 12px;box-sizing:border-box;transition:background-color var(--t-out) var(--ease),color var(--t-out) var(--ease)}
 #addr:hover{background:var(--ov-2);transition:none}
-#addr:focus-within{background:var(--ov-1);box-shadow:inset 0 0 0 1px var(--accent),0 0 0 3px var(--acc-2);transition:none}
+#addr:focus-within{background:var(--ov-1);box-shadow:var(--field-on);transition:none}
 #ai{flex:none;display:grid;place-items:center;color:var(--ink-2)}
 #ai svg,.i svg,.x svg{display:block;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
 #ai svg{width:13px;height:13px}
@@ -287,12 +291,12 @@ html[data-inactive] .i.pic{opacity:.6}
 /* Whose turn, in quiet words at the end of the address field: nothing while the agent is idle. */
 #tn{display:none;flex:none;margin-right:8px;font-size:11px;line-height:14px;white-space:nowrap;color:var(--ink-2)}
 #tn.on{display:block}
-/* The keyboard reaches every button, and its focus shows as the system's ring (not the pointer's). */
-:where(.b,#cr .c,.s):focus{outline:0}
-:where(.b,#cr .c,.s):focus-visible{outline:auto 1px -webkit-focus-ring-color;outline-offset:-1px}
+/* The keyboard reaches every button, and its focus shows as the window's quiet ring (frame.css),
+   inside the button, never for the pointer. */
+:where(.b,#cr .c,.s):focus-visible{outline-offset:-2px}
 /* The window inactive (data-inactive): the bar recedes as the system's does. Glyphs and the
-   crumbs fade, the address field loses its ring, and its selection turns grey; the picked rows
-   turn grey through the tokens (frame.css). Status colours (events) stay. */
+   crumbs fade, the address field keeps only its resting look, and its selection turns grey; the
+   picked rows turn grey through the tokens (frame.css). Status colours (events) stay. */
 html[data-inactive] :is(.b,#cr .c,.s,#ai) svg,html[data-inactive] #cr .c .n,html[data-inactive] #cr .sep{opacity:.6}
 html[data-inactive] #addr:focus-within{box-shadow:none}
 html[data-inactive] #url::selection{background:-apple-system-unemphasized-selected-text-background}
@@ -313,8 +317,8 @@ html[data-part=side] #side{display:flex;flex-direction:column;gap:8px;height:100
    buttons beside it. */
 #sh{flex:none;display:flex;align-items:center;gap:2px;height:28px}
 #sk{flex:1;min-width:0;display:flex;align-items:center;gap:8px;height:100%;padding:0 4px;border-radius:var(--r-2);box-sizing:border-box;cursor:text}
-/* Typed in, the field shows the system's focus ring, as the address field does. */
-#sk:focus-within{box-shadow:inset 0 0 0 1px var(--accent),0 0 0 3px var(--acc-2)}
+/* Typed in, the field shows its line, as the address field does (frame.css, --field-on). */
+#sk:focus-within{box-shadow:var(--field-on)}
 html[data-inactive] #sk:focus-within{box-shadow:none}
 #si{flex:none;display:grid;color:var(--ink-2);pointer-events:none}
 #si svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round}
@@ -356,10 +360,10 @@ html[data-inactive] .zm svg{opacity:.6}
 #sl .t.on:not(:hover) .x,#sl .t.pair .half:not(:hover) .x{opacity:0}
 html.dragging #sl .x{opacity:0!important}
 /* The keyboard in the list: the arrows move a pick, Return or Space shows it. The pick is the
-   accent with white words, never the pointer's look; grey in an inactive window (frame.css). */
-#sl:focus{outline:0}
-#sl:focus-visible [data-pick]{background:var(--acc-sel);color:var(--on-sel);box-shadow:none}
-#sl:focus-visible [data-pick] :is(.u,.zm){color:inherit;opacity:.85}
+   row in the keyboard's ring (frame.css, --focus), never the pointer's look nor the accent; the
+   list itself takes no ring. */
+#sl:focus-visible{outline:0}
+#sl:focus-visible [data-key][data-pick]{background:var(--ov-2);box-shadow:inset 0 0 0 2px var(--focus)}
 /* The window inactive: the side's glyphs fade with the bar's. */
 html[data-inactive] :is(#sl,#gh) .ic svg,html[data-inactive] #si{opacity:.6}
 /* A split window's two tabs: one group, each its own row as any tab's (stacked, a hairline
@@ -376,7 +380,7 @@ html[data-inactive] :is(#sl,#gh) .ic svg,html[data-inactive] #si{opacity:.6}
 #grip{display:none;position:fixed;top:0;right:0;bottom:0;width:7px;cursor:col-resize;z-index:4;touch-action:none;outline:none}
 html[data-part=side] #grip{display:block}
 #grip::after{content:"";position:absolute;top:0;bottom:0;right:0;width:2px;background:transparent;transition:background-color var(--t-out) var(--ease)}
-#grip:hover::after,html.resizing #grip::after,#grip:focus-visible::after{background:var(--accent);transition:none}
+#grip:hover::after,html.resizing #grip::after,#grip:focus-visible::after{background:var(--focus);transition:none}
 html.resizing,html.resizing *{cursor:col-resize!important;user-select:none}
 /* Shut, the side is a rail: its button where it was, and each tab's picture, the one shown lit,
    its name as the pointer rests on it. */
@@ -1302,15 +1306,16 @@ if (document.documentElement.dataset.part === "side") {
     Object.assign(drag.ghost.style, { left: box.left + "px", top: box.top + "px", width: box.width + "px", height: box.height + "px" });
     drag.box = box;
     document.getElementById("gh").append(drag.ghost);
-    // The row itself is drawn as a card where it is, and the window told the tab is held: where in
-    // the card the pointer holds it, where the card is in this page, and how tall the page's view
-    // is (its view may begin above it). The app takes the card's picture and draws it where the
-    // pointer is, over the list, the pages, other windows, unbounded by this view; then (`CH()`,
-    // or a moment without it) the row is the empty place it leaves.
+    // The row itself is drawn as a card where it is, and the window told the tab is held: which
+    // tab, where in the card the pointer holds it, where the card is in this page, and how tall
+    // the page's view is (its view may begin above it). The app takes the card's picture and
+    // draws it where the pointer is, over the list, the pages, other windows, unbounded by this
+    // view, and makes its window ready for the tab to land; then (`CH()`, or a moment without
+    // it) the row is the empty place it leaves.
     drag.w = innerWidth;
     drag.row.classList.add("shot");
     drag.shooting = true;
-    window.ipc.postMessage("drag-start " + [drag.x - box.left, drag.y - box.top, box.left, box.top, box.width, box.height, innerHeight].map(Math.round).join(" "));
+    window.ipc.postMessage("drag-start " + drag.key + " " + [drag.x - box.left, drag.y - box.top, box.left, box.top, box.width, box.height, innerHeight].map(Math.round).join(" "));
     setTimeout(() => shot(false), 400);
     document.documentElement.classList.add("dragging");
     lifting = true;
@@ -1345,12 +1350,16 @@ if (document.documentElement.dataset.part === "side") {
       // The point in this page, and on the screen (a window that moves under the pointer
       // moves this page with it: only the screen's point stays put).
       drag.at = [Math.round(event.clientX), Math.round(event.clientY), Math.round(event.screenX), Math.round(event.screenY)];
-      if (!queued) {
+      const over = () => {
+        queued = false;
+        if (drag?.out) window.ipc.postMessage("drop-over " + drag.key + " " + drag.at.join(" "));
+      };
+      // Once a frame while the page is seen; at once while it is not, as it gets no frames then
+      // (a window behind others) and the app must still hear where the tab is.
+      if (document.hidden) over();
+      else if (!queued) {
         queued = true;
-        requestAnimationFrame(() => {
-          queued = false;
-          if (drag?.out) window.ipc.postMessage("drop-over " + drag.key + " " + drag.at.join(" "));
-        });
+        requestAnimationFrame(over);
       }
       return;
     }

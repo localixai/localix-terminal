@@ -168,8 +168,34 @@ row shows a tab, a drag between rows moves it, ⇧⌘\ or a tab dragged onto the
 even (`Heard::Equalized`), a click in a pane of a split tab or a key focuses it
 (`Heard::Focused`), ⇧⌘↩ zooms the pane in use or draws its tab whole again (`Heard::Zoomed`).
 The operation's notice brings the new layout back. While a drag is under way the window moves its
-own views (the divider under the pointer, the dragged row, a window following the pointer); only the
-drop is an operation.
+own views (the divider under the pointer, the dragged row, a window following the pointer, the
+panes making room for a tab carried over them, below); only the drop is an operation.
+
+### A tab carried from the side
+
+A tab taken from the side's list is one gesture, kept in one state by the loop from the lift to
+the drop (`browser/carry.rs`, carried out by `host_carry.rs`), whichever window it goes over:
+lifted in its list (the list moves its row; its card is drawn at the pointer, `chip.rs`), over its
+window's panes, out of its window (below, Moving a tab to another window), and let go.
+
+- **Lifted**, the window makes ready for it to land: a divider's view more than the tree shown
+  needs is made now (`Deck::ready_to_land`), so none is made while the tab is carried.
+- **Over the panes**, the tab stands where it would land (`browser/deck_preview.rs`, docs/ui.md
+  Motion): the window is laid out as that landing would lay it, the tab's own view in its place
+  and the panes beside it making room, each the view itself. The layout is told nothing, and
+  each terminal keeps its grid (held, as while a divider is dragged). The views are drawn there
+  from where they stood by springs the system plays on their layers (`glide.rs`). Where it
+  lands is found by zones taken once from the panes as the layout keeps them when the tab came
+  over them (`carry_zones.rs`): the pane under the pointer, its left half its left and its
+  right half its right, over it and under it only near its upper and lower edge; another side
+  only once the pointer is in its zone by a margin, another pane only past the divider by one.
+  What each pane and side would make of the tab is worked out once
+  (`Deck::plan`: the tree `Deck::landed` makes, laid out by the layout's geometry) and kept
+  while it is carried; the window is laid out again only when the landing changes.
+- **Let go over the panes**, the layout is told the split (`Heard::Split`) and the window lays
+  itself out once from it, which moves nothing: each terminal whose pane changed is told one
+  new grid. Escape, or back over the list, the window is laid out as the layout keeps it,
+  once, and nothing was written.
 
 ### A tab's tree in the window
 
@@ -226,11 +252,13 @@ then), so a restore opens it where it was.
 
 The app holds as many terminals at once as the machine has room for (`terminal/room.rs`), every
 project's and every window's counted, with those whose tab the person closed while their program
-runs on out of sight. What one costs was measured: its page, where a window shows it, is a WebKit
-process of its own, about 47 MiB drawn; in the app it holds three descriptors (its PTY's end and
-a copy for its reader and its writer), two threads and about 1.6 MiB. So a quarter of the
-machine's memory and half the open-file limit each bound the count, the tighter holds, and never
-under 16 (on a Mac with 24 GB and the raised limit of 10,240: 128).
+runs on out of sight. What one costs was measured: it holds three descriptors (its PTY's end and
+a copy for its reader and its writer) and two threads, and its screen and history in the
+terminal core take about 9 MiB with 10,000 rows, at most 16 MiB however wide (the core's limit
+on a history); the window draws it in a view of its own, which keeps no picture while out of
+sight. So a quarter of the machine's memory, at 16 MiB a terminal, and half the open-file limit
+each bound the count, the tighter holds, and never under 16 (on a Mac with 24 GB and the raised
+limit of 10,240: 384).
 
 - **Room is made only of a program that ended.** A new terminal over the bound takes the place of
   the oldest of its project whose program ended (its tab goes, as one closed). A program that
@@ -342,11 +370,11 @@ into the first as it starts, each in its project's workspace there, and closes t
 ## Moving a tab to another window
 
 A drag of a tab out of its window, past 10 points from the window's edge, detaches it (over the
-window's pages it lays the window out in halves instead, as Split View does):
+window's pages it shows where it would land as a split instead, above):
 
 1. **Detach.** With more than one tab in the window, a window of the same size opens at once, not
    taking the keys, placed so that its first row is under the pointer; the tab's panes move into it
-   as they are (no reload, no new program). The source keeps an empty slot where the tab was, and
+   as they are (no reload, no new program), drawn as they were. The source keeps an empty slot where the tab was, and
    shows the tab beside it if the dragged one was shown. With one tab only, the window itself is
    what moves.
 2. **Follow.** Each move of the pointer places the moving window so its first row stays under it.
@@ -364,7 +392,7 @@ Nothing is written before the drop: a detach shown and taken back leaves no chan
 The panes move between windows as they are: a page's or a panel's view is put into the other
 window's content (`Deck::take`, `Deck::take_in`), so a page is not loaded again and a terminal's
 program goes on. The gesture is the windows' together, so the loop handles it before it picks a
-window for an event (`host_tear.rs`); the window's part is where it is on the screen, where its
+window for an event (`host_carry.rs`, `host_tear.rs`); the window's part is where it is on the screen, where its
 list is, and moving or clearing itself (`deck_tear.rs`). Let go, the layout is told once:
 `Heard::Moved` with the window for a list, `Heard::Detached` for a window of its own, whose row the
 app gives the window it was carried out into.

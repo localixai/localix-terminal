@@ -1,18 +1,33 @@
 //! Tests of `screen`.
 
+use super::super::core::{Content, Step};
 use super::*;
+
+/// A blank screen of `rows` by `columns`.
+pub(super) fn blank(rows: u16, columns: u16) -> Screen {
+    Screen::new(rows, columns).unwrap()
+}
 
 /// The rows (blank ones kept to the end of the used ones) and the cursor after `bytes` (fed whole,
 /// then a byte at a time: the screen must not depend on how the reads were cut).
 fn shown(bytes: &[u8]) -> (Vec<String>, (u16, u16)) {
-    let mut whole = Screen::new(40, 120);
+    let mut whole = blank(40, 120);
     whole.feed(bytes);
-    let mut split = Screen::new(40, 120);
+    let mut split = blank(40, 120);
     for byte in bytes {
         split.feed(&[*byte]);
     }
-    assert_eq!(whole.replay(), split.replay(), "split one byte per read");
     let (text, cursor) = whole.text();
+    assert_eq!(
+        (&text, cursor),
+        (&split.text().0, split.cursor()),
+        "split one byte per read"
+    );
+    assert_eq!(
+        whole.search_text(),
+        split.search_text(),
+        "split one byte per read"
+    );
     (text.lines().map(str::to_string).collect(), cursor)
 }
 
@@ -44,59 +59,32 @@ fn only_text_reaches_the_screen() {
 }
 
 #[test]
-fn a_replay_carries_the_screen_as_a_terminal_draws_it() {
-    let mut screen = Screen::new(40, 120);
-    screen.feed(b"hi\r\n\x1b[1mthere\x1b[0m and \x1b[31mred\x1b[m\x1b[3;7H");
-    let drawn = String::from_utf8(screen.replay()).unwrap();
-    // What a terminal shows after it: the same text, styles and cursor.
-    let mut again = vt100::Parser::new(40, 120, 0);
-    again.process(drawn.as_bytes());
-    let (before, after) = (screen.parser.screen(), again.screen());
-    assert_eq!(after.contents(), before.contents());
-    assert_eq!(after.cursor_position(), (2, 6));
-    assert!(after.cell(1, 0).unwrap().bold());
-    assert_eq!(after.cell(1, 10).unwrap().fgcolor(), vt100::Color::Idx(1));
-    // It draws, and asks nothing: no string sequence, no query, no title.
-    assert!(!drawn.contains("\x1b]") && !drawn.contains("\x1bP") && !drawn.contains("[6n"));
-}
-
-#[test]
-fn a_replay_preserves_palette_and_truecolor_foregrounds() {
-    let mut screen = Screen::new(40, 120);
-    screen.feed(b"\x1b[31mR\x1b[38;5;202mI\x1b[38;2;12;180;240mT\x1b[0m");
-    let mut again = vt100::Parser::new(40, 120, 0);
-    again.process(&screen.replay());
-    for (column, expected) in [
-        vt100::Color::Idx(1),
-        vt100::Color::Idx(202),
-        vt100::Color::Rgb(12, 180, 240),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        assert_eq!(
-            again
-                .screen()
-                .cell(0, u16::try_from(column).unwrap())
-                .unwrap()
-                .fgcolor(),
-            expected,
-        );
-    }
-}
-
-#[test]
 fn a_resized_screen_keeps_its_text_and_reports_its_size() {
-    let mut screen = Screen::new(40, 120);
+    let mut screen = blank(40, 120);
     screen.feed(b"hello");
     screen.resize(10, 50);
     assert_eq!(screen.size(), (10, 50));
     assert_eq!(screen.text().0, "hello");
+    // No rows or no columns is not a size.
+    screen.resize(0, 50);
+    assert_eq!(screen.size(), (10, 50));
+}
+
+#[test]
+fn a_resize_wraps_the_lines_again_to_the_new_width() {
+    let mut screen = blank(5, 10);
+    screen.feed(b"abcdefghijklmno\r\n$ ");
+    assert_eq!(screen.text().0, "abcdefghij\nklmno\n$");
+    screen.resize(5, 20);
+    assert_eq!(screen.text().0, "abcdefghijklmno\n$");
+    screen.resize(5, 5);
+    assert_eq!(screen.text().0, "abcde\nfghij\nklmno\n$");
+    assert_eq!(screen.search_text(), "abcdefghijklmno\n$");
 }
 
 #[test]
 fn a_title_is_kept_aside_as_words() {
-    let mut screen = Screen::new(40, 120);
+    let mut screen = blank(40, 120);
     assert_eq!(screen.title(), None);
     // Ended by BEL, then by `ESC \`, read a byte at a time: the spinner in front is left off.
     screen.feed(b"\x1b]0;\xe2\x9c\xb3 Fix the cart\x07a");
@@ -112,31 +100,9 @@ fn a_title_is_kept_aside_as_words() {
 }
 
 #[test]
-fn a_replay_keeps_the_alternate_screen_and_the_input_modes_the_program_asked_for() {
-    let mut screen = Screen::new(40, 120);
-    screen.feed(b"shell\x1b[?2004h\x1b[?1049h\x1b[?1000h\x1b[?1h\x1b[Hvim");
-    let drawn = String::from_utf8(screen.replay()).unwrap();
-    for sequence in ["\x1b[?1049h", "\x1b[?2004h", "\x1b[?1000h", "\x1b[?1h"] {
-        assert!(drawn.contains(sequence), "{sequence:?} in {drawn:?}");
-    }
-    assert!(
-        drawn.starts_with("\x1b[?1049h"),
-        "the switch comes before the drawing"
-    );
-    // On the normal screen there is no switch.
-    let mut normal = Screen::new(40, 120);
-    normal.feed(b"hi\x1b[?2004h");
-    let drawn = String::from_utf8(normal.replay()).unwrap();
-    assert!(
-        drawn.contains("\x1b[?2004h") && !drawn.contains("1049"),
-        "{drawn:?}"
-    );
-}
-
-#[test]
 fn a_string_left_open_ends_at_the_next_escape_and_the_screen_goes_on() {
     // A title never ended, then a prompt: the escape that follows begins a sequence of its own.
-    let mut screen = Screen::new(40, 120);
+    let mut screen = blank(40, 120);
     screen.feed(b"a\x1b]0;half a title\x1b[31mb\x1b[mc");
     assert_eq!(screen.text().0, "abc");
     // A cancelled string, then text.
@@ -147,7 +113,7 @@ fn a_string_left_open_ends_at_the_next_escape_and_the_screen_goes_on() {
 
 #[test]
 fn a_text_that_wraps_at_the_panes_edge_is_found_whole() {
-    let mut screen = Screen::new(5, 10);
+    let mut screen = blank(5, 10);
     screen.feed(b"abcdefghijklmno\r\nxy   z");
     // The snapshot keeps the screen's own rows.
     assert_eq!(screen.text().0, "abcdefghij\nklmno\nxy   z");
@@ -155,14 +121,14 @@ fn a_text_that_wraps_at_the_panes_edge_is_found_whole() {
     assert_eq!(found, "abcdefghijklmno\nxy   z");
     assert!(found.contains("hijkl") && found.contains("y   z"));
     // A row that ends on its own ends the line, its trailing spaces gone.
-    let mut plain = Screen::new(5, 10);
+    let mut plain = blank(5, 10);
     plain.feed(b"ab   \r\ncd");
     assert_eq!(plain.search_text(), "ab\ncd");
 }
 
 #[test]
 fn a_shells_marks_are_counted_and_never_drawn() {
-    let mut screen = Screen::new(5, 40);
+    let mut screen = blank(5, 40);
     // A mark split across two reads, ended either way a string ends.
     screen.feed(b"$ \x1b]133;C\x07out\r\n\x1b]133;D");
     assert!(screen.marks().running().is_some());
@@ -170,41 +136,31 @@ fn a_shells_marks_are_counted_and_never_drawn() {
     let (count, ended) = screen.marks().ended();
     assert_eq!((count, ended.unwrap().code), (1, Some(3)));
     assert_eq!(screen.text().0, "$ out\n$");
+    // The core is told them too, and reads its cells by them.
+    assert_eq!(screen.core.step(), Some(Step::Ended(Some(3))));
+    assert_eq!(screen.core.content(0, 2), Some(Content::Output));
 }
 
 #[test]
 fn what_a_command_left_on_is_put_right_when_the_shell_says_it_ended() {
     // A program that died with the mouse reported and the cursor hidden: the shell's prompt
     // would take clicks as typing.
-    let mut screen = Screen::new(5, 40);
-    assert!(
-        screen
-            .feed(b"\x1b]133;C\x07\x1b[?1002h\x1b[?1006h\x1b[?25ltui")
-            .is_empty()
-    );
-    let righted = screen.feed(b"\r\nKilled\r\n\x1b]133;D;137\x07$ ");
-    assert_eq!(righted, RIGHTED);
-    let drawn = String::from_utf8(screen.replay()).unwrap();
-    assert!(
-        !drawn.contains("?1002h") && !drawn.contains("?25l"),
-        "{drawn:?}"
-    );
+    let mut screen = blank(5, 40);
+    assert!(!screen.feed(b"\x1b]133;C\x07\x1b[?1002h\x1b[?1006h\x1b[?25ltui"));
+    assert!(screen.feed(b"\r\nKilled\r\n\x1b]133;D;137\x07$ "));
+    assert!(!screen.core.mouse_tracking() && screen.core.cursor_visible());
     // A command that left nothing on, and output with no command's end in it: nothing is added.
-    assert!(
-        screen
-            .feed(b"\x1b]133;C\x07ok\x1b]133;D;0\x07$ ")
-            .is_empty()
-    );
-    assert!(screen.feed(b"\x1b[?1000hplain").is_empty());
+    assert!(!screen.feed(b"\x1b]133;C\x07ok\x1b]133;D;0\x07$ "));
+    assert!(!screen.feed(b"\x1b[?1000hplain"));
 }
 
 #[test]
 fn a_program_the_shell_started_at_once_keeps_what_it_turned_on() {
     // A line typed ahead: the next command starts in the same breath the last one ended.
-    let mut screen = Screen::new(5, 40);
+    let mut screen = blank(5, 40);
     screen.feed(b"\x1b]133;C\x07");
-    let righted = screen.feed(b"\x1b]133;D;0\x07\x1b]133;C\x07\x1b[?1000h");
-    assert!(righted.is_empty());
+    assert!(!screen.feed(b"\x1b]133;D;0\x07\x1b]133;C\x07\x1b[?1000h"));
+    assert!(screen.core.mouse_tracking());
 }
 
 /// A report of the program status protocol, as a program writes it, ended by `end`.
@@ -214,7 +170,7 @@ fn status(body: &str, end: &str) -> Vec<u8> {
 
 #[test]
 fn a_status_report_is_kept_for_the_terminal_and_never_shows_or_titles() {
-    let mut screen = Screen::new(40, 120);
+    let mut screen = blank(40, 120);
     screen.feed(&status("state=working:app=claude-code", "\x07"));
     screen.feed(b"a");
     screen.feed(&status("state=working:id=a1", "\x1b\\"));
@@ -239,7 +195,7 @@ fn a_long_report_is_read_whole_however_the_reads_cut_it() {
         "\x1b\\",
     );
     assert!(bytes.len() > 2500);
-    let mut screen = Screen::new(40, 120);
+    let mut screen = blank(40, 120);
     let (first, rest) = bytes.split_at(1000);
     screen.feed(first);
     assert!(screen.status().rows().is_empty(), "not before its end");
@@ -251,7 +207,7 @@ fn a_long_report_is_read_whole_however_the_reads_cut_it() {
 
 #[test]
 fn a_report_past_the_most_is_dropped_never_read_cut_short() {
-    let mut screen = Screen::new(40, 120);
+    let mut screen = blank(40, 120);
     let long = format!("state=working:app=claude-code:{}", "z=1:".repeat(1100));
     screen.feed(&status(&long, "\x07"));
     assert!(screen.status().rows().is_empty());
@@ -262,7 +218,7 @@ fn a_report_past_the_most_is_dropped_never_read_cut_short() {
 
 #[test]
 fn each_query_is_owed_an_answer_once() {
-    let mut screen = Screen::new(40, 120);
+    let mut screen = blank(40, 120);
     screen.feed(b"\x1b]7501;?\x1b\\\x1b]75");
     screen.feed(b"01;?\x07");
     assert_eq!(screen.status_asked(), 2);
@@ -271,7 +227,7 @@ fn each_query_is_owed_an_answer_once() {
 
 #[test]
 fn a_reset_takes_every_record() {
-    let mut screen = Screen::new(40, 120);
+    let mut screen = blank(40, 120);
     screen.feed(&status("state=done", "\x07"));
     screen.feed(b"\x1b[?1049h");
     assert_eq!(

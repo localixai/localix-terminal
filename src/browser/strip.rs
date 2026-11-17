@@ -19,7 +19,7 @@ pub use made::made;
 use made::{MADE, made_of};
 
 pub(super) use history::{Row, State, menu};
-pub(super) use input::{Click, Finding, Keyed, Seek, Tool, click, moved};
+pub(super) use input::{Click, Finding, Keyed, Seek, Seeking, Tool, click, moved};
 pub(super) use marks::Marks;
 pub use marks::Working;
 pub(super) use page_calls::{Found, comment, find, found};
@@ -74,7 +74,7 @@ pub const FILE: u32 = 1 << 25;
 pub(super) const SETTINGS: u32 = BOARD;
 /// A tab: one of the browser's (its id) or a panel (its id): a terminal session's screen, a
 /// board, or a file being edited.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Key {
     Web(u32),
     Term(u32),
@@ -343,7 +343,7 @@ pub(super) const PAGE: &str = include_str!("strip.html");
 
 /// The SHA-384 of the page's one script, its resize helper, the dialog's script and the tree's in:
 /// the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "I+pX0KXSMxkaLDmEH5WQatVUMwpBEinDHu6ZxV3Z2hYX1SFuRORgfHua+6rWMytB";
+const SCRIPT_SHA384: &str = "C2zMJJt5jRmdRMICn3gvd94MF2PTnnfxjQvbGUNQ7Huq9Jgnp+d7sRPOnXqNBpMh";
 
 /// The strip's page: the trusted UI's resize helper, the window's dialog (dialog.rs), the side's
 /// tree of files (tree.rs) and the toolbar's find row (its markup, words and keys shared with the

@@ -197,15 +197,9 @@ fn a_dragged_tab_says_where_it_goes() {
         Some(Click::Move(Key::Web(2), Some(Key::Term(3))))
     );
     assert_eq!(click("move t3 end"), Some(Click::Move(Key::Term(3), None)));
-    assert_eq!(
-        click("drop-over w1 400 120"),
-        Some(Click::DropOver(Key::Web(1), 400, 120))
-    );
-    assert_eq!(click("drop-off"), Some(Click::DropOff));
-    assert_eq!(
-        click("drop w1 400 120"),
-        Some(Click::Drop(Key::Web(1), 400, 120))
-    );
+    // Carried over the pages, it is the carry's (carry.rs), not a click of the window's.
+    assert_eq!(click("drop-over w1 400 120"), None);
+    assert_eq!(click("drop w1 400 120"), None);
     // A divider says which of the tree's it is.
     for (said, heard) in [
         ("split-move 1 9 done", Some(Click::SplitMove(1, 9, true))),
@@ -225,11 +219,7 @@ fn a_dragged_tab_says_where_it_goes() {
     assert_eq!(click("place w2 end"), Some(Click::Place(Key::Web(2), None)));
     assert_eq!(click("place w2"), None);
     // The side's points are the window's once moved down by the bar.
-    assert_eq!(moved("drop w1 400 120", (0.0, 38.0)), "drop w1 400 158");
-    assert_eq!(
-        moved("drop-over w1 400 120", (0.0, 38.0)),
-        "drop-over w1 400 158"
-    );
+    assert_eq!(moved("menu w1 400 120", (0.0, 38.0)), "menu w1 400 158");
 }
 
 #[test]

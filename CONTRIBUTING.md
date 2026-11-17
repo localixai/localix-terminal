@@ -7,11 +7,12 @@ cargo build
 cargo clippy --all-targets -- -D warnings
 cargo test                                   # unit tests, and the CLI against a server with no window
 bun test plugins/claude-code/hooks/register.spec.ts  # plugin hooks with a mocked host; Bun 1.3+
-bun test src/browser src/terminal                  # UI gestures, frame cadence, motion, the terminal page's keys
+bun test src/browser src/editor                    # UI gestures, frame cadence, motion, the editor's page
 bunx tsc -p plugins/claude-code                    # the plugin's types (see below)
 shellcheck install.sh scripts/*.sh plugins/claude-code/bin/llxterm
 cargo deny --locked check                          # advisories, licences and sources (deny.toml)
 LLXTERM_DISPLAY_TESTS=1 cargo test --test browser   # real windows: needs a display, and shows some
+LLXTERM_DISPLAY_TESTS=1 cargo test --test browser -- panel carried   # only the scenes whose names hold the word
 ```
 
 - The plugin's type check needs the `claude-code` module's declarations, which Claude Code writes
@@ -22,6 +23,22 @@ LLXTERM_DISPLAY_TESTS=1 cargo test --test browser   # real windows: needs a disp
 - `cargo test` builds a test build (the `test-server` feature, turned on only by the crate's own
   dev-dependency): its server never opens a window and keeps its lock and socket in `LLXTERM_TEST_DIR`,
   so tests never reach your own server. Do not run a test build's binary by hand without that variable.
+- `LLXTERM_RECORD=DIR` (set where the app or `serve` starts) records each terminal's raw output and
+  resizes into `DIR` as asciicast v2, one file per terminal, readable by you alone. It is for
+  development: a recording holds whatever the programs wrote, secrets too. The recordings in
+  `tests/fixtures/terminal/` were made so, in a scratch home with nothing of anyone's, and read by
+  hand before they were kept; `tests/core_screens.rs` feeds each to the terminal core and holds
+  its last screen to the one kept beside it, `*.screen` (`LLXTERM_WRITE_SCREENS=1` writes them
+  anew, to be read before they are committed).
+- The terminal core is libghostty-vt, linked statically through `ghostty-vt-sys`, which needs
+  Rust 1.96 (`rust-version`). On macOS its build script fetches the release's prebuilt library
+  and holds it to the sha256 the crate pins; on Linux it builds the library from the release's
+  source with Zig 0.17 (`scripts/install-zig.sh` installs the pinned one, checked by its
+  sha256, as CI does). To build offline, point `GHOSTTY_RELEASE_DIR` at a folder that holds the
+  release's files (each checked against its pinned sha256 as if fetched; Linux still builds them
+  with Zig), or `GHOSTTY_VT_LIB_DIR`
+  at a folder with a `libghostty-vt.a` built from the same release, which needs no Zig at all
+  (`GHOSTTY_VT_LIB_SHA256` checks it).
 - Read [ARCHITECTURE.md](ARCHITECTURE.md) first; its rules are checked by the lints and
   `tests/architecture.rs` in the normal `cargo test` run.
 - Display tests also check split proportions, sidebar row identity and IME input in the real

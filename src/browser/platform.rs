@@ -6,6 +6,8 @@ mod bounds;
 mod views;
 
 pub(super) use bounds::bound;
+#[cfg(target_os = "macos")]
+pub(super) use views::filling;
 pub(super) use views::{Follow, OVER_PAGES, follow};
 pub(super) use views::{
     Pane, clear, has_keys, keep_rendering, keep_tab_rendering, loading, reparent, see_through,
@@ -205,15 +207,25 @@ pub(super) fn show(
     super::menu_gtk::show(view, entries)
 }
 
-/// The pasteboard's text (pasteboard.rs); elsewhere none yet.
+/// The pasteboard's text, handed to `done` at once (pasteboard.rs); nothing when it holds none.
 #[cfg(target_os = "macos")]
-pub(super) fn pasted() -> Option<String> {
-    super::pasteboard::pasted()
+pub(super) fn paste_into(done: impl FnOnce(String) + 'static) {
+    if let Some(text) = super::pasteboard::pasted() {
+        done(text);
+    }
 }
 
+/// The clipboard's text, handed to `done` on the window's thread once the program that holds
+/// it gives it: the window goes on meanwhile, so one that is slow or never answers holds
+/// nothing up. Nothing when it holds no text.
 #[cfg(not(target_os = "macos"))]
-pub(super) fn pasted() -> Option<String> {
-    None
+pub(super) fn paste_into(done: impl FnOnce(String) + 'static) {
+    let clipboard = gtk::Clipboard::get(&gtk::gdk::SELECTION_CLIPBOARD);
+    clipboard.request_text(move |_, text| {
+        if let Some(text) = text {
+            done(text.to_owned());
+        }
+    });
 }
 
 /// `address` opened by the person's own app for it (their default browser); whether it was.

@@ -29,7 +29,7 @@ body{margin:0;display:flex;flex-direction:column;color:var(--fg);font:13px/16px 
 #bar button{font:inherit;color:var(--ink);background:var(--ov-2);border:0;border-radius:var(--r-2);height:24px;padding:0 10px;cursor:default}
 #bar button:hover{background:var(--ov-3)}
 #bar button:active{background:var(--ov-4)}
-#bar button:focus-visible{outline:2px solid var(--acc-4);outline-offset:1px}
+#bar button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 /* The file's place: its text, or the document drawn from it, and over their corner the one
    button that turns between them. */
 #w{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
@@ -39,7 +39,7 @@ body{margin:0;display:flex;flex-direction:column;color:var(--fg);font:13px/16px 
 .ico{flex:none;width:28px;height:28px;padding:0;border:0;border-radius:var(--r-2);background:transparent;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-2);cursor:default}
 .ico:hover{background:var(--ov-2);color:var(--fg)}
 .ico:active{background:var(--ov-3)}
-.ico:focus-visible{outline:2px solid var(--acc-4);outline-offset:1px}
+.ico:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .ico svg{flex:none;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
 html[data-inactive] .ico svg{opacity:.6}
 #mode{position:absolute;top:8px;right:16px}
@@ -52,7 +52,7 @@ html[data-inactive] .ico svg{opacity:.6}
 #p .flowdown{max-width:720px;margin:0 auto;font-size:15px;line-height:24px;
   --fd-fg:var(--fg);--fd-fg-soft:var(--ink-2);--fd-fg-faint:var(--ink-2);--fd-bg:transparent;--fd-bg-solid:var(--bg);
   --fd-border:var(--ov-4);--fd-border-subtle:var(--ov-3);--fd-border-strong:var(--ink-3);
-  --fd-link:var(--s-value);--fd-focus:var(--acc-4);--fd-font-mono:var(--mono);--fd-radius:var(--r-3);--fd-radius-small:var(--r-1);
+  --fd-link:var(--s-value);--fd-focus:var(--focus);--fd-font-mono:var(--mono);--fd-radius:var(--r-3);--fd-radius-small:var(--r-1);
   --fd-code-comment:var(--s-note);--fd-code-keyword:var(--s-word);--fd-code-string:var(--s-text);--fd-code-number:var(--s-value);
   --fd-code-function:var(--s-call);--fd-code-type:var(--s-kind);--fd-code-tag:var(--s-tag)}
 #p .flowdown a{cursor:pointer}
@@ -90,7 +90,7 @@ html[data-inactive] #e .cm-focused>.cm-scroller>.cm-selectionLayer .cm-selection
 #e .cm-search br{display:none}
 #e .cm-search label{display:inline-flex;align-items:center;gap:4px;font-size:12px}
 #e .cm-textfield{font:inherit;color:var(--fg);background:var(--ov-1);border:0;box-shadow:var(--hair-in);border-radius:var(--r-2);height:24px;padding:0 8px;margin:0}
-#e .cm-textfield:focus{outline:2px solid var(--acc-4);outline-offset:-1px}
+#e .cm-textfield:focus{outline:0;box-shadow:var(--field-on)}
 #e .cm-button{font:inherit;color:var(--ink);background:var(--ov-2);background-image:none;border:0;border-radius:var(--r-2);height:24px;padding:0 10px;margin:0;cursor:default}
 #e .cm-button:hover{background:var(--ov-3)}
 #e .cm-button:active{background:var(--ov-4);background-image:none}

@@ -4,13 +4,12 @@
 
 use tao::dpi::LogicalSize;
 
-use super::super::host::Cmd;
 use super::super::tabs::Tabs;
 
 use super::super::host::Shared;
 
 use super::super::strip::{BAR, HEIGHT, Key, RAIL, side_held, side_widest};
-use super::super::tabs::{pin, place};
+use super::super::tabs::pin;
 use super::{Deck, Shown};
 use crate::layout::geometry::Rect;
 
@@ -25,7 +24,10 @@ impl Deck {
         }
         let view = match self.shown {
             Shown::Web => self.web.as_ref().map(Tabs::active),
-            Shown::Term(id) => self.term(id).map(|open| &open.webview),
+            Shown::Term(id) => match self.term(id) {
+                Some(open) => return open.face.focus(),
+                None => None,
+            },
             Shown::Nothing => None,
         };
         // No tab shown: the start of a new one takes them, never a tab out of sight.
@@ -46,10 +48,11 @@ impl Deck {
     fn hush(&self) {
         let on = self.strip.is_some() && super::super::dialog::up();
         let pages = self.web.as_ref().map(Tabs::active);
-        let terms = self.terms.iter().map(|open| &open.webview);
+        for open in &self.terms {
+            open.face.hush(on);
+        }
         for view in pages
             .into_iter()
-            .chain(terms)
             .chain(&self.side)
             .chain(&self.nav)
             .chain(&self.docs)
@@ -132,11 +135,7 @@ impl Deck {
 
     /// How much of the window's left the side keeps now: the tabs lie beside it.
     fn left(&self) -> f64 {
-        if self.side.is_some() {
-            self.side_wide()
-        } else {
-            0.0
-        }
+        self.side.as_ref().map_or(0.0, |_| self.side_wide())
     }
 
     /// The shown tab's part of the window, under the strip (and a page's toolbar) and beside the
@@ -148,7 +147,7 @@ impl Deck {
         let now = self.shown_key();
         // A document's pane starts under the row of its session's documents.
         let docs = self.docs_over(now);
-        let place = now.and_then(|key| self.panes_in(self.area(false))?.rect(&key));
+        let place = now.and_then(|key| self.drawn_in(self.area(false))?.rect(&key));
         match place {
             Some(rect) => {
                 let above = docs + if browsing { self.toolbar() } else { 0.0 };
@@ -184,9 +183,10 @@ impl Deck {
         // The open menu has the whole window, the address field's suggestions the pages' part:
         // the pages stand aside, still rendering.
         let over = self.covered() || self.typing;
-        // Split, the window shows the shown tab's tree, each pane in its place; the one in use
-        // has the toolbar. All stay under a list the strip opens over them.
-        let split = self.panes_in((size, left, top));
+        // Split, the window shows the shown tab's tree, each pane in its place (while a carried
+        // tab stands where it would land, as that landing lays them out); the one in use has
+        // the toolbar. All stay under a list the strip opens over them.
+        let split = self.drawn_in((size, left, top));
         let raised = self.stack(split.as_ref().map_or(0, |panes| panes.dividers.len()));
         let panes = super::super::split::under(split, over, raised);
         if let Some(strip) = &self.strip {
@@ -199,31 +199,7 @@ impl Deck {
         }
         let in_use = self.shown_key();
         let used = in_use.and_then(|key| panes.as_ref()?.rect(&key));
-        if let Some(nav) = &self.nav {
-            let blank = self.nav.is_some() && self.blank();
-            let used_x = used.map_or(left, |rect| rect.x);
-            let x = if self.browsing() || blank {
-                used_x
-            } else {
-                -(width + 100.0)
-            };
-            let tall = if self.typing || blank {
-                size.height
-            } else {
-                self.toolbar()
-            };
-            let wide = match (blank, used) {
-                (false, Some(rect)) => rect.width,
-                _ => size.width,
-            };
-            let under = used.map_or(top, |rect| rect.y) + self.docs_over(in_use);
-            super::super::platform::bound(nav, LogicalSize::new(wide, tall), x, under);
-            // Over a whole page it stretches with the window as the window resizes; over one
-            // pane of a split it keeps its width until the layout that follows.
-            if panes.is_none() {
-                super::super::platform::follow(nav, super::super::platform::Follow::Top);
-            }
-        }
+        self.place_nav(used, (left, top, size), panes.is_none());
         // An open menu leaves the side in place: the strip, clear but for the menu, lies over it.
         self.place_side(size.height, top);
         // Where the strip lies over the pages, they stay under an open menu.
@@ -258,7 +234,11 @@ impl Deck {
             let (whole, _, under) = self.area(self.nav.is_some());
             web.layout(&pages, whole, under);
         }
+        // A divider held, or a carried tab standing where it would land: each terminal keeps
+        // its grid until it is let go (`TermView::hold`).
+        let held = self.dragging() || self.previewing();
         for open in &self.terms {
+            open.face.hold(held);
             let key = Key::Term(open.id);
             let spot = match &panes {
                 Some(panes) => panes.rect(&key),
@@ -269,25 +249,68 @@ impl Deck {
                     size.height,
                 )),
             };
-            // Out of sight, a terminal's output waits unrun; back in sight, what waited runs.
-            if open.slot.shown(spot.is_some()) {
-                let _ = self.proxy.send_event(Cmd::Paint(open.id));
-            }
             let docs = self.docs_over(Some(key));
+            let row = self.find_under(open.id);
             match spot {
-                Some(rect) => place(
-                    &open.webview,
+                Some(rect) => open.face.place(
                     rect.x,
                     rect.y + docs,
-                    LogicalSize::new(rect.width, (rect.height - docs).max(0.0)),
+                    LogicalSize::new(rect.width, (rect.height - docs - row).max(0.0)),
                     true,
                 ),
-                None => place(&open.webview, -(width + 100.0), top, size, false),
+                None => open.face.place(-(width + 100.0), top, size, false),
             }
         }
         self.place_lines(panes.as_ref(), width);
         self.place_docs(panes.as_ref(), (left, size.width, top), over);
         self.hush();
+    }
+
+    /// The browser's toolbar placed: over the page shown (in its pane, `used`, when the tab is
+    /// split: `whole_tab` false), across the window with no tab shown, or the find row alone
+    /// under a terminal; else out of sight. `size` is the tabs' part, from `left` and `top`.
+    fn place_nav(
+        &self,
+        used: Option<Rect>,
+        (left, top, size): (f64, f64, LogicalSize<f64>),
+        whole_tab: bool,
+    ) {
+        let width = size.width + left;
+        let in_use = self.shown_key();
+        let Some(nav) = &self.nav else {
+            return;
+        };
+        // Over a page, its toolbar; under a terminal, the find row alone, while it is open.
+        let whole = Rect::new(left, top, size.width, size.height);
+        let row = self.term_row(used, whole);
+        let blank = self.blank();
+        let x = if self.browsing() || blank {
+            used.map_or(left, |rect| rect.x)
+        } else {
+            -(width + 100.0)
+        };
+        let tall = if self.typing || blank {
+            size.height
+        } else {
+            self.toolbar()
+        };
+        let wide = match (blank, used) {
+            (false, Some(rect)) => rect.width,
+            _ => size.width,
+        };
+        let under = used.map_or(top, |rect| rect.y) + self.docs_over(in_use);
+        let at = row.unwrap_or_else(|| Rect::new(x, under, wide, tall));
+        super::super::platform::bound(nav, LogicalSize::new(at.width, at.height), at.x, at.y);
+        // Over a whole page it stretches with the window as the window resizes; over one
+        // pane of a split, or under a terminal, it keeps its place until the layout after.
+        let follow = match (whole_tab, row.is_none()) {
+            (_, false) => Some(super::super::platform::Follow::Still),
+            (true, true) => Some(super::super::platform::Follow::Top),
+            (false, true) => None,
+        };
+        if let Some(follow) = follow {
+            super::super::platform::follow(nav, follow);
+        }
     }
 
     /// The views over the pages, the last on top: the toolbar while its suggestions are open,

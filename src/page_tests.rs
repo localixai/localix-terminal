@@ -23,7 +23,6 @@ fn no_page_defines_again_what_the_kit_gives_it() {
     let pages = [
         ("board", include_str!("board/page.js")),
         ("catalog", include_str!("catalog/page.js")),
-        ("terminal", include_str!("terminal/emulator.js")),
     ];
     for given in [
         "const post =",
@@ -68,20 +67,13 @@ fn a_row_that_scrolls_sideways_is_written_once() {
 
 #[test]
 fn every_page_that_finds_takes_the_one_find_row() {
-    // The terminal's page and the browser's toolbar draw the shared markup, and run its words
-    // and keys before their own steps; neither keeps a copy of either.
-    let pages = [
-        (
-            "terminal",
-            include_str!("terminal/emulator.html"),
-            "{{find}}",
-        ),
-        (
-            "toolbar",
-            include_str!("browser/strip.html"),
-            "<!--FIND_ROW-->",
-        ),
-    ];
+    // The browser's toolbar draws the shared markup, and runs its words and keys before its
+    // own steps; it keeps a copy of neither.
+    let pages = [(
+        "toolbar",
+        include_str!("browser/strip.html"),
+        "<!--FIND_ROW-->",
+    )];
     for (page, markup, place) in pages {
         assert!(markup.contains(place), "{page} takes the find row");
         assert!(
@@ -90,20 +82,14 @@ fn every_page_that_finds_takes_the_one_find_row() {
         );
     }
     assert!(FIND_ROW.contains("id=\"find-q\"") && FIND_ROW.contains("class=\"finds\""));
-    let joined = [
-        ("terminal", include_str!("terminal.rs")),
-        ("toolbar", include_str!("browser/strip.rs")),
-    ];
+    let joined = [("toolbar", include_str!("browser/strip.rs"))];
     for (page, module) in joined {
         assert!(
             module.contains("page/find.js\")"),
             "{page} runs the row's script"
         );
     }
-    for script in [
-        include_str!("terminal/find.js"),
-        include_str!("browser/page_find.js"),
-    ] {
+    for script in [include_str!("browser/page_find.js")] {
         for given in [
             "function counted(",
             "function findText(",

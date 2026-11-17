@@ -50,7 +50,7 @@ impl Session {
 
     /// The person typed `text` in the window: a note that waited for them is read, what the
     /// program said it finished or failed is seen, and so is a command of theirs that ended
-    /// unseen. What the window types for them (a reply to the program's question, the mouse, an
+    /// unseen, and a bell rung unseen. What the window types for them (a reply to the program's question, the mouse, an
     /// arrow) starts with an escape, and reads nothing.
     pub(super) fn attended(&self, text: &str) {
         if text.len() > 1 && text.starts_with('\x1b') {
@@ -59,7 +59,8 @@ impl Session {
         let heard = {
             let mut state = self.shared.lock();
             state.screen.status_mut().seen();
-            let seen = state.told.unseen.take().is_some();
+            let rang = state.told.rang.take().is_some();
+            let seen = state.told.unseen.take().is_some() || rang;
             if state.screen.notes().heard() || seen {
                 state.told.on_note.clone()
             } else {
@@ -88,10 +89,10 @@ impl Session {
             "screen {columns}×{rows}, cursor at row {row} col {column} (untrusted program output):\n{text}"
         );
         match (state.ended, state.status) {
-            (true, Some(code)) => {
-                let _ = write!(out, "\n(the program exited with {code})");
+            (true, status) => {
+                out.push('\n');
+                out.push_str(&ended_words(status));
             }
-            (true, None) => out.push_str("\n(the program ended)"),
             (false, _) if pty::hides_input(&self.control) => out.push_str(wait::ASKING_NOTE),
             (false, _) => {
                 let marks = state.screen.marks();
@@ -123,5 +124,13 @@ impl Session {
         use std::os::fd::AsRawFd;
         let group = super::super::foreground::group(self.control.as_raw_fd())?;
         super::super::foreground::cwd(group)
+    }
+}
+
+/// How a program ended, as its terminal says it: with its exit code when it is known.
+pub(super) fn ended_words(status: Option<i32>) -> String {
+    match status {
+        Some(code) => format!("(the program exited with {code})"),
+        None => "(the program ended)".into(),
     }
 }

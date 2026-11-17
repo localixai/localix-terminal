@@ -8,10 +8,7 @@ mod keyed;
 #[path = "seek.rs"]
 mod seek;
 pub(in super::super) use keyed::{Finding, Keyed};
-pub(in super::super) use seek::Seek;
-/// The steps of the row, named by the tests of what it says.
-#[cfg(test)]
-pub(in super::super) use seek::Seeking;
+pub(in super::super) use seek::{Seek, Seeking};
 
 /// A toolbar button the strip had no room for: it waits in the "»" menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -101,12 +98,6 @@ pub(in super::super) enum Click {
     Move(Key, Option<Key>),
     /// The person carried a document along its row: it goes before the other (none: last).
     Place(Key, Option<Key>),
-    /// A tab dragged out over the pages, at a point of the window: where it would go shows.
-    DropOver(Key, u32, u32),
-    /// The dragged tab back over the list (or let go there): nothing shows on the pages.
-    DropOff,
-    /// A tab let go of over the pages, at a point of the window: it goes into that half.
-    Drop(Key, u32, u32),
     /// "+" at these points of the strip: a new page or terminal, as the person picks.
     NewTab(u32, u32),
     /// The size button at these points of the strip: the page's size, as the person picks.
@@ -254,13 +245,8 @@ pub(in super::super) fn click(body: &str) -> Option<Click> {
 }
 
 /// A tab the person drags: along the list (`move KEY BEFORE|end`), a document along its row
-/// (`place KEY BEFORE|end`), over the pages
-/// (`drop-over KEY X Y`, `drop-off`), let go of over them (`drop KEY X Y`).
+/// (`place KEY BEFORE|end`). Over the pages it is the carry's (`carry.rs`).
 fn dragged_tab(verb: &str, rest: Option<&str>) -> Option<Click> {
-    let point = |at: &str| -> Option<(u32, u32)> {
-        let (x, y) = at.split_once(' ')?;
-        Some((x.parse().ok()?, y.parse().ok()?))
-    };
     match (verb, rest) {
         ("move" | "place", Some(rest)) => {
             let (key, before) = rest.split_once(' ')?;
@@ -274,17 +260,6 @@ fn dragged_tab(verb: &str, rest: Option<&str>) -> Option<Click> {
                 Click::Place
             };
             Some(to(Key::parse(key)?, before))
-        }
-        ("drop-off", None) => Some(Click::DropOff),
-        ("drop-over", Some(rest)) => {
-            let (key, at) = rest.split_once(' ')?;
-            let (x, y) = point(at)?;
-            Some(Click::DropOver(Key::parse(key)?, x, y))
-        }
-        ("drop", Some(rest)) => {
-            let (key, at) = rest.split_once(' ')?;
-            let (x, y) = point(at)?;
-            Some(Click::Drop(Key::parse(key)?, x, y))
         }
         _ => None,
     }
@@ -306,8 +281,6 @@ pub(in super::super) fn moved(body: &str, (x, y): (f64, f64)) -> String {
     let point = |px: &str, py: &str| Some(format!("{} {}", at(px, x)?, at(py, y)?));
     let moved = match parts.as_slice() {
         ["menu", key, px, py] => point(px, py).map(|p| format!("menu {key} {p}")),
-        ["drop", key, px, py] => point(px, py).map(|p| format!("drop {key} {p}")),
-        ["drop-over", key, px, py] => point(px, py).map(|p| format!("drop-over {key} {p}")),
         [
             verb @ ("new" | "frame" | "projects" | "tabs"),
             px,

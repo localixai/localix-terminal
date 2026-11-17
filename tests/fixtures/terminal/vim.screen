@@ -1,0 +1,10 @@
+size 40x120
+cursor 6 1
+screen main
+history 0
+---
+demo % vim -u DEFAULTS -i NONE notes.txt
+demo % cat notes.txt
+hello worldfirst
+second line
+demo % exit

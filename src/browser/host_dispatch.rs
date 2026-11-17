@@ -14,6 +14,9 @@ use super::super::web::on_browser;
 use super::super::{Cmd, Window};
 use super::{On, act};
 
+#[path = "host_dispatch_term.rs"]
+mod term;
+
 impl On<'_> {
     pub(super) fn command(&mut self, command: Cmd) {
         // How the window is drawn after it (`Drawn`).
@@ -61,9 +64,10 @@ impl On<'_> {
             Cmd::Open { window, reply } => self.open(&window, &reply),
             Cmd::Panel(opening) => self.panel(opening),
             Cmd::Paint(id) => self.paint(id),
+            Cmd::TermProbe(id, probe, reply) => drop(reply.send(self.term_probe(id, probe))),
+            Cmd::TermShot(id, reply) => self.term_shot(id, reply),
             Cmd::PanelMenu(id, at, items) => self.panel_menu(id, at, &items),
             Cmd::PanelLink(id, url) => self.panel_link(id, url),
-            Cmd::PanelCopy(id, text) => self.panel_copy(id, &text),
             Cmd::CommandEnded(id, code, took) => self.command_ended(id, code, took),
             Cmd::Reveal(id) => self.reveal(id),
             Cmd::Unanswered(id, at) => self.unanswered(id, at),
@@ -226,14 +230,6 @@ impl On<'_> {
         }
     }
 
-    /// A program's copy from terminal `id` (OSC 52), on the pasteboard where the rule says
-    /// (`panel::copy_where`), read against this window.
-    fn panel_copy(&self, id: u32, text: &str) {
-        if let Some(deck) = self.deck.as_ref() {
-            panel::copy_where(deck, id, text, platform::copy);
-        }
-    }
-
     /// A command the person typed in terminal `id` ended: news for them, told to the app, where
     /// the rule says they did not see it end (`panel::unattended`), read against this window, the
     /// one the terminal is in if any is, and the setting (Settings, Terminal).
@@ -247,14 +243,6 @@ impl On<'_> {
         if panel::unattended(keys, id, took, after, active) {
             let key = Key::Term(id).name();
             (self.shared).heard(&key, Heard::Unattended { code, took });
-        }
-    }
-
-    /// Terminal `id`'s newest frame, run in its page.
-    fn paint(&mut self, id: u32) {
-        let open = self.deck.as_ref().and_then(|open| open.term(id));
-        if let Some((open, frame)) = open.and_then(|o| Some((o, o.slot.latest()?))) {
-            let _ = open.webview.evaluate_script(&frame);
         }
     }
 
@@ -297,8 +285,8 @@ impl On<'_> {
     }
 }
 
-/// A window's own answer to where the person's keys are, for a program's copy: what it shows,
-/// whether the system made it the key window, and which of its pages is the first responder.
+/// A window's own answer to where the person looks: what it shows, and whether the system made
+/// it the key window.
 impl panel::Keys for Deck {
     fn in_sight(&self, id: u32) -> bool {
         let key = Key::Term(id);
@@ -310,6 +298,6 @@ impl panel::Keys for Deck {
     }
 
     fn typing(&self, id: u32) -> bool {
-        (self.term(id)).is_some_and(|open| platform::has_keys(&open.webview))
+        self.term(id).is_some_and(|open| open.face.has_keys())
     }
 }

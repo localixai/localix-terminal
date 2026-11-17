@@ -208,6 +208,24 @@ fn neither_option_is_meta_unless_the_person_chose_one_and_the_terminals_are_told
 }
 
 #[test]
+fn ligatures_join_unless_the_person_turned_them_off() {
+    let mut settings = Settings::default();
+    assert_eq!(settings.ligatures, Ligatures::On);
+    assert!(settings.ligatures.on());
+    assert_eq!(settings.page()["defaults"]["ligatures"], "on");
+    settings.change(&json!({"ligatures": "off"})).unwrap();
+    assert!(!settings.ligatures.on());
+    assert_eq!(settings.page()["settings"]["ligatures"], "off");
+    assert!(settings.change(&json!({"ligatures": "some"})).is_err());
+    let kept: Settings = serde_json::from_str(r#"{"theme": "dark"}"#).unwrap();
+    assert_eq!(
+        kept.ligatures,
+        Ligatures::On,
+        "kept before there was such a choice"
+    );
+}
+
+#[test]
 fn agents_go_on_in_their_terminals_unless_the_person_turned_it_off() {
     use crate::browser::agents::Resuming;
     let mut settings = Settings::default();

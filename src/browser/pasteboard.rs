@@ -1,5 +1,5 @@
-//! The system's pasteboard (macOS), for what a terminal's menu copies and pastes and what a
-//! program copies (OSC 52, host_dispatch.rs `panel_copy`): plain text.
+//! The system's pasteboard (macOS), for what a menu of the window copies and a page's menu
+//! pastes: plain text.
 
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;

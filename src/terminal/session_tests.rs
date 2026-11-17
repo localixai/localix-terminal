@@ -3,6 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use super::*;
+use crate::surface::Surface;
 
 fn start(command: &str) -> Session {
     Session::start(command, &std::env::temp_dir(), None, None).unwrap()
@@ -54,59 +55,24 @@ fn closing_ends_the_program() {
     assert_ne!(unsafe { libc::kill(pid, 0) }, 0);
 }
 
-/// A session whose painter keeps the scripts it is sent.
-fn painted(command: &str) -> (Session, Arc<Mutex<Vec<String>>>) {
-    let scripts = Arc::new(Mutex::new(vec![]));
-    let kept = Arc::clone(&scripts);
-    let painter: Painter = Box::new(move |script| {
-        kept.lock().unwrap().push(script);
-        true
-    });
-    let session = Session::start(command, &std::env::temp_dir(), None, Some(painter)).unwrap();
-    (session, scripts)
-}
+/// A tab that says when it is let go of.
+struct Tab(Arc<Mutex<bool>>);
 
-/// The bytes of every `W("...")` sent so far.
-fn output(scripts: &Mutex<Vec<String>>) -> Vec<u8> {
-    use base64::Engine;
-    let mut bytes = vec![];
-    for script in scripts.lock().unwrap().iter() {
-        if let Some(b64) = script
-            .strip_prefix("W(\"")
-            .and_then(|s| s.strip_suffix("\")"))
-        {
-            bytes.extend(
-                base64::engine::general_purpose::STANDARD
-                    .decode(b64)
-                    .unwrap(),
-            );
-        }
-    }
-    bytes
-}
-
-#[test]
-fn the_window_gets_the_programs_raw_output_colours_included() {
-    let (session, scripts) = painted(r"printf '\033[31mred\033[0m\n'; sleep 20");
-    session.wait(Some("red"), 0, DEFAULT_WAIT);
-    let deadline = Instant::now() + DEFAULT_WAIT;
-    while !String::from_utf8_lossy(&output(&scripts)).contains("\x1b[31mred") {
-        assert!(Instant::now() < deadline, "{:?}", scripts.lock().unwrap());
-        nap(20);
+impl Drop for Tab {
+    fn drop(&mut self) {
+        *self.0.lock().unwrap() = true;
     }
 }
 
 #[test]
-fn a_loaded_page_is_sent_the_screen_and_the_terminal_takes_its_size() {
-    let (session, scripts) = painted("sh -c 'echo hi; sleep 20'");
-    session.wait(Some("hi"), 0, DEFAULT_WAIT);
-    session.loaded(100, 30);
-    let deadline = Instant::now() + DEFAULT_WAIT;
-    while !scripts.lock().unwrap().iter().any(|s| s.starts_with("R(")) {
-        assert!(Instant::now() < deadline);
-        nap(20);
-    }
-    assert!(session.snapshot().starts_with("screen 100×30"));
+fn the_tab_that_shows_a_session_is_held_while_it_is_open_and_let_go_as_it_closes() {
+    let gone = Arc::new(Mutex::new(false));
+    let tab: View = Box::new(Tab(Arc::clone(&gone)));
+    let session = Session::start("sleep 20", &std::env::temp_dir(), None, Some(tab)).unwrap();
+    session.wait(None, 0, Duration::from_millis(200));
+    assert!(!*gone.lock().unwrap(), "held while it runs");
+    session.close();
+    assert!(*gone.lock().unwrap(), "let go as it closes");
 }
 
 #[test]
@@ -120,7 +86,7 @@ fn a_resize_reaches_the_program() {
 #[test]
 fn what_the_person_types_reaches_the_program() {
     let session = start("sh -c 'read x; echo \"got $x\"; sleep 20'");
-    session.typed("hello\r");
+    Surface::text(&session, "hello\r");
     assert_eq!(
         session.wait(Some("got hello"), 0, DEFAULT_WAIT),
         Until::Matched
@@ -238,9 +204,9 @@ fn typing_and_resizing_never_wait_for_a_program_that_reads_nothing() {
     let session = start("sh -c 'stty raw -echo; sleep 20'");
     session.wait(None, 0, Duration::from_millis(300));
     let begun = Instant::now();
-    session.typed(&"x".repeat(500_000));
+    Surface::text(&session, &"x".repeat(500_000));
     session.resized(90, 25);
-    session.typed("more");
+    Surface::text(&session, "more");
     assert!(
         begun.elapsed() < Duration::from_millis(500),
         "{:?}",

@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use llxterm::board::{Board, Worker};
-use llxterm::browser::{BOARD, Browser, Pane};
+use llxterm::browser::{BOARD, Browser};
 use serde_json::json;
 
 fn until(what: &str, want: impl Fn() -> bool) {
@@ -26,10 +26,8 @@ pub(crate) fn scenario(browser: &Browser) {
     }));
     let loaded: Arc<Mutex<bool>> = Arc::default();
     let seen = Arc::clone(&loaded);
-    panel.sizing(Arc::new(move |pane, _, _| {
-        if pane == Pane::Loaded {
-            *seen.lock().unwrap() = true;
-        }
+    panel.on_load(Arc::new(move || {
+        *seen.lock().unwrap() = true;
     }));
     // Its script ran (the policy let it, by its hash) and it said it is ready.
     until("the board's script never ran", || {

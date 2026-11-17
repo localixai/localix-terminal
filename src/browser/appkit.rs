@@ -1,5 +1,5 @@
-//! AppKit's few common messages, once (macOS): a string, the app, the person's question
-//! (`sheet`).
+//! AppKit's few common messages, once (macOS): a string, the app, whether the person asked for
+//! less motion, the person's question (`sheet`).
 
 use std::ffi::CStr;
 
@@ -30,6 +30,15 @@ pub(super) fn text(text: &str) -> Retained<AnyObject> {
 pub(super) fn literal(text: &CStr) -> Option<Retained<AnyObject>> {
     // SAFETY: a NUL-terminated UTF-8 string, alive through the call; it answers a new string.
     unsafe { msg_send![class!(NSString), stringWithUTF8String: text.as_ptr()] }
+}
+
+/// Whether the person asked for less motion (Accessibility, Display).
+pub(super) fn reduced_motion() -> bool {
+    // SAFETY: `sharedWorkspace` is NSWorkspace's class method, returning the shared instance.
+    let workspace: Retained<AnyObject> = unsafe { msg_send![class!(NSWorkspace), sharedWorkspace] };
+    // SAFETY: an NSWorkspace answers this property with a BOOL.
+    let less: Bool = unsafe { msg_send![&*workspace, accessibilityDisplayShouldReduceMotion] };
+    less.as_bool()
 }
 
 /// `window`'s NSWindow, for as long as the borrow lasts.

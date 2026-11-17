@@ -1,5 +1,6 @@
-//! Tests of `output`: the program's output read whole, what follows it paced, and the whole
-//! screen sent to a page that fell behind.
+//! Tests of `output`: the program's output read whole, what follows it paced, a program's
+//! queries answered through the core with no view, and a session that closes while its program
+//! floods the terminal.
 
 use std::io::{self, Read};
 
@@ -106,40 +107,29 @@ fn a_session_closed_while_its_program_floods_the_terminal_ends_at_once() {
     }
 }
 
+fn start(command: &str) -> super::super::Session {
+    super::super::Session::start(command, &std::env::temp_dir(), None, None).unwrap()
+}
+
 #[test]
-fn a_page_that_fell_behind_is_sent_the_modes_the_program_set_with_the_screen() {
-    use base64::Engine;
-    let scripts = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
-    let kept = std::sync::Arc::clone(&scripts);
-    let painter: super::super::Painter = Box::new(move |script| {
-        kept.lock().unwrap().push(script);
-        true
-    });
-    let command = r"printf '\033[?1004h\033[3 qready'; sleep 20";
-    let dir = std::env::temp_dir();
-    let session = super::super::Session::start(command, &dir, None, Some(painter)).unwrap();
-    session.wait(Some("ready"), 0, super::super::DEFAULT_WAIT);
-    session.behind();
-    let deadline = std::time::Instant::now() + super::super::DEFAULT_WAIT;
-    let screen = loop {
-        let sent = scripts.lock().unwrap().clone();
-        let screen = (sent.iter().rev()).find_map(|script| {
-            script
-                .strip_prefix("R(\"")?
-                .strip_suffix("\")")
-                .map(str::to_string)
-        });
-        if let Some(screen) = screen {
-            break base64::engine::general_purpose::STANDARD
-                .decode(screen)
-                .unwrap();
-        }
-        assert!(std::time::Instant::now() < deadline, "{sent:?}");
-        super::super::nap(20);
-    };
-    let screen = String::from_utf8(screen).unwrap();
-    assert!(
-        screen.contains("\x1b[?1004h") && screen.contains("\x1b[3 q"),
-        "{screen:?}"
+fn a_program_asking_for_the_cursor_is_answered_with_no_view() {
+    // Raw, so the reply is not echoed: the program reads its six bytes and shows them.
+    let session = start(
+        r#"sh -c 'stty raw -echo; printf "\033[6n"; dd bs=1 count=6 2>/dev/null | od -An -c; sleep 20'"#,
     );
+    let until = session.wait(Some("1   ;   1   R"), 0, super::super::DEFAULT_WAIT);
+    assert_eq!(until, super::super::Until::Matched, "{}", session.text());
+}
+
+#[test]
+fn a_program_asking_which_terminal_it_is_in_is_told_with_no_view() {
+    // XTVERSION: the reply is a device control string; its escapes are shown as `E` here.
+    let version = env!("CARGO_PKG_VERSION");
+    let reply = format!("EP>|llxterm {version}E\\");
+    let session = start(&format!(
+        r#"sh -c 'stty raw -echo; printf "\033[>q"; dd bs=1 count={} 2>/dev/null | tr "\033" E; printf "|end"; sleep 20'"#,
+        reply.len()
+    ));
+    let until = session.wait(Some(&format!("{reply}|end")), 0, super::super::DEFAULT_WAIT);
+    assert_eq!(until, super::super::Until::Matched, "{}", session.text());
 }

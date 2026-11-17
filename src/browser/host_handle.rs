@@ -55,7 +55,12 @@ impl Browser {
         let panel = Panel::new(id, Box::new(move |cmd| proxy.send_event(cmd).is_ok()));
         let slot = Arc::clone(&panel.slot);
         let html = super::super::agents::marked(html);
-        let open = Cmd::Panel((id, title.to_string(), html, slot));
+        let open = Cmd::Panel((
+            id,
+            title.to_string(),
+            crate::browser::panel::Body::Page(html),
+            slot,
+        ));
         if self.proxy.send_event(open).is_err() {
             panel.slot.alive.store(false, Ordering::SeqCst);
         }

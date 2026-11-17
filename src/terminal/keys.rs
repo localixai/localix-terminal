@@ -2,28 +2,11 @@
 //! names are strict: a key is a name or one character, and text goes in `input`, so what the
 //! person approves is unambiguous.
 
+pub(super) mod mac;
+
 /// The names a key may have, for the message that refuses another.
 pub(super) const NAMES: &str = "Enter, Tab, Escape, Backspace, Space, Up, Down, Left, Right, Home, End, \
 PageUp, PageDown, Delete, F1-F12, Ctrl-<letter>, or one character";
-
-/// What a window typed (`typed`, as xterm.js sends it), its cursor keys put in the program's
-/// mode: the window draws frames, not the program's modes, so it always sends them as CSI.
-pub(super) fn from_window(typed: &str, application_cursor: bool) -> Vec<u8> {
-    if !application_cursor {
-        return typed.as_bytes().to_vec();
-    }
-    let mut bytes = typed.as_bytes().to_vec();
-    let mut at = 0;
-    while at + 2 < bytes.len() {
-        if bytes[at] == 0x1b && bytes[at + 1] == b'[' && b"ABCDHF".contains(&bytes[at + 2]) {
-            bytes[at + 1] = b'O';
-            at += 3;
-        } else {
-            at += 1;
-        }
-    }
-    bytes
-}
 
 /// The bytes of the key called `name`, or `None` when no key is called that. With
 /// `application_cursor` (a program turned DECCKM on) the cursor keys are sent as SS3, as a

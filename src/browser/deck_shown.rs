@@ -4,6 +4,7 @@
 
 use super::super::panel::Held;
 use super::super::strip::Key;
+use super::super::term_view::{self, TermProbe, TermView, TermViews};
 use super::{Deck, Shown};
 
 impl Deck {
@@ -66,7 +67,7 @@ impl Deck {
             .map(|web| Key::Web(web.active_id()));
         let panel = || {
             (self.terms.iter())
-                .find(|open| super::super::platform::has_keys(&open.webview))
+                .find(|open| open.face.has_keys())
                 .map(|open| Key::Term(open.id))
         };
         page.or_else(panel).map(|key| key.name())
@@ -96,5 +97,48 @@ impl Deck {
                 None => Shown::Web,
             };
         }
+    }
+
+    /// For checks: the terminal views the window's tabs hold, the ones in its hierarchy, and
+    /// the ones alive in the process.
+    pub(in super::super) fn term_views(&self) -> TermViews {
+        TermViews {
+            held: (self.terms.iter())
+                .filter(|open| open.face.term().is_some())
+                .count(),
+            placed: TermView::placed_in(&self.frame.native),
+            alive: term_view::alive(),
+        }
+    }
+
+    /// For checks: the window's edge taken hold of or let go, as the system tells each of its
+    /// terminal views; whether it has one.
+    pub(in super::super) fn edge_held(&self, probe: &TermProbe) -> bool {
+        let views = self.terms.iter().filter_map(|open| open.face.term());
+        views
+            .map(|view| view.probe(probe.clone()).is_some())
+            .fold(false, |any, one| any | one)
+    }
+
+    /// For checks: the window's content made `width` by `height` points, as a person's drag of
+    /// its edge makes it: its views follow the window by their own rules, and it is laid out
+    /// again, as it is when the system says it resized (which comes later, and lays it out once
+    /// more to the same places). The size it had, in whole points.
+    pub(in super::super) fn sized(&self, width: f64, height: f64) -> (u32, u32) {
+        let was: tao::dpi::LogicalSize<u32> =
+            (self.frame.native.inner_size()).to_logical(self.frame.native.scale_factor());
+        // AppKit's own, at once (tao's waits for a later turn of the loop).
+        #[cfg(target_os = "macos")]
+        {
+            use objc2::msg_send;
+            let size = objc2_core_foundation::CGSize::new(width, height);
+            let window = super::super::appkit::native(&self.frame.native);
+            // SAFETY: an NSWindow takes the size of its content, a CGSize.
+            let _: () = unsafe { msg_send![window, setContentSize: size] };
+        }
+        #[cfg(not(target_os = "macos"))]
+        (self.frame.native).set_inner_size(tao::dpi::LogicalSize::new(width, height));
+        self.layout();
+        (was.width, was.height)
     }
 }

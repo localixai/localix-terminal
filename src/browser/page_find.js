@@ -1,7 +1,8 @@
-// Find over a web page (deck_find.rs): the row is the browser toolbar's, under the address. Each
-// step goes to the window (`find type|next|previous #accent query`, `find close`), which has the
-// page find and tells the row what it found (`FS`): the tab whose row it is, its query and the
-// match shown of how many. The accent goes with each step, since a page cannot read it.
+// Find in the tab shown (deck_find.rs): the row is the browser toolbar's, under the address over
+// a web page, alone under a terminal (`data-term`). Each step goes to the window (`find
+// type|next|previous #accent query`, `find close`), which has the page or the terminal find and
+// tells the row what it found (`FS`): the tab whose row it is, whether a terminal's, its query
+// and the match shown of how many. The accent goes with each step, since a page cannot read it.
 let findTab = null;
 function pageFindShown(on) {
   findBar.hidden = !on;
@@ -24,6 +25,7 @@ findRow({
 function FS(state) {
   const was = findTab;
   findTab = state ? state.tab : null;
+  document.documentElement.toggleAttribute("data-term", !!(state && state.term));
   pageFindShown(!!state);
   if (!state) return void (findCount.textContent = "");
   if (state.tab !== was) findField.value = state.query;

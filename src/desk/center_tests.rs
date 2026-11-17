@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 use super::super::tests::{caller, desk, desk_on};
 use super::super::{Call, Desk};
 use super::*;
+use crate::surface::Surface;
 use crate::testing::Scratch;
 
 /// What the center shows now, once the feed has told it all that changed.
@@ -167,9 +168,9 @@ fn what_a_program_asks_to_tell_the_person_waits_until_they_type_in_its_terminal(
 
     // What the window answers the program for them is not the person; a key of theirs is.
     let session = desk.session(1).unwrap();
-    session.typed("\x1b[2;2R");
+    Surface::text(&*session, "\x1b[2;2R");
     assert_eq!(shown(&desk).len(), 1);
-    session.typed("y");
+    Surface::text(&*session, "y");
     assert!(shown(&desk).is_empty());
     desk.shutdown();
 }

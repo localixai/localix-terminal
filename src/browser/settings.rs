@@ -1,7 +1,8 @@
 //! The person's settings for the window: its appearance (theme, how much of the desktop shows
-//! through, the fonts), which Option key a terminal takes for Meta, whether agents go on in their
-//! terminals as the app opens, when a command that finished out of sight is told
-//! (`settings_notice.rs`), and the shortcuts they changed. Kept in `settings.json` under the config directory,
+//! through, the fonts), a terminal's (which Option key it takes for Meta, whether its ligatures
+//! join: `settings_terminal.rs`), whether agents go on in their terminals as the app opens, when
+//! a command that finished out of sight is told (`settings_notice.rs`), and the shortcuts they
+//! changed. Kept in `settings.json` under the config directory,
 //! read once, written whole on each change; a file that does not read is
 //! the defaults (and left as it is until the person changes something, when it is kept beside as
 //! `settings.json.bad`).
@@ -18,7 +19,10 @@ use super::shortcuts::{self, Chord};
 
 #[path = "settings_notice.rs"]
 mod notice;
+#[path = "settings_terminal.rs"]
+mod terminal;
 pub(super) use notice::CommandNotice;
+pub(super) use terminal::{Ligatures, OptionMeta};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -38,20 +42,6 @@ pub(super) enum Transparency {
     #[default]
     Standard,
     High,
-}
-
-/// Which Option key is Meta in a terminal: with it, Option and a key send ESC and the key, as
-/// shells, editors and coding agents read Alt; the other Option types the layout's characters.
-/// Neither by default: many layouts (German, French, Nordic, Polish) type @ [ ] { } | \ ~ with
-/// either Option, and a person who wants Meta chooses the side.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub(super) enum OptionMeta {
-    Left,
-    Right,
-    Both,
-    #[default]
-    Off,
 }
 
 /// The fonts offered, each a CSS stack that falls back to the system's.
@@ -103,6 +93,7 @@ pub(super) struct Settings {
     pub code_font: String,
     pub font_size: u8,
     pub option_meta: OptionMeta,
+    pub ligatures: Ligatures,
     pub updates: super::updates::Updates,
     pub resume_agents: super::agents::Resuming,
     pub command_notice: CommandNotice,
@@ -119,6 +110,7 @@ impl Default for Settings {
             code_font: "system".into(),
             font_size: 13,
             option_meta: OptionMeta::Off,
+            ligatures: Ligatures::On,
             updates: super::updates::Updates::Auto,
             resume_agents: super::agents::Resuming::On,
             command_notice: CommandNotice::After30s,
@@ -142,6 +134,11 @@ fn stack(fonts: &[(&str, &str, &'static str)], id: &str) -> &'static str {
 }
 
 impl Settings {
+    /// The code font as a stack of names, as a terminal is drawn in it.
+    pub(super) fn mono(&self) -> &'static str {
+        stack(&CODE_FONTS, &self.code_font)
+    }
+
     /// What the window's own pages are told: the fonts, as CSS, which Option key a terminal
     /// takes for Meta (`option`), and each shortcut's chord as the system draws it, for the
     /// buttons' hints.
@@ -167,6 +164,7 @@ impl Settings {
         chosen(change, "transparency", &mut self.transparency)?;
         chosen(change, "updates", &mut self.updates)?;
         chosen(change, "option_meta", &mut self.option_meta)?;
+        chosen(change, "ligatures", &mut self.ligatures)?;
         chosen(change, "resume_agents", &mut self.resume_agents)?;
         chosen(change, "command_notice", &mut self.command_notice)?;
         if let Some(font) = text("ui_font") {

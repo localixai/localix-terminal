@@ -55,10 +55,7 @@ impl Deck {
             | Click::SplitMove(..)
             | Click::SplitEven(_)
             | Click::Move(..)
-            | Click::Place(..)
-            | Click::DropOver(..)
-            | Click::DropOff
-            | Click::Drop(..) => return Ok(()),
+            | Click::Place(..) => return Ok(()),
             Click::Reload => {
                 if let (Some(web), Shown::Web) = (&self.web, self.shown) {
                     super::super::unloaded::reload(web.active(), web.active_id(), shared);
@@ -164,9 +161,6 @@ impl Deck {
             | Click::SplitEven(_)
             | Click::Move(..)
             | Click::Place(..)
-            | Click::DropOver(..)
-            | Click::DropOff
-            | Click::Drop(..)
             | Click::Comment
             | Click::Send
             | Click::Drag
@@ -200,7 +194,10 @@ impl Deck {
             let _ = page.evaluate_script(&script);
         }
         for open in &self.terms {
-            let _ = open.webview.evaluate_script(&script);
+            match &open.face {
+                crate::browser::panel::Face::Page(page) => drop(page.evaluate_script(&script)),
+                crate::browser::panel::Face::Term(view) => view.restyle(),
+            }
         }
         self.frame.restyle(settings.theme);
     }
@@ -297,7 +294,7 @@ impl Deck {
             STRIP => self.strip.as_ref(),
             TABS => self.side.as_ref().or(self.strip.as_ref()),
             NAV_PAGE => self.nav.as_ref(),
-            id => self.term(id).map(|open| &open.webview),
+            id => self.term(id).and_then(|open| open.face.page()),
         }
     }
 

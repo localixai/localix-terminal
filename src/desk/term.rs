@@ -6,14 +6,13 @@ mod room;
 
 pub(super) use room::{Room, are_open};
 
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, OnceLock, Weak};
 
 use serde_json::Value;
 
-use crate::browser::Pane;
 use crate::feed::{Entity, Op};
-use crate::terminal::{self, DEFAULT_WAIT, Painter, Session, Until};
+use crate::terminal::{DEFAULT_WAIT, Session, Until, View};
 
 use super::args::{strings, text, waits};
 use super::ledger::Facts;
@@ -86,16 +85,16 @@ impl Desk {
             self.drop_session(ended);
         }
         let id = self.next_terminal.fetch_add(1, Ordering::SeqCst);
-        let typed: Arc<OnceLock<Weak<Session>>> = Arc::default();
-        let painter = self.painter(id, command, (group, aside), &typed);
         let folder = crate::projects::of_key(group)
             .and_then(|project| self.project_by_id(project))
             .map(|project| project.path);
         let own = env::own(id, folder.as_deref(), vars);
-        let session = Session::start_after(command, dir, vars, painter, before, &own)
+        let session = Session::start_after(command, dir, vars, None, before, &own)
             .map_err(|e| format!("could not start it: {e}"))?;
         let session = Arc::new(session);
-        let _ = typed.set(Arc::downgrade(&session));
+        if let Some(view) = self.view(id, command, (group, aside), &session) {
+            session.keep_view(view);
+        }
         self.hear_session(id, &session, dir);
         crate::lock(&self.session_groups).insert(id, group.to_string());
         crate::lock(&self.sessions).insert(id, Arc::clone(&session));
@@ -105,15 +104,15 @@ impl Desk {
         Ok((id, session))
     }
 
-    /// The tab that shows session `id`, where a window shows; what the person types in it goes
-    /// to the session once `typed` holds it.
-    fn painter(
+    /// The tab that shows session `id`, where a window shows: the window draws the session in
+    /// it, woken as its screen changes; the session holds it, and closes it as it closes.
+    fn view(
         &self,
         id: u32,
         command: &str,
         (group, aside): (&str, bool),
-        typed: &Arc<OnceLock<Weak<Session>>>,
-    ) -> Option<Painter> {
+        session: &Arc<Session>,
+    ) -> Option<View> {
         let browser = self.browser.as_ref()?;
         let shown = if command.trim().is_empty() {
             "shell"
@@ -126,34 +125,13 @@ impl Desk {
         if aside {
             browser.aside(&format!("t{id}"));
         }
-        let panel = browser.panel(id, &title, terminal::page(&title));
-        let typed_to = Arc::clone(typed);
-        let typed = Arc::clone(typed);
-        panel.keyboard(Arc::new(move |keys: &str| {
-            if let Some(session) = typed.get().and_then(Weak::upgrade) {
-                session.typed(keys);
-            }
-        }));
-        let sized = Arc::clone(&typed_to);
-        panel.sizing(Arc::new(move |pane, columns, rows| {
-            if let Some(session) = sized.get().and_then(Weak::upgrade) {
-                match pane {
-                    Pane::Loaded => session.loaded(columns, rows),
-                    Pane::Resized => session.resized(columns, rows),
-                }
-            }
-        }));
-        Some(Box::new(move |frame| {
-            let open = panel.paint(&frame);
-            // Output the panel had to drop leaves its page behind the screen: it is sent the
-            // screen whole.
-            if panel.dropped()
-                && let Some(session) = typed_to.get().and_then(Weak::upgrade)
-            {
-                session.behind();
-            }
-            open
-        }))
+        let surface: Arc<dyn crate::surface::Surface> = Arc::clone(session) as _;
+        let panel = browser.term(id, &title, surface);
+        let wake = panel.waker();
+        session.on_changed(move || {
+            let _ = wake();
+        });
+        Some(Box::new(panel))
     }
 
     /// The session of project `group` to let go of for a new one of it when the room is full:
@@ -190,6 +168,23 @@ impl Desk {
     }
 
     /// Type into session `id` and read what it shows.
+    /// A terminal's screen as text, and the picture of it its view draws, where the window
+    /// draws one (a tab out of sight too).
+    pub(super) fn shoot_term(&self, id: u32) -> Result<Output, String> {
+        let state = Some(self.session(id)?.snapshot());
+        let shot = (self.browser.as_ref()).and_then(|browser| browser.term_shot(id).ok());
+        let report = match shot {
+            Some(_) => "A picture of the terminal; its screen as text is below.",
+            None => "A terminal is read as text: its screen is below.",
+        };
+        Ok(Output {
+            report: report.into(),
+            state,
+            shot,
+            missed: false,
+        })
+    }
+
     pub(super) fn interact_term(&self, id: u32, args: &Value) -> Result<Output, String> {
         let session = self.session(id)?;
         let given = args.get("input").and_then(Value::as_str).unwrap_or("");

@@ -9,6 +9,7 @@ use super::super::Kind;
 use super::super::tests::shown;
 use crate::desk::Call;
 use crate::desk::tests::{caller, desk};
+use crate::surface::Surface;
 use crate::testing::Scratch;
 
 fn b64(text: &str) -> String {
@@ -104,7 +105,7 @@ fn a_failure_wants_the_person_and_what_is_done_is_listed_quietly_until_they_type
         "a part that is done is the program's own business"
     );
     assert!(events[0].look.urgent && !events[1].look.urgent);
-    desk.session(1).unwrap().typed("y");
+    Surface::text(&*desk.session(1).unwrap(), "y");
     assert!(shown(&desk).is_empty(), "seen, both go");
     desk.shutdown();
 }
@@ -121,7 +122,7 @@ fn a_program_that_waits_again_after_the_person_typed_is_a_new_line() {
     assert_eq!(first.len(), 1);
     // The person answers in the terminal; the program asks again.
     let session = desk.session(1).unwrap();
-    session.typed("y\r");
+    Surface::text(&*session, "y\r");
     // The Event Center hears the program on a thread of its own, after its words show: it is
     // waited for itself.
     let again = crate::desk::restore::agent_resume::tests::soon(
@@ -215,7 +216,38 @@ fn a_command_that_ended_out_of_sight_is_one_line_with_its_code_and_time_until_th
     );
     assert_eq!(told(None, 3_700)[0].detail, "Ended after 1h 1m");
     // The person types in that terminal: seen, it goes.
-    desk.session(1).unwrap().typed("x");
+    Surface::text(&*desk.session(1).unwrap(), "x");
+    assert!(shown(&desk).is_empty());
+    desk.shutdown();
+}
+
+#[test]
+fn a_bell_out_of_sight_is_one_line_that_wants_the_person_until_they_type() {
+    use crate::browser::Heard;
+    use std::time::Duration;
+    let (desk, scratch) = (desk(), Scratch::new());
+    let mine = caller(&desk, scratch.path(), None);
+    let open = json!({"action": "open", "kind": "terminal", "command": "printf ready; sleep 20", "wait_for": "ready"});
+    desk.window(&mine.call(), &open).unwrap();
+    let rang = || {
+        desk.heard("t1", Heard::Rang);
+        assert!(desk.writes_done(Duration::from_secs(5)));
+        shown(&desk)
+    };
+    let events = rang();
+    assert_eq!(events.len(), 1, "{events:?}");
+    let line = &events[0];
+    assert_eq!(
+        (line.kind, line.id.as_str(), line.tab.as_str()),
+        (Kind::Said, "bell:t1:1", "t1")
+    );
+    assert_eq!(line.detail, "Rang the bell");
+    assert!(line.look.urgent, "it gives the tab its dot");
+    // Rung again before the person looked: still the one line.
+    let events = rang();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].id, "bell:t1:1");
+    Surface::text(&*desk.session(1).unwrap(), "x");
     assert!(shown(&desk).is_empty());
     desk.shutdown();
 }

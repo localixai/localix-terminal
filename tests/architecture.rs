@@ -225,6 +225,26 @@ fn no_async_runtime_threads_and_channels_instead() {
     assert!(broken.is_empty(), "{}", broken.join("\n"));
 }
 
+/// The terminal core's crate (libghostty-vt's bindings) is named in `terminal/core.rs` and the
+/// files under it alone: the rest of the tree holds a `Core`, never a type of the library's, so a
+/// release that changes its C API changes those files and no other.
+#[test]
+fn only_the_terminal_core_names_its_crate() {
+    let mut broken = vec![];
+    let mut reached = false;
+    for file in &crate_map().unwrap().files {
+        let core = file.name == "terminal/core.rs" || file.name.starts_with("terminal/core/");
+        let names =
+            (file.tokens.iter().filter_map(lex::Token::word)).any(|w| w == "ghostty_vt_sys");
+        reached |= core && names;
+        if names && !core {
+            broken.push(format!("{}: the crate is the terminal core's", file.name));
+        }
+    }
+    assert!(reached, "the terminal core no longer names its crate");
+    assert!(broken.is_empty(), "{}", broken.join("\n"));
+}
+
 #[test]
 fn the_reader_sees_grouped_nested_and_climbing_paths_but_not_comments_or_strings() {
     let text = "use crate::{board, layout::{tree, Tab}, self as _};\n\

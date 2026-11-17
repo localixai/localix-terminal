@@ -36,6 +36,8 @@ mod events;
 mod handle;
 #[path = "host_presence.rs"]
 mod presence;
+#[path = "host_term.rs"]
+mod term;
 #[path = "host_web.rs"]
 mod web;
 #[path = "host_window.rs"]

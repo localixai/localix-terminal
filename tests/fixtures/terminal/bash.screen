@@ -1,0 +1,19 @@
+size 40x120
+cursor 15 1
+screen main
+history 0
+---
+demo $ echo hello
+hello
+demo $ false
+demo $
+demo $ sleep 5
+^C
+demo $ printf '\e[1;31mred\e[0m \e[4munder\e[0m \e[38;5;208morange\e[0m\n'
+red under orange
+demo $ ls
+boxes.py    long.txt    notes.txt   progress.sh wide.txt
+demo $ cat missing.txt
+cat: missing.txt: No such file or directory
+demo $ exit
+exit

@@ -177,3 +177,101 @@ fn a_page_is_told_when_the_person_reduces_transparency() {
     assert!(!dressed_as(page, Look::Glass, false).contains("<html data-reduced"));
     assert!(CSS.contains("html[data-reduced]"));
 }
+
+/// Every rule of `sheet` as its selector and its body, a rule inside `@media` with the
+/// query before its selector.
+fn rules(sheet: &str) -> Vec<(&str, &str)> {
+    (sheet.split('}'))
+        .filter_map(|chunk| chunk.rsplit_once('{'))
+        .collect()
+}
+
+/// The app's own sheets, each by its name: the tokens, the strip's page with the tree and
+/// the dialog it draws, Settings, the board, the Store and the editor.
+fn sheets() -> [(&'static str, &'static str); 8] {
+    let styles = |page: &'static str| page.split("</style>").next().unwrap_or(page);
+    [
+        ("frame.css", CSS),
+        ("strip.html", styles(include_str!("strip.html"))),
+        ("tree.css", include_str!("tree.css")),
+        ("dialog.css", include_str!("dialog.css")),
+        ("settings.html", styles(include_str!("settings.html"))),
+        (
+            "board/page.html",
+            styles(include_str!("../board/page.html")),
+        ),
+        (
+            "catalog/page.html",
+            styles(include_str!("../catalog/page.html")),
+        ),
+        (
+            "editor/page.html",
+            styles(include_str!("../editor/page.html")),
+        ),
+    ]
+}
+
+#[test]
+fn focus_is_never_the_accent_nor_a_glow_in_any_page() {
+    // What draws a focus loud: the accent and its ladder, the system's ring, a ring the engine
+    // draws as it likes.
+    let loud = [
+        "--accent",
+        "--acc-",
+        "focus-ring-color",
+        "outline:auto",
+        "Highlight",
+    ];
+    for (name, sheet) in sheets() {
+        for (selector, body) in rules(sheet) {
+            // A rule for what has the focus, and a token named for the focus wherever it is set.
+            let focused = selector.contains(":focus");
+            for declared in body.split(';') {
+                let (property, value) = declared.split_once(':').unwrap_or((declared, ""));
+                if !(focused || property.contains("focus")) {
+                    continue;
+                }
+                for word in loud {
+                    assert!(
+                        !declared.contains(word),
+                        "{name}: `{}` draws a focus with {word}: {property}:{value}",
+                        selector.trim()
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn the_keyboards_ring_and_a_fields_line_are_the_token_sheets() {
+    // One quiet ring for the keyboard and one firmer line for a field typed in, both of the
+    // text's colour; each is its own in an inactive window and under Increase Contrast.
+    for token in ["--focus:", "--field-on:"] {
+        assert!(CSS.matches(token).count() >= 3, "{token} in each state");
+    }
+    let ring = rules(CSS)
+        .into_iter()
+        .find(|(selector, _)| selector.contains(":where(:focus-visible"))
+        .map(|(_, body)| body);
+    assert_eq!(
+        ring,
+        Some("outline:2px solid var(--focus);outline-offset:1px")
+    );
+    // No page draws a ring of a colour of its own: an outline it sets is the token's, or none.
+    for (name, sheet) in sheets() {
+        for (selector, body) in rules(sheet) {
+            for declared in body.split(';') {
+                let Some(value) = declared.trim().strip_prefix("outline:") else {
+                    continue;
+                };
+                let none = matches!(value.trim(), "0" | "none");
+                assert!(
+                    none || value.contains("var(--focus)"),
+                    "{name}: `{}` draws an outline of its own: {value}",
+                    selector.trim()
+                );
+            }
+        }
+    }
+}

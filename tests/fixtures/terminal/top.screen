@@ -1,0 +1,7 @@
+size 40x120
+cursor 3 1
+screen main
+history 0
+---
+demo % top -n 0 -s 1
+demo % exit

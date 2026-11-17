@@ -87,6 +87,9 @@ pub enum Heard<'a> {
         code: Option<i32>,
         took: std::time::Duration,
     },
+    /// The program in this key's terminal rang the bell while the person was not looking at
+    /// it: news for them, as the terminal's dot.
+    Rang,
 }
 
 /// What the person did in a project's tree of files. A folder is named by its path under the

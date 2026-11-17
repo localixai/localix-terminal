@@ -11,7 +11,7 @@ pub(super) use super::edit_disk::Kept;
 use super::edit_disk::{NotOpened, not_opened, shown, watched, within};
 use super::ledger::Facts;
 use super::{Call, Desk};
-use crate::browser::{Pane, Panel};
+use crate::browser::Panel;
 use crate::editor::{self, Did, Saved};
 use crate::files::drafts;
 use crate::files::text::{self, Unread};
@@ -145,8 +145,8 @@ impl Desk {
                 log::warn!("what the person did in a file's tab was dropped: too much waits");
             }
         }));
-        panel.sizing(Arc::new(move |pane, _, _| {
-            if pane == Pane::Loaded && loaded.try_send(Work::Loaded).is_err() {
+        panel.on_load(Arc::new(move || {
+            if loaded.try_send(Work::Loaded).is_err() {
                 log::warn!("a file was not told to its page as it loaded: too much waits");
             }
         }));

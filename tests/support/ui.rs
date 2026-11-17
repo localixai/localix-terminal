@@ -83,10 +83,11 @@ pub(crate) fn scenario(browser: &Browser) {
     });
     // Split View draws the split at once, before any layout tells it back.
     browser.click("key split");
+    // This project's pair, not a row of the project shown before it, drawn until the side is.
     wait(|| {
         tabs(
             browser,
-            "document.querySelectorAll('#sl .pair .half').length === 2",
+            "document.querySelectorAll('#sl .pair .half:is([data-key=t70],[data-key=t71])').length === 2",
         )
     });
 

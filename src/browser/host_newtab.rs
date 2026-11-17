@@ -24,7 +24,6 @@ impl On<'_> {
             label: label.into(),
             marked: false,
             off: false,
-            paste: false,
             icon: Some(icons::of_kind(kind)),
             key: crate::browser::shortcuts::keys_of(id),
         };
@@ -32,7 +31,6 @@ impl On<'_> {
             label,
             marked: false,
             off,
-            paste: false,
             icon,
             key: None,
         };

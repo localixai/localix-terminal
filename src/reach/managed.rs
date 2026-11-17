@@ -2,9 +2,9 @@
 //! organization can turn plugin folders off (`disableSideloadFlags`), and Claude Code then
 //! refuses to start while `CLAUDE_CODE_PLUGIN_DIRS` names one. The sources are read as Claude
 //! Code ranks them, highest first: its cache of the server's settings, the configuration
-//! profile, then the managed settings files with their drop-in folder. A source that is there
-//! but cannot be read counts as refusing: a terminal where `claude` would not start is worse
-//! than one without the plugin.
+//! profile (macOS), then the managed settings files with their drop-in folder. A source that is
+//! there but cannot be read counts as refusing: a terminal where `claude` would not start is
+//! worse than one without the plugin.
 
 use std::path::{Path, PathBuf};
 
@@ -31,13 +31,14 @@ impl Sources {
         let config = (var("CLAUDE_CONFIG_DIR").filter(|dir| !dir.is_empty()))
             .map(PathBuf::from)
             .or_else(|| var("HOME").map(|home| Path::new(&home).join(".claude")));
-        let prefs = Path::new("/Library/Managed Preferences");
-        let mut mdm: Vec<PathBuf> = var("USER")
-            .filter(|user| !user.is_empty() && !user.contains('/'))
-            .map(|user| prefs.join(user).join(PROFILE))
-            .into_iter()
-            .collect();
-        mdm.push(prefs.join(PROFILE));
+        // A configuration profile is macOS's alone, read by its `plutil`.
+        let mut mdm: Vec<PathBuf> = Vec::new();
+        if cfg!(target_os = "macos") {
+            let prefs = Path::new("/Library/Managed Preferences");
+            let user = var("USER").filter(|user| !user.is_empty() && !user.contains('/'));
+            mdm.extend(user.map(|user| prefs.join(user).join(PROFILE)));
+            mdm.push(prefs.join(PROFILE));
+        }
         let folder = if cfg!(target_os = "macos") {
             "/Library/Application Support/ClaudeCode"
         } else {

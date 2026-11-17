@@ -19,7 +19,11 @@ impl Looping {
 
     /// The tab let go: into the list it is over, or, over none, its window stays where it is.
     pub(super) fn let_go(&mut self) -> bool {
-        let Some(tear) = self.tear.take() else {
+        let Some(tear) = self
+            .carry
+            .as_mut()
+            .and_then(|carrying| carrying.tear.take())
+        else {
             return false;
         };
         if let Some(deck) = self.windows.deck(tear.moving) {
@@ -75,7 +79,11 @@ impl Looping {
     /// The pointer is back over the source's list: a window the tab came out into gives it back
     /// and closes; one that moved itself stays where it is.
     pub(super) fn take_back(&mut self) -> bool {
-        let Some(tear) = self.tear.take() else {
+        let Some(tear) = self
+            .carry
+            .as_mut()
+            .and_then(|carrying| carrying.tear.take())
+        else {
             return false;
         };
         if let Some(deck) = tear.over.and_then(|at| self.windows.deck(at)) {

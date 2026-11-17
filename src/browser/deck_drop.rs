@@ -1,39 +1,31 @@
-//! A tab carried over the pages and a divider dragged: where a carried tab lands (beside the
-//! pane it is over, on the side of the edge of that pane it is nearest), the window laid out so
-//! as it is carried, and a divider's share as the person drags it or makes its branch even.
+//! A tab carried over the pages and a divider dragged: the zones of the panes a carried tab
+//! is aimed by (`carry_zones.rs`, the panes as the layout keeps them), where it lands (beside
+//! the pane it is aimed at, on that side), and what that makes of the panes, which the window
+//! is laid out by while the tab stands there (`deck_preview.rs`); and a divider's share as the
+//! person drags it or makes its branch even.
 
+use super::super::carry_zones::Zones;
 use super::super::split::{self, Held, Own};
 use super::super::strip::Key;
 use super::super::{Drawn, Side};
-use super::{Deck, Landing, Over};
+use super::Deck;
 use crate::layout::Tree;
-use crate::layout::geometry::Rect;
-
-/// A whole window's middle is not a split target.
-const DEAD_MIDDLE: f64 = 0.18;
+use crate::layout::geometry::{self, Laid, Rect};
 
 /// Where a carried tab lands: the tree it makes of the tab shown, and the split the layout is
 /// told (the pane it goes beside, and on which side of it).
+#[derive(Clone)]
 pub(in super::super) struct Landed {
     pub tree: Drawn,
     pub beside: Key,
     pub side: Side,
 }
 
-/// The side of `rect` whose edge point `x`, `y` is nearest, by the part of the rectangle it is
-/// from it, and that part (0 on the edge, a half in the middle).
-fn nearest(rect: Rect, x: f64, y: f64) -> (Side, f64) {
-    let across = (x - rect.x) / rect.width.max(1.0);
-    let down = (y - rect.y) / rect.height.max(1.0);
-    let edges = [
-        (Side::Left, across),
-        (Side::Right, 1.0 - across),
-        (Side::Up, down),
-        (Side::Down, 1.0 - down),
-    ];
-    (edges.into_iter())
-        .min_by(|one, other| one.1.total_cmp(&other.1))
-        .unwrap_or((Side::Right, 0.5))
+/// A landing and the panes it lays out (the carried tab's among them), as the window will lay
+/// them once the layout hears of it.
+pub(in super::super) struct Plan {
+    pub landed: Landed,
+    pub laid: Laid<Key>,
 }
 
 impl Deck {
@@ -47,45 +39,55 @@ impl Deck {
             .map_or_else(|| vec![shown], |tab| split::drawn(&tab))
     }
 
-    /// Where `x`, `y` of the window is for a tab carried there: a split window's pane and which
-    /// half of it, a whole one's even halves (its middle none), or off the pages.
-    pub(in super::super) fn over(&self, x: f64, y: f64) -> Over {
+    /// The panes' part of the window, as one rectangle.
+    pub(in super::super) fn pages_rect(&self) -> Rect {
         let (size, left, top) = self.area(false);
-        // Off the pages, past the window's edges too, it goes nowhere.
-        if x < left || y < top || x > left + size.width || y > top + size.height {
-            return Over::Off;
-        }
-        if let Some(panes) = self.panes() {
-            let pane = panes.panes.iter().find(|(_, rect)| rect.contains(x, y));
-            return pane.map_or(Over::Middle, |(key, rect)| {
-                Over::Pane(*key, nearest(*rect, x, y).0)
-            });
-        }
-        let Some(shown) = self.shown_key() else {
-            return Over::Off;
-        };
-        // A whole window splits only for a tab taken well to one edge: its middle is no side.
-        let (side, from) = nearest(Rect::new(left, top, size.width, size.height), x, y);
-        if 0.5 - from < DEAD_MIDDLE {
-            Over::Middle
-        } else {
-            Over::Pane(shown, side)
+        Rect::new(left, top, size.width, size.height)
+    }
+
+    /// Whether `x`, `y` of the window is on the pages, not past their edges.
+    pub(in super::super) fn on_pages(&self, x: f64, y: f64) -> bool {
+        let area = self.pages_rect();
+        x >= area.x && y >= area.y && x <= area.x + area.width && y <= area.y + area.height
+    }
+
+    /// The panes as the layout keeps them, each where it lies (not where a carried tab's
+    /// landing puts it meanwhile): a split tab's, or the one shown alone over the whole part.
+    pub(in super::super) fn homes(&self) -> Vec<(Key, Rect)> {
+        match self.panes_kept() {
+            Some(panes) => panes.panes,
+            None => self
+                .shown_key()
+                .map(|shown| (shown, self.pages_rect()))
+                .into_iter()
+                .collect(),
         }
     }
 
-    /// Where tab `key` lands let go of `over`, from the tab shown as the person had made it
-    /// (`was`): beside the pane it is over, on that side, as the layout puts it; carried over
-    /// the other of two panes, the two change sides. None where nothing changes: over itself,
-    /// over a pane the layout does not take it beside, or within a tab of more than two.
+    /// The zones a tab carried over the panes is aimed by, taken from them as they lie.
+    pub(in super::super) fn zones(&self) -> Zones<Key, Plan> {
+        Zones::new(self.homes(), self.pages_rect())
+    }
+
+    /// What landing tab `key` on `side` of pane `beside` makes of the panes, as the person had
+    /// made the tab shown; none where nothing changes.
+    pub(in super::super) fn plan(&self, key: Key, beside: Key, side: Side) -> Option<Plan> {
+        let landed = self.landed(key, (beside, side), self.split.own.as_ref())?;
+        let tree = landed.tree.named(&|pane: &String| Key::parse(pane))?;
+        let laid = geometry::lay(&tree, self.pages_rect(), split::SPACING);
+        Some(Plan { landed, laid })
+    }
+
+    /// Where tab `key` lands on `side` of pane `beside`, from the tab shown as the person had
+    /// made it (`was`): beside that pane, on that side, as the layout puts it; carried over the
+    /// other of two panes, the two change sides. None where nothing changes: over itself, over
+    /// a pane the layout does not take it beside, or within a tab of more than two.
     pub(in super::super) fn landed(
         &self,
         key: Key,
-        over: Over,
+        (beside, side): (Key, Side),
         was: Option<&Own>,
     ) -> Option<Landed> {
-        let Over::Pane(beside, side) = over else {
-            return None;
-        };
         let shown = self.shown_key()?.name();
         let (name, at) = (key.name(), beside.name());
         if beside == key {
@@ -120,61 +122,6 @@ impl Deck {
             return None;
         }
         Some(Landed { tree, beside, side })
-    }
-
-    /// Tab `key` carried over the pages at `at` (a point of the window), or off them (none):
-    /// the window is laid out as it will be where the tab lands, and back as it was off the
-    /// pages. Over a whole window's middle it stays as it is.
-    pub(in super::super) fn drop_over(&mut self, key: Key, at: Option<(f64, f64)>) {
-        let over = at.map_or(Over::Off, |(x, y)| self.over(x, y));
-        let side = match over {
-            Over::Middle => return,
-            Over::Off => None,
-            Over::Pane(pane, side) => Some((pane, side)),
-        };
-        if side == self.drop {
-            return;
-        }
-        self.drop = side;
-        // Where it lands is worked out from the window as it was before the tab came over it.
-        let was = (self.landing.as_ref())
-            .map_or_else(|| self.split.own.clone(), |landing| landing.was.clone());
-        match self.landed(key, over, was.as_ref()) {
-            Some(landed) => {
-                let base = self.base();
-                self.landing.get_or_insert(Landing { was });
-                self.split.own = Some(Own {
-                    tree: landed.tree,
-                    base,
-                });
-            }
-            None => {
-                if let Some(landing) = self.landing.take() {
-                    self.split.own = landing.was;
-                }
-            }
-        }
-        self.layout();
-    }
-
-    /// The tab carried over the pages taken off them: the window as it was before.
-    pub(in super::super) fn drop_off(&mut self) {
-        let was = self.landing.take();
-        self.drop = None;
-        if let Some(landing) = was {
-            self.split.own = landing.was;
-            self.layout();
-        }
-    }
-
-    /// The tab carried over the pages let go of: what the person had made of the tab shown
-    /// before it came over them, to work out where it landed from.
-    pub(in super::super) fn land(&mut self) -> Option<Own> {
-        self.drop = None;
-        match self.landing.take() {
-            Some(landing) => landing.was,
-            None => self.split.own.clone(),
-        }
     }
 
     /// Divider `at` of the tree shown dragged `moved` points since the person took hold of it;
@@ -256,6 +203,11 @@ impl Deck {
         self.split.held.push(held.clone());
         self.layout();
         done.then_some(held)
+    }
+
+    /// Whether a divider is held now: taken hold of and not yet let go.
+    pub(super) fn dragging(&self) -> bool {
+        (self.split.held.iter()).any(|held| held.grabbed.is_some())
     }
 
     /// The tree the window draws, before panes it does not hold are left out.

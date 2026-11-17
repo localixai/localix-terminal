@@ -12,6 +12,8 @@ mod app_menu;
 mod appkit;
 mod calls;
 mod capture;
+mod carry;
+mod carry_zones;
 #[cfg(target_os = "macos")]
 mod chip;
 #[cfg(not(target_os = "macos"))]
@@ -24,6 +26,7 @@ mod dialog;
 mod feedback;
 mod file_icons;
 mod frame;
+mod glide;
 mod guard;
 mod host;
 mod hush;
@@ -32,6 +35,8 @@ mod icons;
 mod menu;
 #[cfg(not(target_os = "macos"))]
 mod menu_gtk;
+#[cfg(target_os = "macos")]
+mod motion;
 mod notices;
 #[cfg(target_os = "macos")]
 mod nspanel;
@@ -59,6 +64,7 @@ mod split;
 mod strip;
 mod tab_view;
 mod tabs;
+mod term_view;
 mod told;
 mod toolbar;
 mod tree;
@@ -88,11 +94,17 @@ pub use host::{
 };
 pub use notices::{Armed, Notice};
 pub use page::Page;
-pub use panel::{Fitted, Pane, Panel};
+pub use panel::{Loaded, Panel};
 pub use platform::trash;
 pub use strip::HOME;
 pub use strip::{BOARD, FILE, Working, made};
 pub use tabs::MAX_TABS;
+pub use term_view::{
+    CarrySeen, Edit, Painted, PaneSeen, Picture, Pointing, Reader, TermAnswer, TermLook, TermProbe,
+    TermSeen, TermViews,
+};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub use term_view::{TermPainter, term_picture};
 pub use told::{Branch, EntryDid, Leaf, Tree, TreeDid};
 pub(crate) use toolbar::owns;
 pub use viewport::Viewport;

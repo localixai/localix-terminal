@@ -72,6 +72,15 @@ pub(super) fn reduced() -> bool {
     false
 }
 
+/// Whether the person asked for more contrast (Accessibility, Display): the glass is solid, and
+/// a terminal's text keeps 7 to 1 with its ground.
+pub(super) fn increased() -> bool {
+    #[cfg(target_os = "macos")]
+    return native::increased();
+    #[cfg(not(target_os = "macos"))]
+    false
+}
+
 /// Whether the person runs a screen reader (VoiceOver), as a page is told (`reader` in its look).
 pub(super) fn screen_reader() -> bool {
     #[cfg(target_os = "macos")]

@@ -82,8 +82,7 @@ impl On<'_> {
             return;
         };
         let was = open.split.own.clone();
-        let over = crate::browser::deck::Over::Pane(beside, side);
-        let Some(landed) = open.landed(key, over, was.as_ref()) else {
+        let Some(landed) = open.landed(key, (beside, side), was.as_ref()) else {
             return;
         };
         self.tell_landed(key, &landed);
@@ -107,19 +106,10 @@ impl On<'_> {
         self.shared.heard(&key.name(), told);
     }
 
-    /// Tab `key` let go of over the pages at `x`, `y` of the window: beside the pane it was let
-    /// go over, on the side of it it was over, as it was laid out while it was carried.
-    pub(super) fn dropped(&mut self, key: Key, x: f64, y: f64) {
-        let Some(open) = self.deck.as_mut() else {
-            return;
-        };
-        let over = open.over(x, y);
-        let was = open.land();
-        match open.landed(key, over, was.as_ref()) {
-            Some(landed) => self.tell_landed(key, &landed),
-            // Let go where nothing changes: the tab shown as the person had made it.
-            None => open.split.own = was,
-        }
+    /// Tab `key` let go of over the pages where it lands (`landed`, where it stood while it
+    /// was carried): drawn at once, laid out once, and the layout told.
+    pub(super) fn land(&mut self, key: Key, landed: &crate::browser::deck::Landed) {
+        self.tell_landed(key, landed);
         if let Some(open) = self.deck.as_ref() {
             open.refresh(self.shared);
         }
