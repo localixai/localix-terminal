@@ -26,25 +26,13 @@
 </p>
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/window-dark.png">
-    <img src="assets/window-light.png" width="860" alt="A Localix Terminal window on a project: the side lists its board and its session, Claude Code, over the tree of the project's files; Claude Code runs in a terminal, and the page and the file opened in its session are tabs on the terminal's right">
-  </picture>
+  <img src="assets/window-dark.png" width="860" alt="A Localix Terminal window on a project: the side lists its board and its session, Claude Code, over the tree of the project's files; Claude Code runs in a terminal, and the page and the file opened in its session are tabs on the terminal's right">
 </p>
 
 <p align="center">
-  <a href="assets/editor-dark.png"><picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/editor-dark.png">
-    <img src="assets/editor-light.png" width="284" alt="A file of the project in the editor, with three more open in tabs over it">
-  </picture></a>
-  <a href="assets/board-dark.png"><picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/board-dark.png">
-    <img src="assets/board-light.png" width="284" alt="The project's board: cards in Todo, one an agent is doing, one handed in for review">
-  </picture></a>
-  <a href="assets/store-dark.png"><picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/store-dark.png">
-    <img src="assets/store-light.png" width="284" alt="The Store: plugins, skills and MCP servers for coding agents">
-  </picture></a>
+  <a href="assets/editor-dark.png"><img src="assets/editor-dark.png" width="284" alt="A file of the project in the editor, with three more open in tabs over it"></a>
+  <a href="assets/board-dark.png"><img src="assets/board-dark.png" width="284" alt="The project's board: cards in Todo, one an agent is doing, one handed in for review"></a>
+  <a href="assets/store-dark.png"><img src="assets/store-dark.png" width="284" alt="The Store: plugins, skills and MCP servers for coding agents"></a>
 </p>
 
 ## A terminal first

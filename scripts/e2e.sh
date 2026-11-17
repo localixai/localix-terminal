@@ -7,7 +7,8 @@
 # change a person sees; it ends with the number of checks that failed, and fails if any did.
 #   scripts/e2e.sh [--update] [dark|light]
 # The pictures are written to target/e2e; `--update` also copies the README's (the session, the
-# editor, the board and the Store) to assets/, to be looked at and committed.
+# editor, the board and the Store, in dark: what is shown of the app is dark only) to assets/,
+# to be looked at and committed.
 # The app it starts is apart from yours, which keeps running: it has its own socket, data and
 # settings in a scratch folder (LLXTERM_RUNTIME, LLXTERM_DATA, XDG_CONFIG_HOME), and only a
 # copy of the Store's index is taken from yours, so the Store is full at once. While it runs
@@ -24,6 +25,10 @@ cli="$app/Contents/MacOS/llxterm"
 out=$PWD/target/e2e
 update=0
 if [ "${1:-}" = --update ]; then update=1; shift; fi
+if [ "$update" = 1 ] && [ "${1:-dark}" != dark ]; then
+  echo "e2e: --update takes the README's pictures from the dark scenes; run it without light" >&2
+  exit 2
+fi
 # The window's place and size on the screen, in points, and how much of the desktop around it a
 # picture takes.
 x=166 y=112 width=1180 height=740 margin=56
@@ -335,7 +340,7 @@ reopening() {
 reopening
 
 if [ "$update" = 1 ]; then
-  for name in window editor board store; do cp "$out/$name"-*.png assets/; done
+  for name in window editor board store; do cp "$out/$name-dark.png" assets/; done
 fi
 if [ "$failed" = 0 ]; then
   echo "e2e: every check passed; the pictures are in $out"

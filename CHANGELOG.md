@@ -167,6 +167,9 @@
 
 ### Changed
 
+- **The README shows the app in dark only.** Its pictures are the dark ones, whatever GitHub's
+  theme, and `scripts/e2e.sh --update` copies only those; the light copies are gone. The run still
+  checks every scene in dark and in light.
 - **No longer 16 terminals at most.** The app holds as many terminals as this machine's memory
   and open-file limit allow, every project's counted: a terminal's page takes about 47 MiB (a
   WebKit process of its own) and its program three descriptors and two threads in the app, so

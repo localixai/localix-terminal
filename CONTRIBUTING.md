@@ -71,8 +71,9 @@ terminal, a file, a page, the Store and Settings, in dark and in light. Each ste
 what the `window` tool reports, what is written to the project and what the window offers to
 assistive tools, and each scene is pictured into `target/e2e`. Run it before a release and after
 a change a person sees, and look at the pictures; `--update` also copies the README's
-(`assets/*-dark.png`, `assets/*-light.png`), to be committed. It hides the other apps while it
-runs, so leave the Mac alone for the two minutes it takes.
+(`assets/*-dark.png`: what is shown of the app, in the README and demos, is dark only), to be
+committed. It hides the other apps while it runs, so leave the Mac alone for the two minutes it
+takes.
 
 The workflows run on pushes, tags and by hand only, never on a pull request: the Linux jobs run on the
 project's self-hosted runners, which a fork's code must never reach.
