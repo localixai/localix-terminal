@@ -6,7 +6,8 @@ import { SITE } from '@/shared/config';
 import { escapeHtml } from '@/shared/lib/html';
 import { answer, measurementId, privacySignal, resumeAnalytics, storedAnswer, type Answer } from '@/shared/analytics';
 
-const CARD = 'consent';
+// Its own id, not 'consent': the kit page's specimen of it is a section of that name.
+const CARD = 'consent-card';
 /** The attribute of anything that opens the card again: the footer's "Cookie settings". */
 export const OPEN = 'data-consent-open';
 
