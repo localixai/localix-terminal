@@ -57,6 +57,12 @@ const site: SiteConfig = {
     license: 'https://opensource.org/licenses/MIT',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
   },
+  // Usage statistics: Google Analytics 4, only after a visitor's yes (the lab's one property).
+  analytics: {
+    ga4: 'G-Q8WCW7ZLDD',
+    notice: 'We count visits with Google Analytics, only with your yes, to see which pages help.',
+    privacy: 'https://localix.ai/privacy',
+  },
   llms: '> Localix Terminal is an open source terminal for a person and their coding agents: its sessions belong to a project and come back as they were left, and Claude Code, Codex or any CLI agent runs in them as it ships and uses the same browser, board and Store the person does.',
 };
 
