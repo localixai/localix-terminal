@@ -5,7 +5,7 @@ import type { SiteConfig } from '@/shared/config';
 const GITHUB = 'https://github.com/localixai/localix-terminal';
 const RELEASE = `${GITHUB}/releases/latest/download`;
 const DESCRIPTION =
-  'Terminal sessions that belong to a project and come back as you left them. Claude Code, Codex or any CLI agent runs in them as it ships, and uses the same browser, board and Store you do.';
+  'Terminal sessions that belong to a project and come back as you left them. Claude Code, Codex or any CLI agent runs in them, with your browser and board.';
 
 const site: SiteConfig = {
   name: 'Localix Terminal',

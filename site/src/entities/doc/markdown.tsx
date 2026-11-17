@@ -117,10 +117,13 @@ export function read(markdown: string): Read {
     if (heading.depth > depth + 1) throw new Error(`"${heading.text}" skips a heading level (h${depth} to h${heading.depth})`);
     depth = heading.depth;
   }
-  // The description is the paragraph that opens the page, before its first section.
+  // The description is the paragraph that opens the page, before its first section. A line that
+  // only labels the page (`**Availability:** macOS only.`) is passed over when prose follows it.
   const section = blocks.findIndex((block, at) => at > 0 && /^#{2,}\s/.test(block.source));
   const opening = blocks.slice(1, section < 0 ? undefined : section);
-  const summary = plain(opening.find((block) => /^(?!```|~~~)[^\s#>|<!-]/.test(block.source))?.source ?? '');
+  const paragraphs = opening.filter((block) => /^(?!```|~~~)[^\s#>|<!-]/.test(block.source));
+  const label = (source: string) => /^\*\*[^*\n]{1,40}:\*\*/.test(source) && plain(source).length < 60;
+  const summary = plain((paragraphs.find((block) => !label(block.source)) ?? paragraphs[0])?.source ?? '');
   if (!summary) throw new Error('a doc opens with a paragraph after its title: its description');
   return { title: title.text, titleId: title.id, summary, headings, body };
 }

@@ -6,7 +6,7 @@ const docs: DocsConfig = {
   index: {
     title: 'Localix Terminal docs',
     description:
-      'How to install Localix Terminal, connect your coding agents, and work in the window: terminal sessions, the browser, the board, the Store, and what your agents do in it.',
+      'How to install Localix Terminal, connect your coding agents and work in it: sessions, the browser, the board, the Store, and what agents do there.',
   },
   groups: [
     {
