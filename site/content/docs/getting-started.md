@@ -4,7 +4,7 @@ Install the app, open a folder as a project, and open a terminal or start an age
 
 ## Install
 
-macOS 12+ on Apple Silicon, or Linux with WebKitGTK.
+macOS 13+ on Apple Silicon, or Linux with WebKitGTK.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/localixai/localix-terminal/main/install.sh | sh
@@ -24,7 +24,7 @@ sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0
 
 ### From source
 
-Rust 1.89+; on Linux also `libwebkit2gtk-4.1-dev` and `libgtk-3-dev`.
+Rust 1.96+; on Linux also `libwebkit2gtk-4.1-dev`, `libgtk-3-dev` and Zig 0.17, which builds the terminal core (`scripts/install-zig.sh` in the repository installs the pinned one).
 
 ```sh
 cargo install --locked --git https://github.com/localixai/localix-terminal && llxterm open

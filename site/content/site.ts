@@ -17,7 +17,7 @@ const site: SiteConfig = {
   sourceDir: 'site',
   // The app's builds: the landing offers the one for the reader's system, macOS's otherwise.
   downloads: [
-    { os: 'macos', label: 'Download for macOS', href: `${RELEASE}/Localix-Terminal-macos.dmg`, note: 'Apple Silicon, macOS 12 or later', also: 'Also for macOS' },
+    { os: 'macos', label: 'Download for macOS', href: `${RELEASE}/Localix-Terminal-macos.dmg`, note: 'Apple Silicon, macOS 13 or later', also: 'Also for macOS' },
     {
       os: 'linux',
       label: 'Download for Linux',
