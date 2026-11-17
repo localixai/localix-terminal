@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { renderToStaticMarkup, renderToString } from 'react-dom/server';
-import { PAGES } from '@/entities/doc';
-import { DocsLayout } from '@/pages/docs';
+import { PAGES, SOLO_PAGES } from '@/entities/doc';
+import { DocsLayout, SoloLayout } from '@/pages/docs';
 import { KitPage } from '@/pages/kit';
 import { LandingPage } from '@/pages/landing';
 import { DOCS, DOCS_NAV, SITE } from '@/shared/config';
@@ -21,6 +21,8 @@ export function render(): string {
 
 /** Every docs route the build writes: the index, then each page. */
 export const DOCS_ROUTES = [DOCS, ...PAGES.map((page) => page.route)];
+/** The pages of content/pages, each at the site's root. */
+export const SOLO_ROUTES = SOLO_PAGES.map((page) => page.route);
 
 /** 404.html: the docs' template around the 404, kept out of search results. */
 export function renderNotFound(template: string): string {
@@ -40,9 +42,16 @@ export function renderKit(template: string): string {
   return template.replace(HEAD, () => meta).replace(BODY, () => body);
 }
 
-/** A docs route as a whole document: `template` (docs.html, as built or as written) with the
- *  page's head and body in its two marks. Undefined for a route that is no page. */
+/** A docs route, or a page of content/pages, as a whole document: `template` (docs.html, as
+ *  built or as written) with the page's head and body in its two marks. Undefined for a route that
+ *  is no page. */
 export function renderDocsPage(route: string, template: string): string | undefined {
+  const solo = SOLO_PAGES.find((candidate) => candidate.route === route);
+  if (solo) {
+    const meta = { title: `${solo.title} · ${SITE.name}`, headline: solo.title, description: solo.description, route };
+    const body = renderToStaticMarkup(<SoloLayout page={solo} />);
+    return template.replace(HEAD, () => head({ ...meta, kind: 'article' })).replace(BODY, () => body);
+  }
   const page = PAGES.find((candidate) => candidate.route === route);
   if (!page && route !== DOCS) return undefined;
   for (const mark of [HEAD, BODY]) {

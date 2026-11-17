@@ -39,6 +39,11 @@ export type SiteConfig = {
   /** Who makes the product, and the page of everything they make: signed first in the footer,
    *  before its line, and the way there from every page. */
   maker?: NavLink;
+  /** Usage statistics: Google Analytics 4, loaded only after a visitor's yes on a small card
+   *  (content/docs/analytics.md). `ga4` is the web stream's measurement id (`G-…`), `notice` the
+   *  card's one sentence, `privacy` the page that says what is collected. Without it the site has
+   *  no card, no footer link and no tag. */
+  analytics?: { ga4: string; notice: string; privacy?: string };
   /** schema.org data for the landing. */
   jsonLd?: Record<string, unknown>;
   /** The opening of llms.txt, as markdown; the docs' list follows it. */

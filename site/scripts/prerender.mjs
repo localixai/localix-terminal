@@ -41,7 +41,7 @@ if (missing.length > 0) {
   throw new Error(`The docs link to files the repository does not have:\n  ${missing.join('\n  ')}`);
 }
 const template = await readFile(`${dist}docs.html`, 'utf8');
-for (const route of ssr.DOCS_ROUTES) {
+for (const route of [...ssr.DOCS_ROUTES, ...ssr.SOLO_ROUTES]) {
   const file = `${dist}${route.slice(1)}.html`;
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, ssr.renderDocsPage(route, template));
@@ -76,4 +76,4 @@ const llms = await readFile(`${dist}llms.txt`, 'utf8');
 await writeFile(`${dist}llms.txt`, `${llms.trimEnd()}\n\n${ssr.llmsDocs()}`);
 
 await rm(server, { recursive: true, force: true });
-console.log(`prerendered dist/index.html and ${ssr.DOCS_ROUTES.length} docs pages`);
+console.log(`prerendered dist/index.html, ${ssr.DOCS_ROUTES.length} docs pages and ${ssr.SOLO_ROUTES.length} pages of their own`);

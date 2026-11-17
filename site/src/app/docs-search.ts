@@ -1,6 +1,7 @@
 // The docs' search, loaded the first time it is opened: the index is every section of every page
 // as text, fetched once; a query's words must all be in a section, and one found in a heading or
 // a title counts for more than one in the text.
+import { track } from '@/shared/analytics';
 
 type Row = { u: string; p: string; g: string; h: string; x: string };
 const MOST = 12;
@@ -61,12 +62,23 @@ export async function attach(dialog: HTMLDialogElement) {
     else input.removeAttribute('aria-activedescendant');
     current?.querySelector('a')?.scrollIntoView({ block: 'nearest' });
   };
+  // One event for a search: when it closes, or leaves for a result on another page, whether its
+  // last query found anything. Never the query. Kept as the query is typed, since Escape in a
+  // search field empties it before a second Escape closes the dialog.
+  let found: boolean | undefined;
+  const searched = () => {
+    if (found === undefined) return;
+    track('docs_searched', { found });
+    found = undefined;
+  };
+
   const draw = () => {
     const query = input.value.trim();
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const found = find(rows, words);
+    const results = find(rows, words);
+    if (query) found = results.length > 0;
     list.replaceChildren(
-      ...found.map((row, index) => {
+      ...results.map((row, index) => {
         const link = Object.assign(document.createElement('a'), { href: row.u });
         const piece = (name: string) => link.appendChild(Object.assign(document.createElement('span'), { className: name }));
         piece('search-where').textContent = row.h ? `${row.g} / ${row.p}` : row.g;
@@ -78,7 +90,7 @@ export async function attach(dialog: HTMLDialogElement) {
         return item;
       }),
     );
-    status.textContent = found.length > 0 ? '↑↓ to move · ↵ to open · esc to close' : `Nothing found for “${query}”.`;
+    status.textContent = results.length > 0 ? '↑↓ to move · ↵ to open · esc to close' : `Nothing found for “${query}”.`;
     mark(0);
   };
 
@@ -102,9 +114,11 @@ export async function attach(dialog: HTMLDialogElement) {
   list.addEventListener('click', (event) => {
     const link = (event.target as Element).closest('a');
     if (link && link.pathname === location.pathname) dialog.close();
+    else if (link) searched();
   });
   dialog.addEventListener('click', (event) => event.target === dialog && dialog.close());
   dialog.addEventListener('close', () => {
+    searched();
     input.value = '';
     draw();
   });

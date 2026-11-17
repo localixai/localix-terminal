@@ -43,14 +43,23 @@
   flex-wrap: wrap;
   gap: 0 1.4rem;
 }
-.foot nav a {
+.foot nav a,
+.foot-consent {
   display: inline-flex;
   align-items: center;
   min-height: 2.75rem;
   color: var(--soft);
 }
+/* A button that reads as one of the links beside it. */
+.foot-consent {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
 @media (hover: hover) and (pointer: fine) {
-  .foot nav a:hover {
+  .foot nav a:hover,
+  .foot-consent:hover {
     color: var(--white);
   }
 }

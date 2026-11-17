@@ -49,6 +49,13 @@
 .docs-main {
   min-width: 0;
 }
+/* A page of its own (content/pages): the text alone, in the middle, at every width. */
+.docs.docs-solo {
+  grid-template-columns: minmax(0, 1fr);
+}
+.docs-solo .docs-main.docs-main {
+  grid-column: 1 / -1;
+}
 .docs-article {
   max-width: 48rem;
   margin-inline: auto;

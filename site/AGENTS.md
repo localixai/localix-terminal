@@ -50,6 +50,8 @@ keep merging. Read `content/docs/structure.md` before a change; it is short.
 | Add a docs page | A file in `content/docs/`, its name in `content/docs/nav.ts`. See `content/docs/writing-docs.md`. |
 | Change a colour or a shape | `content/theme.css` in a site; `src/shared/styles/global.css` in the template. |
 | Add a section to the landing | A field of `LandingContent`, a widget in `src/widgets/`, a line in `LandingPage.tsx`, a specimen on the kit page, a paragraph in `content/docs/landing.md`. |
+| Add a page outside the docs | A markdown file in `content/pages/`: `privacy.md` is `/privacy`. See `content/docs/writing-docs.md`. |
+| Count visits | `analytics` in `content/site.ts`; `content/docs/analytics.md`. Google's tag is named only in `src/shared/analytics/google-tag.ts`. |
 | Add a release | A `## x.y.z` heading in `CHANGELOG.md` (a date may follow: `## 1.2.0 - 2026-01-31`); the landing's list reads it at build time. |
 | Take the template's updates | `npm run sync` in a site; `CHANGELOG.md`'s **Migration** notes say what to change. |
 | Publish | Push to `main`. See `content/docs/deploy.md`. |

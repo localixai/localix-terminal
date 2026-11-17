@@ -1,0 +1,55 @@
+/* The usage statistics card: over the page's lower left corner, across it on a phone, in the
+   cards' raised ground. Fixed, so it moves nothing when it comes; under the search dialog, which
+   is in the top layer. */
+.consent {
+  position: fixed;
+  bottom: var(--gutter);
+  left: var(--gutter);
+  z-index: 20;
+  width: min(25rem, 100vw - 2 * var(--gutter));
+  padding: 1rem 1.1rem 1.1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--soft);
+  font-size: var(--step-s);
+  line-height: 1.55;
+  animation: consent-in 240ms var(--ease-out) both;
+}
+.consent p {
+  margin: 0 0 0.9rem;
+}
+.consent a {
+  color: var(--link);
+}
+.consent-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+/* The two answers are one variant and one size: saying no is as easy as saying yes. */
+.consent .action {
+  flex: 1;
+  background: transparent;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .consent .action:hover {
+    border-color: var(--white);
+  }
+}
+/* On the kit page, drawn where it stands. */
+.consent.consent-specimen {
+  position: static;
+  animation: none;
+}
+@keyframes consent-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .consent {
+    animation: none;
+  }
+}

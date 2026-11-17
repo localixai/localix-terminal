@@ -7,6 +7,8 @@
 //   5. Nothing the browser loads reaches entities/doc, the build-time markdown engine.
 //   6. No file is longer than 300 lines.
 //   7. A colour is a token: no hex colour in a stylesheet outside shared/styles.
+//   8. Google's tag, its queue and its host are named only in shared/analytics/google-tag.ts, and
+//      in no page's HTML: nothing of Google's may reach a page before a visitor's yes.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +50,16 @@ for (const path of files.filter((file) => file.endsWith('.css') && !relative(src
       const colour = /#[0-9a-fA-F]{3,8}\b/.exec(line.replace(/\/\*.*?\*\//g, ''));
       if (colour) problems.push(`${relative(root, path)}:${index + 1}: ${colour[0]} (a colour is a token of src/shared/styles/global.css)`);
     });
+}
+
+const TAG = /googletagmanager|google-analytics\.com|\bgtag\b|\bdataLayer\b/;
+const TAG_FILE = join(src, 'shared/analytics/google-tag.ts');
+const pages = ['index.html', 'docs.html', 'kit.html'].map((page) => join(root, page));
+const publicDir = join(root, 'public');
+const publicPages = walk(publicDir).filter((path) => path.endsWith('.html'));
+for (const path of [...code.filter((file) => file !== TAG_FILE), ...pages, ...publicPages]) {
+  const at = readFileSync(path, 'utf8').split('\n').findIndex((line) => TAG.test(line));
+  if (at >= 0) problems.push(`${relative(root, path)}:${at + 1}: names Google's tag (only src/shared/analytics/google-tag.ts may)`);
 }
 
 for (const path of code) {

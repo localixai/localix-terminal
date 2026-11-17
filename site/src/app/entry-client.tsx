@@ -1,7 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
+import { startConsent } from '@/features/consent';
 import { LandingPage } from '@/pages/landing';
 import '@/shared/styles/global.css';
+import '@/features/consent/Consent.css';
 // The site's own tokens, last: they win over the template's.
 import '@content/theme.css';
 
@@ -18,3 +20,5 @@ const app = (
 // runs; the dev server serves an empty #root.
 if (container.hasChildNodes()) hydrateRoot(container, app);
 else createRoot(container).render(app);
+
+startConsent();

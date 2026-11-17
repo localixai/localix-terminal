@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
+import { track } from '@/shared/analytics';
 import { shellLine } from '@/shared/lib/highlight';
 import { Check, Copy, Tokens } from '@/shared/ui';
 import './InstallCommand.css';
@@ -34,6 +35,7 @@ export function InstallCommand({ tabs }: { tabs: readonly (readonly [string, str
     try {
       await navigator.clipboard.writeText(command);
       setCopied(true);
+      track('install_copied', { method: tabs[shown]?.[0] ?? '' });
     } catch {
       return;
     }

@@ -54,6 +54,12 @@ export const CARD: Card = {
   media: { kind: 'terminal', blocks: [{ lang: 'shell', text: '$ example check\n' }, { out: 'ok  12 files, 0 problems', tone: 'ok' }] },
 };
 
+/** The usage statistics card's words on a site that has not set its own. */
+export const CONSENT = {
+  notice: 'We count visits with Google Analytics, only with your yes, to see which pages help.',
+  privacy: '#consent',
+};
+
 export const PROSE = `## A second-level heading
 
 A paragraph of a docs page, with **strong words**, a [link](#prose), and \`inline code\` such as

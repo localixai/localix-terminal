@@ -2,7 +2,11 @@
 // the build, with no React in the browser: this adds the code blocks' Copy, the tabs' switch, and marks the section
 // being read in the table of contents. Without it a page reads the same.
 
+import { startConsent } from '@/features/consent';
+import { track } from '@/shared/analytics';
 import './docs-menus';
+
+startConsent();
 
 for (const button of document.querySelectorAll<HTMLButtonElement>('.fd-code-copy')) {
   const code = button.closest('.fd-code')?.querySelector('pre');
@@ -14,6 +18,7 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('.fd-code-copy
     } catch {
       return;
     }
+    track('code_copied', {});
     button.dataset.copied = '';
     button.setAttribute('aria-label', 'Copied');
     window.clearTimeout(timer);

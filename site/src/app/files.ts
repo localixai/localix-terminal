@@ -1,12 +1,12 @@
-import { GROUPS, PAGES } from '@/entities/doc';
+import { GROUPS, PAGES, SOLO_PAGES } from '@/entities/doc';
 import { DOCS, DOCS_NAV, SITE as CONFIG } from '@/shared/config';
 
 const SITE = CONFIG.url;
 const INDEX = DOCS_NAV.index;
 
-/** sitemap.xml: the landing, the docs' index and every page. */
+/** sitemap.xml: the landing, the docs' index and every page, and the pages of content/pages. */
 export function sitemap(): string {
-  const urls = ['/', DOCS, ...PAGES.map((page) => page.route)]
+  const urls = ['/', DOCS, ...PAGES.map((page) => page.route), ...SOLO_PAGES.map((page) => page.route)]
     .map((route) => `  <url>\n    <loc>${SITE}${route === '/' ? '/' : route}</loc>\n    <changefreq>weekly</changefreq>\n  </url>`)
     .join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
