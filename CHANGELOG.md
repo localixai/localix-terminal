@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+
+- **The document view takes flowdown 0.9.0.** Code in a Markdown file is coloured by flowdown's own
+  highlighter, a line at a time, so the preview script no longer carries highlight.js and is a
+  quarter smaller (202 KB, was 275 KB). A long reply or a long code block draws faster, and an open
+  code block draws what the finished one will.
+
 ## 0.1.8
 
 ### Added
