@@ -42,6 +42,12 @@ pub(super) const fn without_option(flags: usize) -> usize {
     flags & !OPTION & !0x20 & !0x40
 }
 
+/// `flags` with Control taken off, on both sides: a key held with Control and Shift is read by
+/// the character it types with Shift alone.
+pub(super) const fn without_control(flags: usize) -> usize {
+    flags & !CONTROL & !0x01 & !0x2000
+}
+
 /// What a key made Meta sends after its ESC: the character the layout gives it, but a letter
 /// key in a layout of another script gives its Latin letter (so Meta-b moves a word back under
 /// a Cyrillic layout too).

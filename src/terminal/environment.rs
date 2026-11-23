@@ -31,7 +31,7 @@ pub(super) fn apply(program: &mut Command, vars: Option<&[(String, String)]>, ow
         .env_remove("NO_COLOR")
         .env_remove("FORCE_COLOR")
         .env_remove("CLICOLOR_FORCE")
-        .env("TERM", "xterm-256color")
+        .env("TERM", super::TERM)
         .env("COLORTERM", "truecolor")
         .env("CLICOLOR", "1")
         .env("TERM_PROGRAM", "llxterm")

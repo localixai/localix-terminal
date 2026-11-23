@@ -1,7 +1,7 @@
 // The window's dialog (dialog.rs): one look for everything the app asks or announces. Built
 // element by element; every word is set as text. `DLG(dialog)` shows it, `DLG(null)` takes it
-// away; the answer goes back as `dialog yes` or `dialog no`, a yes with what was typed into its
-// fields after it as one JSON object.
+// away; the answer goes back as `dialog yes`, `dialog other` (a question's second act, its third
+// button) or `dialog no`, a yes with what was typed into its fields after it as one JSON object.
 const DLG_MARKS = {
   ask: [["path", { d: "M6 6.2a2 2 0 1 1 3.1 1.7c-.7.5-1.1.9-1.1 1.7" }], ["path", { d: "M8 11.9v.1" }]],
   app: [["rect", { x: 2.5, y: 3, width: 11, height: 10, rx: 1.6 }], ["path", { d: "M2.5 6h11M6 6v7" }]],
@@ -117,6 +117,12 @@ function DLG(dialog) {
     for (const input of inputs) if (input.value.trim()) given[input.name] = input.value.trim();
     window.ipc.postMessage("dialog yes " + JSON.stringify(given));
   });
+  // A second act stands apart on the left, quiet, away from Cancel and the act asked about.
+  if (dialog.other) {
+    const other = dlgNode("button", "btn other", dialog.other);
+    other.addEventListener("click", () => window.ipc.postMessage("dialog other"));
+    acts.append(other);
+  }
   acts.append(no, yes);
   card.append(acts);
   root.append(card);
@@ -125,7 +131,7 @@ function DLG(dialog) {
   // does it.
   if (dialog.asked) (inputs[0] ?? yes).focus();
 }
-// While a dialog is up the keys are its own: Escape is its other button, Return in a field is
+// While a dialog is up the keys are its own: Escape is its Cancel, Return in a field is
 // the one that does it, and Tab stays within it.
 document.addEventListener("keydown", (event) => {
   const root = document.getElementById("dlg");

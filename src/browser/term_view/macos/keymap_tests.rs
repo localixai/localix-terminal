@@ -1,6 +1,6 @@
 //! Tests of `keymap`: keys by their place, and the side of each modifier held.
 
-use super::{code, held_now, meta_text, mods, without_option};
+use super::{code, held_now, meta_text, mods, without_control, without_option};
 use crate::surface::{KeyCode, Mods};
 
 #[test]
@@ -55,4 +55,12 @@ fn a_letter_made_meta_is_its_latin_letter_in_any_layout() {
     assert_eq!(meta_text(KeyCode::Letter(b'y'), "z", false), "z");
     assert_eq!(meta_text(KeyCode::Digit(1), "1", false), "1");
     assert_eq!(meta_text(KeyCode::Unidentified, "ö", false), "ö");
+}
+
+#[test]
+fn control_is_taken_off_on_both_sides_and_the_rest_kept() {
+    let shift = (1 << 17) | 0x02;
+    let control = (1 << 18) | 0x01 | 0x2000;
+    assert_eq!(without_control(shift | control), shift);
+    assert_eq!(without_control(shift), shift);
 }

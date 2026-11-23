@@ -10,7 +10,7 @@ use super::overlay::{self, SCROLLBAR_WIDTH};
 use super::rows::{Cache, Painted};
 use super::theme::{Paint, Theme};
 use super::{Picture, TermLook};
-use crate::surface::{Frame, RowId, Underline};
+use crate::surface::{CellPixels, Frame, RowId, Underline};
 
 #[cfg(target_os = "linux")]
 pub(crate) use super::linux::Canvas as Native;
@@ -42,12 +42,17 @@ type Fonts = <Native as Pen>::Fonts;
 /// tall.
 pub(crate) type Placed = (Image, [f64; 4]);
 
+/// A cell of `fonts` in whole pixels, as every row is drawn.
+fn cell_of(fonts: &Fonts) -> (f64, f64) {
+    let cell = fonts.metrics().cell;
+    (cell.0.round().max(1.0), cell.1.round().max(1.0))
+}
+
 /// The cells and the gutter of `frame` drawn in `fonts` at `scale`, in pixels.
 fn grid(fonts: &Fonts, frame: &Frame, scale: f64) -> Grid {
     let pad = layout::gutter(frame.alternate);
-    let cell = fonts.metrics().cell;
     Grid {
-        cell: (cell.0.round().max(1.0), cell.1.round().max(1.0)),
+        cell: cell_of(fonts),
         origin: (f64::from(pad.left) * scale, f64::from(pad.top) * scale),
         scale,
     }
@@ -215,11 +220,19 @@ impl TermPainter {
     /// A cell's size, in points.
     pub(crate) fn cell(&self) -> (f64, f64) {
         let scale = self.look.scale;
-        let cell = self.fonts.metrics().cell;
-        (
-            cell.0.round().max(1.0) / scale,
-            cell.1.round().max(1.0) / scale,
-        )
+        let cell = cell_of(&self.fonts);
+        (cell.0 / scale, cell.1 / scale)
+    }
+
+    /// A cell's size in the screen's pixels, whole as every row is drawn: what the terminal
+    /// tells a program that asks its size in pixels.
+    pub(crate) fn cell_pixels(&self) -> CellPixels {
+        let cell = cell_of(&self.fonts);
+        let whole = |n: f64| u32::try_from(pixels(n)).unwrap_or(u32::MAX);
+        CellPixels {
+            width: whole(cell.0),
+            height: whole(cell.1),
+        }
     }
 
     /// The cursor of `frame` drawn alone, and where it goes; none while it is hidden.

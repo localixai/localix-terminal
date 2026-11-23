@@ -190,13 +190,14 @@ pub struct Arranging {
 /// A way from a pane: where a new one goes beside it, or where the keys go.
 pub use crate::layout::geometry::Side;
 
-/// A question to the person: go on (`yes`) or Cancel. The desk words it; the window asks it as
-/// its system asks.
+/// A question to the person: go on (`yes`), do the second act it offers (`other`, for a
+/// question that has one), or Cancel. The desk words it; the window asks it as its system asks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Confirm {
     pub title: String,
     pub detail: String,
     pub yes: String,
+    pub other: Option<String>,
 }
 
 /// Where the person's answers to the window's offers are kept (offer.rs asks; the app keeps

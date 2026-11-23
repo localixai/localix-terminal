@@ -1,14 +1,15 @@
 //! A session as a view draws and acts on it (`surface::Surface`): its frame from the core's
 //! render state, the first half of each update under the session's lock and the second after it
-//! is let go of, nothing new while a program holds its frame back; and what the view tells it:
+//! is let go of (a frame a program holds back is not in the core's screen until it lets go, so
+//! nothing of it is drawn before); and what the view tells it:
 //! keys, text, the pointer and the wheel, focus, pastes, the selection and a find, each turned
 //! into the bytes the program asked for and queued, never written while the lock is held.
 
 use super::super::{keys, pty};
 use super::{Session, read};
 use crate::surface::{
-    Button, Count, FindStep, Frame, Geometry, Key, KeyCode, Link, Mods, Mouse, MouseAction,
-    OptionMeta, Palette, Routed, ScrollTo, Surface,
+    Button, CellPixels, Count, FindStep, Frame, Geometry, Key, KeyCode, Link, Mods, Mouse,
+    MouseAction, OptionMeta, Palette, Routed, ScrollTo, Surface,
 };
 use crate::terminal::Render;
 
@@ -40,8 +41,7 @@ impl Session {
 
 impl Surface for Session {
     fn frame(&self, into: &mut Frame, full: bool) -> bool {
-        // The session's lock first, then the render state's: the core takes them in that order
-        // as a hold begins while it is fed.
+        // The session's lock first, then the render state's, always in that order.
         let mut state = self.shared.lock();
         let mut slot = crate::lock(&self.render);
         let new = slot.is_none();
@@ -51,12 +51,9 @@ impl Surface for Session {
         let Some(render) = slot.as_mut() else {
             return false;
         };
+        // A frame held past its second is drawn now, whether or not the reader woke for it.
         state.screen.core_mut().let_go_if_long();
-        // While a program holds its frame, the render state keeps the frame from before the
-        // hold (the core brought it up to then): it is drawn as it is, never updated. A view
-        // that had none then has nothing finished to draw.
-        let held = state.screen.holding();
-        if (held && new) || (!held && render.begin(state.screen.core()).is_err()) {
+        if render.begin(state.screen.core()).is_err() {
             return false;
         }
         let full = full || new || std::mem::take(&mut state.viewed.redraw);
@@ -75,8 +72,8 @@ impl Surface for Session {
         drawn || told
     }
 
-    fn resize(&self, columns: u16, lines: u16) {
-        self.resized(columns, lines);
+    fn resize(&self, columns: u16, lines: u16, cell: CellPixels) {
+        self.resized(columns, lines, cell);
     }
 
     fn hidden(&self) {

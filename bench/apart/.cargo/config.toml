@@ -1,0 +1,4 @@
+# The bench crate's target folder: `engine-apart` lands beside `engine`, where the benchmarks
+# look for it.
+[build]
+target-dir = "../target"

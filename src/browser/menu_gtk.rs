@@ -145,8 +145,9 @@ fn fill(menu: &gtk::Menu, entries: &[Entry], picked: &Arc<AtomicUsize>, next: &m
     }
 }
 
-/// `question` asked of the person in GTK's dialog: whether they went on.
-pub(super) fn confirm(question: &super::Confirm) -> bool {
+/// `question` asked of the person in GTK's dialog: which of its buttons they chose.
+pub(super) fn confirm(question: &super::Confirm) -> super::dialog::Answer {
+    use super::dialog::Answer;
     use gtk::prelude::{DialogExt, GtkWindowExt, MessageDialogExt};
     let dialog = gtk::MessageDialog::new(
         None::<&gtk::Window>,
@@ -156,11 +157,20 @@ pub(super) fn confirm(question: &super::Confirm) -> bool {
         &question.title,
     );
     dialog.set_secondary_text(Some(&question.detail));
+    // The second act stands first, apart from Cancel and the act asked about.
+    if let Some(other) = &question.other {
+        dialog.add_button(other, gtk::ResponseType::Other(1));
+    }
     dialog.add_button("Cancel", gtk::ResponseType::Cancel);
     dialog.add_button(&question.yes, gtk::ResponseType::Accept);
+    dialog.set_default_response(gtk::ResponseType::Accept);
     let answer = dialog.run();
     dialog.close();
-    answer == gtk::ResponseType::Accept
+    match answer {
+        gtk::ResponseType::Accept => Answer::Yes,
+        gtk::ResponseType::Other(1) => Answer::Other,
+        _ => Answer::No,
+    }
 }
 
 /// Nothing outside the window quits the app here: its close does.

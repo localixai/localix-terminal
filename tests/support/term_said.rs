@@ -1,6 +1,7 @@
 //! What a terminal's program says beyond its text, in a real window: its colours (16, 256 and
 //! 24-bit) drawn as asked; its links (an address in its output, and one it gave with OSC 8) lit
-//! under the pointer while Command is held and opened in a tab by a Command-click; its copy
+//! under the pointer while Command is held, a Command-click asking where it opens in the window's
+//! dialog (a tab, the default browser, or nowhere) unless Settings chose a tab; its copy
 //! (OSC 52) kept off the pasteboard while the terminal does not have the person's keys (a test
 //! run is never the app in front), and a read of the pasteboard never answered; its bell news
 //! for the person, who is not looking, from a terminal in sight or out of it; ⌘K, which leaves a
@@ -12,6 +13,7 @@ use std::time::{Duration, Instant};
 
 use llxterm::browser::{Asked, Browser, Heard, Pointing, TermAnswer, TermProbe};
 use llxterm::surface::Surface;
+use serde_json::{Value, json};
 
 use super::terminal_view::{COMMAND, opened, seen_in};
 
@@ -173,18 +175,66 @@ fn links(browser: &Browser) {
     point(browser, LINKS, Pointing::Moved, (8, 1), COMMAND);
     seen_in(browser, LINKS, |seen| seen.link.is_none());
 
-    // A Command-click opens the link in a tab; a click alone opens nothing.
+    // A click alone opens nothing; a Command-click asks where the link opens: the address,
+    // Open in Browser apart, Cancel, and Open in Tab with the keys, all within the card.
     point(browser, LINKS, Pointing::Down, (10, 0), 0);
     point(browser, LINKS, Pointing::Up, (10, 0), 0);
-    point(browser, LINKS, Pointing::Down, (10, 0), COMMAND);
-    point(browser, LINKS, Pointing::Up, (10, 0), COMMAND);
+    let question = json!([
+        "Open Link?",
+        "https://example.test/a",
+        ["Open in Browser", "Cancel", "Open in Tab"],
+        true,
+        "dlg-yes"
+    ]);
+    command_click(browser);
+    assert_eq!(asked_link(browser), question);
+    // Cancel opens nothing; Open in Tab opens it in a tab of the terminal's project.
+    browser.click("dialog no");
+    until("the question gone", || asked_link(browser).is_null());
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(asked.lock().unwrap().is_empty(), "cancelled, nothing opens");
+    command_click(browser);
+    assert_eq!(asked_link(browser), question);
+    browser.click("dialog yes");
     until("the address asked for as a page", || {
         !asked.lock().unwrap().is_empty()
     });
-    std::thread::sleep(Duration::from_millis(200));
     assert_eq!(*asked.lock().unwrap(), ["https://example.test/a"]);
+
+    // With Settings › Terminal › Open links on In a Tab, a Command-click opens it at once.
+    let tab = TermProbe::Settings(json!({"open_links": "tab"}));
+    assert_eq!(browser.term_probe(LINKS, tab), Some(TermAnswer::Done));
+    point(browser, LINKS, Pointing::Down, (2, 1), COMMAND);
+    point(browser, LINKS, Pointing::Up, (2, 1), COMMAND);
+    until("the program's link asked for as a page", || {
+        asked.lock().unwrap().len() == 2
+    });
+    assert!(asked_link(browser).is_null(), "nothing asked");
+    assert_eq!(asked.lock().unwrap()[1], "https://osc.test/x");
+    let ask = TermProbe::Settings(json!({"open_links": "ask"}));
+    assert_eq!(browser.term_probe(LINKS, ask), Some(TermAnswer::Done));
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(asked.lock().unwrap().len(), 2);
     browser.listen(|_, _| {});
     session.close();
+}
+
+/// A Command-click on the address in the links' terminal, and its question up.
+fn command_click(browser: &Browser) {
+    point(browser, LINKS, Pointing::Down, (10, 0), COMMAND);
+    point(browser, LINKS, Pointing::Up, (10, 0), COMMAND);
+    until("the link's question up", || !asked_link(browser).is_null());
+}
+
+/// The window's dialog as the strip draws it: its title, its sentence, its buttons' words in
+/// their order, whether they fit in the card, and which has the keys; null with none up.
+fn asked_link(browser: &Browser) -> Value {
+    let read = "(() => { const d = document.getElementById('dlg'); if (!d) return null; \
+        const acts = d.querySelector('.acts'); \
+        return [d.querySelector('h2').textContent, d.querySelector('#dlg-d').textContent, \
+        [...acts.querySelectorAll('button')].map((b) => b.textContent), \
+        acts.scrollWidth <= acts.clientWidth, document.activeElement?.id ?? null]; })()";
+    browser.peek_strip(read).unwrap_or(Value::Null)
 }
 
 /// A program's copy and its read of the pasteboard, its bell, and ⌘K on its full screen. The

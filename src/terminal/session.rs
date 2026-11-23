@@ -21,6 +21,7 @@ mod wait;
 use self::input::Input;
 use super::screen::Screen;
 use super::{COLUMNS, ROWS};
+use crate::surface::CellPixels;
 
 /// What shows a session in the window (its tab): held while the session is open and let go of
 /// as it closes, which closes the tab.
@@ -119,9 +120,8 @@ pub struct Session {
     control: std::fs::File,
     child: Mutex<Child>,
     /// What a view drew from last (`surface.rs`): made as one first draws, behind a lock of its
-    /// own, shared with the core (which brings it up to the moment a program holds its frame),
-    /// and always taken after the session's.
-    render: super::Drawn,
+    /// own, always taken after the session's.
+    render: Mutex<Option<super::Render>>,
 }
 
 /// How a wait ended.
@@ -168,7 +168,6 @@ impl Session {
     ) -> io::Result<Self> {
         // Before the program: a screen the core cannot make starts nothing.
         let screen = Screen::new(ROWS, COLUMNS).map_err(io::Error::other)?;
-        let render = screen.core().drawn();
         let Pty { mut child, master } = pty::spawn(command, dir, vars, own)?;
         let ends = master
             .try_clone()
@@ -217,7 +216,7 @@ impl Session {
             input: Arc::new(Input::default()),
             control,
             child: Mutex::new(child),
-            render,
+            render: Mutex::new(None),
         };
         // Before the reader starts: the program's first output comes after it.
         if !before.trim().is_empty() {
@@ -235,15 +234,20 @@ impl Session {
         Ok(session)
     }
 
-    /// The window's pane changed to `columns` by `rows`: the program is told, as at a terminal.
-    pub fn resized(&self, columns: u16, rows: u16) {
+    /// The window's pane changed to `columns` by `rows` of cells `cell` in pixels (zero
+    /// without a view): the program is told, as at a terminal, its size in pixels too.
+    pub fn resized(&self, columns: u16, rows: u16, cell: CellPixels) {
         if columns == 0 || rows == 0 {
             return;
         }
-        let _ = pty::resize(&self.control, columns, rows);
+        let across = |cells: u16, each: u32| {
+            u16::try_from(u32::from(cells).saturating_mul(each)).unwrap_or(u16::MAX)
+        };
+        let pixels = (across(columns, cell.width), across(rows, cell.height));
+        let _ = pty::resize(&self.control, columns, rows, pixels);
         let mut state = self.shared.lock();
         record::keep(&mut state.record, |record| record.resize(rows, columns));
-        state.screen.resize(rows, columns);
+        state.screen.resize(rows, columns, cell);
     }
 
     pub fn command(&self) -> &str {

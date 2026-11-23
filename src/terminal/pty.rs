@@ -164,13 +164,14 @@ fn open() -> io::Result<(OwnedFd, OwnedFd)> {
     Ok((master, slave))
 }
 
-/// Give the terminal behind `master` a new size; the kernel signals its program (SIGWINCH).
-pub(super) fn resize(master: &File, columns: u16, rows: u16) -> io::Result<()> {
+/// Give the terminal behind `master` a new size, in cells and in pixels (`pixels`: its width
+/// and height, zero where not known); the kernel signals its program (SIGWINCH).
+pub(super) fn resize(master: &File, columns: u16, rows: u16, pixels: (u16, u16)) -> io::Result<()> {
     let size = libc::winsize {
         ws_row: rows,
         ws_col: columns,
-        ws_xpixel: 0,
-        ws_ypixel: 0,
+        ws_xpixel: pixels.0,
+        ws_ypixel: pixels.1,
     };
     // SAFETY: TIOCSWINSZ only reads the winsize it is given, on a descriptor `master` keeps open.
     match unsafe { libc::ioctl(master.as_raw_fd(), libc::TIOCSWINSZ as _, &raw const size) } {

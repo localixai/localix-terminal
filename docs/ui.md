@@ -342,12 +342,18 @@ define colours of its own beyond its `--ground`.
   same terminal takes its place, and it goes once the person types there. It is decided once,
   as the shell says the command ended; nothing waits on a timer.
 - **A question is a dialog**, the window's own (`dialog.rs`), one look for everything the app
-  asks or announces: a mark that draws itself, a title, a sentence, and two buttons. With the
-  window away (put away, in the Dock) a question is the system's alert in front instead.
+  asks or announces: a mark that draws itself, a title, a sentence, and two buttons, or three
+  for a question that offers a second act beside the one it asks about. With the window away
+  (put away, in the Dock) a question is the system's alert in front instead, with the same
+  buttons.
   - the title asks about the act, with the app's or the thing's name ("Quit Localix Terminal?");
   - the detail says what is lost or ended, in one or two sentences, and nothing else;
   - the default button names the act (Quit, Restart, Close), never OK or Yes, and is the
     dialog's one accent; the other is quiet, second, and Esc;
+  - a second act, where a question offers one, is a quiet button apart on the left, as the
+    system's alert puts its third, and takes neither Return nor Esc: a link Command-clicked in
+    a terminal asks "Open Link?" with its address, Open in Tab, Open in Browser and Cancel,
+    unless Settings → Terminal → Open links chose one place;
   - asked again while it is up, it is not stacked; another waits its turn behind it;
   - one the person asked for takes the keys, on its default button. One the app raises on its
     own leaves the keys where they are, so a Return typed into a terminal never answers it;

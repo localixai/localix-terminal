@@ -1,6 +1,6 @@
 //! The person's settings for the window: its appearance (theme, how much of the desktop shows
 //! through, the fonts), a terminal's (which Option key it takes for Meta, whether its ligatures
-//! join: `settings_terminal.rs`), whether agents go on in their terminals as the app opens, when
+//! join, where a link Command-clicked in it opens: `settings_terminal.rs`), whether agents go on in their terminals as the app opens, when
 //! a command that finished out of sight is told (`settings_notice.rs`), and the shortcuts they
 //! changed. Kept in `settings.json` under the config directory,
 //! read once, written whole on each change; a file that does not read is
@@ -22,7 +22,7 @@ mod notice;
 #[path = "settings_terminal.rs"]
 mod terminal;
 pub(super) use notice::CommandNotice;
-pub(super) use terminal::{Ligatures, OptionMeta};
+pub(super) use terminal::{Ligatures, OpenLinks, OptionMeta};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -94,6 +94,7 @@ pub(super) struct Settings {
     pub font_size: u8,
     pub option_meta: OptionMeta,
     pub ligatures: Ligatures,
+    pub open_links: OpenLinks,
     pub updates: super::updates::Updates,
     pub resume_agents: super::agents::Resuming,
     pub command_notice: CommandNotice,
@@ -111,6 +112,7 @@ impl Default for Settings {
             font_size: 13,
             option_meta: OptionMeta::Off,
             ligatures: Ligatures::On,
+            open_links: OpenLinks::Ask,
             updates: super::updates::Updates::Auto,
             resume_agents: super::agents::Resuming::On,
             command_notice: CommandNotice::After30s,
@@ -165,6 +167,7 @@ impl Settings {
         chosen(change, "updates", &mut self.updates)?;
         chosen(change, "option_meta", &mut self.option_meta)?;
         chosen(change, "ligatures", &mut self.ligatures)?;
+        chosen(change, "open_links", &mut self.open_links)?;
         chosen(change, "resume_agents", &mut self.resume_agents)?;
         chosen(change, "command_notice", &mut self.command_notice)?;
         if let Some(font) = text("ui_font") {

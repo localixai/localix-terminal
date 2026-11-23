@@ -170,6 +170,7 @@ pub(super) fn on_browser(
         | Cmd::Unpanel(_)
         | Cmd::PanelMenu(..)
         | Cmd::PanelLink(..)
+        | Cmd::TermLink(..)
         | Cmd::CommandEnded(..)
         | Cmd::Unanswered(..)
         | Cmd::Reveal(_)

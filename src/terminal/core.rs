@@ -2,8 +2,9 @@
 //! (wide characters, line drawing, the other screen, a resize that wraps lines again), linked
 //! statically through its raw bindings and held behind a handle the session owns. It is fed the
 //! program's output and read as text (`core/text.rs`, by the core's own formatter) and for what
-//! a shell said of its commands (`core/marks.rs`, OSC 133). It gets the program's output whole
-//! and answers its queries itself (`core/effects.rs`), into a queue the session writes to the
+//! a shell said of its commands (`core/marks.rs`, OSC 133). It gets the program's output whole,
+//! but for a frame the program holds back, kept until it lets go (`core/frames.rs`), and
+//! answers its queries itself (`core/effects.rs`), into a queue the session writes to the
 //! program; a program's copy and its bell are only recorded, for the window to decide on
 //! (`core/clip.rs`), and its title is the session's filter's, never the core's.
 //!
@@ -16,9 +17,14 @@ use std::ptr;
 
 use ghostty_vt_sys as vt;
 
+use crate::surface::CellPixels;
+
+mod cell;
+mod cell_bits;
 mod clip;
 mod effects;
 mod find;
+mod frames;
 mod handles;
 mod keys;
 mod links;
@@ -27,9 +33,9 @@ mod mouse;
 mod render;
 mod scroll;
 mod select;
+mod style;
 mod text;
 
-pub use effects::Drawn;
 pub use marks::{Content, Step};
 pub use render::Render;
 
@@ -39,6 +45,8 @@ const HISTORY_LINES: usize = 10_000;
 /// The most bytes history takes, whichever limit comes first: at 120 columns 10,000 rows take
 /// about 12 MB, and a far wider terminal reaches this before its rows run out.
 const HISTORY_BYTES: usize = 16 << 20;
+/// The mode in which a character of several codepoints is measured as Unicode says.
+const GRAPHEMES: u16 = 2027;
 
 /// One terminal's screen and history, and the parser that reads a program's output into them.
 pub struct Core {
@@ -47,13 +55,15 @@ pub struct Core {
     /// wrapped. Each borrows the terminal, so each is freed first.
     plain: vt::Formatter,
     joined: vt::Formatter,
-    /// What the core's callbacks heard (its answers, a shell's steps, a frame held back): made
-    /// as the core is (`Box::into_raw`) and freed after its terminal, so no callback outlives it.
+    /// What the core's callbacks heard (its answers, a shell's steps, a copy, a bell): made as
+    /// the core is (`Box::into_raw`) and freed after its terminal, so no callback outlives it.
     heard: *const effects::Heard,
     /// The encoders and the selection gesture, made as a view first needs them.
     handles: handles::Handles,
     /// What a find looks for and found.
     found: find::Found,
+    /// The bytes of a frame the program holds back, not yet written.
+    kept: frames::Kept,
 }
 
 // SAFETY: the terminal, its formatters and the callback's state belong to this handle alone, and
@@ -110,9 +120,18 @@ impl Core {
             heard: Box::into_raw(Box::<effects::Heard>::default()),
             handles: handles::Handles::default(),
             found: find::Found::default(),
+            kept: frames::Kept::default(),
         };
         core.set(vt::TerminalOption::SCROLLBACK_MAX_LINES, &HISTORY_LINES)?;
         core.set(vt::TerminalOption::SCROLLBACK_MAX_BYTES, &HISTORY_BYTES)?;
+        // Characters of several codepoints take the columns Unicode gives them (mode 2027), as
+        // the programs that draw beside them count them; it is the mode a reset comes back to,
+        // and a program may still turn it off.
+        let unicode = vt::TerminalModeConfig {
+            mode: GRAPHEMES,
+            value: true,
+        };
+        core.set(vt::TerminalOption::MODE_DEFAULT, &unicode)?;
         core.plain = core.formatter(false)?;
         core.joined = core.formatter(true)?;
         effects::listen(&core)?;
@@ -148,23 +167,27 @@ impl Core {
         config.value
     }
 
-    /// Takes in a program's output, as a terminal does.
-    pub fn feed(&mut self, bytes: &[u8]) {
-        // SAFETY: the bytes are read only during the call; the core takes any bytes at all.
-        unsafe { vt::ghostty_terminal_vt_write(self.term, bytes.as_ptr(), bytes.len()) };
-        self.found.stale = true;
-    }
-
-    /// The grid becomes `rows` by `columns`; the main screen's lines are wrapped again to fit,
-    /// rows come back from history as it grows, and the scroll region is the whole of it again.
+    /// The grid becomes `rows` by `columns` of cells `cell` in pixels (zero where no view drew
+    /// it), which a program that asks the size is told; the main screen's lines are wrapped
+    /// again to fit, rows come back from history as it grows, and the scroll region is the whole
+    /// of it again. A frame the program holds is let go of first: it was drawn for the size
+    /// before.
     ///
     /// # Errors
     /// A grid with no rows or columns, which leaves the size as it was.
-    pub fn resize(&mut self, rows: u16, columns: u16) -> Result<(), Refused> {
+    pub fn resize(&mut self, rows: u16, columns: u16, cell: CellPixels) -> Result<(), Refused> {
         let (rows, columns) = sized("a resize to no rows or no columns", rows, columns)?;
-        // SAFETY: a resize of a live terminal; no cell has a size in pixels here.
-        let resized = unsafe { vt::ghostty_terminal_resize(self.term, columns, rows, 0, 0) };
+        self.let_go();
+        let (width, height) = (cell.width, cell.height);
+        // SAFETY: a resize of a live terminal.
+        let resized =
+            unsafe { vt::ghostty_terminal_resize(self.term, columns, rows, width, height) };
         done(resized, "a resize")
+    }
+
+    /// A cell's size in pixels, as the last resize gave it; zero before one gave it.
+    pub fn cell_pixels(&self) -> CellPixels {
+        cell_of(self.term)
     }
 
     /// The grid's rows and columns.
@@ -194,12 +217,6 @@ impl Core {
     /// Whether the program asked to be told where a paste starts and ends.
     pub fn bracketed_paste(&self) -> bool {
         self.mode(2004)
-    }
-
-    /// Whether the program holds the screen while it draws a frame (synchronized output): what
-    /// the screen holds meanwhile is a frame half drawn.
-    pub fn synchronized(&self) -> bool {
-        self.mode(2026)
     }
 
     /// Whether the cursor is shown.
@@ -265,6 +282,19 @@ fn get_of<T: Default>(term: vt::Terminal, data: vt::TerminalData::Type) -> T {
     value
 }
 
+/// `term`'s cell in pixels, as its last resize gave it: the library keeps the grid's whole width
+/// and height, columns and rows times the cell's.
+fn cell_of(term: vt::Terminal) -> CellPixels {
+    let rows: u16 = get_of(term, vt::TerminalData::ROWS);
+    let columns: u16 = get_of(term, vt::TerminalData::COLS);
+    let width: u32 = get_of(term, vt::TerminalData::WIDTH_PX);
+    let height: u32 = get_of(term, vt::TerminalData::HEIGHT_PX);
+    CellPixels {
+        width: width / u32::from(columns.max(1)),
+        height: height / u32::from(rows.max(1)),
+    }
+}
+
 /// Where `term`'s cursor is: row and column, from 1.
 fn cursor_of(term: vt::Terminal) -> (u16, u16) {
     let row: u16 = get_of(term, vt::TerminalData::CURSOR_Y);
@@ -274,7 +304,6 @@ fn cursor_of(term: vt::Terminal) -> (u16, u16) {
 
 impl Drop for Core {
     fn drop(&mut self) {
-        self.deafen();
         self.handles.free(self.term);
         for formatter in [self.plain, self.joined] {
             if !formatter.is_null() {

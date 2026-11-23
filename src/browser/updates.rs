@@ -152,6 +152,7 @@ pub(super) fn announcement(told: &Told) -> Option<(String, super::dialog::Dialog
         notes: super::dialog::notes(&release.notes),
         fields: vec![],
         yes: "Restart to Update".into(),
+        other: None,
         no: "Later".into(),
         asked: false,
     };

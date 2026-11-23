@@ -239,14 +239,22 @@ pub struct Frame {
     pub ended: Option<String>,
 }
 
+/// A cell's size in the screen's pixels, as the view draws it: what a program that asks the
+/// terminal's size in pixels is told. Zero where no view has drawn the terminal.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct CellPixels {
+    pub width: u32,
+    pub height: u32,
+}
+
 /// A terminal as a view draws it and acts on it. Every call is short: what takes the terminal's
 /// lock holds it only to read or tell the core.
 pub trait Surface: Send + Sync {
     /// Fills `into` with what changed since the last frame (every row when `full`); `false`
     /// when there is nothing new to draw, as while a program holds its frame back.
     fn frame(&self, into: &mut Frame, full: bool) -> bool;
-    /// The view's grid is `columns` by `lines`.
-    fn resize(&self, columns: u16, lines: u16);
+    /// The view's grid is `columns` by `lines`, each cell `cell` in pixels.
+    fn resize(&self, columns: u16, lines: u16, cell: CellPixels);
     /// The view went out of sight: what it drew from is let go of, and the next frame is full.
     fn hidden(&self);
     /// The theme the terminal is drawn in: what a program asks of its colours is answered from it.

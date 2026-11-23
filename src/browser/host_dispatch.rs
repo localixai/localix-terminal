@@ -7,7 +7,7 @@ use std::sync::mpsc::SyncSender;
 use crate::browser::deck::Deck;
 use crate::browser::panel::{self, Opening};
 use crate::browser::strip::{Click, Key};
-use crate::browser::{Asked, Heard, frame, platform, strip};
+use crate::browser::{Heard, frame, platform, strip};
 
 use super::super::commands::Drawn;
 use super::super::web::on_browser;
@@ -67,7 +67,8 @@ impl On<'_> {
             Cmd::TermProbe(id, probe, reply) => drop(reply.send(self.term_probe(id, probe))),
             Cmd::TermShot(id, reply) => self.term_shot(id, reply),
             Cmd::PanelMenu(id, at, items) => self.panel_menu(id, at, &items),
-            Cmd::PanelLink(id, url) => self.panel_link(id, url),
+            Cmd::PanelLink(id, url) => term::in_tab(shared, id, url),
+            Cmd::TermLink(id, url) => self.term_link(id, url),
             Cmd::CommandEnded(id, code, took) => self.command_ended(id, code, took),
             Cmd::Reveal(id) => self.reveal(id),
             Cmd::Unanswered(id, at) => self.unanswered(id, at),
@@ -215,18 +216,6 @@ impl On<'_> {
             && let Some(line) = unloaded.line(id)
         {
             let _ = view.load_html(&line);
-        }
-    }
-
-    /// An address the person opened from terminal `id`'s text: a page asked of the app as any
-    /// the person asks for, in that terminal's project, so it joins the session they look at
-    /// and opens where the window has no page yet.
-    fn panel_link(&self, id: u32, url: String) {
-        let project = crate::lock(&self.shared.groups)
-            .get(&Key::Term(id).name())
-            .cloned();
-        if let Some(project) = project {
-            (self.shared).heard(&project, Heard::Asked(Asked::Page(Some(url))));
         }
     }
 

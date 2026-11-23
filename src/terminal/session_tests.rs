@@ -79,8 +79,38 @@ fn the_tab_that_shows_a_session_is_held_while_it_is_open_and_let_go_as_it_closes
 fn a_resize_reaches_the_program() {
     let session = start("sh -c 'trap \"stty size\" WINCH; while :; do sleep 0.1; done'");
     session.wait(None, 0, Duration::from_millis(500));
-    session.resized(90, 25);
+    session.resized(90, 25, CellPixels::default());
     assert_eq!(session.wait(Some("25 90"), 0, DEFAULT_WAIT), Until::Matched);
+}
+
+#[test]
+fn a_resize_tells_the_program_and_the_core_its_size_in_pixels() {
+    let session = start("sleep 20");
+    let cell = CellPixels {
+        width: 8,
+        height: 17,
+    };
+    session.resized(90, 25, cell);
+    let mut size = libc::winsize {
+        ws_row: 0,
+        ws_col: 0,
+        ws_xpixel: 0,
+        ws_ypixel: 0,
+    };
+    use std::os::fd::AsRawFd;
+    // SAFETY: TIOCGWINSZ writes the winsize it is given, on a descriptor the session keeps open.
+    let read = unsafe {
+        libc::ioctl(
+            session.control.as_raw_fd(),
+            libc::TIOCGWINSZ as _,
+            &raw mut size,
+        )
+    };
+    assert_eq!(read, 0);
+    let told = (size.ws_col, size.ws_row, size.ws_xpixel, size.ws_ypixel);
+    assert_eq!(told, (90, 25, 90 * 8, 25 * 17));
+    assert_eq!(session.shared.lock().screen.core().cell_pixels(), cell);
+    session.close();
 }
 
 #[test]
@@ -205,7 +235,7 @@ fn typing_and_resizing_never_wait_for_a_program_that_reads_nothing() {
     session.wait(None, 0, Duration::from_millis(300));
     let begun = Instant::now();
     Surface::text(&session, &"x".repeat(500_000));
-    session.resized(90, 25);
+    session.resized(90, 25, CellPixels::default());
     Surface::text(&session, "more");
     assert!(
         begun.elapsed() < Duration::from_millis(500),

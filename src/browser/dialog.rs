@@ -1,6 +1,7 @@
 //! The window's dialog: the one look of everything the app asks or announces in its window. A
 //! mark that draws itself, a title, a sentence, a list worth reading first (what is new, what an
-//! install does), what it needs typed, and two buttons.
+//! install does), what it needs typed, and two buttons, or three for a question that offers a
+//! second act beside the one it asks about.
 //! The strip's page draws it over the whole window (dialog.js, dialog.css); the dialogs up wait
 //! here in the order they were asked, one shown at a time, each with whoever waits for its answer.
 
@@ -44,6 +45,8 @@ pub(super) struct Dialog {
     pub(super) fields: Vec<Field>,
     /// The button that does it, the default one.
     pub(super) yes: String,
+    /// The button of a second act, for a question that offers one: quiet, apart on the left.
+    pub(super) other: Option<String>,
     /// The button that does not, and Escape.
     pub(super) no: String,
     /// The person asked for it just now, so it takes the keys. One the app raises on its own
@@ -52,10 +55,10 @@ pub(super) struct Dialog {
 }
 
 impl Dialog {
-    /// A question to the person as a dialog: go on, or Cancel.
+    /// A question to the person as a dialog: go on, its second act if it offers one, or Cancel.
     pub(super) fn question(question: &super::Confirm) -> Self {
         Self {
-            id: format!("ask:{}", question.title),
+            id: format!("ask:{}\n{}", question.title, question.detail),
             mark: "ask",
             tone: "neutral",
             versions: None,
@@ -65,6 +68,7 @@ impl Dialog {
             notes: vec![],
             fields: vec![],
             yes: question.yes.clone(),
+            other: question.other.clone(),
             no: "Cancel".into(),
             asked: true,
         }
@@ -88,6 +92,7 @@ impl Dialog {
             notes,
             fields: question.fields.clone(),
             yes: question.yes.clone(),
+            other: None,
             no: "Cancel".into(),
             asked: question.asked,
         }
@@ -150,9 +155,25 @@ pub(super) fn notes(markdown: &str) -> Vec<Note> {
     notes
 }
 
-/// One who waits for a dialog's answer: whether the person chose its `yes`, and what they gave
-/// for its fields.
-type Done = Box<dyn FnOnce(bool, &Given)>;
+/// The person's answer to a dialog: its `yes` (the default button, Return), its `other` (the
+/// second act, of a question that offers one), or neither (Cancel, Escape).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Answer {
+    Yes,
+    Other,
+    No,
+}
+
+impl Answer {
+    /// Whether the person chose the act the dialog asks about.
+    pub(super) fn yes(self) -> bool {
+        self == Self::Yes
+    }
+}
+
+/// One who waits for a dialog's answer: which button the person chose, and what they gave for
+/// its fields (with its `yes` alone).
+type Done = Box<dyn FnOnce(Answer, &Given)>;
 
 /// Whoever waits for a dialog's answer.
 type Waiting = Vec<Done>;
@@ -187,9 +208,9 @@ thread_local! {
     static STAGE: Mutex<Stage> = Mutex::default();
 }
 
-/// `dialog` shown once those before it are answered; `done` takes whether the person chose its
-/// `yes`, and what they gave for its fields.
-pub(super) fn ask(dialog: Dialog, done: impl FnOnce(bool, &Given) + 'static) {
+/// `dialog` shown once those before it are answered; `done` takes which button the person
+/// chose, and what they gave for its fields.
+pub(super) fn ask(dialog: Dialog, done: impl FnOnce(Answer, &Given) + 'static) {
     STAGE.with(|stage| crate::lock(stage).ask(dialog, Box::new(done)));
 }
 
@@ -220,22 +241,23 @@ pub(super) fn waits(id: &str) -> bool {
 
 /// The person answered the dialog shown: whoever waited is told, the stage let go of first (one
 /// told may ask again).
-pub(super) fn answer(yes: bool, given: &Given) {
+pub(super) fn answer(answer: Answer, given: &Given) {
     let waiting = STAGE.with(|stage| crate::lock(stage).answered());
     for done in waiting {
-        done(yes, given);
+        done(answer, given);
     }
 }
 
-/// The page's word of the person's answer, if `said` is one: `dialog no`, `dialog yes`, or
-/// `dialog yes` and what they typed as one JSON object of words.
-pub(super) fn said(said: &str) -> Option<(bool, Given)> {
+/// The page's word of the person's answer, if `said` is one: `dialog no`, `dialog other`,
+/// `dialog yes`, or `dialog yes` and what they typed as one JSON object of words.
+pub(super) fn said(said: &str) -> Option<(Answer, Given)> {
     match said.strip_prefix("dialog ")? {
-        "no" => Some((false, Given::new())),
-        "yes" => Some((true, Given::new())),
+        "no" => Some((Answer::No, Given::new())),
+        "other" => Some((Answer::Other, Given::new())),
+        "yes" => Some((Answer::Yes, Given::new())),
         typed => {
             let given = serde_json::from_str(typed.strip_prefix("yes ")?).ok()?;
-            Some((true, given))
+            Some((Answer::Yes, given))
         }
     }
 }

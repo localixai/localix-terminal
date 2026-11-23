@@ -10,11 +10,10 @@ use std::ptr;
 
 use ghostty_vt_sys as vt;
 
+use super::cell_bits;
+use super::style::{raw_row, rgb};
 use super::{Core, Refused, done};
-use crate::surface::{
-    Cell, Color, Colors, Cursor, Flags, Frame, Rgb, Row, RowId, Scrollbar, Shape, Style, Underline,
-    Wide,
-};
+use crate::surface::{Colors, Cursor, Frame, Row, RowId, Scrollbar, Shape};
 
 /// One view's render state, and the iterators that read rows and cells out of it.
 pub struct Render {
@@ -22,6 +21,20 @@ pub struct Render {
     rows: vt::RenderStateRowIterator,
     cells: vt::RenderStateRowCells,
     /// What the first part read of the terminal itself, for the second to put in the frame.
+    scroll: Scrollbar,
+    alternate: bool,
+    mouse: bool,
+    /// What the last frame said besides its rows. The library's dirt covers rows alone, so a
+    /// cursor that only moved (a shell's Left arrow, a backspace), changed its shape or hid, a
+    /// colour a program set, or a mode turned on, is a new frame by this.
+    told: Option<Told>,
+}
+
+/// What a frame says that is not a row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Told {
+    cursor: Cursor,
+    colors: Colors,
     scroll: Scrollbar,
     alternate: bool,
     mouse: bool,
@@ -44,6 +57,7 @@ impl Render {
             scroll: Scrollbar::default(),
             alternate: false,
             mouse: false,
+            told: None,
         };
         // SAFETY: a null allocator is the library's default; each handle is written on success
         // and freed by `drop`, which skips one left null.
@@ -74,16 +88,6 @@ impl Render {
         Ok(())
     }
 
-    /// The whole update at once, from a callback of `term` as it writes (a hold that begins):
-    /// what the next `finish` copies out is the terminal as it is at this moment.
-    pub(super) fn capture(&mut self, term: vt::Terminal) -> Result<(), Refused> {
-        // SAFETY: both are live; a callback only reads the terminal that called it.
-        let updated = unsafe { vt::ghostty_render_state_update(self.state, term) };
-        done(updated, "an update")?;
-        self.read_terminal(term);
-        Ok(())
-    }
-
     /// The scrollbar and modes of `term`, read with the update.
     fn read_terminal(&mut self, term: vt::Terminal) {
         let bar: vt::TerminalScrollbar = super::get_of(term, vt::TerminalData::SCROLLBAR);
@@ -104,18 +108,29 @@ impl Render {
         // SAFETY: only the render state's own memory is touched; an end with no begin is a no-op.
         let _ = unsafe { vt::ghostty_render_state_end_update(self.state) };
         let dirty: vt::RenderStateDirty::Type = self.get(vt::RenderStateData::DIRTY);
-        if dirty == vt::RenderStateDirty::FALSE && !full {
+        let mut colors = into.colors.clone();
+        self.colors(&mut colors);
+        let told = Told {
+            cursor: self.cursor(),
+            colors,
+            scroll: self.scroll,
+            alternate: self.alternate,
+            mouse: self.mouse,
+        };
+        if dirty == vt::RenderStateDirty::FALSE && !full && self.told.as_ref() == Some(&told) {
             return false;
         }
         into.full = full || dirty == vt::RenderStateDirty::FULL;
         into.columns = self.get(vt::RenderStateData::COLS);
         into.lines = self.get(vt::RenderStateData::ROWS);
-        into.scroll = self.scroll;
-        into.alternate = self.alternate;
-        into.mouse_taken = self.mouse;
-        self.colors(&mut into.colors);
-        into.cursor = self.cursor();
-        self.rows_into(into);
+        into.scroll = told.scroll;
+        into.alternate = told.alternate;
+        into.mouse_taken = told.mouse;
+        into.colors.clone_from(&told.colors);
+        into.cursor = told.cursor;
+        let cursor_row = told.cursor.at.map(|(_, y)| y);
+        self.told = Some(told);
+        self.rows_into(into, cursor_row);
         // SAFETY: the frame was read whole; both layers of dirt are cleared.
         let _ = unsafe { vt::ghostty_render_state_clean(self.state) };
         true
@@ -182,8 +197,9 @@ impl Render {
     }
 
     /// Every row in view into `into.rows`, reusing what they held; a row's cells only when it is
-    /// dirty or the frame is full.
-    fn rows_into(&mut self, into: &mut Frame) {
+    /// dirty or the frame is full, and the cursor's row (`cursor_row`) always: a block cursor
+    /// draws the character it stands on, and a cursor that only moved leaves its row clean.
+    fn rows_into(&mut self, into: &mut Frame, cursor_row: Option<u16>) {
         let out: *mut vt::RenderStateRowIterator = &raw mut self.rows;
         let data = vt::RenderStateData::ROW_ITERATOR;
         // SAFETY: the iterator made in `new` is pointed at this render state's rows.
@@ -198,7 +214,7 @@ impl Render {
                 into.rows.push(Row::default());
             }
             if let Some(row) = into.rows.get_mut(count) {
-                self.row_into(row, into.full);
+                self.row_into(row, into.full, cursor_row);
             }
             count += 1;
         }
@@ -213,7 +229,7 @@ impl Render {
         done(read, "a row").ok().map(|()| value)
     }
 
-    fn row_into(&mut self, row: &mut Row, full: bool) {
+    fn row_into(&mut self, row: &mut Row, full: bool, cursor_row: Option<u16>) {
         let id: vt::RenderStateRowId = self.row_get(vt::RenderStateRowData::ID).unwrap_or_default();
         let [high, low] = id.bits;
         row.id = RowId(u128::from(high) << 64 | u128::from(low));
@@ -235,70 +251,33 @@ impl Render {
             (read == vt::Result::SUCCESS).then_some((selection.start_x, selection.end_x));
         row.text.clear();
         row.cells.clear();
-        if row.dirty {
+        if row.dirty || cursor_row == Some(row.y) {
             self.cells_into(row);
         }
     }
 
+    /// The cells of the row the iterator is at: their raw values in one read, and the cell
+    /// iterator put over the row for the cells that must be asked more.
     fn cells_into(&mut self, row: &mut Row) {
         let out: *mut vt::RenderStateRowCells = &raw mut self.cells;
         let data = vt::RenderStateRowData::CELLS;
         // SAFETY: the cell iterator made in `new` is pointed at the current row's cells.
         let read = unsafe { vt::ghostty_render_state_row_get(self.rows, data, out.cast()) };
-        if done(read, "a row's cells").is_err() {
+        let raw: Option<vt::CellsView> = self.row_get(vt::RenderStateRowData::CELLS_RAW);
+        let (Ok(()), Some(raw)) = (done(read, "a row's cells"), raw) else {
+            return;
+        };
+        if raw.ptr.is_null() {
             return;
         }
-        // SAFETY: the cell iterator was set just now, over a render state not updated since.
-        while unsafe { vt::ghostty_render_state_row_cells_next(self.cells) } {
-            let cell = self.cell(&mut row.text);
+        // SAFETY: the library says `ptr` holds `len` cells, valid until the render state is next
+        // updated, which is after this frame is read.
+        let values = unsafe { std::slice::from_raw_parts(raw.ptr, raw.len) };
+        let places = cell_bits::places();
+        for (x, &value) in (0..=u16::MAX).zip(values) {
+            let fields = cell_bits::fields(places, value);
+            let cell = super::cell::read(self.cells, fields, x, &mut row.text);
             row.cells.push(cell);
-        }
-    }
-
-    fn cell_get<T: Default>(&self, data: vt::RenderStateRowCellsData::Type) -> Option<T> {
-        let mut value = T::default();
-        let out: *mut T = &raw mut value;
-        // SAFETY: `out` points to the type `data` is written as; the iterator is at a cell.
-        let read = unsafe { vt::ghostty_render_state_row_cells_get(self.cells, data, out.cast()) };
-        done(read, "a cell").ok().map(|()| value)
-    }
-
-    /// The cell the iterator is at, its text added to `text`.
-    fn cell(&self, text: &mut String) -> Cell {
-        let from = u32::try_from(text.len()).unwrap_or(u32::MAX);
-        let mut bytes = [0u8; 64];
-        let mut buffer = vt::Buffer {
-            ptr: bytes.as_mut_ptr(),
-            cap: bytes.len(),
-            len: 0,
-        };
-        let out: *mut vt::Buffer = &raw mut buffer;
-        let data = vt::RenderStateRowCellsData::GRAPHEMES_UTF8;
-        // SAFETY: the buffer points to `bytes`, its room said; the iterator is at a cell.
-        let read = unsafe { vt::ghostty_render_state_row_cells_get(self.cells, data, out.cast()) };
-        let written = bytes.get(..buffer.len.min(bytes.len())).unwrap_or_default();
-        if read == vt::Result::SUCCESS {
-            text.push_str(&String::from_utf8_lossy(written));
-        }
-        let raw: vt::Cell = self
-            .cell_get(vt::RenderStateRowCellsData::RAW)
-            .unwrap_or_default();
-        let style: vt::Style = self
-            .cell_get(vt::RenderStateRowCellsData::STYLE)
-            .unwrap_or_default();
-        let bg: Option<vt::ColorRgb> = self.cell_get(vt::RenderStateRowCellsData::BG_COLOR);
-        let len = text.len().saturating_sub(from as usize);
-        Cell {
-            from,
-            len: u16::try_from(len).unwrap_or(u16::MAX),
-            wide: wide(raw),
-            style: Style {
-                fg: color(style.fg_color),
-                bg: bg.map(rgb),
-                flags: Flags(style.flags.to_le_bytes()[0]),
-                underline: underline(style.flags),
-                underline_color: color(style.underline_color),
-            },
         }
     }
 }
@@ -320,57 +299,14 @@ impl Drop for Render {
     }
 }
 
-fn rgb(color: vt::ColorRgb) -> Rgb {
-    Rgb {
-        r: color.r,
-        g: color.g,
-        b: color.b,
-    }
-}
-
-fn color(color: vt::StyleColor) -> Color {
-    match vt::StyleColorTag::Type::from(color.tag) {
-        // SAFETY: the tag says the palette index is the field set.
-        vt::StyleColorTag::PALETTE => Color::Palette(unsafe { color.value.palette }),
-        // SAFETY: the tag says the colour is the field set.
-        vt::StyleColorTag::RGB => Color::Rgb(rgb(unsafe { color.value.rgb })),
-        _ => Color::Default,
-    }
-}
-
-fn underline(flags: vt::StyleFlags) -> Underline {
-    match (flags >> vt::STYLE_UNDERLINE_SHIFT) & 0b111 {
-        1 => Underline::Single,
-        2 => Underline::Double,
-        3 => Underline::Curly,
-        4 => Underline::Dotted,
-        5 => Underline::Dashed,
-        _ => Underline::None,
-    }
-}
-
-fn wide(cell: vt::Cell) -> Wide {
-    let mut wide: vt::CellWide::Type = vt::CellWide::NARROW;
-    let out: *mut vt::CellWide::Type = &raw mut wide;
-    // SAFETY: a cell's width is written as the type `out` points to.
-    let _ = unsafe { vt::ghostty_cell_get(cell, vt::CellData::WIDE, out.cast()) };
-    match wide {
-        vt::CellWide::WIDE => Wide::Wide,
-        vt::CellWide::SPACER_TAIL => Wide::Tail,
-        vt::CellWide::SPACER_HEAD => Wide::Head,
-        _ => Wide::Narrow,
-    }
-}
-
-/// Whether a raw row says `data` (a bool) of itself.
-fn raw_row(row: vt::Row, data: vt::RowData::Type) -> bool {
-    let mut value = false;
-    let out: *mut bool = &raw mut value;
-    // SAFETY: the row's flag is written as a bool.
-    let _ = unsafe { vt::ghostty_row_get(row, data, out.cast()) };
-    value
-}
-
 #[cfg(test)]
 #[path = "render_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "render_told_tests.rs"]
+mod told_tests;
+
+#[cfg(test)]
+#[path = "render_cells_tests.rs"]
+mod cells_tests;

@@ -3,6 +3,7 @@
 //! stops and its input modes.
 
 use super::tests::blank;
+use crate::surface::CellPixels;
 
 #[test]
 fn a_box_drawn_with_the_line_drawing_set_reads_as_its_lines() {
@@ -34,6 +35,7 @@ fn a_wide_character_takes_two_columns_and_reads_once() {
     assert_eq!(joined.text().0, family);
 }
 
+/// Agents read the screen the view shows: the frame before while a program holds one back.
 #[test]
 fn a_frame_held_back_is_read_as_it_was_until_the_program_lets_it_go() {
     let bytes = b"ready\x1b[?2026h\x1b[H\x1b[2Jhalf a fr";
@@ -52,8 +54,6 @@ fn a_frame_held_back_is_read_as_it_was_until_the_program_lets_it_go() {
             "split {split}"
         );
         assert_eq!(screen.search_text(), "ready");
-        // A program that asks is told where the cursor is now.
-        assert_eq!(screen.cursor(), (1, 10));
         screen.feed(b"ame\x1b[?2026l");
         assert_eq!(screen.text().0, "half a frame");
     }
@@ -62,7 +62,7 @@ fn a_frame_held_back_is_read_as_it_was_until_the_program_lets_it_go() {
     screen.feed(b"\x1b[?2026hone\x1b[?2026l\x1b[?2026h\x1b[Htwo");
     assert_eq!(screen.text().0, "one");
     // A resize lets the frame go.
-    screen.resize(6, 20);
+    screen.resize(6, 20, CellPixels::default());
     assert_eq!(screen.text().0, "two");
 }
 

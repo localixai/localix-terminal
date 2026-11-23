@@ -95,6 +95,7 @@ fn unnamed_too() -> Vec<(Cmd, Route, Drawn)> {
         title: String::new(),
         detail: String::new(),
         yes: String::new(),
+        other: None,
     };
     vec![
         (Cmd::Clicked(String::new()), Route::Current, Drawn::Settles),
@@ -126,6 +127,24 @@ fn unnamed_too() -> Vec<(Cmd, Route, Drawn)> {
         (Cmd::Presented(presented), Route::Current, Drawn::Itself),
         (Cmd::Confirm(confirm, asked), Route::Current, Drawn::Itself),
         (Cmd::Exit(0), Route::Current, Drawn::Itself),
+    ]
+}
+
+/// The addresses opened from a panel's text or Command-clicked in a terminal: to the window the
+/// panel is in.
+fn links() -> Vec<(Cmd, Route, Drawn)> {
+    let pane = |key: &str| Route::Pane(key.to_string());
+    vec![
+        (
+            Cmd::PanelLink(3, "http://localhost:5175/".into()),
+            pane("t3"),
+            Drawn::Itself,
+        ),
+        (
+            Cmd::TermLink(3, "https://example.com/".into()),
+            pane("t3"),
+            Drawn::Itself,
+        ),
     ]
 }
 
@@ -161,11 +180,6 @@ fn named() -> Vec<(Cmd, Route, Drawn)> {
         ),
         (Cmd::Unpanel(3), pane("t3"), Drawn::Settles),
         (Cmd::PanelMenu(3, (1, 2), vec![]), pane("t3"), Drawn::Itself),
-        (
-            Cmd::PanelLink(3, "http://localhost:5175/".into()),
-            pane("t3"),
-            Drawn::Itself,
-        ),
         (Cmd::Unanswered(4, 9), pane("w4"), Drawn::Itself),
         (Cmd::Titled(2, "zsh".into()), pane("t2"), Drawn::Told),
         (
@@ -239,6 +253,7 @@ fn each_command_declares_the_window_it_goes_to_and_how_it_is_drawn() {
         .into_iter()
         .chain(unnamed_too())
         .chain(named())
+        .chain(links())
         .enumerate()
     {
         assert_eq!(

@@ -1,0 +1,547 @@
+{
+  "chunk": 4096,
+  "columns": 120,
+  "history": 10000,
+  "rounds": 5,
+  "rows": 40,
+  "smoke": false,
+  "warm": 1,
+  "workloads": [
+    {
+      "about": "numbered lines, as `seq` prints",
+      "bytes": 16777224,
+      "engines": [
+        {
+          "bestMbps": 367.6723035759353,
+          "differs": null,
+          "instructionsPerByte": 72.10519827356421,
+          "mbps": 347.43425701595254,
+          "name": "llxterm",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 131.544930556032,
+          "differs": null,
+          "instructionsPerByte": 214.77863894527485,
+          "mbps": 127.01318067608192,
+          "name": "llxterm, framed",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 150.9497683540866,
+          "differs": null,
+          "instructionsPerByte": 109.59022624958693,
+          "mbps": 147.68921533469123,
+          "name": "alacritty_terminal",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 37.8270939114907,
+          "differs": null,
+          "instructionsPerByte": 586.8593165353219,
+          "mbps": 30.192099794497253,
+          "name": "wezterm-term",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 228.15342492176464,
+          "differs": null,
+          "instructionsPerByte": 61.34459508915182,
+          "mbps": 209.68439252054247,
+          "name": "rio-vt",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 41.04684904964321,
+          "differs": null,
+          "instructionsPerByte": 587.709263224953,
+          "mbps": 39.757134144976426,
+          "name": "vt100",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        }
+      ],
+      "name": "ascii"
+    },
+    {
+      "about": "every cell its own colour: truecolor text on a 256-colour ground",
+      "bytes": 16778896,
+      "engines": [
+        {
+          "bestMbps": 374.1969123378253,
+          "differs": null,
+          "instructionsPerByte": 48.50766647579197,
+          "mbps": 369.2904446963278,
+          "name": "llxterm",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 63.03337449468129,
+          "differs": null,
+          "instructionsPerByte": 454.9845203760724,
+          "mbps": 60.41726294981159,
+          "name": "llxterm, framed",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 347.25614412699065,
+          "differs": null,
+          "instructionsPerByte": 61.41485840307968,
+          "mbps": 330.4048830832262,
+          "name": "alacritty_terminal",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 178.1314974036263,
+          "differs": null,
+          "instructionsPerByte": 130.6629433187976,
+          "mbps": 175.5812561478412,
+          "name": "wezterm-term",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 316.1708296335175,
+          "differs": null,
+          "instructionsPerByte": 71.01307243337106,
+          "mbps": 313.3289571457297,
+          "name": "rio-vt",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 368.9186314232234,
+          "differs": null,
+          "instructionsPerByte": 62.76013195385441,
+          "mbps": 365.9665608878104,
+          "name": "vt100",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        }
+      ],
+      "name": "dense"
+    },
+    {
+      "about": "lines written into a scroll region, scrolled both ways",
+      "bytes": 16777330,
+      "engines": [
+        {
+          "bestMbps": 764.8947872057324,
+          "differs": null,
+          "instructionsPerByte": 28.77701314809925,
+          "mbps": 619.3505950458908,
+          "name": "llxterm",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 103.3830314717466,
+          "differs": null,
+          "instructionsPerByte": 186.4980372323844,
+          "mbps": 96.81798209210145,
+          "name": "llxterm, framed",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 190.7731493523568,
+          "differs": null,
+          "instructionsPerByte": 109.91489086761719,
+          "mbps": 174.6449991486523,
+          "name": "alacritty_terminal",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 50.67239452901972,
+          "differs": null,
+          "instructionsPerByte": 537.407207881111,
+          "mbps": 49.660101245178055,
+          "name": "wezterm-term",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 556.4504881739598,
+          "differs": null,
+          "instructionsPerByte": 31.72103338254657,
+          "mbps": 541.3569959262695,
+          "name": "rio-vt",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 150.8080815290008,
+          "differs": null,
+          "instructionsPerByte": 191.97910126343106,
+          "mbps": 148.3733049156479,
+          "name": "vt100",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        }
+      ],
+      "name": "scroll-region"
+    },
+    {
+      "about": "short words written all over the screen, the cursor moved each time",
+      "bytes": 16777216,
+      "engines": [
+        {
+          "bestMbps": 254.73754179478348,
+          "differs": null,
+          "instructionsPerByte": 63.268133103847504,
+          "mbps": 251.8617783182212,
+          "name": "llxterm",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 102.85450844797566,
+          "differs": null,
+          "instructionsPerByte": 217.6751126050949,
+          "mbps": 101.93212135979212,
+          "name": "llxterm, framed",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 202.89415222005212,
+          "differs": null,
+          "instructionsPerByte": 96.01655781269073,
+          "mbps": 196.66033392675297,
+          "name": "alacritty_terminal",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 37.12028727214506,
+          "differs": null,
+          "instructionsPerByte": 611.8517468571663,
+          "mbps": 36.25245772433242,
+          "name": "wezterm-term",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 285.96755485292306,
+          "differs": null,
+          "instructionsPerByte": 67.51612621545792,
+          "mbps": 283.7266183704574,
+          "name": "rio-vt",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 147.71656003878883,
+          "differs": "row 1: \"c/main.rsailets     matcompilingh   Ok(())                                   mwarning passed\", not \"c/main.rsailets    matccompilingh   Ok(())                                   mwarning passed\"",
+          "instructionsPerByte": 156.66973251104355,
+          "mbps": 145.46966079265073,
+          "name": "vt100",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": false
+        }
+      ],
+      "name": "cursor"
+    },
+    {
+      "about": "CJK, emoji joined and with VS16, combining marks",
+      "bytes": 16777273,
+      "engines": [
+        {
+          "bestMbps": 253.45003759540873,
+          "differs": null,
+          "instructionsPerByte": 61.56539897753348,
+          "mbps": 244.98389509351983,
+          "name": "llxterm",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 84.18245912164397,
+          "differs": null,
+          "instructionsPerByte": 242.79951032566495,
+          "mbps": 83.00011385429683,
+          "name": "llxterm, framed",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 149.91118686321508,
+          "differs": null,
+          "instructionsPerByte": 118.7339101533366,
+          "mbps": 140.65561687793996,
+          "name": "alacritty_terminal",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 63.9494660384614,
+          "differs": "row 38: \"한국어 naïve Привет 終端機 a\\u{308}\\u{323} 🏳\\u{fe0f}\\u{200d}🌈 🏳\\u{fe0f}🌈 👍🏽 👨\\u{200d}👩\\u{200d}👧\\u{200d}👦 👍🏽 😀\", not \"한국어 naïve Привет 終端機 a\\u{308}\\u{323} 🏳\\u{fe0f}\\u{200d}🌈 🏳\\u{fe0f}\\u{200d}🌈 👍🏽 👨\\u{200d}👩\\u{200d}👧\\u{200d}👦 👍🏽 😀\"",
+          "instructionsPerByte": 368.2652653980179,
+          "mbps": 61.804286004627826,
+          "name": "wezterm-term",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": false
+        },
+        {
+          "bestMbps": 124.6554097810323,
+          "differs": null,
+          "instructionsPerByte": 197.5540800343417,
+          "mbps": 121.98296740650262,
+          "name": "rio-vt",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 117.61165371828552,
+          "differs": null,
+          "instructionsPerByte": 183.44302634879935,
+          "mbps": 113.8579203182481,
+          "name": "vt100",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        }
+      ],
+      "name": "unicode"
+    },
+    {
+      "about": "full-screen frames on the other screen, each in a synchronized update",
+      "bytes": 16779102,
+      "engines": [
+        {
+          "bestMbps": 708.4772232016497,
+          "differs": null,
+          "instructionsPerByte": 33.5939599151373,
+          "mbps": 680.42694980431,
+          "name": "llxterm",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 179.28298397387192,
+          "differs": null,
+          "instructionsPerByte": 163.90161642738687,
+          "mbps": 178.14913065154215,
+          "name": "llxterm, framed",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 282.32496450768207,
+          "differs": null,
+          "instructionsPerByte": 93.0117021161204,
+          "mbps": 280.3586336400111,
+          "name": "alacritty_terminal",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 51.14375349098422,
+          "differs": null,
+          "instructionsPerByte": 544.0695097985578,
+          "mbps": 50.38751090656704,
+          "name": "wezterm-term",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 757.1070914905497,
+          "differs": null,
+          "instructionsPerByte": 36.003208336179135,
+          "mbps": 745.0162935524846,
+          "name": "rio-vt",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 183.6249197035728,
+          "differs": null,
+          "instructionsPerByte": 165.45405999677456,
+          "mbps": 178.15732675383003,
+          "name": "vt100",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        }
+      ],
+      "name": "tui"
+    },
+    {
+      "about": "lines of 64 KiB, each wrapped over 546 rows",
+      "bytes": 16778869,
+      "engines": [
+        {
+          "bestMbps": 667.5422350374922,
+          "differs": null,
+          "instructionsPerByte": 30.350671788426265,
+          "mbps": 659.5651191693983,
+          "name": "llxterm",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 126.14892729795385,
+          "differs": null,
+          "instructionsPerByte": 213.60443245608508,
+          "mbps": 122.05240131154508,
+          "name": "llxterm, framed",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 245.66905529796068,
+          "differs": null,
+          "instructionsPerByte": 103.3175777223125,
+          "mbps": 241.270262837669,
+          "name": "alacritty_terminal",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 55.1372790457503,
+          "differs": null,
+          "instructionsPerByte": 523.6582934761574,
+          "mbps": 54.41296075670895,
+          "name": "wezterm-term",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 646.0368473740951,
+          "differs": null,
+          "instructionsPerByte": 29.88554550369277,
+          "mbps": 642.5126265304837,
+          "name": "rio-vt",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 160.70648844079938,
+          "differs": null,
+          "instructionsPerByte": 187.40240846984383,
+          "mbps": 158.24916749007997,
+          "name": "vt100",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        }
+      ],
+      "name": "long-line"
+    },
+    {
+      "about": "the app's recorded sessions, one after another",
+      "bytes": 16823136,
+      "engines": [
+        {
+          "bestMbps": 292.18500442885176,
+          "differs": null,
+          "instructionsPerByte": 82.48048437580246,
+          "mbps": 287.19409117316957,
+          "name": "llxterm",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 119.15379799997189,
+          "differs": null,
+          "instructionsPerByte": 234.42820458682615,
+          "mbps": 114.90863208550658,
+          "name": "llxterm, framed",
+          "ours": true,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 147.10204965458055,
+          "differs": null,
+          "instructionsPerByte": 111.56415444777953,
+          "mbps": 139.70209638644263,
+          "name": "alacritty_terminal",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 29.559325726710664,
+          "differs": null,
+          "instructionsPerByte": 888.8720469833924,
+          "mbps": 29.10206675194151,
+          "name": "wezterm-term",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 422.8994944477639,
+          "differs": null,
+          "instructionsPerByte": 64.34342633858515,
+          "mbps": 395.70814319988705,
+          "name": "rio-vt",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        },
+        {
+          "bestMbps": 53.65840052340679,
+          "differs": null,
+          "instructionsPerByte": 465.953287306243,
+          "mbps": 53.02397027489477,
+          "name": "vt100",
+          "ours": false,
+          "panicked": null,
+          "sameScreen": true
+        }
+      ],
+      "name": "recorded"
+    }
+  ]
+}

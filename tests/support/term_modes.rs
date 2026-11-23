@@ -1,7 +1,8 @@
 //! What a program asks of the terminal it runs in, kept by the view, in a real window: told of
 //! focus as the view gains and loses the keys (1004), its cursor drawn in the shape it set
-//! (DECSCUSR), a paste framed as it asked (2004), and on its own screen the wheel turned into
-//! arrow keys (1007).
+//! (DECSCUSR), a paste framed as it asked (2004), on its own screen the wheel turned into arrow
+//! keys (1007), and the cursor drawn where a program moved it with nothing written (a shell's
+//! Left arrow).
 
 use llxterm::browser::{Browser, Edit, TermAnswer, TermProbe};
 use llxterm::surface::Shape;
@@ -12,6 +13,7 @@ use super::terminal_view::{opened, read, seen_in};
 /// The terminals' ids: apart from the other scenes' and the desk's.
 const ID: u32 = 909;
 const FULL: u32 = 910;
+const MOVED: u32 = 926;
 
 fn hex(text: &str) -> Vec<String> {
     text.bytes().map(|byte| format!("{byte:02x}")).collect()
@@ -65,4 +67,17 @@ pub(crate) fn scenario(browser: &Browser) {
         "the wheel sent {up:?}, not an arrow up"
     );
     full.close();
+
+    // A cursor moved back with nothing written, as a shell moves it for the Left arrow: the
+    // view draws it on the b, not after it.
+    let moved = opened(
+        browser,
+        MOVED,
+        "printf 'ab'; sleep 0.5; printf '\\b'; exec sleep 60",
+    );
+    seen_in(browser, MOVED, |seen| {
+        seen.shown && seen.cursor == Some((2, 0))
+    });
+    seen_in(browser, MOVED, |seen| seen.cursor == Some((1, 0)));
+    moved.close();
 }

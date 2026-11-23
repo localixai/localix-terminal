@@ -103,7 +103,8 @@ impl View {
         self.redraw(true);
     }
 
-    /// The grid that fits the area now, told to the terminal (and its program) when it is new.
+    /// The grid that fits the area now, told to the terminal (and its program) when it or its
+    /// cell's size in pixels is new (a font's size, a screen of another scale).
     pub(super) fn fit(&self) {
         let (width, height) = self.size();
         let Some(mut state) = self.state() else {
@@ -114,15 +115,17 @@ impl View {
         };
         let alternate = state.frame.alternate;
         let grid = painter.grid(width, height, alternate);
+        let cell = painter.cell_pixels();
         state.fitted_alternate = alternate;
-        if width < 1.0 || height < 1.0 || grid == state.grid {
+        let same = grid == state.grid && cell == state.cell;
+        if width < 1.0 || height < 1.0 || same {
             return;
         }
-        state.grid = grid;
+        (state.grid, state.cell) = (grid, cell);
         state.resized += 1;
         let surface = Arc::clone(&state.surface);
         drop(state);
-        surface.resize(grid.0, grid.1);
+        surface.resize(grid.0, grid.1, cell);
         self.redraw(false);
     }
 

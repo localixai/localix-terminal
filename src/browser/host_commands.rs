@@ -83,6 +83,9 @@ pub(in super::super) enum Cmd {
     PanelMenu(u32, (u32, u32), Vec<super::super::choice::Entry>),
     /// An address the person opened from a panel's text (`o` of its page).
     PanelLink(u32, String),
+    /// A web address the person Command-clicked in a terminal: opened where Settings says, or
+    /// where they answer (term_links.rs).
+    TermLink(u32, String),
     /// A command the person typed in a panel's terminal ended, after so long, with its code if
     /// the shell said one: news for them if they were not looking (`panel::unattended`).
     CommandEnded(u32, Option<i32>, std::time::Duration),
@@ -193,6 +196,7 @@ impl Cmd {
             | Cmd::Unpanel(id)
             | Cmd::PanelMenu(id, ..)
             | Cmd::PanelLink(id, _)
+            | Cmd::TermLink(id, _)
             | Cmd::CommandEnded(id, ..)
             | Cmd::Titled(id, _) => term(*id),
             Cmd::Eval { tab: Some(id), .. }
@@ -266,6 +270,7 @@ impl Cmd {
             | Cmd::TermShot(..)
             | Cmd::PanelMenu(..)
             | Cmd::PanelLink(..)
+            | Cmd::TermLink(..)
             | Cmd::CommandEnded(..)
             | Cmd::Unanswered(..)
             | Cmd::Restyle

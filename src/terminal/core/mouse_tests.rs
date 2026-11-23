@@ -87,6 +87,9 @@ fn focus_is_reported_only_while_asked() {
 fn a_paste_is_bracketed_when_asked_and_made_safe() {
     let mut core = Core::new(4, 20).unwrap();
     assert_eq!(core.paste_bytes("one\ntwo"), b"one\rtwo");
+    // Lines copied from Windows or a web page end in CR LF: one Return each, not two.
+    assert_eq!(core.paste_bytes("one\r\ntwo\r\n"), b"one\rtwo\r");
+    assert_eq!(core.paste_bytes("one\rtwo"), b"one\rtwo");
     core.feed(b"\x1b[?2004h");
     assert_eq!(core.paste_bytes("one\ntwo"), b"\x1b[200~one\ntwo\x1b[201~");
     assert_eq!(

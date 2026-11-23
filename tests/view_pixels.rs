@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 
 use cast::{Cast, Event};
 use llxterm::browser::{Picture, TermLook, term_picture};
-use llxterm::surface::Frame;
+use llxterm::surface::{CellPixels, Frame};
 use llxterm::terminal::{Core, Render};
 
 fn fixture(dir: &str, name: &str) -> PathBuf {
@@ -42,7 +42,9 @@ fn core_of(cast: &Cast, last: usize, look: &TermLook) -> Core {
     for (_, event) in cast.events.iter().take(last + 1) {
         match event {
             Event::Output(text) => core.feed(text.as_bytes()),
-            Event::Resize(rows, columns) => core.resize(*rows, *columns).unwrap(),
+            Event::Resize(rows, columns) => {
+                core.resize(*rows, *columns, CellPixels::default()).unwrap()
+            }
         }
     }
     core
@@ -294,7 +296,7 @@ fn coloured(text: &str) -> ([usize; 4], usize) {
 #[test]
 fn an_emoji_sequence_is_one_glyph_across_its_cells_no_taller_than_its_row() {
     // Three people apart, and the same three joined into one family: the family is one
-    // picture, much narrower than three, in the middle of the six cells the core keeps for it.
+    // picture, in the two cells Unicode gives it, where the three apart begin.
     let (apart, height) = coloured("👨👩👧");
     let (family, _) = coloured("👨\u{200d}👩\u{200d}👧");
     let width = |b: [usize; 4]| b[1] - b[0];
@@ -302,9 +304,8 @@ fn an_emoji_sequence_is_one_glyph_across_its_cells_no_taller_than_its_row() {
         width(family) * 2 < width(apart),
         "joined {family:?}, apart {apart:?}"
     );
-    let (middle_apart, middle) = ((apart[0] + apart[1]) / 2, (family[0] + family[1]) / 2);
     assert!(
-        middle.abs_diff(middle_apart) < width(apart) / 6,
+        family[0].abs_diff(apart[0]) < width(apart) / 6 && width(family) <= width(apart) / 3 + 2,
         "{family:?} {apart:?}"
     );
     // The middle row of three: an emoji drawn no taller than its row keeps off the other two.

@@ -64,6 +64,7 @@ mod split;
 mod strip;
 mod tab_view;
 mod tabs;
+mod term_links;
 mod term_view;
 mod told;
 mod toolbar;

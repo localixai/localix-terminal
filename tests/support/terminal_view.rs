@@ -2,8 +2,9 @@
 //! take the window's keys as it opens, the keys the system hands its view reach the program as
 //! a Mac terminal sends them (Shift+Enter a newline, ⌥← and ⌘← the readline keys, the Option
 //! made Meta on its side only), an input method's text stays the view's until it is committed,
-//! and the terminal's ground is left clear over the window's glass. The helpers that open a
-//! terminal in a tab and read its view are the other terminal scenes' too.
+//! the terminal's ground is left clear over the window's glass, and a program that asks its size
+//! is told the grid the view shows and the cell's pixels. The helpers that open a terminal in a
+//! tab and read its view are the other terminal scenes' too.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -15,6 +16,9 @@ use llxterm::terminal::Session;
 #[cfg(target_os = "macos")]
 /// The panel's id: apart from the desk's terminals, which count from 1.
 const ID: u32 = 900;
+#[cfg(target_os = "macos")]
+/// The terminal whose program asks its size.
+const SIZED: u32 = 927;
 
 #[cfg(target_os = "macos")]
 /// The system's modifier bits, with the device's bit for the side of each (the left, but for
@@ -23,8 +27,13 @@ const SHIFT: usize = (1 << 17) | 0x02;
 #[cfg(target_os = "macos")]
 const OPTION: usize = (1 << 19) | 0x20;
 #[cfg(target_os = "macos")]
+const CONTROL: usize = (1 << 18) | 0x01;
+#[cfg(target_os = "macos")]
 const RIGHT_OPTION: usize = (1 << 19) | 0x40;
 pub(crate) const COMMAND: usize = (1 << 20) | 0x08;
+/// What the system's flags say of every arrow key: a function key, on the numeric pad.
+#[cfg(target_os = "macos")]
+const ARROW: usize = (1 << 23) | (1 << 21);
 
 /// `command` started in a tab of its own, `id`, drawn by the window as the desk draws one.
 pub(crate) fn opened(browser: &Browser, id: u32, command: &str) -> Arc<Session> {
@@ -100,6 +109,20 @@ pub(crate) fn read(session: &Session, from: usize, want: usize) -> Vec<String> {
             .collect();
         if bytes.len() >= from + want || Instant::now() > deadline {
             return bytes.into_iter().skip(from).collect();
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[cfg(target_os = "macos")]
+/// The last bytes the program read, as many as `want`, once they are `want` or after a while.
+fn last(session: &Session, want: &[&str]) -> Vec<String> {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let bytes = read(session, 0, 0);
+        let tail = bytes[bytes.len().saturating_sub(want.len())..].to_vec();
+        if tail == want || Instant::now() > deadline {
+            return tail;
         }
         std::thread::sleep(Duration::from_millis(20));
     }
@@ -197,5 +220,100 @@ pub(crate) fn scenario(browser: &Browser) {
         "the ground under an empty cell is not clear"
     );
 
+    // Spaces among letters reach the program once each; with Shift a space, with Control a
+    // NUL.
+    for (code, chars) in [
+        (0x31, " "),
+        (0x00, "a"),
+        (0x31, " "),
+        (0x31, " "),
+        (0x0b, "b"),
+    ] {
+        press(browser, code, 0, chars);
+    }
+    press(browser, 0x31, SHIFT, " ");
+    press_in(browser, ID, (0x31, CONTROL), "\0", " ");
+    let typed = read(&session, base + 3, 7);
+    assert_eq!(typed, ["20", "61", "20", "20", "62", "20", "00"]);
+    // Control with Shift, where the input method hands over a control character or none: the
+    // key's own character with Shift is what it is read by. Ctrl+Shift+Space a NUL, Ctrl+_
+    // (Shift and minus) readline's undo. The minus is in the same place in Latin and Cyrillic
+    // layouts, so the check does not hang on the layout chosen.
+    press_in(browser, ID, (0x31, CONTROL | SHIFT), "\0", " ");
+    press_in(browser, ID, (0x1b, CONTROL | SHIFT), "\u{1f}", "-");
+    assert_eq!(read(&session, base + 10, 2), ["00", "1f"]);
+    // Control on [, I, M and C, by their places: Escape, Tab, Return and the interrupt, as a
+    // program that reads plain bytes takes them, whichever layout is chosen.
+    press_in(browser, ID, (0x21, CONTROL), "\u{1b}", "[");
+    press_in(browser, ID, (0x22, CONTROL), "\t", "i");
+    press_in(browser, ID, (0x2e, CONTROL), "\r", "m");
+    press_in(browser, ID, (0x08, CONTROL), "\u{3}", "c");
+    assert_eq!(read(&session, base + 12, 4), ["1b", "09", "0d", "03"]);
+    // The arrows, as the system hands them over (a function key of the numeric pad, its
+    // character from Unicode's private area): plain, with Shift, and with Option, which moves a
+    // shell by a word.
+    for (code, chars) in [
+        (0x7e, "\u{f700}"),
+        (0x7d, "\u{f701}"),
+        (0x7c, "\u{f703}"),
+        (0x7b, "\u{f702}"),
+    ] {
+        press(browser, code, ARROW, chars);
+    }
+    let arrows = read(&session, base + 16, 12);
+    assert_eq!(
+        arrows,
+        [
+            "1b", "5b", "41", "1b", "5b", "42", "1b", "5b", "43", "1b", "5b", "44"
+        ]
+    );
+    // By now the program's lines fill more than the screen, so these are read at its end.
+    press(browser, 0x7e, ARROW | SHIFT, "\u{f700}");
+    press(browser, 0x7b, ARROW | OPTION, "\u{f702}");
+    let moved = ["1b", "5b", "31", "3b", "32", "41", "1b", "62"];
+    assert_eq!(last(&session, &moved), moved);
+
+    session.close();
+    sizes_are_answered(browser);
+}
+
+#[cfg(target_os = "macos")]
+/// A program that asks its size once its pane's grid is told (a key it waits for): it is
+/// answered the grid the view shows and a cell of the pixels it is drawn in.
+fn sizes_are_answered(browser: &Browser) {
+    let session = opened(
+        browser,
+        SIZED,
+        "stty raw -echo; printf 'sized\\r\\n'; head -c 1 >/dev/null; \
+         printf '\\033[18t\\033[16t'; exec xxd -p -c 1",
+    );
+    let shown = seen_in(browser, SIZED, |seen| {
+        seen.shown && seen.rows.iter().any(|row| row.trim() == "sized")
+    });
+    press_in(browser, SIZED, (0x31, 0), " ", " ");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let told = loop {
+        let bytes = read(&session, 0, 0);
+        let told: String = (bytes.iter())
+            .filter_map(|byte| u8::from_str_radix(byte, 16).ok())
+            .map(char::from)
+            .collect();
+        if told.matches('t').count() >= 2 || Instant::now() > deadline {
+            break told;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    let grid = format!("\x1b[8;{};{}t", shown.lines, shown.columns);
+    let cell = told
+        .strip_prefix(&grid)
+        .and_then(|rest| rest.strip_prefix("\x1b[6;"));
+    let cell = cell.and_then(|rest| rest.strip_suffix('t'));
+    let pixels: Vec<u32> = cell.map_or_else(Vec::new, |cell| {
+        cell.split(';').filter_map(|n| n.parse().ok()).collect()
+    });
+    assert!(
+        pixels.len() == 2 && pixels.iter().all(|&n| n > 0),
+        "the program was told {told:?}, its grid {grid:?}"
+    );
     session.close();
 }

@@ -106,10 +106,11 @@ impl TermView {
         self.redraw(true);
     }
 
-    /// The grid that fits the view now, told to the terminal (and its program) when it is new:
-    /// not while the person moves its pane's edge (`hold.rs`), nor out of sight once it was in
-    /// sight, where it keeps the grid it had (a pane put by for another's zoom comes back as it
-    /// went, its program told nothing).
+    /// The grid that fits the view now, told to the terminal (and its program) when it or its
+    /// cell's size in pixels is new (a font's size, a screen of another scale): not while the
+    /// person moves its pane's edge (`hold.rs`), nor out of sight once it was in sight, where it
+    /// keeps the grid it had (a pane put by for another's zoom comes back as it went, its
+    /// program told nothing).
     pub(super) fn fit(&self) {
         let bounds = self.bounds();
         let Some(mut state) = self.state() else {
@@ -124,15 +125,17 @@ impl TermView {
         };
         let alternate = state.frame.alternate;
         let grid = painter.grid(bounds.size.width, bounds.size.height, alternate);
+        let cell = painter.cell_pixels();
         state.fitted_alternate = alternate;
-        if bounds.size.width < 1.0 || bounds.size.height < 1.0 || grid == state.grid {
+        let same = grid == state.grid && cell == state.cell;
+        if bounds.size.width < 1.0 || bounds.size.height < 1.0 || same {
             return;
         }
-        state.grid = grid;
+        (state.grid, state.cell) = (grid, cell);
         state.resized += 1;
         let surface = Arc::clone(&state.surface);
         drop(state);
-        surface.resize(grid.0, grid.1);
+        surface.resize(grid.0, grid.1, cell);
         self.redraw(false);
     }
 

@@ -1,0 +1,45 @@
+# The terminal core's benchmark: llxterm's core against other terminals' cores, fed the same bytes.
+# A crate of its own, outside the app's build: the cores it is compared with never reach the app.
+[package]
+name = "llxterm-bench"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+llxterm = { path = "..", optional = true }
+serde_json = "1.0.154"
+# getrusage of each child the memory benchmark starts (wait4), and the kernel's counters.
+libc = "0.2"
+# The cores compared. Each is the newest release when the bench was written; an exact version,
+# so a run is the same code until it is moved on purpose.
+alacritty_terminal = { version = "=0.26.0", optional = true }
+vt100 = { version = "=0.18.1", optional = true }
+# The core of rio's terminal, without its renderer, window or clipboard (its own crate; the
+# `rio-backend` crate is this plus those).
+rio-vt = { version = "=0.5.32", default-features = false, optional = true }
+# wezterm's terminal core is not released on crates.io: taken from its repository at a fixed
+# commit.
+wezterm-term = { git = "https://github.com/wezterm/wezterm", rev = "89e01990a5ad0b30e67d84d68b2fc4ad4eb71276", optional = true }
+
+# Which cores a build links. llxterm's and most references share this crate's binaries; rio-vt
+# is built apart (apart/), as its copy of the simdutf library has the same symbols as the one
+# inside libghostty-vt, and one binary would run one copy for both. The quick loop (quick/) links
+# llxterm alone.
+[features]
+default = ["ours", "references"]
+ours = ["dep:llxterm"]
+references = ["dep:alacritty_terminal", "dep:vt100", "dep:wezterm-term"]
+rio = ["dep:rio-vt"]
+
+# Built for speed, every core alike: one codegen unit, fat LTO, a panic unwinding, line tables for
+# a profiler. The app itself ships built for size (its own Cargo.toml); libghostty-vt is a
+# prebuilt library either way.
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = 3
+panic = "unwind"
+debug = "line-tables-only"

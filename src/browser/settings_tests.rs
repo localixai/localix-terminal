@@ -268,3 +268,23 @@ fn a_command_typed_out_of_sight_is_told_after_thirty_seconds_unless_the_person_c
     let kept: Settings = serde_json::from_str(r#"{"theme": "dark"}"#).unwrap();
     assert_eq!(kept.command_notice, CommandNotice::After30s);
 }
+
+#[test]
+fn a_link_clicked_in_a_terminal_asks_where_it_opens_unless_the_person_chose_one_place() {
+    let mut settings = Settings::default();
+    assert_eq!(settings.open_links, OpenLinks::Ask);
+    assert_eq!(settings.page()["defaults"]["open_links"], "ask");
+    for (chosen, place) in [
+        ("tab", OpenLinks::Tab),
+        ("browser", OpenLinks::Browser),
+        ("ask", OpenLinks::Ask),
+    ] {
+        settings.change(&json!({"open_links": chosen})).unwrap();
+        assert_eq!(settings.open_links, place);
+        assert_eq!(settings.page()["settings"]["open_links"], chosen);
+    }
+    assert!(settings.change(&json!({"open_links": "window"})).is_err());
+    assert!(settings.change(&json!({"open_links": true})).is_err());
+    let kept: Settings = serde_json::from_str(r#"{"theme": "dark"}"#).unwrap();
+    assert_eq!(kept.open_links, OpenLinks::Ask, "a file from before asks");
+}

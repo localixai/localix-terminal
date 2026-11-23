@@ -1,6 +1,6 @@
 [package]
 name = "llxterm"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2024"
 rust-version = "1.96"
 description = "Localix Terminal, the terminal for you and your coding agents: sessions that belong to a project and come back as you left them, with a browser, a board and a Store that agents use too"
@@ -33,6 +33,9 @@ ghostty-vt-sys = "=0.9.0"
 # in, so the binary needs no SQLite of the system.
 rusqlite = { version = "0.41.1", features = ["bundled", "fallible_uint"] }
 percent-encoding = "2"
+# Already in the tree through serde_json: the marks of a held frame are looked for in every read
+# of a program's output, by a search that takes many bytes at a time (src/terminal/core/frames.rs).
+memchr = "2.8.3"
 
 # Messages to the WKWebView behind the window, and the block its screenshot answers through.
 [target.'cfg(target_os = "macos")'.dependencies]

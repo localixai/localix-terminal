@@ -3,6 +3,7 @@
 //! said of its commands.
 
 use super::{Content, Core, HISTORY_LINES, Step};
+use crate::surface::CellPixels;
 
 fn core(rows: u16, columns: u16) -> Core {
     match Core::new(rows, columns) {
@@ -82,10 +83,10 @@ fn a_line_longer_than_the_row_wraps_onto_the_next() {
 fn resizing_changes_the_grid_and_keeps_the_text() {
     let mut core = core(10, 40);
     core.feed(b"one\r\ntwo");
-    assert!(core.resize(5, 20).is_ok());
+    assert!(core.resize(5, 20, CellPixels::default()).is_ok());
     assert_eq!(core.size(), (5, 20));
     assert_eq!(core.text(), "one\ntwo");
-    assert!(core.resize(0, 20).is_err());
+    assert!(core.resize(0, 20, CellPixels::default()).is_err());
     assert_eq!(core.size(), (5, 20));
 }
 
@@ -185,4 +186,21 @@ fn the_steps_a_shell_reports_are_heard_and_divide_the_cells() {
     assert_eq!(core.content(1, 0), Some(Content::Output));
     assert_eq!(core.content(9, 0), None, "off the grid");
     assert_eq!(core.text(), "$ ls\nout");
+}
+
+/// A character of several codepoints takes the columns Unicode gives it, as the programs that
+/// draw beside it count them: an emoji joined by ZWJ is one of two columns, not one per part,
+/// and a heart chosen to be an emoji (VS16) is two. A full reset keeps it so.
+#[test]
+fn a_character_of_several_codepoints_takes_the_columns_unicode_gives_it() {
+    let mut core = core(5, 20);
+    core.feed("\u{1F469}\u{200D}\u{1F4BB}x".as_bytes());
+    assert_eq!(core.cursor(), (1, 4), "a joined emoji then x");
+    core.feed("\r\n\u{2764}\u{FE0F}x".as_bytes());
+    assert_eq!(core.cursor(), (2, 4), "an emoji heart then x");
+    core.feed("\x1bc\u{1F469}\u{200D}\u{1F4BB}x".as_bytes());
+    assert_eq!(core.cursor(), (1, 4), "after a full reset");
+    // A program may still ask for the widths of old, and has them until it lets go.
+    core.feed("\x1b[?2027l\r\n\u{1F469}\u{200D}\u{1F4BB}x".as_bytes());
+    assert_eq!(core.cursor(), (2, 6), "widths of old, asked for");
 }

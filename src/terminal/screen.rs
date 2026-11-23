@@ -2,14 +2,15 @@
 //! redraws, wide characters, the lines a box is drawn with, a resize that wraps lines again), by
 //! the terminal core, for what agents read. The core gets the output whole and answers a program's
 //! queries itself; the session reads beside it what the core has no callback for
-//! (`screen/safe.rs`: the title, a shell's marks, notes, the program's state). A frame a program
-//! holds back while it draws the next (synchronized output) is read as the screen showed it when
-//! the hold began, which the core keeps.
+//! (`screen/safe.rs`: the title, a shell's marks, notes, the program's state). While a program
+//! holds a frame back as it draws it (synchronized output), the core keeps the frame's bytes
+//! and its screen is the frame before: what agents read is what the view shows.
 
 use super::core::{Core, Refused};
 use super::marks::Marks;
 use super::notes::Notes;
 use super::status::Records;
+use crate::surface::CellPixels;
 
 mod safe;
 
@@ -50,12 +51,6 @@ impl Screen {
         }
         self.core.feed(RIGHTED);
         true
-    }
-
-    /// Whether a program holds its frame back now (and not past the core's most): a view keeps
-    /// drawing the frame from before the hold until it lets go.
-    pub(super) fn holding(&self) -> bool {
-        self.core.holding()
     }
 
     /// The core, for a view to draw and act on.
@@ -117,22 +112,16 @@ impl Screen {
     }
 
     /// The screen as text, its blank rows at the end left out, and where the cursor is (row and
-    /// column, from 1): the frame a program holds back while it draws the next.
+    /// column, from 1).
     pub(super) fn text(&self) -> (String, (u16, u16)) {
-        (self.core.held_text()).unwrap_or_else(|| (self.core.text(), self.core.cursor()))
+        (self.core.text(), self.core.cursor())
     }
 
     /// The screen as text to look in: a row that wraps on to the next is joined to it with no line
     /// break and its trailing spaces kept, so a text that crosses the pane's edge is found whole.
     /// The rows are as `text` has them otherwise.
     pub(super) fn search_text(&self) -> String {
-        (self.core.held_search()).unwrap_or_else(|| self.core.search_text())
-    }
-
-    /// Where the cursor is now: row and column, from 1, held frame or not.
-    #[cfg(test)]
-    pub(super) fn cursor(&self) -> (u16, u16) {
-        self.core.cursor()
+        self.core.search_text()
     }
 
     /// The grid's rows and columns.
@@ -140,12 +129,14 @@ impl Screen {
         self.core.size()
     }
 
-    /// The grid becomes `rows` by `columns`, its lines wrapped again to fit and its scroll region
-    /// the whole of it; a held frame is let go, as the core lets go of the hold. The same size
-    /// changes nothing, and a grid of no rows or columns is not taken.
-    pub(super) fn resize(&mut self, rows: u16, columns: u16) {
-        if (rows, columns) != self.size() {
-            let _ = self.core.resize(rows, columns);
+    /// The grid becomes `rows` by `columns` of cells `cell` in pixels, its lines wrapped again
+    /// to fit and its scroll region the whole of it; a frame the program holds is let go of
+    /// first. The same size in cells and pixels changes nothing, and a grid of no rows or
+    /// columns is not taken.
+    pub(super) fn resize(&mut self, rows: u16, columns: u16, cell: CellPixels) {
+        let (now_rows, now_columns) = self.size();
+        if (rows, columns, cell) != (now_rows, now_columns, self.core.cell_pixels()) {
+            let _ = self.core.resize(rows, columns, cell);
         }
     }
 

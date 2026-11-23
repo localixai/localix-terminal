@@ -137,7 +137,14 @@ fn typed(view: &TermView, surface: &dyn Surface, event: &NSEvent, key: &Key) {
         view.redraw(false);
         return;
     }
-    let text = acts::printable(&committed);
+    let mut text = acts::printable(&committed);
+    // With Control and Shift the input method hands over a control character, or none, and the
+    // encoder would send nothing: the key is read by what it types with Shift (Ctrl+_ is
+    // Control, Shift and minus; Ctrl+Shift+Space a NUL). Control alone is read by its place.
+    if text.is_empty() && key.mods.has(Mods::CTRL) && key.mods.has(Mods::SHIFT) {
+        let flags = keymap::without_control(ns::flags(event));
+        text = acts::printable(&ns::chars_with(event, flags));
+    }
     let consumed = acts::consumed(&text, key.mods, Mods::SHIFT | Mods::ALT);
     let key = Key {
         text: text.clone(),

@@ -1,0 +1,25 @@
+# The engines that cannot share a binary with llxterm's core: rio-vt, whose copy of the simdutf
+# library has the same symbols as the one inside libghostty-vt, so one binary would run one copy
+# for both. Its `engine-apart` is started by `throughput` and `memory` as `engine` is.
+[package]
+name = "llxterm-bench-apart"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "engine-apart"
+path = "src/main.rs"
+
+[dependencies]
+llxterm-bench = { path = "..", default-features = false, features = ["rio"] }
+
+# As the bench crate is built, so the two share what they build (.cargo/config.toml).
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = 3
+panic = "unwind"
+debug = "line-tables-only"

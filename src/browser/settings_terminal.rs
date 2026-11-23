@@ -1,6 +1,6 @@
-//! A terminal's own settings (Settings, Terminal): which Option key it takes for Meta, and
-//! whether its code font's ligatures join (on by default; off draws `->` and `!=` as their
-//! letters, in fonts that join them).
+//! A terminal's own settings (Settings, Terminal): which Option key it takes for Meta, whether
+//! its code font's ligatures join (on by default; off draws `->` and `!=` as their letters, in
+//! fonts that join them), and where a link Command-clicked in it opens.
 
 use serde::{Deserialize, Serialize};
 
@@ -32,4 +32,15 @@ impl Ligatures {
     pub(in crate::browser) const fn on(self) -> bool {
         matches!(self, Self::On)
     }
+}
+
+/// Where a link the person Command-clicks in a terminal opens: they are asked each time (by
+/// default), or it opens at once in a tab of the window, or in their default browser.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(in crate::browser) enum OpenLinks {
+    #[default]
+    Ask,
+    Tab,
+    Browser,
 }

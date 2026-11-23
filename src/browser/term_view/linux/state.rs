@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use super::super::spoken::Lines;
 use super::{Placed, TermPainter};
-use crate::surface::{Edge, Frame, Link, Mouse, OptionMeta, Surface};
+use crate::surface::{CellPixels, Edge, Frame, Link, Mouse, OptionMeta, Surface};
 
 /// The pictures drawn over the rows: the cursor, an input method's text, the line under a
 /// program that ended, and the scrollbar's slider.
@@ -33,8 +33,10 @@ pub(crate) struct State {
     pub(super) frame: Frame,
     pub(super) lines: Lines,
     pub(super) over: Over,
-    /// The grid the terminal was told, and the screen it was fitted on.
+    /// The grid the terminal was told, its cell's size in pixels, and the screen it was fitted
+    /// on.
     pub(super) grid: (u16, u16),
+    pub(super) cell: CellPixels,
     pub(super) fitted_alternate: bool,
     pub(super) shown: bool,
     /// Under the window's dialog: no click, no key, no pointer.
@@ -101,6 +103,7 @@ impl State {
             lines: Lines::default(),
             over: Over::default(),
             grid: (0, 0),
+            cell: CellPixels::default(),
             fitted_alternate: false,
             shown: false,
             hushed: false,

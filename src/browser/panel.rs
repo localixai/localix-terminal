@@ -278,10 +278,11 @@ pub(super) fn open(
     let html = match body {
         Body::Page(html) => html,
         Body::Term(surface) => {
-            // A link the person Command-clicks opens as an address they opened from its text.
+            // A link the person Command-clicks opens where Settings says, or where they answer
+            // (term_links.rs).
             let opens = Box::new(move |address: &str| {
                 if web(address) {
-                    let _ = proxy.send_event(Cmd::PanelLink(id, address.to_owned()));
+                    let _ = proxy.send_event(Cmd::TermLink(id, address.to_owned()));
                 }
             });
             let view = super::term_view::TermView::open(native, surface, opens)

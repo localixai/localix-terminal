@@ -52,12 +52,13 @@ pub(super) fn dock(
 pub(super) use super::menu_gtk::{quit_through, showing, splitting, zooming};
 
 /// `question` asked in GTK's dialog, which holds the loop until it is answered; `done` takes
-/// whether the person went on. One signature with macOS, where the question is a sheet.
+/// which of its buttons the person chose. One signature with macOS, where the question is a
+/// sheet.
 #[cfg(not(target_os = "macos"))]
 pub(super) fn confirm(
     question: &super::Confirm,
     _window: Option<&tao::window::Window>,
-    done: impl FnOnce(bool) + 'static,
+    done: impl FnOnce(super::dialog::Answer) + 'static,
 ) {
     done(super::menu_gtk::confirm(question));
 }

@@ -10,7 +10,7 @@ use objc2::runtime::AnyObject;
 use super::super::spoken::{Lines, Spoken};
 use super::TermPainter;
 use super::layers::Layers;
-use crate::surface::{Edge, Frame, Link, Mouse, OptionMeta, Surface};
+use crate::surface::{CellPixels, Edge, Frame, Link, Mouse, OptionMeta, Surface};
 
 /// What the view keeps: the terminal it shows, how it draws it, and what the person is doing in
 /// it now.
@@ -24,9 +24,10 @@ pub(crate) struct State {
     pub(super) layers: Layers,
     /// The last frame, its rows kept from one to the next as the terminal fills them.
     pub(super) frame: Frame,
-    /// The grid the terminal was told, and the screen it was fitted on (the other screen has
-    /// no gutter).
+    /// The grid the terminal was told, its cell's size in pixels, and the screen it was fitted
+    /// on (the other screen has no gutter).
     pub(super) grid: (u16, u16),
+    pub(super) cell: CellPixels,
     pub(super) fitted_alternate: bool,
     pub(super) shown: bool,
     /// It was shown once: out of sight since, it keeps the grid it had in sight.
@@ -95,6 +96,7 @@ impl State {
             layers: Layers::new(scale),
             frame: Frame::default(),
             grid: (0, 0),
+            cell: CellPixels::default(),
             fitted_alternate: false,
             shown: false,
             was_shown: false,

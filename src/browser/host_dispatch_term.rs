@@ -1,20 +1,64 @@
 //! What one window does for a terminal's view when its terminal or the work thread asks: draw
 //! its newest frame (with what its program asked of the window as it drew, and a find's count
-//! told again as new output is looked in), a picture of it for an agent, and, for checks, what
-//! it shows or is told.
+//! told again as new output is looked in), open a link the person Command-clicked in it, a
+//! picture of it for an agent, and, for checks, what it shows or is told.
 
+use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
 
 use crate::browser::capture::Shot;
 use crate::browser::panel;
 use crate::browser::strip::Key;
+use crate::browser::term_links::{self, Clicked, Place};
 use crate::browser::term_view::{TermAnswer, TermProbe};
-use crate::browser::{Heard, platform};
+use crate::browser::{Asked, Heard, platform};
 
-use super::super::super::Cmd;
+use super::super::super::{Cmd, Shared};
 use super::super::On;
 
+/// An address the person opened from panel `id`'s text: a page asked of the app as any the
+/// person asks for, in that panel's project, so it joins the session they look at and opens
+/// where the window has no page yet.
+pub(super) fn in_tab(shared: &Shared, id: u32, url: String) {
+    let project = crate::lock(&shared.groups)
+        .get(&Key::Term(id).name())
+        .cloned();
+    if let Some(project) = project {
+        shared.heard(&project, Heard::Asked(Asked::Page(Some(url))));
+    }
+}
+
+/// `url` opened in `place`: a tab of terminal `id`'s project, or the person's default browser.
+fn open_in(place: Place, shared: &Shared, id: u32, url: String) {
+    match place {
+        Place::Tab => in_tab(shared, id, url),
+        Place::Browser => {
+            if !platform::open_outside(&url) {
+                log::warn!("window: the system did not open {url}");
+            }
+        }
+    }
+}
+
 impl On<'_> {
+    /// A web address the person Command-clicked in terminal `id`: opened where Settings ›
+    /// Terminal › Open links says, or, while it says Ask, where they answer the window's dialog.
+    pub(super) fn term_link(&mut self, id: u32, url: String) {
+        let setting = crate::browser::settings::now().open_links;
+        match term_links::clicked(setting, &url) {
+            Some(Clicked::Open(place)) => open_in(place, self.shared, id, url),
+            Some(Clicked::Ask) => {
+                let shared = Arc::clone(self.shared);
+                self.choose(&term_links::question(&url), move |answer| {
+                    if let Some(place) = term_links::answered(answer) {
+                        open_in(place, &shared, id, url);
+                    }
+                });
+            }
+            None => {}
+        }
+    }
+
     /// For checks: what terminal `id`'s view is told or shows.
     pub(super) fn term_probe(&self, id: u32, probe: TermProbe) -> Option<TermAnswer> {
         if let TermProbe::Settings(change) = &probe {

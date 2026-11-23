@@ -343,7 +343,7 @@ pub(super) const PAGE: &str = include_str!("strip.html");
 
 /// The SHA-384 of the page's one script, its resize helper, the dialog's script and the tree's in:
 /// the page's policy runs it alone.
-const SCRIPT_SHA384: &str = "C2zMJJt5jRmdRMICn3gvd94MF2PTnnfxjQvbGUNQ7Huq9Jgnp+d7sRPOnXqNBpMh";
+const SCRIPT_SHA384: &str = "orYWItru0neY7dui5sBwqXA4KwIEhkvDZz7tTKwFRTORHGfaVnmNfThLpATvNyx1";
 
 /// The strip's page: the trusted UI's resize helper, the window's dialog (dialog.rs), the side's
 /// tree of files (tree.rs) and the toolbar's find row (its markup, words and keys shared with the

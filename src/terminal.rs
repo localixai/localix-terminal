@@ -16,7 +16,7 @@ mod screen;
 mod session;
 mod status;
 
-pub use core::{Content, Core, Drawn, Refused, Render, Step};
+pub use core::{Content, Core, Refused, Render, Step};
 pub use environment::Own;
 pub use hooks::keep_in as keep_shell_files_in;
 pub use marks::Ended;
@@ -28,3 +28,7 @@ pub use status::{Asks, Doing, Status};
 /// The grid a terminal panel shows: a terminal session is this size.
 pub const COLUMNS: u16 = 120;
 pub const ROWS: u16 = 40;
+
+/// The terminal type a terminal's programs are told they run in (`TERM`), which the core also
+/// answers a program's query of its terminfo name with (XTGETTCAP `TN`), and a recording says.
+const TERM: &str = "xterm-256color";

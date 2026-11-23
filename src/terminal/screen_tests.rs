@@ -19,8 +19,8 @@ fn shown(bytes: &[u8]) -> (Vec<String>, (u16, u16)) {
     }
     let (text, cursor) = whole.text();
     assert_eq!(
-        (&text, cursor),
-        (&split.text().0, split.cursor()),
+        (text.clone(), cursor),
+        split.text(),
         "split one byte per read"
     );
     assert_eq!(
@@ -62,11 +62,11 @@ fn only_text_reaches_the_screen() {
 fn a_resized_screen_keeps_its_text_and_reports_its_size() {
     let mut screen = blank(40, 120);
     screen.feed(b"hello");
-    screen.resize(10, 50);
+    screen.resize(10, 50, CellPixels::default());
     assert_eq!(screen.size(), (10, 50));
     assert_eq!(screen.text().0, "hello");
     // No rows or no columns is not a size.
-    screen.resize(0, 50);
+    screen.resize(0, 50, CellPixels::default());
     assert_eq!(screen.size(), (10, 50));
 }
 
@@ -75,9 +75,9 @@ fn a_resize_wraps_the_lines_again_to_the_new_width() {
     let mut screen = blank(5, 10);
     screen.feed(b"abcdefghijklmno\r\n$ ");
     assert_eq!(screen.text().0, "abcdefghij\nklmno\n$");
-    screen.resize(5, 20);
+    screen.resize(5, 20, CellPixels::default());
     assert_eq!(screen.text().0, "abcdefghijklmno\n$");
-    screen.resize(5, 5);
+    screen.resize(5, 5, CellPixels::default());
     assert_eq!(screen.text().0, "abcde\nfghij\nklmno\n$");
     assert_eq!(screen.search_text(), "abcdefghijklmno\n$");
 }

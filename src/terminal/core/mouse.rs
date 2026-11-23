@@ -81,7 +81,11 @@ impl Core {
     /// `text` as a paste sends it to the program now.
     pub fn paste_bytes(&self, text: &str) -> Vec<u8> {
         let bracketed = self.bracketed_paste();
-        let mut data = text.as_bytes().to_vec();
+        // Unframed, each line's end is a Return: a CR LF is one, as terminals send it.
+        let mut data = match bracketed {
+            true => text.as_bytes().to_vec(),
+            false => text.replace("\r\n", "\r").into_bytes(),
+        };
         let (from, len) = (data.as_mut_ptr().cast(), data.len());
         encoded(|buf, room, written| {
             // SAFETY: `data` is the paste's own copy, changed in place and alive through the

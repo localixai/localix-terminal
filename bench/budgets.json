@@ -1,0 +1,38 @@
+{
+  "$comment": "What llxterm's terminal core is held to. `cargo run --release --bin check` reads results/*.json and fails on any rule a run breaks. Change a number only together with its reason, in the change that moves it.",
+  "rules": [
+    {
+      "id": "every-engine-runs",
+      "about": "Every engine takes in every workload without a panic, timed and in a process of its own."
+    },
+    {
+      "id": "same-screen",
+      "about": "On these workloads every engine ends on llxterm's screen and cursor, so the engines are compared doing the same work.",
+      "workloads": [
+        "ascii"
+      ]
+    },
+    {
+      "id": "above-floor",
+      "about": "On every workload llxterm's core takes output at least as fast as vt100, the floor.",
+      "engine": "vt100",
+      "minRatio": 1.0
+    },
+    {
+      "id": "above-reference",
+      "about": "On every workload llxterm's core takes output at least as fast as alacritty_terminal, the core most terminals of its language are built on.",
+      "engine": "alacritty_terminal",
+      "minRatio": 1.0
+    },
+    {
+      "id": "reference-level",
+      "about": "On every workload llxterm's core takes output at least this share of the fastest reference core's speed. Below 1: on cursor, tui and recorded sessions the fastest reference leads by up to a third (0.65x to 0.91x in the runs of 2026-11-23), and what is left of the gap is inside the terminal core library, which llxterm keeps (decided 2026-11-23); runs on this machine differ by a tenth, so the share held is below the lowest run seen.",
+      "minRatio": 0.6
+    },
+    {
+      "id": "memory",
+      "about": "A terminal of 120 by 40 with 10,000 rows of history holds at most this in llxterm's core, over the floor of its process, on every workload.",
+      "maxMiB": 24
+    }
+  ]
+}

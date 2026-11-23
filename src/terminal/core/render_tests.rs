@@ -3,7 +3,7 @@
 //! the cursor and the selection.
 
 use super::Render;
-use crate::surface::{Color, Flags, Frame, Rgb, RowId, Shape, Wide};
+use crate::surface::{CellPixels, Color, Flags, Frame, Rgb, RowId, Shape, Wide};
 use crate::terminal::Core;
 
 fn core(rows: u16, columns: u16) -> Core {
@@ -116,7 +116,7 @@ fn a_resize_makes_the_next_frame_full() {
     core.feed(b"hello");
     let mut render = Render::new().unwrap();
     drawn(&mut render, &core);
-    core.resize(4, 12).unwrap();
+    core.resize(4, 12, CellPixels::default()).unwrap();
     let frame = drawn(&mut render, &core);
     assert!(frame.full);
     assert_eq!((frame.columns, frame.lines, frame.rows.len()), (12, 4, 4));

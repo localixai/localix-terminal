@@ -1,0 +1,189 @@
+{
+  "smoke": false,
+  "workloads": [
+    {
+      "added": {
+        "alacritty_terminal": 33652736,
+        "llxterm": 11124736,
+        "llxterm, framed": 12976128,
+        "rio-vt": 11010048,
+        "vt100": 8175616,
+        "wezterm-term": 4636672
+      },
+      "bytes": 16777224,
+      "failed": {},
+      "name": "ascii",
+      "peaks": {
+        "alacritty_terminal": 43089920,
+        "llxterm": 20561920,
+        "llxterm, framed": 22413312,
+        "none": 9437184,
+        "none, apart": 1605632,
+        "rio-vt": 12615680,
+        "vt100": 17612800,
+        "wezterm-term": 14073856
+      }
+    },
+    {
+      "added": {
+        "alacritty_terminal": 20365312,
+        "llxterm": 15450112,
+        "llxterm, framed": 18153472,
+        "rio-vt": 16367616,
+        "vt100": 21381120,
+        "wezterm-term": 78610432
+      },
+      "bytes": 16778896,
+      "failed": {},
+      "name": "dense",
+      "peaks": {
+        "alacritty_terminal": 29802496,
+        "llxterm": 24887296,
+        "llxterm, framed": 27590656,
+        "none": 9437184,
+        "none, apart": 1605632,
+        "rio-vt": 17973248,
+        "vt100": 30818304,
+        "wezterm-term": 88047616
+      }
+    },
+    {
+      "added": {
+        "alacritty_terminal": 3768320,
+        "llxterm": 688128,
+        "llxterm, framed": 2490368,
+        "rio-vt": 1441792,
+        "vt100": 229376,
+        "wezterm-term": 2195456
+      },
+      "bytes": 16777330,
+      "failed": {},
+      "name": "scroll-region",
+      "peaks": {
+        "alacritty_terminal": 13205504,
+        "llxterm": 10125312,
+        "llxterm, framed": 11927552,
+        "none": 9437184,
+        "none, apart": 1605632,
+        "rio-vt": 3047424,
+        "vt100": 9666560,
+        "wezterm-term": 11632640
+      }
+    },
+    {
+      "added": {
+        "alacritty_terminal": 10403840,
+        "llxterm": 3014656,
+        "llxterm, framed": 4784128,
+        "rio-vt": 3571712,
+        "vt100": 9076736,
+        "wezterm-term": 2113536
+      },
+      "bytes": 16777216,
+      "failed": {},
+      "name": "cursor",
+      "peaks": {
+        "alacritty_terminal": 19841024,
+        "llxterm": 12451840,
+        "llxterm, framed": 14221312,
+        "none": 9437184,
+        "none, apart": 1605632,
+        "rio-vt": 5177344,
+        "vt100": 18513920,
+        "wezterm-term": 11550720
+      }
+    },
+    {
+      "added": {
+        "alacritty_terminal": 37011456,
+        "llxterm": 12943360,
+        "llxterm, framed": 14860288,
+        "rio-vt": 11616256,
+        "vt100": 23396352,
+        "wezterm-term": 5324800
+      },
+      "bytes": 16777273,
+      "failed": {},
+      "name": "unicode",
+      "peaks": {
+        "alacritty_terminal": 46448640,
+        "llxterm": 22380544,
+        "llxterm, framed": 24297472,
+        "none": 9437184,
+        "none, apart": 1605632,
+        "rio-vt": 13221888,
+        "vt100": 32833536,
+        "wezterm-term": 14761984
+      }
+    },
+    {
+      "added": {
+        "alacritty_terminal": 491520,
+        "llxterm": 786432,
+        "llxterm, framed": 2670592,
+        "rio-vt": 950272,
+        "vt100": 425984,
+        "wezterm-term": 933888
+      },
+      "bytes": 16779102,
+      "failed": {},
+      "name": "tui",
+      "peaks": {
+        "alacritty_terminal": 9928704,
+        "llxterm": 10223616,
+        "llxterm, framed": 12107776,
+        "none": 9437184,
+        "none, apart": 1605632,
+        "rio-vt": 2555904,
+        "vt100": 9863168,
+        "wezterm-term": 10371072
+      }
+    },
+    {
+      "added": {
+        "alacritty_terminal": 33669120,
+        "llxterm": 11190272,
+        "llxterm, framed": 13156352,
+        "rio-vt": 11026432,
+        "vt100": 42237952,
+        "wezterm-term": 5931008
+      },
+      "bytes": 16778869,
+      "failed": {},
+      "name": "long-line",
+      "peaks": {
+        "alacritty_terminal": 43106304,
+        "llxterm": 20627456,
+        "llxterm, framed": 22593536,
+        "none": 9437184,
+        "none, apart": 1605632,
+        "rio-vt": 12632064,
+        "vt100": 51675136,
+        "wezterm-term": 15368192
+      }
+    },
+    {
+      "added": {
+        "alacritty_terminal": 33931264,
+        "llxterm": 11632640,
+        "llxterm, framed": 13565952,
+        "rio-vt": 11616256,
+        "vt100": 2916352,
+        "wezterm-term": 5586944
+      },
+      "bytes": 16823136,
+      "failed": {},
+      "name": "recorded",
+      "peaks": {
+        "alacritty_terminal": 43368448,
+        "llxterm": 21069824,
+        "llxterm, framed": 23003136,
+        "none": 9437184,
+        "none, apart": 1605632,
+        "rio-vt": 13221888,
+        "vt100": 12353536,
+        "wezterm-term": 15024128
+      }
+    }
+  ]
+}

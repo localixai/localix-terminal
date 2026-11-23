@@ -1,8 +1,16 @@
 //! A key the person pressed made into the bytes the program asked for: the core's key encoder,
 //! set from the modes the program set (cursor keys, the keypad, modifyOtherKeys, the keyboard
 //! protocol whose flags a program pushes with `CSI > u`), with Option as Alt on the side the
-//! person chose, and one rule of ours: Shift+Enter sends a line feed while no program asked for
-//! the keyboard protocol, as coding agents read it for a new line in what is typed.
+//! person chose. Control on a key whose text the input method left out is encoded by the key's
+//! ASCII character, as the encoder reads Control (so modifyOtherKeys tells it apart).
+//!
+//! While a program asked for neither the keyboard protocol nor modifyOtherKeys, it reads plain
+//! bytes, and the keys are sent as terminals send them to it: Return, Tab and Escape with
+//! Control or Option, and Escape with Shift, are the keys themselves (Shift+Tab stays a back-tab),
+//! and Control on a character is its control
+//! byte (Ctrl+I a Tab, Ctrl+[ an Escape, Ctrl+Shift+A a ^A), where the encoder would tell them
+//! apart in a form only those modes ask for. Option as Meta puts ESC before them. One rule is
+//! ours: Shift+Enter sends a line feed, as coding agents read it for a new line in what is typed.
 
 use ghostty_vt_sys as vt;
 
@@ -18,11 +26,46 @@ impl Core {
     /// What `key` sends the program now; nothing for a key that sends nothing (a modifier
     /// alone, a release the program did not ask to hear).
     pub fn encode_key(&mut self, key: &Key, meta: OptionMeta) -> Vec<u8> {
+        let plain = self.keyboard_flags() == 0 && key.action != KeyAction::Release;
         let shift_enter =
             key.code == KeyCode::Enter && key.mods.0 & !Mods::SHIFT_RIGHT == Mods::SHIFT;
-        if shift_enter && key.action != KeyAction::Release && self.keyboard_flags() == 0 {
+        if shift_enter && plain {
             return b"\n".to_vec();
         }
+        let typed;
+        let key = match control_text(key) {
+            Some(text) => {
+                typed = Key {
+                    text,
+                    ..key.clone()
+                };
+                &typed
+            }
+            None => key,
+        };
+        let bytes = self.encoded_key(key, meta);
+        if !plain || !told_apart(&bytes) || self.modify_other_keys() {
+            return bytes;
+        }
+        plain_bytes(key, meta).unwrap_or(bytes)
+    }
+
+    /// Whether the program turned on modifyOtherKeys (level 2), which the terminal does not say:
+    /// the encoder then tells Ctrl+A from a plain ^A.
+    fn modify_other_keys(&mut self) -> bool {
+        let probe = Key {
+            code: KeyCode::Letter(b'a'),
+            mods: Mods(Mods::CTRL),
+            text: "a".into(),
+            unshifted: Some('a'),
+            ..Key::default()
+        };
+        self.encoded_key(&probe, OptionMeta::Off) != [1]
+    }
+
+    /// What the core's encoder sends for `key`, with the terminal's modes and Option as Alt on
+    /// the side `meta` says.
+    fn encoded_key(&mut self, key: &Key, meta: OptionMeta) -> Vec<u8> {
         let term = self.term;
         let Some((encoder, event)) = self.handles.keys() else {
             return vec![];
@@ -54,6 +97,91 @@ impl Core {
         let _ = unsafe { vt::ghostty_key_event_set_utf8(event, none) };
         bytes
     }
+}
+
+/// The text a key held with Control is encoded by when the input method gave it none: its own
+/// ASCII character (a key of another script is read by its place, as it is).
+fn control_text(key: &Key) -> Option<String> {
+    let unshifted = key
+        .unshifted
+        .filter(|c| c.is_ascii_graphic() || *c == ' ')?;
+    (key.mods.has(Mods::CTRL) && key.text.is_empty()).then(|| unshifted.to_string())
+}
+
+/// Whether the encoder told a key apart in a form a program must ask for: the keyboard
+/// protocol's (`CSI … u`), modifyOtherKeys' (`CSI 27;…~`), or nothing at all.
+fn told_apart(sent: &[u8]) -> bool {
+    let csi = sent.starts_with(b"\x1b[");
+    sent.is_empty() || (csi && (sent.ends_with(b"u") || sent.starts_with(b"\x1b[27;")))
+}
+
+/// What `key` sends to a program that reads plain bytes: Return, Tab or Escape itself, or the
+/// control byte of the character Control is held on; ESC before it for Option as Meta. None
+/// for a key with Command, an Option that types its own character, or no control byte.
+fn plain_bytes(key: &Key, meta: OptionMeta) -> Option<Vec<u8>> {
+    let held = key.mods.0 & (Mods::SHIFT | Mods::CTRL | Mods::ALT | Mods::SUPER);
+    let alt = held & Mods::ALT != 0;
+    if held & Mods::SUPER != 0 || (alt && !meta.is_meta(key.mods)) {
+        return None;
+    }
+    const KEYS: [(KeyCode, u8); 3] = [
+        (KeyCode::Enter, b'\r'),
+        (KeyCode::Tab, b'\t'),
+        (KeyCode::Escape, 0x1b),
+    ];
+    let byte = match KEYS.iter().find(|(code, _)| *code == key.code) {
+        Some((_, byte)) => *byte,
+        None if held & Mods::CTRL != 0 => {
+            let mut chars = key.text.chars();
+            let typed = chars.next().filter(|_| chars.next().is_none());
+            // The character typed, else the key's own, else (a layout of another script) the
+            // one its place has in the US layout, as Ctrl+C is read under any layout.
+            let ascii = |c: &char| c.is_ascii();
+            let c = typed.filter(ascii).or_else(|| key.unshifted.filter(ascii));
+            control_byte(c.or_else(|| place(key.code))?)?
+        }
+        None => return None,
+    };
+    Some(if alt { vec![0x1b, byte] } else { vec![byte] })
+}
+
+/// The character a key's place has in the US layout, for the keys Control makes a byte of.
+fn place(code: KeyCode) -> Option<char> {
+    const PLACES: [(KeyCode, char); 5] = [
+        (KeyCode::BracketLeft, '['),
+        (KeyCode::Backslash, '\\'),
+        (KeyCode::BracketRight, ']'),
+        (KeyCode::Slash, '/'),
+        (KeyCode::Space, ' '),
+    ];
+    if let KeyCode::Letter(letter) = code {
+        return Some(char::from(letter));
+    }
+    if let KeyCode::Digit(digit) = code {
+        return char::from_digit(u32::from(digit), 10);
+    }
+    PLACES.iter().find(|(at, _)| *at == code).map(|(_, c)| *c)
+}
+
+/// The control byte Control makes of `c`: a letter's (either case), and those of the
+/// punctuation and digits that have one.
+fn control_byte(c: char) -> Option<u8> {
+    const MORE: [(&str, u8); 7] = [
+        ("@ 2", 0x00),
+        ("[3", 0x1b),
+        ("\\4", 0x1c),
+        ("]5", 0x1d),
+        ("^6~", 0x1e),
+        ("_/7", 0x1f),
+        ("?8", 0x7f),
+    ];
+    let byte = u8::try_from(c).ok().filter(u8::is_ascii)?;
+    if byte.is_ascii_alphabetic() {
+        return Some(byte.to_ascii_lowercase() - b'a' + 1);
+    }
+    MORE.iter()
+        .find(|(chars, _)| chars.as_bytes().contains(&byte))
+        .map(|(_, control)| *control)
 }
 
 /// Fills the core's key event from `key`; its text is borrowed, not copied, and the caller
@@ -186,3 +314,7 @@ fn code(code: KeyCode) -> vt::Key::Type {
 #[cfg(test)]
 #[path = "keys_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "keys_spec_tests.rs"]
+mod spec_tests;

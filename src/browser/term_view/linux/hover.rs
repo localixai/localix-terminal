@@ -1,6 +1,7 @@
 //! What the pointer finds over the view, as the terminal page had it. Links: while Super is held,
 //! the link under the pointer (one its program gave, or an http or https address in its line) is
-//! underlined and the pointer is a hand; a Super-click opens it, in a tab of the window. The
+//! underlined and the pointer is a hand; a Super-click opens it where the window says
+//! (`term_links.rs`: in a tab, in the default browser, or asked). The
 //! scrollbar over the right edge: its slider shows only while there is history to scroll and the
 //! pointer is over the view; pointed at it is brighter; dragged, the view follows it, and a press
 //! in its track brings the slider there. And the pointer's shape over the view.

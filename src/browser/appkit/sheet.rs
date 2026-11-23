@@ -12,6 +12,7 @@ use objc2::runtime::{AnyObject, Bool};
 use objc2::{class, msg_send};
 
 use super::{activate, string, text};
+use crate::browser::dialog::Answer;
 
 /// Whether a question hangs from the window as a sheet: only while it is on screen.
 fn hangs(visible: bool, miniaturized: bool) -> bool {
@@ -58,7 +59,7 @@ fn ask(
 }
 
 /// Whoever waits for an answer to a question.
-type Waiting = Vec<Box<dyn FnOnce(bool)>>;
+type Waiting = Vec<Box<dyn FnOnce(Answer)>>;
 
 /// The questions up, each with whoever waits for its answer: one asked again while it is up (Quit
 /// pressed twice) waits for the one shown, and never stacks a second sheet under it.
@@ -74,7 +75,7 @@ impl<Q> Default for Up<Q> {
 
 impl<Q: PartialEq> Up<Q> {
     /// `done` waits for `question`'s answer; whether it is to be shown (it was not up).
-    pub(super) fn join(&mut self, question: Q, done: Box<dyn FnOnce(bool)>) -> bool {
+    pub(super) fn join(&mut self, question: Q, done: Box<dyn FnOnce(Answer)>) -> bool {
         if let Some((_, waiting)) = self.asked.iter_mut().find(|(up, _)| *up == question) {
             waiting.push(done);
             return false;
@@ -96,16 +97,27 @@ thread_local! {
     static UP: Mutex<Up<super::super::Confirm>> = Mutex::new(Up::default());
 }
 
+/// The person's answer, by the button of the alert they chose (its `NSModalResponse`): the
+/// buttons are added as `yes`, Cancel, then the second act, so the first is the default and
+/// Return, Cancel takes Escape, and the third stands apart on the left.
+fn answer_of(response: isize) -> Answer {
+    /// NSAlertFirstButtonReturn, and the two after it.
+    const FIRST: isize = 1000;
+    match response - FIRST {
+        0 => Answer::Yes,
+        2 => Answer::Other,
+        _ => Answer::No,
+    }
+}
+
 /// `question` asked of the person on `window` (or in front of every app, when it is away); `done`
-/// takes whether they chose `yes` over Cancel. Asked again while it is up, it is not shown again:
+/// takes which of its buttons they chose. Asked again while it is up, it is not shown again:
 /// `done` takes the answer to the one shown.
 pub(in super::super) fn confirm(
     question: &super::super::Confirm,
     window: Option<&tao::window::Window>,
-    done: impl FnOnce(bool) + 'static,
+    done: impl FnOnce(Answer) + 'static,
 ) {
-    /// NSAlertFirstButtonReturn: the first button added, `yes`.
-    const FIRST: isize = 1000;
     if !UP.with(|up| crate::lock(up).join(question.clone(), Box::new(done))) {
         return;
     }
@@ -119,7 +131,11 @@ pub(in super::super) fn confirm(
         // SAFETY: an alert takes its informative text, an NSString.
         let _: () = unsafe { msg_send![&*alert, setInformativeText: &*detail] };
     }
-    for button in [question.yes.as_str(), "Cancel"] {
+    let other = question.other.as_deref();
+    for button in [Some(question.yes.as_str()), Some("Cancel"), other]
+        .into_iter()
+        .flatten()
+    {
         if let Some(title) = string(button) {
             // SAFETY: an alert takes a button's title, an NSString, and answers the button.
             let _: *mut AnyObject = unsafe { msg_send![&*alert, addButtonWithTitle: &*title] };
@@ -130,7 +146,7 @@ pub(in super::super) fn confirm(
         // Taken out first: one told may ask again, and is asked anew.
         let waiting = UP.with(|up| crate::lock(up).answered(&asked));
         for done in waiting {
-            done(answer == FIRST);
+            done(answer_of(answer));
         }
     });
 }

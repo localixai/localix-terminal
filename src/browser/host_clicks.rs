@@ -61,8 +61,8 @@ impl On<'_> {
         if let Some(url) = went(said) {
             return self.go(url);
         }
-        if let Some((yes, given)) = crate::browser::dialog::said(said) {
-            return self.dialog_answered(yes, &given);
+        if let Some((answer, given)) = crate::browser::dialog::said(said) {
+            return self.dialog_answered(answer, &given);
         }
         if said == crate::browser::updates::CHECK {
             return self.check_for_updates();

@@ -1,0 +1,2 @@
+# Every crate here builds into this one folder (apart/ and quick/ through their .cargo/config.toml).
+/target

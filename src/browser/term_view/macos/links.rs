@@ -1,7 +1,8 @@
 //! The links in the view: while Command is held, the link under the pointer (one its program gave,
 //! or an http or https address in its line) is underlined and the pointer is a hand; a
-//! Command-click opens it, in a tab of the window. Without Command a click selects or goes to the
-//! program as any other; and the pointer's shape over the view.
+//! Command-click opens it where the window says (`term_links.rs`: in a tab, in the default
+//! browser, or asked). Without Command a click selects or goes to the program as any other; and
+//! the pointer's shape over the view.
 
 use std::sync::Arc;
 

@@ -1,10 +1,11 @@
 //! Tests of `effects`: the core answers a program's queries itself, once each and only so much
-//! a read, with the terminal's own name; the program's colours and links reach it; and a frame a
-//! program holds back is kept as it was when the hold began, for agents and for the view.
+//! a read, with the terminal's own name; and the program's colours and links reach it.
+
+use std::fmt::Write as _;
 
 use super::super::{Core, Render};
-use super::{HOLD_MOST, REPLIES_MOST};
-use crate::surface::Frame;
+use super::REPLIES_MOST;
+use crate::surface::{CellPixels, Frame};
 
 fn core(rows: u16, columns: u16) -> Core {
     match Core::new(rows, columns) {
@@ -86,47 +87,51 @@ fn a_programs_colours_and_links_reach_the_core() {
 }
 
 #[test]
-fn a_held_frame_is_kept_as_it_was_when_the_hold_began() {
+fn the_terminal_answers_its_terminfo_name_as_programs_are_told_it() {
     let mut core = core(5, 20);
-    let drawn = core.drawn();
-    *crate::lock(&drawn) = Render::new().ok();
-    core.feed(b"ready\x1b[?2026h\x1b[H\x1b[2Jhalf a fr");
-    assert!(core.holding());
-    assert_eq!(core.held_text(), Some(("ready".to_string(), (1, 6))));
-    assert_eq!(core.held_search().as_deref(), Some("ready"));
-    // The view's render state was brought to that moment, and is not updated meanwhile.
-    let mut frame = Frame::default();
-    let finished = crate::lock(&drawn)
-        .as_mut()
-        .map(|r| r.finish(&mut frame, true));
-    assert_eq!(finished, Some(true));
-    assert!(frame.rows.first().is_some_and(|row| row.text == "ready"));
-    core.feed(b"ame\x1b[?2026l");
-    assert!(!core.holding());
-    assert_eq!(core.held_text(), None);
-    assert_eq!(core.text(), "half a frame");
+    // XTGETTCAP of "TN", its name hex-encoded: answered valid (1), the name hex-encoded too.
+    let name = (super::super::super::TERM.bytes()).fold(String::new(), |mut hex, b| {
+        let _ = write!(hex, "{b:02X}");
+        hex
+    });
+    assert_eq!(
+        answered(&mut core, b"\x1bP+q544E\x1b\\"),
+        format!("\x1bP1+r544E={name}\x1b\\")
+    );
 }
 
 #[test]
-fn a_hold_ends_as_the_grid_is_resized_and_past_its_most() {
+fn the_grid_is_answered_in_characters_either_way_it_is_asked() {
     let mut core = core(5, 20);
-    core.feed(b"\x1b[?2026h");
-    assert!(core.holding());
-    core.resize(6, 20).unwrap();
-    assert!(!core.holding(), "a resize lets go");
-    core.feed(b"\x1b[?2026h");
-    assert!(!core.let_go_if_long(), "not yet");
-    crate::backoff(HOLD_MOST);
-    assert!(!core.holding(), "past its most it is not believed");
-    assert!(core.let_go_if_long());
-    assert!(!core.synchronized(), "and the mode is let go of");
+    assert_eq!(answered(&mut core, b"\x1b[18t"), "\x1b[8;5;20t");
+    assert_eq!(answered(&mut core, b"\x1b[19t"), "\x1b[9;5;20t");
 }
 
 #[test]
-fn a_core_made_deaf_hears_no_hold_and_reads_no_screen_for_one() {
-    let mut core = core(4, 20);
-    core.deafen();
-    core.feed(b"\x1b[?2026hheld");
-    assert!(!core.holding());
-    assert_eq!(core.held_text(), None);
+fn the_size_in_pixels_is_answered_from_the_cell_the_view_drew() {
+    let mut core = core(5, 20);
+    let cell = CellPixels {
+        width: 9,
+        height: 18,
+    };
+    core.resize(6, 30, cell).unwrap();
+    assert_eq!(core.cell_pixels(), cell);
+    assert_eq!(answered(&mut core, b"\x1b[18t"), "\x1b[8;6;30t");
+    assert_eq!(answered(&mut core, b"\x1b[16t"), "\x1b[6;18;9t");
+    assert_eq!(answered(&mut core, b"\x1b[14t"), "\x1b[4;108;270t");
+    // A cell of another size on the same grid: a font's size, a screen of another scale.
+    let twice = CellPixels {
+        width: 18,
+        height: 36,
+    };
+    core.resize(6, 30, twice).unwrap();
+    assert_eq!(answered(&mut core, b"\x1b[16t"), "\x1b[6;36;18t");
+}
+
+#[test]
+fn with_no_view_the_size_in_pixels_is_answered_as_zero() {
+    let mut core = core(5, 20);
+    assert_eq!(answered(&mut core, b"\x1b[16t"), "\x1b[6;0;0t");
+    assert_eq!(answered(&mut core, b"\x1b[14t"), "\x1b[4;0;0t");
+    assert_eq!(answered(&mut core, b"\x1b[18t"), "\x1b[8;5;20t");
 }

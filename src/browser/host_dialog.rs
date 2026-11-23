@@ -7,24 +7,27 @@ use std::sync::mpsc::SyncSender;
 
 use super::super::Cmd;
 use super::On;
+use crate::browser::dialog::Answer;
 use crate::browser::{Confirm, Heard, dialog, platform, updates};
 use crate::kind::{Given, Question};
 
 impl On<'_> {
     /// `question` asked of the person; `reply` takes whether they went on.
     pub(super) fn confirm(&mut self, question: &Confirm, reply: SyncSender<bool>) {
-        let done = move |yes, _: &Given| {
-            let _ = reply.send(yes);
-        };
+        self.choose(question, move |answer| {
+            let _ = reply.send(answer.yes());
+        });
+    }
+
+    /// `question` asked of the person, in the window's dialog while it is on screen and as the
+    /// system asks otherwise; `done` takes which of its buttons they chose.
+    pub(super) fn choose(&mut self, question: &Confirm, done: impl FnOnce(Answer) + 'static) {
         match self.deck.as_ref() {
             Some(open) if open.dialogs() => {
-                dialog::ask(dialog::Dialog::question(question), done);
+                dialog::ask(dialog::Dialog::question(question), |answer, _| done(answer));
                 open.refresh(self.shared);
             }
-            open => {
-                let done = move |yes| done(yes, &Given::new());
-                platform::confirm(question, open.map(|open| &open.frame.native), done);
-            }
+            open => platform::confirm(question, open.map(|open| &open.frame.native), done),
         }
     }
 
@@ -32,8 +35,8 @@ impl On<'_> {
     /// With the window away it is asked as the system asks, which has no fields: what the
     /// question needs is then missing, and whoever asked says so.
     pub(super) fn question(&mut self, question: &Question, reply: SyncSender<Option<Given>>) {
-        let done = move |yes: bool, given: &Given| {
-            let _ = reply.send(yes.then(|| given.clone()));
+        let done = move |answer: Answer, given: &Given| {
+            let _ = reply.send(answer.yes().then(|| given.clone()));
         };
         match self.deck.as_ref() {
             Some(open) if open.dialogs() => {
@@ -50,8 +53,9 @@ impl On<'_> {
                         .collect::<Vec<_>>()
                         .join("\n"),
                     yes: question.yes.clone(),
+                    other: None,
                 };
-                let done = move |yes| done(yes, &Given::new());
+                let done = move |answer| done(answer, &Given::new());
                 platform::confirm(&plain, open.map(|open| &open.frame.native), done);
             }
         }
@@ -71,9 +75,9 @@ impl On<'_> {
             return;
         }
         let (shared, id) = (Arc::clone(self.shared), announced.id.clone());
-        dialog::ask(announced, move |yes, _| {
-            shared.offers.announced(&id, &offer, yes);
-            if yes {
+        dialog::ask(announced, move |answer, _| {
+            shared.offers.announced(&id, &offer, answer.yes());
+            if answer.yes() {
                 shared.heard("", Heard::Update);
             }
         });
@@ -82,8 +86,8 @@ impl On<'_> {
 
     /// The person answered the dialog shown: whoever waited is told, every window draws what is
     /// up now, and the keys go back to the tab shown.
-    pub(super) fn dialog_answered(&mut self, yes: bool, given: &Given) {
-        dialog::answer(yes, given);
+    pub(super) fn dialog_answered(&mut self, answer: Answer, given: &Given) {
+        dialog::answer(answer, given);
         let _ = self.proxy.send_event(Cmd::Strip);
         if let Some(open) = self.deck.as_ref() {
             open.refresh(self.shared);

@@ -21,6 +21,7 @@ mod cast;
 use std::path::{Path, PathBuf};
 
 use cast::{Cast, Event};
+use llxterm::surface::CellPixels;
 use llxterm::terminal::Core;
 
 fn fixtures() -> PathBuf {
@@ -43,7 +44,9 @@ fn played(cast: &Cast) -> Core {
     for (_, event) in &cast.events {
         match event {
             Event::Output(text) => core.feed(text.as_bytes()),
-            Event::Resize(rows, columns) => core.resize(*rows, *columns).unwrap(),
+            Event::Resize(rows, columns) => {
+                core.resize(*rows, *columns, CellPixels::default()).unwrap()
+            }
         }
     }
     core

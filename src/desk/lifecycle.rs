@@ -29,6 +29,7 @@ impl Desk {
                             title: "Quit Localix Terminal?".into(),
                             detail: quit_detail(running),
                             yes: "Quit".into(),
+                            other: None,
                         })
                     });
                 if sure && let Some(quit) = desk.quit.get() {
@@ -55,6 +56,7 @@ impl Desk {
                             title: "Restart Localix Terminal to update?".into(),
                             detail: update_detail(running),
                             yes: "Restart".into(),
+                            other: None,
                         })
                     });
                 if !sure {

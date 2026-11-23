@@ -30,6 +30,11 @@ LLXTERM_DISPLAY_TESTS=1 cargo test --test browser -- panel carried   # only the 
   hand before they were kept; `tests/core_screens.rs` feeds each to the terminal core and holds
   its last screen to the one kept beside it, `*.screen` (`LLXTERM_WRITE_SCREENS=1` writes them
   anew, to be read before they are committed).
+- `bench/` measures the terminal core against the cores other terminals are built on: how fast
+  each takes in a program's output, what it holds, and whether each ends on the same screen
+  (`bench/run.sh`; `bench/README.md` says what and how, `bench/results/latest.md` the last
+  figures). It is a crate of its own, outside the app's build; `bench/quick/` counts a change to
+  the core in instructions, in seconds. The canvas is measured by `tests/view_bench.rs`.
 - The terminal core is libghostty-vt, linked statically through `ghostty-vt-sys`, which needs
   Rust 1.96 (`rust-version`). On macOS its build script fetches the release's prebuilt library
   and holds it to the sha256 the crate pins; on Linux it builds the library from the release's

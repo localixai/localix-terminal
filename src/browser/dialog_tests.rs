@@ -1,9 +1,10 @@
-//! The window's dialog: one shown at a time, a question asked twice shown once, and a release's
-//! notes read as the lines a person sees.
+//! The window's dialog: one shown at a time, a question asked twice shown once, a question with
+//! a second act answered by any of its three buttons, and a release's notes read as the lines a
+//! person sees.
 
 use std::sync::{Arc, Mutex};
 
-use super::{Dialog, Note, Stage, notes, said, script};
+use super::{Answer, Dialog, Note, Stage, notes, said, script};
 use crate::browser::Confirm;
 use crate::kind::{Field, Given, Question};
 
@@ -12,6 +13,7 @@ fn about(title: &str) -> Dialog {
         title: title.into(),
         detail: "Two terminals still run a program.".into(),
         yes: "Quit".into(),
+        other: None,
     })
 }
 
@@ -21,6 +23,10 @@ fn a_question_is_a_dialog_with_its_act_and_cancel_that_takes_the_keys() {
     assert_eq!(
         (dialog.yes.as_str(), dialog.no.as_str(), dialog.asked),
         ("Quit", "Cancel", true)
+    );
+    assert_eq!(
+        dialog.other, None,
+        "a question with no second act has two buttons"
     );
     let drawn = script(Some(&dialog));
     assert!(drawn.starts_with("DLG({"), "{drawn}");
@@ -37,7 +43,8 @@ fn dialogs_are_shown_one_at_a_time_and_one_asked_again_is_not_shown_twice() {
     let heard = Arc::new(Mutex::new(Vec::new()));
     let hear = |who: &'static str| {
         let heard = Arc::clone(&heard);
-        Box::new(move |yes: bool, _: &Given| crate::lock(&heard).push((who, yes))) as super::Done
+        Box::new(move |answer: Answer, _: &Given| crate::lock(&heard).push((who, answer)))
+            as super::Done
     };
     let mut stage = Stage::default();
     stage.ask(about("Quit Localix Terminal?"), hear("first"));
@@ -47,13 +54,16 @@ fn dialogs_are_shown_one_at_a_time_and_one_asked_again_is_not_shown_twice() {
     let shown = stage.up.front().map(|(dialog, _)| dialog.title.clone());
     assert_eq!(shown.as_deref(), Some("Quit Localix Terminal?"));
     for done in stage.answered() {
-        done(true, &Given::new());
+        done(Answer::Yes, &Given::new());
     }
-    assert_eq!(*crate::lock(&heard), [("first", true), ("again", true)]);
+    assert_eq!(
+        *crate::lock(&heard),
+        [("first", Answer::Yes), ("again", Answer::Yes)]
+    );
     for done in stage.answered() {
-        done(false, &Given::new());
+        done(Answer::No, &Given::new());
     }
-    assert_eq!(crate::lock(&heard).last(), Some(&("other", false)));
+    assert_eq!(crate::lock(&heard).last(), Some(&("other", Answer::No)));
     assert!(stage.answered().is_empty(), "none up: nobody waits");
 }
 
@@ -82,12 +92,18 @@ fn a_releases_notes_are_read_as_headings_points_and_sentences_in_plain_words() {
 }
 
 #[test]
-fn the_pages_answer_is_yes_or_no_with_what_was_typed_and_nothing_else() {
-    assert_eq!(said("dialog yes"), Some((true, Given::new())));
-    assert_eq!(said("dialog no"), Some((false, Given::new())));
+fn the_pages_answer_is_yes_its_other_act_or_no_with_what_was_typed_and_nothing_else() {
+    assert_eq!(said("dialog yes"), Some((Answer::Yes, Given::new())));
+    assert_eq!(said("dialog other"), Some((Answer::Other, Given::new())));
+    assert_eq!(said("dialog no"), Some((Answer::No, Given::new())));
     let typed = said(r#"dialog yes {"API_KEY":"s3cret"}"#);
     let given = Given::from([("API_KEY".to_string(), "s3cret".to_string())]);
-    assert_eq!(typed, Some((true, given)));
+    assert_eq!(typed, Some((Answer::Yes, given)));
+    assert_eq!(
+        said(r#"dialog other {"API_KEY":"s3cret"}"#),
+        None,
+        "only yes types"
+    );
     assert_eq!(said("dialog yes {not json"), None);
     assert_eq!(said(r#"dialog yes {"n":1}"#), None, "only words are typed");
     assert_eq!(said("dialog"), None);
@@ -129,4 +145,25 @@ fn a_tabs_question_is_the_same_dialog_with_its_points_and_fields() {
     };
     let dialog = Dialog::asking(&gone);
     assert_eq!((dialog.tone, dialog.asked), ("danger", true));
+}
+
+#[test]
+fn a_question_with_a_second_act_shows_it_as_a_third_button_and_only_its_yes_goes_on() {
+    let dialog = Dialog::question(&Confirm {
+        title: "Open Link?".into(),
+        detail: "https://example.com/a".into(),
+        yes: "Open in Tab".into(),
+        other: Some("Open in Browser".into()),
+    });
+    assert_eq!(
+        (
+            dialog.yes.as_str(),
+            dialog.other.as_deref(),
+            dialog.no.as_str()
+        ),
+        ("Open in Tab", Some("Open in Browser"), "Cancel")
+    );
+    let drawn = script(Some(&dialog));
+    assert!(drawn.contains("\"other\":\"Open in Browser\""), "{drawn}");
+    assert!(Answer::Yes.yes() && !Answer::Other.yes() && !Answer::No.yes());
 }

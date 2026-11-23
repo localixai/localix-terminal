@@ -1,0 +1,3 @@
+# The bench crate's target folder: llxterm and its dependencies, built once for both.
+[build]
+target-dir = "../target"

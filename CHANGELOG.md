@@ -2,12 +2,73 @@
 
 ## Unreleased
 
+## 0.1.9
+
+### Added
+
+- **A link ⌘-clicked in a terminal asks where it opens.** The window's dialog names the address
+  and offers Open in Tab (Return), which opens it in a tab of the terminal's project as before,
+  Open in Browser, which hands it to your default browser, and Cancel (Escape). Settings →
+  Terminal → Open links chooses one place for every link instead: Ask Each Time (the default),
+  In a Tab, or In Default Browser. Only http and https addresses are opened, as before; a link
+  an agent opens with `llxterm open` still opens in a tab. The window's dialog can now offer a
+  second act beside the one it asks about, and so can the system's alert that asks while the
+  window is put away.
+- **A program can ask a terminal its size and its name.** Asked its size, a terminal answers
+  its grid in characters and, in pixels, its text area and one cell as the window draws them
+  (`CSI 14 t`, `16 t`, `18 t`, `19 t`), and the terminal device carries the same pixel size, so
+  a program that draws pictures in the terminal can fit them to its cells. The size is told
+  again when only the cell changes, for a font size that keeps the grid or a screen of another
+  scale. A terminal no window has drawn yet answers zero pixels. Asked its terminfo name
+  (XTGETTCAP `TN`), it answers `xterm-256color`, the `TERM` its programs are given.
+
 ### Changed
 
+- **A terminal's output reaches the screen with about half the work.** Each frame a terminal
+  draws reads the rows that changed: a plain character is now read from the cell itself, and the
+  library is asked only about a cell with a style, a ground of its own, or several codepoints.
+  The terminal also looks for the start and end of a program's frame many bytes at a time.
+- **Full-screen programs that draw in synchronized frames run about 5× faster.** Coding agents,
+  editors and other programs that ask the terminal to hold each frame until it is finished no
+  longer make it read the whole screen out at every frame: the frame's output waits until the
+  program says it is done, the screen keeps showing the frame before (to you and to an agent
+  reading it alike), and the new frame lands whole. A frame never finished still shows after a
+  second, or at once as the terminal is resized. An answer to a question the program asks the
+  terminal in the middle of such a frame comes as the frame ends, as in other terminals that
+  hold frames.
 - **The document view takes flowdown 0.9.0.** Code in a Markdown file is coloured by flowdown's own
   highlighter, a line at a time, so the preview script no longer carries highlight.js and is a
   quarter smaller (202 KB, was 275 KB). A long reply or a long code block draws faster, and an open
   code block draws what the finished one will.
+
+### Fixed
+
+- **An emoji made of several codepoints takes the two columns programs expect.** A joined emoji
+  (👩‍💻) took one pair of columns for each of its parts and an emoji heart (❤️) one column, so the
+  cursor in a coding agent's prompt stood further right than the agent drew it. Such characters
+  are now measured as Unicode says, from the start and after a reset; a program that asks for
+  the old widths still has them.
+- **The cursor is drawn where it is after every move.** A cursor that a program only moved, with
+  nothing written, stayed drawn where it had been until a row changed: a space typed at the end
+  of a coding agent's prompt (the agent moves the cursor and draws nothing for a trailing
+  space), the shell's Left and Right arrows, a second Backspace. The cursor now steps with each
+  of them, and so does a cursor a program hides, shows or reshapes, a ground colour it sets
+  (OSC 11) and a mode it turns on, all with no row written.
+- **A block cursor shows the character it stands on** after it moved onto a row that did not
+  change, where it was drawn as a solid block with the character hidden.
+- **Control with Shift reaches the program.** Ctrl+Shift+Space (NUL), Ctrl+_ (readline's and
+  Emacs's undo, typed as Control, Shift and minus), Ctrl+^ and Ctrl+? sent nothing; Ctrl+Shift with
+  a letter sends the letter's control byte.
+- **Keys reach a program that reads plain bytes as terminals send them.** Ctrl+[, Ctrl+I and
+  Ctrl+M are Escape, Tab and Return again (they sent nothing; vi's Escape on Ctrl+[ works as it
+  did), and Return, Tab and Escape with Control or Option, and Escape with Shift, are the keys
+  themselves (Shift+Tab stays a back-tab, Shift+Return a line feed), where
+  they came as `ESC[27;5;13~` and the like, which a shell prints. A program that asks for the
+  keyboard protocol or turns on modifyOtherKeys is still told them apart, and the latter is told
+  Control on every letter as it asked, where Ctrl+A came as a plain ^A.
+- **A pasted Windows or web line is one Return.** Lines ending in CR LF were pasted as two
+  Returns each, running an empty command after every line, when the program had not asked to
+  be told of pastes.
 
 ## 0.1.8
 

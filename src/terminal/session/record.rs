@@ -67,7 +67,7 @@ impl Record {
             "width": columns,
             "height": rows,
             "timestamp": since.as_secs(),
-            "env": {"TERM": "xterm-256color"},
+            "env": {"TERM": super::super::TERM},
         });
         writeln!(file, "{header}")?;
         Ok(Self {
