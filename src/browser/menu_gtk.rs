@@ -166,10 +166,13 @@ pub(super) fn confirm(question: &super::Confirm) -> super::dialog::Answer {
     dialog.set_default_response(gtk::ResponseType::Accept);
     let answer = dialog.run();
     dialog.close();
-    match answer {
-        gtk::ResponseType::Accept => Answer::Yes,
-        gtk::ResponseType::Other(1) => Answer::Other,
-        _ => Answer::No,
+    // Cancel, Escape and a closed dialog all say no.
+    if answer == gtk::ResponseType::Accept {
+        Answer::Yes
+    } else if answer == gtk::ResponseType::Other(1) {
+        Answer::Other
+    } else {
+        Answer::No
     }
 }
 
