@@ -18,7 +18,7 @@ log = "0.4"
 tao = "0.37"
 wry = "0.57"
 # Already in the tree through tao and wry: an address is checked as the system will read it.
-url = "2.5.8"
+url = "2.5.9"
 # The few unix calls std has no wrapper for: the PTY, signals, locks.
 libc = "0.2"
 # An update's archive is checked against the checksum its release lists.
